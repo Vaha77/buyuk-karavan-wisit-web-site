@@ -10,7 +10,7 @@ const navigation = [
   { label: "Mahsulotlar", href: "/admin/products", icon: Package },
   { label: "Buyurtmalar", href: "#", icon: ShoppingBag },
   { label: "Mijozlar", href: "#", icon: Users },
-  { label: "AI Chat", href: "#", icon: MessageSquare },
+  { label: "Mijoz so‘rovlari", href: "/admin/leads", icon: MessageSquare },
   { label: "Hisob-kitoblar", href: "#", icon: CalendarDays },
   { label: "Kontent", href: "/admin/content/home", icon: Boxes },
   { label: "Foydalanuvchilar", href: "#", icon: Users },
@@ -21,6 +21,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const homeContentRoute = pathname.startsWith("/admin/content/home");
+  const leadsRoute = pathname.startsWith("/admin/leads");
   return <div className="admin-shell">
     <button className={`admin-drawer-backdrop ${open ? "is-open" : ""}`} aria-label="Menyuni yopish" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}/>
     <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
@@ -28,14 +29,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <span className="admin-sidebar-label">ADMIN</span>
       <nav aria-label="Admin navigatsiya">{navigation.map(item => {
         const Icon = item.icon;
-        const active = item.href === "/admin/products" ? pathname.startsWith("/admin/products") : item.href === "/admin/content/home" && homeContentRoute;
+        const active = item.href === "/admin/products" ? pathname.startsWith("/admin/products") : item.href === "/admin/content/home" ? homeContentRoute : item.href === "/admin/leads" && leadsRoute;
         return <div key={item.label}>{item.href === "#" ? <span className="admin-nav-item is-disabled"><Icon size={17}/>{item.label}</span> : <Link className={`admin-nav-item ${active ? "is-active" : ""}`} href={item.href} onClick={() => setOpen(false)}><Icon size={17}/>{item.label}</Link>}{item.label === "Kontent" && <Link className={`admin-nav-child ${homeContentRoute ? "is-active" : ""}`} href="/admin/content/home" onClick={() => setOpen(false)}>Home Page</Link>}</div>;
       })}</nav>
     </aside>
     <div className="admin-main">
       <header className="admin-topbar">
         <div className="admin-mobile-brand"><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong></div>
-        <div className="admin-topbar-title"><strong>{homeContentRoute ? "Home Page" : "Mahsulotlar"}</strong><span>{homeContentRoute ? "Bosh sahifa kontentini boshqarish" : "Saytdagi mahsulotlarni boshqarish"}</span></div>
+        <div className="admin-topbar-title"><strong>{leadsRoute ? "Mijoz so‘rovlari" : homeContentRoute ? "Home Page" : "Mahsulotlar"}</strong><span>{leadsRoute ? "Madina AI orqali kelgan mijoz murojaatlari" : homeContentRoute ? "Bosh sahifa kontentini boshqarish" : "Saytdagi mahsulotlarni boshqarish"}</span></div>
         <div className="admin-topbar-actions"><div className="admin-topbar-search"><Search size={14}/><span>Qidirish...</span></div><Bell className="admin-bell" size={18}/><span className="admin-avatar">A</span><button className="admin-mobile-menu" aria-label="Menyuni ochish" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={21}/></button></div>
       </header>
       <div className="admin-workspace">{children}</div>
