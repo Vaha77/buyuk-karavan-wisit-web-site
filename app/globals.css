@@ -25,3 +25,5 @@
 @media(max-width:360px){.hero h1{font-size:38px}.temperature-values span{font-size:43px}.type-card{font-size:11px}.brand{font-size:12px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 .hero-title-mobile{display:none}@media(max-width:700px){.hero-title-desktop{display:none}.hero-title-mobile{display:inline}.hero-content{padding-top:120px}.hero h1{font-size:39px}}@media(max-width:360px){.hero h1{font-size:35px}}
+.hero-title-line{display:block}
+.type-card.selected{transform:translateY(-2px)}.type-icon{transition:transform .25s ease,background .25s ease}.type-card.selected .type-icon{transform:scale(1.05)}
