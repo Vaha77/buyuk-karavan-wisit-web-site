@@ -3,9 +3,33 @@
 import { useEffect } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { MotionPathPlugin } from "gsap/MotionPathPlugin";
 import Lenis from "lenis";
 
+function contourMotion(mobile: boolean) {
+  const prefix = mobile ? ".hero-contour-mobile" : ".hero-contour-desktop";
+  const path = document.querySelector<SVGPathElement>(`${prefix} path`);
+  const beacon = document.querySelector<SVGGElement>(`${prefix} .hero-contour-beacon`);
+  if (!path || !beacon) return;
+  gsap.set(beacon, { autoAlpha: 1 });
+  gsap.to(beacon, {
+    motionPath: { path },
+    duration: mobile ? 19 : 24,
+    ease: "none",
+    repeat: -1,
+  });
+  gsap.to(beacon, { opacity: 0.68, duration: 2.4, ease: "sine.inOut", yoyo: true, repeat: -1 });
+  if (!mobile) {
+    const trail = document.querySelector<SVGGElement>(`${prefix} .hero-contour-trail`);
+    if (trail) {
+      gsap.set(trail, { autoAlpha: 0.42 });
+      gsap.to(trail, { motionPath: { path }, duration: 24, delay: 0.38, ease: "none", repeat: -1 });
+    }
+  }
+}
+
 function mobileMotion() {
+  contourMotion(true);
   // Native window scrolling on iOS. Every scrolling item owns its trigger.
   gsap.set(".header-inner, .hero-eyebrow, .hero-title-line, .hero-subtitle, .hero-actions .button, .hero-temp", { autoAlpha: 0 });
   gsap.set(".header-inner", { y: -30 });
@@ -172,6 +196,7 @@ function mobileMotion() {
 }
 
 function desktopMotion() {
+  contourMotion(false);
   const hero = gsap.timeline({ defaults: { ease: "power2.out" } });
   hero.from(".header-inner", { autoAlpha: 0, y: -16, duration: 0.7 })
     .from(".hero-copy > *", { autoAlpha: 0, y: 25, duration: 0.75, stagger: 0.11 }, "-=0.3")
@@ -194,7 +219,7 @@ function desktopMotion() {
 
 export function HomeMotion() {
   useEffect(() => {
-    gsap.registerPlugin(ScrollTrigger);
+    gsap.registerPlugin(ScrollTrigger, MotionPathPlugin);
     const media = gsap.matchMedia();
     media.add("(max-width: 700px) and (prefers-reduced-motion: no-preference)", () => {
       // This branch intentionally has no Lenis or custom scroller.
