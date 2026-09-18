@@ -4,22 +4,24 @@ import { redirect } from "next/navigation";
 import { createProduct, updateProduct, deleteProduct, toggleProductVisibility, copyProduct, DuplicateSlugError, ProductNotFoundError } from "@/lib/products/mutations";
 import { validateProductInput } from "@/lib/products/validation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { ImageValidationError } from "@/lib/products/storage";
 
 type ActionResult = { error?: string };
 
 function message(error: unknown): string {
   if (error instanceof DuplicateSlugError) return "Bu URL slug boshqa mahsulotda ishlatilgan.";
   if (error instanceof ProductNotFoundError) return "Mahsulot topilmadi.";
+  if (error instanceof ImageValidationError) return error.message;
   return "Saqlashda xatolik yuz berdi. Keyinroq qayta urinib ko‘ring.";
 }
 
-export async function saveProductAction(id: string | null, raw: unknown): Promise<ActionResult> {
+export async function saveProductAction(id: string | null, raw: unknown, images: unknown = []): Promise<ActionResult> {
   await requireAdmin();
   const parsed = validateProductInput(raw);
   if (!parsed.success) return { error: parsed.error };
   try {
-    if (id) await updateProduct(id, parsed.data);
-    else await createProduct(parsed.data);
+    if (id) await updateProduct(id, parsed.data, images);
+    else await createProduct(parsed.data, images);
   } catch (error) {
     return { error: message(error) };
   }

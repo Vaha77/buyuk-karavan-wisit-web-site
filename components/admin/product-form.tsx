@@ -2,13 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowDown, ArrowUp, ImagePlus, Plus, Trash2, UploadCloud, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
+import { ProductImageUploader, type ProductImagePreview } from "./product-image-uploader";
 import { productCategories, type Product, type ProductAvailability, type ProductCategory } from "@/lib/products/types";
 import { saveProductAction } from "@/app/admin/(protected)/products/actions";
 
 type Specification = { id: string; name: string; value: string };
-type Preview = { id: string; url: string; name: string };
 type FormState = {
   name: string; brand: string; model: string; category: ProductCategory;
   shortDescription: string; description: string; specifications: Specification[];
@@ -40,20 +39,6 @@ export function ProductTagsEditor({ tags, onChange }: { tags: string[]; onChange
   const add=()=>{const value=input.trim();if(value&&!tags.includes(value))onChange([...tags,value]);setInput("");};
   return <section className="admin-form-card"><div className="admin-form-card-heading"><h2>Mahsulot teglari</h2><p>Saytdagi kartochkada ko‘rinadigan qisqa teglar.</p></div><div className="admin-tags">{tags.map(tag=><span key={tag}>{tag}<button type="button" aria-label={`${tag} tegini o‘chirish`} onClick={()=>onChange(tags.filter(item=>item!==tag))}><X size={13}/></button></span>)}</div><div className="admin-tag-input"><input aria-label="Yangi teg" value={input} placeholder="Masalan: 20 HP" onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();add();}}}/><button type="button" onClick={add}><Plus size={16}/>Teg qo‘shish</button></div></section>;
 }
-export function ProductImageUploader() {
-  const [images,setImages]=useState<Preview[]>([]);
-  const fileRef=useRef<HTMLInputElement>(null);
-  const urlsRef=useRef<string[]>([]);
-  useEffect(()=>()=>{urlsRef.current.forEach(url=>URL.revokeObjectURL(url));},[]);
-  const addFiles=(files: FileList | File[])=>{const incoming=Array.from(files).filter(file=>file.type.startsWith("image/")).map(file=>{const url=URL.createObjectURL(file);urlsRef.current.push(url);return{id:`image-${Date.now()}-${Math.random()}`,url,name:file.name};});setImages(current=>[...current,...incoming]);};
-  const remove=(id:string)=>setImages(current=>{const target=current.find(item=>item.id===id);if(target){URL.revokeObjectURL(target.url);urlsRef.current=urlsRef.current.filter(url=>url!==target.url);}return current.filter(item=>item.id!==id);});
-  const move=(index:number,direction:number)=>setImages(current=>{const next=[...current],target=index+direction;if(target<0||target>=next.length)return current;[next[index],next[target]]=[next[target],next[index]];return next;});
-  return <section className="admin-form-card"><div className="admin-form-card-heading"><h2>Mahsulot rasmlari</h2><p>Birinchi rasm katalogdagi asosiy rasm bo‘ladi. Rasmlar faqat shu sahifada vaqtincha ko‘rsatiladi.</p></div>
-    <input className="sr-only" ref={fileRef} type="file" accept="image/*" multiple onChange={e=>{if(e.target.files)addFiles(e.target.files);e.target.value="";}}/>
-    <div className="admin-upload-zone" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files);}}><UploadCloud size={29}/><strong>Rasmlarni shu yerga tashlang</strong><span>yoki kompyuterdan tanlang</span><button type="button" onClick={()=>fileRef.current?.click()}>Rasm yuklash</button></div>
-    {images.length ? <div className="admin-image-grid">{images.map((image,index)=><div className="admin-image-preview" key={image.id}><Image unoptimized src={image.url} alt={image.name} width={160} height={100}/>{index===0&&<span>Asosiy rasm</span>}<div><button type="button" aria-label="Oldinga" disabled={index===0} onClick={()=>move(index,-1)}><ArrowUp size={15}/></button><button type="button" aria-label="Keyinga" disabled={index===images.length-1} onClick={()=>move(index,1)}><ArrowDown size={15}/></button><button type="button" aria-label="Rasmni o‘chirish" onClick={()=>remove(image.id)}><X size={15}/></button></div></div>)}</div> : <div className="admin-empty-images"><ImagePlus size={19}/> Hozircha rasm qo‘shilmagan</div>}
-  </section>;
-}
 export function ProductSeoFields({ state, update }: { state: FormState; update: (key: keyof FormState, value: string) => void }) {
   return <details className="admin-form-card admin-seo"><summary>SEO / URL <span>Qidiruv tizimlari uchun ixtiyoriy ma’lumotlar</span></summary><div className="admin-form-grid"><FormField label="Slug"><input value={state.slug} onChange={e=>update("slug",e.target.value)} placeholder="xue-ying-br-20pg"/></FormField><FormField label="SEO title"><input value={state.seoTitle} onChange={e=>update("seoTitle",e.target.value)}/></FormField><FormField label="SEO description"><textarea value={state.seoDescription} onChange={e=>update("seoDescription",e.target.value)} rows={3}/></FormField></div></details>;
 }
@@ -62,13 +47,17 @@ export function AdminSaveBar({ onSave, onDraft, pending }: { onSave: () => void;
 }
 export function ProductForm({ product }: { product?: Product }) {
   const [state,setState]=useState<FormState>(()=>fromProduct(product));
+  const [images,setImages]=useState<ProductImagePreview[]>(()=> (product?.images || []).map((url,index)=>({id:`existing-${index}`,url,name:`${index+1}-rasm`})));
+  const previewUrls=useRef<string[]>([]);
+  useEffect(()=>{previewUrls.current=images.filter(image=>image.file).map(image=>image.url);},[images]);
+  useEffect(()=>()=>{previewUrls.current.forEach(url=>URL.revokeObjectURL(url));},[]);
   const [slugEdited,setSlugEdited]=useState(Boolean(product));
   const [feedback,setFeedback]=useState("");
   const [pending,startTransition]=useTransition();
   const update=(key:keyof FormState,value:string|number|boolean|Specification[]|string[])=>setState(current=>({...current,[key]:value}));
   const updateIdentity=(key:"name"|"model",value:string)=>setState(current=>{const next={...current,[key]:value};return slugEdited?next:{...next,slug:slugify(`${next.name} ${next.model}`)};});
   const save=(draft:boolean)=>startTransition(async()=>{
-    const result=await saveProductAction(product?.id??null,{...state,isVisible:draft?false:state.isVisible,specifications:state.specifications.filter(row=>row.name.trim()||row.value.trim())});
+    const result=await saveProductAction(product?.id??null,{...state,isVisible:draft?false:state.isVisible,specifications:state.specifications.filter(row=>row.name.trim()||row.value.trim())},images.map(image=>image.file?{file:image.file}:{url:image.url}));
     if(result.error)setFeedback(result.error);
   });
   return <div className="admin-form-page"><div className="admin-page-heading"><div><Link className="admin-back-link" href="/admin/products">← Mahsulotlarga qaytish</Link><h1>{product?"Mahsulotni tahrirlash":"Yangi mahsulot"}</h1><p>{product?"Mahsulot ma’lumotlarini yangilash":"Sayt katalogiga yangi mahsulot qo‘shish"}</p></div></div>
@@ -81,7 +70,7 @@ export function ProductForm({ product }: { product?: Product }) {
         <FormField label="Qisqa tavsif"><textarea value={state.shortDescription} onChange={e=>update("shortDescription",e.target.value)} rows={3}/></FormField>
         <FormField label="Mahsulot haqida"><textarea value={state.description} onChange={e=>update("description",e.target.value)} rows={5}/></FormField>
       </div></section>
-      <ProductImageUploader/>
+      <ProductImageUploader images={images} onChange={setImages} onError={setFeedback}/>
       <ProductSpecificationsEditor rows={state.specifications} onChange={rows=>update("specifications",rows)}/>
       <ProductTagsEditor tags={state.tags} onChange={tags=>update("tags",tags)}/>
       <ProductSeoFields state={state} update={(key,value)=>{if(key==="slug")setSlugEdited(true);update(key,value);}}/>

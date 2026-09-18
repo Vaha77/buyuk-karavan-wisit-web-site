@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Activity, ArrowRight, CircuitBoard, DoorClosed, PanelsTopLeft, Radio, Snowflake, Waves } from "lucide-react";
 import type { Product } from "@/lib/products/types";
 
@@ -18,7 +19,7 @@ export function ProductCard({ product }: { product: Product }) {
   return <Link className="catalog-card" href={`/products/${product.slug}`} aria-label={`${product.name} ${product.model} — batafsil`}>
     <div className="catalog-card-image">
       <span className="catalog-card-badge">{product.badge}</span>
-      <Icon className="catalog-card-icon" size={38} strokeWidth={1.7} aria-hidden="true" />
+      {product.image ? <Image className="catalog-card-real-image" src={product.image} alt={`${product.name} ${product.model}`} fill sizes="(max-width: 700px) 100vw, 380px" /> : <Icon className="catalog-card-icon" size={38} strokeWidth={1.7} aria-hidden="true" />}
     </div>
     <div className="catalog-card-body">
       <div className="catalog-card-identification"><h2>{product.name}</h2><p>{product.model}</p></div>
