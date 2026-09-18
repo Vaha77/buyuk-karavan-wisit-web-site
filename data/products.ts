@@ -1,41 +1,4 @@
-export const productCategories = [
-  { id: "all", label: "Barchasi" },
-  { id: "compressors", label: "Kompressorlar" },
-  { id: "evaporators", label: "Evaporatorlar" },
-  { id: "condensers", label: "Kondensatorlar" },
-  { id: "chillers", label: "Chillerlar" },
-  { id: "panels", label: "Sandwich panellar" },
-  { id: "doors", label: "Sovutish eshiklari" },
-  { id: "pipes", label: "Mis quvurlar" },
-  { id: "accessories", label: "Aksessuarlar" },
-] as const;
-
-export type ProductCategory = Exclude<(typeof productCategories)[number]["id"], "all">;
-export type ProductAvailability = "available" | "order";
-export type Product = {
-  id: string;
-  slug: string;
-  name: string;
-  brand: string;
-  model: string;
-  category: ProductCategory;
-  badge: string;
-  image: string | null;
-  images?: string[];
-  shortDescription?: string;
-  description?: string;
-  descriptionBullets?: string[];
-  specifications?: { id: string; name: string; value: string; mobileOrder?: number }[];
-  applications?: { id: string; label: string }[];
-  tags?: string[];
-  specs: string[];
-  availability: ProductAvailability;
-  order: number;
-  isVisible: boolean;
-  seoTitle?: string;
-  seoDescription?: string;
-  updatedAt?: string;
-};
+import type { Product } from "../lib/products/types";
 
 export const products: Product[] = [
   { id: "p01", slug: "xue-ying-br-20pg", name: "XUE YING", brand: "XUE YING", model: "BR +20PG", category: "compressors", badge: "KOMPRESSOR", image: null, specs: ["20 HP", "R404A"], tags: ["20 HP", "R404A"], availability: "available", order: 1, isVisible: true, shortDescription: "Sanoat sovutish tizimlari uchun yarim germetik porshenli kompressor.", description: "XUE YING BR +20PG — sanoat sovutish tizimlari uchun mo‘ljallangan yarim germetik porshenli kompressor. Sovutish kameralari, mahsulot omborlari va boshqa sanoat sovutish qurilmalarida ishlatiladi.", descriptionBullets: ["R404A sovutgich bilan ishlashga mo‘ljallangan", "Sanoat sovutish agregatlari tarkibida qo‘llaniladi", "O‘rnatish va sozlash bo‘yicha maslahat mavjud"], specifications: [{id:"power",name:"Quvvat",value:"20 HP",mobileOrder:2},{id:"refrigerant",name:"Sovutgich",value:"R404A",mobileOrder:3},{id:"oil",name:"Moy turi",value:"—",mobileOrder:8},{id:"dimensions",name:"O‘lchamlari",value:"—",mobileOrder:10},{id:"temperature",name:"Ishlash harorati",value:"—",mobileOrder:5},{id:"voltage",name:"Kuchlanish",value:"—",mobileOrder:6},{id:"cylinders",name:"Silindrlar",value:"—",mobileOrder:7},{id:"weight",name:"Og‘irligi",value:"—",mobileOrder:9}], applications: [{id:"rooms",label:"Sovutish kameralari"},{id:"produce",label:"Meva va sabzavot saqlash"},{id:"meat",label:"Go‘sht mahsulotlari"},{id:"industrial",label:"Sanoat sovutish tizimlari"}] },

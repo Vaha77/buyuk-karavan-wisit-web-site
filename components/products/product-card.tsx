@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Activity, ArrowRight, CircuitBoard, DoorClosed, PanelsTopLeft, Radio, Snowflake, Waves } from "lucide-react";
-import type { Product } from "@/data/products";
+import type { Product } from "@/lib/products/types";
 
 const iconByCategory = {
   compressors: CircuitBoard,

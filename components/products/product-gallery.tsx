@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Activity, CircuitBoard, DoorClosed, House, PanelsTopLeft, Radio, Snowflake, Waves } from "lucide-react";
-import type { Product } from "@/data/products";
+import type { Product } from "@/lib/products/types";
 
 const icons = { compressors: CircuitBoard, evaporators: Activity, condensers: PanelsTopLeft, chillers: Snowflake, panels: PanelsTopLeft, doors: DoorClosed, pipes: Waves, accessories: Radio } as const;
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CircleHelp, Droplet, House, PanelsTopLeft, Refrigerator } from "lucide-react";
-import { productCategories, products, type Product } from "@/data/products";
+import { productCategories, type Product } from "@/lib/products/types";
 import { ProductCard } from "./product-card";
 import { ProductGallery } from "./product-gallery";
 import { ProductDetailMotion } from "./product-detail-motion";
@@ -22,9 +22,8 @@ function detailSpecs(product: Product) {
 }
 function SpecRows({ rows }: { rows: Spec[] }) { return <div className="detail-spec-column">{rows.map(item=><div className="detail-spec-row" key={item.id}><span>{item.name}</span><strong className={item.id==="status"&&item.value==="Mavjud"?"is-available":""}>{item.value || "—"}</strong></div>)}</div>; }
 
-export function ProductDetail({ product }: { product: Product }) {
+export function ProductDetail({ product, related }: { product: Product; related: Product[] }) {
   const specs = detailSpecs(product);
-  const related = products.filter(item=>item.isVisible&&item.id!==product.id).sort((a,b)=>(Number(b.category===product.category)-Number(a.category===product.category))||(a.order-b.order)).slice(0,4);
   return <main className="products-page detail-page">
     <div className="container detail-container">
       <nav className="detail-breadcrumb" aria-label="Breadcrumb"><Link href="/">Bosh sahifa</Link><span>›</span><Link href="/products">Mahsulotlar</Link><span>›</span><Link href="/products">{categoryName(product)}</Link><span>›</span><strong>{product.name} {product.model}</strong></nav>

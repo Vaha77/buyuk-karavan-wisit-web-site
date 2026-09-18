@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Copy, Edit3, Eye, EyeOff, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
-import { productCategories, products, type Product } from "@/data/products";
+import { productCategories, type Product } from "@/lib/products/types";
+import { copyProductAction, deleteProductAction, toggleVisibilityAction } from "@/app/admin/(protected)/products/actions";
 
 const categoryNames: Record<Product["category"], string> = {
   compressors: "Kompressor", evaporators: "Evaporator", condensers: "Kondensator", chillers: "Chiller",
@@ -18,7 +20,7 @@ export function ProductVisibilityToggle({ product, onChange }: { product: Produc
 }
 export function ProductActionsMenu({ product, onCopy, onHide, onDelete }: { product: Product; onCopy: () => void; onHide: () => void; onDelete: () => void }) {
   return <details className="admin-actions-menu"><summary aria-label={`${product.name} amallari`}><MoreHorizontal size={20}/></summary><div className="admin-actions-popover">
-    <Link href={`/admin/products/${product.order}/edit`}><Edit3 size={15}/>Tahrirlash</Link>
+    <Link href={`/admin/products/${product.id}/edit`}><Edit3 size={15}/>Tahrirlash</Link>
     <Link href={`/products/${product.slug}`} target="_blank"><Eye size={15}/>Saytda ko‘rish</Link>
     <button type="button" onClick={onCopy}><Copy size={15}/>Nusxa olish</button>
     <button type="button" onClick={onHide}><EyeOff size={15}/>{product.isVisible ? "Yashirish" : "Ko‘rsatish"}</button>
@@ -50,7 +52,7 @@ export function ProductManagementCard({ product, selected, onSelect, onVisibilit
   return <article className="admin-product-card">
     <div className="admin-product-card-top"><input type="checkbox" aria-label={`${product.name} tanlash`} checked={selected} onChange={onSelect}/><span className="admin-product-thumb"><PackageGlyph/></span><div><strong>{product.name}</strong><span>{product.model}</span></div><ProductActionsMenu product={product} onHide={onVisibility} onCopy={onCopy} onDelete={onDelete}/></div>
     <div className="admin-product-card-meta"><span>{categoryNames[product.category]}</span><ProductStatusBadge product={product}/></div>
-    <div className="admin-product-card-bottom"><ProductVisibilityToggle product={product} onChange={onVisibility}/><span>#{String(product.order).padStart(2,"0")}</span><Link href={`/admin/products/${product.order}/edit`}>Tahrirlash →</Link></div>
+    <div className="admin-product-card-bottom"><ProductVisibilityToggle product={product} onChange={onVisibility}/><span>#{String(product.order).padStart(2,"0")}</span><Link href={`/admin/products/${product.id}/edit`}>Tahrirlash →</Link></div>
   </article>;
 }
 export function ProductFilters({ query, onQuery, category, onCategory, status, onStatus }: {
@@ -61,27 +63,37 @@ export function ProductFilters({ query, onQuery, category, onCategory, status, o
     <label><span className="sr-only">Holati</span><select value={status} onChange={event => onStatus(event.target.value)}><option value="all">Barchasi</option><option value="available">Mavjud</option><option value="order">Buyurtma asosida</option><option value="hidden">Yashirilgan</option></select></label>
   </div>;
 }
-export function AdminProductsPage() {
-  const [records, setRecords] = useState<Product[]>(products);
+export function AdminProductsPage({ products, saved }: { products: Product[]; saved?: "created" | "updated" }) {
+  const records = products;
+  const [pending, startTransition] = useTransition();
+  const [feedback, setFeedback] = useState(saved ? "Mahsulot saqlandi." : "");
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [status, setStatus] = useState("all");
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<string | null>(null);
   const rows = useMemo(() => records.filter(p => (category === "all" || p.category === category) && (status === "all" || (status === "hidden" ? !p.isVisible : p.availability === status)) && `${p.name} ${p.brand} ${p.model}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).sort((a,b) => a.order-b.order), [records, query, category, status]);
-  const toggleVisibility = (id: string) => setRecords(current => current.map(p => p.id === id ? { ...p, isVisible: !p.isVisible } : p));
-  const copyProduct = (id: string) => setRecords(current => { const source = current.find(p => p.id === id); return source ? [...current, { ...source, id: `copy-${Date.now()}`, name: `${source.name} — nusxa`, slug: `${source.slug}-nusxa`, order: Math.max(...current.map(p => p.order))+1, isVisible: false }] : current; });
+  const run = (action: (id: string) => Promise<{ error?: string }>, id: string, success: string) => startTransition(async () => {
+    const result = await action(id);
+    if (result.error) { setFeedback(result.error); return; }
+    setFeedback(success);
+    router.refresh();
+  });
+  const toggleVisibility = (id: string) => run(toggleVisibilityAction, id, "Ko‘rinish holati yangilandi.");
+  const copyProduct = (id: string) => run(copyProductAction, id, "Mahsulot nusxasi yaratildi.");
   const toggleSelected = (id: string) => setSelected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
-  return <div className="admin-products-page">
+  return <div className="admin-products-page" aria-busy={pending}>
     <div className="admin-page-heading"><div><h1>Mahsulotlar</h1><p>Saytdagi mahsulotlarni boshqarish</p></div><Link className="admin-primary-button" href="/admin/products/new"><Plus size={18}/>Yangi mahsulot</Link></div>
     <div className="admin-summary-grid">
       {[["Jami mahsulotlar",records.length],["Mavjud",records.filter(p=>p.availability==="available").length],["Buyurtma asosida",records.filter(p=>p.availability==="order").length],["Yashirilgan",records.filter(p=>!p.isVisible).length]].map(([label,value]) => <div className="admin-summary-card" key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </div>
+    {feedback && <p className="admin-form-feedback" role="status">{feedback}</p>}
     <section className="admin-panel admin-management-panel"><div className="admin-panel-heading"><h2>Mahsulotlar ro‘yxati</h2><span>{rows.length} ta mahsulot</span></div>
       <ProductFilters query={query} onQuery={setQuery} category={category} onCategory={setCategory} status={status} onStatus={setStatus}/>
       {rows.length ? <><ProductManagementTable rows={rows} selected={selected} onSelect={toggleSelected} onSelectAll={() => setSelected(rows.every(p=>selected.includes(p.id)) ? [] : rows.map(p=>p.id))} onVisibility={toggleVisibility} onCopy={copyProduct} onDelete={setDeleting}/>
         <div className="admin-mobile-products">{rows.map(p=><ProductManagementCard key={p.id} product={p} selected={selected.includes(p.id)} onSelect={()=>toggleSelected(p.id)} onVisibility={()=>toggleVisibility(p.id)} onCopy={()=>copyProduct(p.id)} onDelete={()=>setDeleting(p.id)}/>)}</div></> : <p className="admin-empty">Mos mahsulot topilmadi.</p>}
     </section>
-    {deleting && <div className="admin-dialog-backdrop" role="presentation"><div className="admin-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-delete-title"><h2 id="admin-delete-title">Mahsulotni o‘chirish</h2><p>Bu faqat vaqtinchalik demo ro‘yxatidan o‘chiradi. Backend ma’lumotlari o‘zgarmaydi.</p><div><button type="button" onClick={()=>setDeleting(null)}>Bekor qilish</button><button type="button" className="is-danger" onClick={()=>{setRecords(current=>current.filter(p=>p.id!==deleting));setDeleting(null)}}>O‘chirish</button></div></div></div>}
+    {deleting && <div className="admin-dialog-backdrop" role="presentation"><div className="admin-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-delete-title"><h2 id="admin-delete-title">Mahsulotni o‘chirish</h2><p>Mahsulot bazadan butunlay o‘chiriladi. Davom etasizmi?</p><div><button type="button" onClick={()=>setDeleting(null)}>Bekor qilish</button><button type="button" className="is-danger" disabled={pending} onClick={()=>{const id=deleting;setDeleting(null);run(deleteProductAction,id,"Mahsulot o‘chirildi.")}}>O‘chirish</button></div></div></div>}
   </div>;
 }

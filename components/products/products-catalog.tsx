@@ -4,17 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { productCategories, products, type ProductCategory } from "@/data/products";
+import { productCategories, type Product, type ProductCategory } from "@/lib/products/types";
 import { ProductCard } from "./product-card";
 
-export function ProductsCatalog() {
+export function ProductsCatalog({ products }: { products: Product[] }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<ProductCategory | "all">("all");
   const gridRef = useRef<HTMLDivElement>(null);
   const visible = useMemo(() => products
     .filter(product => product.isVisible && (category === "all" || product.category === category))
     .filter(product => `${product.name} ${product.brand} ${product.model}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
-    .sort((a, b) => a.order - b.order), [query, category]);
+    .sort((a, b) => a.order - b.order), [products, query, category]);
   const visibleIds = visible.map(product => product.id).join(",");
 
   useEffect(() => {

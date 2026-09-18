@@ -2,10 +2,14 @@ import type { Metadata } from "next";
 import { Header } from "@/components/home/navigation";
 import { Footer } from "@/components/home/home-page";
 import { ProductsCatalog } from "@/components/products/products-catalog";
+import { getPublicProducts } from "@/lib/products/queries";
+import { connection } from "next/server";
 import "@/components/products/products.css";
 
 export const metadata: Metadata = { title: "Mahsulotlar — BUYUK KARAVAN", description: "Professional sovutish uskunalari va komponentlari katalogi." };
 
-export default function ProductsPage() {
-  return <div className="products-shell"><Header onProducts/><main className="products-page"><ProductsCatalog/></main><Footer onProducts/></div>;
+export default async function ProductsPage() {
+  await connection();
+  const products = await getPublicProducts();
+  return <div className="products-shell"><Header onProducts/><main className="products-page"><ProductsCatalog products={products}/></main><Footer onProducts/></div>;
 }

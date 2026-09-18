@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowDown, ArrowUp, ImagePlus, Plus, Trash2, UploadCloud, X } from "lucide-react";
-import { productCategories, type Product, type ProductAvailability, type ProductCategory } from "@/data/products";
+import { productCategories, type Product, type ProductAvailability, type ProductCategory } from "@/lib/products/types";
+import { saveProductAction } from "@/app/admin/(protected)/products/actions";
 
 type Specification = { id: string; name: string; value: string };
 type Preview = { id: string; url: string; name: string };
@@ -20,7 +21,7 @@ function fromProduct(product?: Product): FormState {
   if (!product) return blank;
   return { name: product.name, brand: product.brand, model: product.model, category: product.category,
     shortDescription: product.shortDescription || "", description: product.description || "",
-    specifications: product.specifications?.length ? product.specifications : product.id === "p01" ? [{ id:"power", name:"Quvvat", value:"20 HP" },{ id:"refrigerant",name:"Sovutgich",value:"R404A" }] : product.specs.map((value,index)=>({id:`spec-${index}`,name:"Xususiyat",value})),
+    specifications: product.specifications?.length ? product.specifications : product.specs.map((value,index)=>({id:`spec-${index}`,name:"Xususiyat",value})),
     tags: product.tags || product.specs, availability: product.availability, isVisible: product.isVisible, order: product.order,
     slug: product.slug, seoTitle: product.seoTitle || "", seoDescription: product.seoDescription || "" };
 }
@@ -56,16 +57,20 @@ export function ProductImageUploader() {
 export function ProductSeoFields({ state, update }: { state: FormState; update: (key: keyof FormState, value: string) => void }) {
   return <details className="admin-form-card admin-seo"><summary>SEO / URL <span>Qidiruv tizimlari uchun ixtiyoriy ma’lumotlar</span></summary><div className="admin-form-grid"><FormField label="Slug"><input value={state.slug} onChange={e=>update("slug",e.target.value)} placeholder="xue-ying-br-20pg"/></FormField><FormField label="SEO title"><input value={state.seoTitle} onChange={e=>update("seoTitle",e.target.value)}/></FormField><FormField label="SEO description"><textarea value={state.seoDescription} onChange={e=>update("seoDescription",e.target.value)} rows={3}/></FormField></div></details>;
 }
-export function AdminSaveBar({ onSave, onDraft }: { onSave: () => void; onDraft: () => void }) {
-  return <div className="admin-save-bar"><Link href="/admin/products">Bekor qilish</Link><div><button type="button" onClick={onDraft}>Qoralama saqlash</button><button className="admin-primary-button" type="button" onClick={onSave}>Mahsulotni saqlash</button></div></div>;
+export function AdminSaveBar({ onSave, onDraft, pending }: { onSave: () => void; onDraft: () => void; pending: boolean }) {
+  return <div className="admin-save-bar"><Link href="/admin/products">Bekor qilish</Link><div><button type="button" disabled={pending} onClick={onDraft}>Qoralama saqlash</button><button className="admin-primary-button" type="button" disabled={pending} onClick={onSave}>{pending ? "Saqlanmoqda..." : "Mahsulotni saqlash"}</button></div></div>;
 }
 export function ProductForm({ product }: { product?: Product }) {
   const [state,setState]=useState<FormState>(()=>fromProduct(product));
   const [slugEdited,setSlugEdited]=useState(Boolean(product));
   const [feedback,setFeedback]=useState("");
+  const [pending,startTransition]=useTransition();
   const update=(key:keyof FormState,value:string|number|boolean|Specification[]|string[])=>setState(current=>({...current,[key]:value}));
   const updateIdentity=(key:"name"|"model",value:string)=>setState(current=>{const next={...current,[key]:value};return slugEdited?next:{...next,slug:slugify(`${next.name} ${next.model}`)};});
-  const save=(draft:boolean)=>{setFeedback(draft?"Qoralama vaqtincha saqlandi — backend hali ulanmagan.":"Mahsulot ma’lumotlari tekshirildi. Saqlash backend ulanmaguncha vaqtinchalik.");};
+  const save=(draft:boolean)=>startTransition(async()=>{
+    const result=await saveProductAction(product?.id??null,{...state,isVisible:draft?false:state.isVisible,specifications:state.specifications.filter(row=>row.name.trim()||row.value.trim())});
+    if(result.error)setFeedback(result.error);
+  });
   return <div className="admin-form-page"><div className="admin-page-heading"><div><Link className="admin-back-link" href="/admin/products">← Mahsulotlarga qaytish</Link><h1>{product?"Mahsulotni tahrirlash":"Yangi mahsulot"}</h1><p>{product?"Mahsulot ma’lumotlarini yangilash":"Sayt katalogiga yangi mahsulot qo‘shish"}</p></div></div>
     <div className="admin-form-layout"><div className="admin-form-main">
       <section className="admin-form-card"><div className="admin-form-card-heading"><h2>Asosiy ma’lumotlar</h2></div><div className="admin-form-grid">
@@ -86,6 +91,6 @@ export function ProductForm({ product }: { product?: Product }) {
       <section className="admin-form-card"><div className="admin-form-card-heading"><h2>Tartib</h2></div><FormField label="Ko‘rsatish tartibi"><input type="number" min={1} value={state.order} onChange={e=>update("order",Number(e.target.value))}/></FormField></section>
     </aside></div>
     {feedback&&<p className="admin-form-feedback" role="status">{feedback}</p>}
-    <AdminSaveBar onDraft={()=>save(true)} onSave={()=>save(false)}/>
+    <AdminSaveBar onDraft={()=>save(true)} onSave={()=>save(false)} pending={pending}/>
   </div>;
 }

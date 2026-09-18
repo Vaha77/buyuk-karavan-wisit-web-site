@@ -3,20 +3,23 @@ import { notFound } from "next/navigation";
 import { Header } from "@/components/home/navigation";
 import { Footer } from "@/components/home/home-page";
 import { ProductDetail } from "@/components/products/product-detail";
-import { products } from "@/data/products";
+import { getProductBySlug, getRelatedProducts } from "@/lib/products/queries";
+import { connection } from "next/server";
 import "@/components/products/products.css";
 import "@/components/products/product-detail.css";
 
 type Props = { params: Promise<{ slug: string }> };
-export function generateStaticParams() { return products.filter(product => product.isVisible).map(product => ({ slug: product.slug })); }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  await connection();
   const { slug } = await params;
-  const product = products.find(item => item.slug === slug && item.isVisible);
-  return { title: product?.seoTitle || (product ? `${product.name} ${product.model} — BUYUK KARAVAN` : "Mahsulot topilmadi"), description: product?.seoDescription || product?.shortDescription || (product ? `${product.name} ${product.model} — sovutish uskunasi.` : undefined) };
+  const product = await getProductBySlug(slug);
+  return { title: product?.seoTitle || product?.name || "Mahsulot topilmadi", description: product?.seoDescription || product?.shortDescription };
 }
 export default async function ProductDetailPage({ params }: Props) {
+  await connection();
   const { slug } = await params;
-  const product = products.find(item => item.slug === slug && item.isVisible);
+  const product = await getProductBySlug(slug);
   if (!product) notFound();
-  return <div className="products-shell detail-shell"><Header onProducts/><ProductDetail product={product}/><Footer onProducts/></div>;
+  const related = await getRelatedProducts(product.id, product.category);
+  return <div className="products-shell detail-shell"><Header onProducts/><ProductDetail product={product} related={related}/><Footer onProducts/></div>;
 }
