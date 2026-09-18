@@ -44,6 +44,7 @@ function Footer({ onProducts = false }: { onProducts?: boolean }) {
       <div className="footer-column footer-contact"><h3>Aloqa</h3><p>Namangan, O‘zbekiston</p><p>[Telefon raqami]</p><p>@buyuk_karavan</p><div className="socials"><a href="https://instagram.com/buyuk_karavan" aria-label="Instagram"><Instagram size={17}/></a><a href="https://t.me/buyuk_karavan" aria-label="Telegram"><Send size={17}/></a></div></div>
     </div>
     <div className="container footer-bottom"><span>© 2026 Buyuk Karavan MChJ. Barcha huquqlar himoyalangan.</span><span>Namangan, O‘zbekiston</span></div>
+    <div className="container footer-admin-row"><span>© 2026 BUYUK KARAVAN</span><span aria-hidden="true">·</span><Link href="/admin">Admin</Link></div>
   </footer>;
 }
 export function HomePage() { return <><Header/><main><Hero/><Selector/><Solutions/><Equipment/><Temperature/><Projects/><Reasons/><Consultation/></main><Footer/><HomeMotion/></>; }

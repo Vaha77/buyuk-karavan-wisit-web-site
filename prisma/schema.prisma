@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProductAvailability {
+  AVAILABLE
+  ORDER
+}
+
+enum LeadStatus {
+  NEW
+  REVIEWING
+  CONTACTED
+  COMPLETED
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+}
+
+model Product {
+  id               String              @id @default(cuid())
+  name             String
+  brand            String
+  model            String
+  slug             String              @unique
+  category         String
+  shortDescription String?
+  description      String?
+  images           String[]            @default([])
+  specifications   Json                @default("[]")
+  tags             String[]            @default([])
+  availability     ProductAvailability @default(AVAILABLE)
+  isVisible        Boolean             @default(true)
+  order            Int                 @default(0)
+  seoTitle         String?
+  seoDescription   String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([isVisible, order])
+  @@index([category])
+}
+
+model HomeContent {
+  id               String   @id @default(cuid())
+  hero             Json
+  selector         Json
+  solutions        Json
+  featuredProducts Json
+  temperatureRange Json
+  projects         Json
+  reasons          Json
+  cta              Json
+  footer           Json
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Lead {
+  id           String     @id @default(cuid())
+  customerName String?
+  phone        String?
+  telegram     String?
+  requestType  String
+  product      String?
+  dimensions   String?
+  capacity     String?
+  temperature  String?
+  region       String?
+  notes        String?
+  status       LeadStatus @default(NEW)
+  aiSummary    String?
+  chatHistory  Json       @default("[]")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  name         String
+  phone        String    @unique
+  passwordHash String
+  role         AdminRole @default(MANAGER)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     AdminSession[]
+}
+
+model AdminSession {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AdminLoginAttempt {
+  key         String   @id @db.VarChar(64)
+  attempts    Int      @default(0)
+  windowStart DateTime @default(now())
+}

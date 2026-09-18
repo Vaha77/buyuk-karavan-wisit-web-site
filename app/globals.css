@@ -29,3 +29,4 @@
 .type-card.selected{transform:translateY(-2px)}.type-icon{transition:transform .25s ease,background .25s ease}.type-card.selected .type-icon{transform:scale(1.05)}
 .hero-contour-light{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}.hero-contour-light path{visibility:hidden}.hero-contour-light .hero-contour-beacon,.hero-contour-light .hero-contour-trail{opacity:0}.hero-contour-mobile{display:none}@media(max-width:700px){.hero-contour-desktop{display:none}.hero-contour-mobile{display:block}}
 @media(max-width:700px){.site-header{position:absolute}}
+.footer-admin-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:26px;padding-top:18px;border-top:1px solid #ffffff14;color:#8ea5b8;font-size:11px;letter-spacing:.04em;text-align:center}.footer-admin-row a{color:inherit;text-decoration:underline;text-decoration-color:#8ea5b866;text-underline-offset:3px}.footer-admin-row a:hover{color:#fff}

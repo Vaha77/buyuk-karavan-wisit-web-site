@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Boxes, CalendarDays, ChevronLeft, LayoutDashboard, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, Users, X } from "lucide-react";
+import { Bell, Boxes, CalendarDays, ChevronLeft, LayoutDashboard, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, Users, X } from "lucide-react";
+import { logoutAction } from "@/app/admin/login/actions";
 
 const navigation = [
   { label: "Dashboard", href: "#", icon: LayoutDashboard },
@@ -17,7 +18,9 @@ const navigation = [
   { label: "Sozlamalar", href: "#", icon: Settings },
 ];
 
-export function AdminShell({ children }: { children: React.ReactNode }) {
+const roleLabels = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer" };
+
+export function AdminShell({ children, user }: { children: React.ReactNode; user: { name: string; role: keyof typeof roleLabels } }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const homeContentRoute = pathname.startsWith("/admin/content/home");
@@ -37,7 +40,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <header className="admin-topbar">
         <div className="admin-mobile-brand"><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong></div>
         <div className="admin-topbar-title"><strong>{leadsRoute ? "Mijoz so‘rovlari" : homeContentRoute ? "Home Page" : "Mahsulotlar"}</strong><span>{leadsRoute ? "Madina AI orqali kelgan mijoz murojaatlari" : homeContentRoute ? "Bosh sahifa kontentini boshqarish" : "Saytdagi mahsulotlarni boshqarish"}</span></div>
-        <div className="admin-topbar-actions"><div className="admin-topbar-search"><Search size={14}/><span>Qidirish...</span></div><Bell className="admin-bell" size={18}/><span className="admin-avatar">A</span><button className="admin-mobile-menu" aria-label="Menyuni ochish" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={21}/></button></div>
+        <div className="admin-topbar-actions"><div className="admin-topbar-search"><Search size={14}/><span>Qidirish...</span></div><Bell className="admin-bell" size={18}/><span className="admin-user"><span className="admin-avatar">{user.name.trim().charAt(0).toUpperCase()}</span><span className="admin-user-details"><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span></span><form action={logoutAction}><button className="admin-logout" type="submit" aria-label="Chiqish"><LogOut size={16}/><span>Chiqish</span></button></form><button className="admin-mobile-menu" aria-label="Menyuni ochish" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={21}/></button></div>
       </header>
       <div className="admin-workspace">{children}</div>
     </div>

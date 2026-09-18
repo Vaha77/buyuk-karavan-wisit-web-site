@@ -1,4 +1,6 @@
 .admin-shell{--admin-navy:#102c47;--admin-blue:#245487;--admin-line:#d7e6f8;--admin-muted:#7c91aa;display:flex;min-height:100vh;background:#f7fbff;color:var(--admin-navy);font-size:14px}
+.admin-user{display:flex;align-items:center;gap:9px}.admin-user-details{display:grid;gap:2px;white-space:nowrap}.admin-user-details strong{font-size:12px}.admin-user-details small{font-size:10px;color:#7c91aa}.admin-logout{display:flex;align-items:center;gap:6px;border:0;background:#edf5ff;color:#245487;border-radius:8px;padding:9px 11px;font:inherit;font-weight:700;cursor:pointer}.admin-logout:hover{background:#dfeeff}
+@media(max-width:650px){.admin-user-details,.admin-logout span{display:none}.admin-logout{padding:8px}}
 .admin-shell *{min-width:0}
 .admin-sidebar{width:246px;flex:none;background:#fff;border-right:1px solid var(--admin-line);min-height:100vh;padding:24px 16px 30px;position:relative;z-index:50}
 .admin-sidebar-brand{display:flex;align-items:center;gap:10px;height:34px;white-space:nowrap}
