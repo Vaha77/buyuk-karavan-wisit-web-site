@@ -72,6 +72,27 @@ model Product360Asset {
   @@index([status])
 }
 
+model Project {
+  id               String   @id @default(cuid())
+  title            String
+  slug             String   @unique
+  shortDescription String?
+  description      String?
+  location         String?
+  temperature      String?
+  capacity         String?
+  category         String?
+  images           String[] @default([])
+  coverImage       String?
+  isVisible        Boolean  @default(true)
+  isFeatured       Boolean  @default(false)
+  order            Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([isVisible, isFeatured, order])
+}
+
 model HomeContent {
   id               String   @id @default(cuid())
   hero             Json
