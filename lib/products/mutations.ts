@@ -143,6 +143,24 @@ export async function toggleProductVisibility(id: string) {
   return updated;
 }
 
+export async function attachGeneratedProductImage(id: string, file: File, placement: "main" | "gallery") {
+  await requireAdmin();
+  const previous = await getDb().product.findUnique({ where: { id } });
+  if (!previous) throw new ProductNotFoundError();
+  const url = await uploadProductImage(id, file);
+  const images = placement === "main" ? [url, ...previous.images.slice(1)] : [...previous.images, url];
+  let updated;
+  try {
+    updated = await getDb().product.update({ where: { id }, data: { images } });
+  } catch (error) {
+    await Promise.allSettled([deleteOwnedImage(url, id)]);
+    throw error;
+  }
+  revalidateProducts(updated.slug);
+  if (placement === "main" && previous.images[0]) await Promise.allSettled([cleanupUnreferenced(id, [previous.images[0]])]);
+  return updated;
+}
+
 export async function copyProduct(id: string) {
   await requireAdmin();
   const source = await getDb().product.findUnique({ where: { id } });
