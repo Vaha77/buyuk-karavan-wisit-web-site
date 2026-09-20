@@ -69,35 +69,3 @@ export async function deleteOwnedImage(url: string, productId: string) {
   const c = config();
   await client().send(new DeleteObjectCommand({ Bucket: c.bucket, Key: key }));
 }
-
-export async function uploadProduct360Source(productId: string, slot: string, file: File): Promise<string> {
-  if(!/^real-(12-(00[1-9]|01[0-2])|24-(00[1-9]|01\d|02[0-4]))$/.test(slot))throw new ImageValidationError("360° burchak noto‘g‘ri.");
-  if (!(file instanceof File)) throw new ImageValidationError("Rasmni tanlang.");
-  const format = formats.get(file.type);
-  if (!format) throw new ImageValidationError("Rasm formati qo‘llab-quvvatlanmaydi.");
-  if (!file.size || file.size > MAX_IMAGE_SIZE) throw new ImageValidationError("Rasm hajmi juda katta.");
-  const buffer = new Uint8Array(await file.arrayBuffer());
-  if (!format.signature(buffer)) throw new ImageValidationError("Rasm formati qo‘llab-quvvatlanmaydi.");
-  const c = config();
-  const key = `products/${productId}/360/sources/${slot}-${randomUUID()}.${format.extension}`;
-  await client().send(new PutObjectCommand({ Bucket: c.bucket, Key: key, Body: buffer, ContentType: file.type }));
-  return `${c.endpoint}/${c.bucket}/${key}`;
-}
-
-export async function deleteOwnedProduct360Image(url: string, productId: string) {
-  const c = config();
-  try {
-    const parsed = new URL(url);
-    const prefix = `${c.endpoint}/${c.bucket}/products/${productId}/360/`;
-    if (parsed.search || parsed.hash || !parsed.href.startsWith(prefix)) return;
-    const key = parsed.href.slice(`${c.endpoint}/${c.bucket}/`.length);
-    if (!/^products\/[A-Za-z0-9_-]+\/360\/(sources\/((front|right|back|left)|frame-(00[1-9]|01\d|02[0-4])|real-(12-(00[1-9]|01[0-2])|24-(00[1-9]|01\d|02[0-4])))-[0-9a-f-]+|frames\/\d{3,}-[0-9a-f-]+)\.(jpg|png|webp)$/.test(key)) return;
-    await client().send(new DeleteObjectCommand({ Bucket: c.bucket, Key: key }));
-  } catch { /* External and malformed URLs are never deleted. */ }
-}
-
-export async function uploadProduct360Frame(productId:string,position:number,bytes:Uint8Array){
-  if(!Number.isInteger(position)||position<1||position>999||!bytes.length||bytes.length>20*1024*1024)throw new ImageValidationError("360° kadr noto‘g‘ri.");
-  const c=config();const key=`products/${productId}/360/frames/${String(position).padStart(3,"0")}-${randomUUID()}.png`;
-  await client().send(new PutObjectCommand({Bucket:c.bucket,Key:key,Body:bytes,ContentType:"image/png"}));return `${c.endpoint}/${c.bucket}/${key}`;
-}

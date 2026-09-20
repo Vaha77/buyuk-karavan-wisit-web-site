@@ -5,7 +5,6 @@ import { ProductCard } from "./product-card";
 import { ProductGallery } from "./product-gallery";
 import { ProductDetailMotion } from "./product-detail-motion";
 import { MadinaPlaceholder } from "./madina-placeholder";
-import type { Product360View } from "@/lib/product-360/types";
 
 const applicationIcons = { rooms: House, produce: Droplet, meat: Refrigerator, industrial: PanelsTopLeft } as const;
 const categoryName = (product: Product) => productCategories.find(item=>item.id===product.category)?.label || product.badge;
@@ -23,13 +22,13 @@ function detailSpecs(product: Product) {
 }
 function SpecRows({ rows }: { rows: Spec[] }) { return <div className="detail-spec-column">{rows.map(item=><div className="detail-spec-row" key={item.id}><span>{item.name}</span><strong className={item.id==="status"&&item.value==="Mavjud"?"is-available":""}>{item.value || "—"}</strong></div>)}</div>; }
 
-export function ProductDetail({ product, related, asset360 }: { product: Product; related: Product[]; asset360: Product360View | null }) {
+export function ProductDetail({ product, related }: { product: Product; related: Product[] }) {
   const specs = detailSpecs(product);
   return <main className="products-page detail-page">
     <div className="container detail-container">
       <nav className="detail-breadcrumb" aria-label="Breadcrumb"><Link href="/">Bosh sahifa</Link><span>›</span><Link href="/products">Mahsulotlar</Link><span>›</span><Link href="/products">{categoryName(product)}</Link><span>›</span><strong>{product.name} {product.model}</strong></nav>
       <div className="detail-hero">
-        <ProductGallery product={product} asset360={asset360}/>
+        <ProductGallery product={product}/>
         <div className="detail-info">
           <span className="detail-category">{product.badge}</span>
           <h1>{product.name}</h1>

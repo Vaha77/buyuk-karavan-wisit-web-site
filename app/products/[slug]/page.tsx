@@ -5,7 +5,6 @@ import { Footer } from "@/components/home/home-page";
 import { ProductDetail } from "@/components/products/product-detail";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products/queries";
 import { connection } from "next/server";
-import { getReadyProduct360Asset } from "@/lib/product-360/queries";
 import "@/components/products/products.css";
 import "@/components/products/product-detail.css";
 
@@ -21,6 +20,6 @@ export default async function ProductDetailPage({ params }: Props) {
   const { slug } = await params;
   const product = await getProductBySlug(slug);
   if (!product) notFound();
-  const [related, asset360] = await Promise.all([getRelatedProducts(product.id, product.category), getReadyProduct360Asset(product.id)]);
-  return <div className="products-shell detail-shell"><Header onProducts/><ProductDetail product={product} related={related} asset360={asset360}/><Footer onProducts/></div>;
+  const related = await getRelatedProducts(product.id, product.category);
+  return <div className="products-shell detail-shell"><Header onProducts/><ProductDetail product={product} related={related}/><Footer onProducts/></div>;
 }
