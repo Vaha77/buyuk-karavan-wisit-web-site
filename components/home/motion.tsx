@@ -6,6 +6,16 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { MotionPathPlugin } from "gsap/MotionPathPlugin";
 import Lenis from "lenis";
 
+const one = <T extends Element = HTMLElement>(selector: string) => document.querySelector<T>(selector);
+const many = <T extends Element = HTMLElement>(selector: string) => gsap.utils.toArray<T>(selector);
+const setIfPresent = (selector: string, vars: gsap.TweenVars) => { const targets = many(selector); if (targets.length) gsap.set(targets, vars); };
+function addFromTo(timeline: gsap.core.Timeline, selector: string, from: gsap.TweenVars, to: gsap.TweenVars, position?: gsap.Position) {
+  const targets = many(selector); if (targets.length) timeline.fromTo(targets, from, to, position);
+}
+function addFrom(timeline: gsap.core.Timeline, selector: string, vars: gsap.TweenVars, position?: gsap.Position) {
+  const targets = many(selector); if (targets.length) timeline.from(targets, vars, position);
+}
+
 function contourMotion(mobile: boolean) {
   const prefix = mobile ? ".hero-contour-mobile" : ".hero-contour-desktop";
   const path = document.querySelector<SVGPathElement>(`${prefix} path`);
@@ -31,24 +41,23 @@ function contourMotion(mobile: boolean) {
 function mobileMotion() {
   contourMotion(true);
   // Native window scrolling on iOS. Every scrolling item owns its trigger.
-  gsap.set(".header-inner, .hero-eyebrow, .hero-title-line, .hero-subtitle, .hero-actions .button, .hero-temp", { autoAlpha: 0 });
-  gsap.set(".header-inner", { y: -30 });
-  gsap.set(".hero-eyebrow", { y: 26 });
-  gsap.set(".hero-title-line", { y: 48 });
-  gsap.set(".hero-subtitle", { y: 35 });
-  gsap.set(".hero-actions .button", { y: 38 });
-  gsap.set(".hero-temp", { y: 32, scale: 0.94 });
+  setIfPresent(".header-inner, .hero-eyebrow, .hero-title-line, .hero-subtitle, .hero-actions .button, .hero-temp", { autoAlpha: 0 });
+  setIfPresent(".header-inner", { y: -30 });
+  setIfPresent(".hero-eyebrow", { y: 26 });
+  setIfPresent(".hero-title-line", { y: 48 });
+  setIfPresent(".hero-subtitle", { y: 35 });
+  setIfPresent(".hero-actions .button", { y: 38 });
+  setIfPresent(".hero-temp", { y: 32, scale: 0.94 });
 
   const hero = gsap.timeline({ defaults: { ease: "power3.out" } });
-  hero
-    .fromTo(".header-inner", { autoAlpha: 0, y: -30 }, { autoAlpha: 1, y: 0, duration: 0.75, immediateRender: false })
-    .fromTo(".hero-eyebrow", { autoAlpha: 0, y: 26 }, { autoAlpha: 1, y: 0, duration: 0.68, immediateRender: false }, "-=0.2")
-    .fromTo(".hero-title-line", { autoAlpha: 0, y: 48 }, { autoAlpha: 1, y: 0, duration: 0.86, stagger: 0.15, immediateRender: false }, "-=0.08")
-    .fromTo(".hero-subtitle", { autoAlpha: 0, y: 35 }, { autoAlpha: 1, y: 0, duration: 0.72, immediateRender: false }, "-=0.12")
-    .fromTo(".hero-actions .button:first-child", { autoAlpha: 0, y: 38 }, { autoAlpha: 1, y: 0, duration: 0.7, immediateRender: false }, "-=0.08")
-    .fromTo(".hero-actions .button:last-child", { autoAlpha: 0, y: 38 }, { autoAlpha: 1, y: 0, duration: 0.7, immediateRender: false }, "-=0.48")
-    .fromTo(".hero-temp", { autoAlpha: 0, y: 32, scale: 0.94 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.78, immediateRender: false }, "-=0.18");
-  gsap.to(".room-front", { y: 24, ease: "none", scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: 0.8 } });
+  addFromTo(hero,".header-inner",{autoAlpha:0,y:-30},{autoAlpha:1,y:0,duration:.75,immediateRender:false});
+  addFromTo(hero,".hero-eyebrow",{autoAlpha:0,y:26},{autoAlpha:1,y:0,duration:.68,immediateRender:false},"-=0.2");
+  addFromTo(hero,".hero-title-line",{autoAlpha:0,y:48},{autoAlpha:1,y:0,duration:.86,stagger:.15,immediateRender:false},"-=0.08");
+  addFromTo(hero,".hero-subtitle",{autoAlpha:0,y:35},{autoAlpha:1,y:0,duration:.72,immediateRender:false},"-=0.12");
+  addFromTo(hero,".hero-actions .button:first-child",{autoAlpha:0,y:38},{autoAlpha:1,y:0,duration:.7,immediateRender:false},"-=0.08");
+  addFromTo(hero,".hero-actions .button:last-child",{autoAlpha:0,y:38},{autoAlpha:1,y:0,duration:.7,immediateRender:false},"-=0.48");
+  addFromTo(hero,".hero-temp",{autoAlpha:0,y:32,scale:.94},{autoAlpha:1,y:0,scale:1,duration:.78,immediateRender:false},"-=0.18");
+  const roomFront=one(".room-front"),heroSection=one(".hero");if(roomFront&&heroSection)gsap.to(roomFront,{y:24,ease:"none",scrollTrigger:{trigger:heroSection,start:"top top",end:"bottom top",scrub:.8}});
 
   const selectorTitle = document.querySelector<HTMLElement>(".selector-intro h2");
   if (selectorTitle) {
@@ -104,7 +113,7 @@ function mobileMotion() {
     gsap.fromTo(card, { autoAlpha: 0, y: 40, scale: 0.94 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.72, delay: (index % 2) * 0.12, ease: "power3.out", immediateRender: false,
       scrollTrigger: { trigger: card, start: "top 84%", once: true } });
   });
-  const equipmentAction = document.querySelector<HTMLElement>(".equipment-mobile-all");
+  const equipmentAction = document.querySelector<HTMLElement>(".equipment-all");
   if (equipmentAction) {
     gsap.set(equipmentAction, { autoAlpha: 0, y: 35 });
     gsap.fromTo(equipmentAction, { autoAlpha: 0, y: 35 }, { autoAlpha: 1, y: 0, duration: 0.68, ease: "power3.out", immediateRender: false,
@@ -139,7 +148,7 @@ function mobileMotion() {
     gsap.fromTo(card, { autoAlpha: 0, y: 50, scale: 0.94 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.86, ease: "power3.out", immediateRender: false,
       scrollTrigger: { trigger: card, start: "top 82%", once: true } });
   });
-  const projectsAction = document.querySelector<HTMLElement>(".projects-mobile-all");
+  const projectsAction = document.querySelector<HTMLElement>(".projects-all");
   if (projectsAction) {
     gsap.set(projectsAction, { autoAlpha: 0, y: 35 });
     gsap.fromTo(projectsAction, { autoAlpha: 0, y: 35 }, { autoAlpha: 1, y: 0, duration: 0.68, ease: "power3.out", immediateRender: false,
@@ -198,46 +207,42 @@ function mobileMotion() {
 function desktopMotion() {
   contourMotion(false);
   const hero = gsap.timeline({ defaults: { ease: "power2.out" } });
-  hero.from(".header-inner", { autoAlpha: 0, y: -16, duration: 0.7 })
-    .from(".hero-copy > *", { autoAlpha: 0, y: 25, duration: 0.75, stagger: 0.11 }, "-=0.3")
-    .from(".hero-temp", { autoAlpha: 0, y: 18, duration: 0.65 }, "-=0.2");
-  gsap.to(".room-front", { y: 50, ease: "none", scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: 1 } });
-  const entrance = (target: string | Element, trigger: string | Element, extra: gsap.TweenVars = {}) => gsap.from(target, {
+  addFrom(hero,".header-inner",{autoAlpha:0,y:-16,duration:.7});
+  addFrom(hero,".hero-copy > *",{autoAlpha:0,y:25,duration:.75,stagger:.11},"-=0.3");
+  addFrom(hero,".hero-temp",{autoAlpha:0,y:18,duration:.65},"-=0.2");
+  const roomFront=one(".room-front"),heroSection=one(".hero");if(roomFront&&heroSection)gsap.to(roomFront,{y:50,ease:"none",scrollTrigger:{trigger:heroSection,start:"top top",end:"bottom top",scrub:1}});
+  const entrance = (target: Element | Element[], trigger: Element, extra: gsap.TweenVars = {}) => gsap.from(target, {
     autoAlpha: 0, y: 25, duration: 0.68, ease: "power2.out", ...extra,
     scrollTrigger: { trigger, start: "top 88%", once: true },
   });
-  for (const selector of [".selector-intro", ".type-grid", ".selector-steps", ".solutions-section .section-heading", ".equipment-section .section-heading", ".temperature-copy", ".temperature-scale", ".projects-section .section-heading", ".reasons-section .section-heading", ".consultation-content", ".footer-grid"]) entrance(selector, selector);
+  for (const selector of [".selector-intro", ".type-grid", ".selector-steps", ".solutions-section .section-heading", ".equipment-section .section-heading", ".temperature-copy", ".temperature-scale", ".projects-section .section-heading", ".reasons-section .section-heading", ".consultation-content", ".footer-grid"]) { const target=one(selector);if(target)entrance(target,target); }
   gsap.utils.toArray<HTMLElement>(".solution-row").forEach((row, index) => {
     entrance(row.querySelector(".solution-image") ?? row, row, { x: index % 2 ? -28 : 28, y: 0, duration: 0.7 });
     entrance(row.querySelector(".solution-copy") ?? row, row, { x: index % 2 ? 22 : -22, y: 0, delay: 0.1, duration: 0.7 });
   });
-  entrance(".equipment-card", ".equipment-grid", { scale: 0.97, y: 15, stagger: 0.06 });
-  entrance(".project-card", ".projects-grid", { scale: 0.98, y: 22, stagger: 0.1, duration: 0.8 });
-  entrance(".reason-row", ".reasons-list", { y: 15, stagger: 0.09 });
-  entrance(".footer-bottom", ".footer-bottom", { y: 10 });
+  const equipmentCards=many(".equipment-card"),equipmentGrid=one(".equipment-grid");if(equipmentCards.length&&equipmentGrid)entrance(equipmentCards,equipmentGrid,{scale:.97,y:15,stagger:.06});
+  const projectCards=many(".project-card"),projectsGrid=one(".projects-grid");if(projectCards.length&&projectsGrid)entrance(projectCards,projectsGrid,{scale:.98,y:22,stagger:.1,duration:.8});
+  const reasonRows=many(".reason-row"),reasonsList=one(".reasons-list");if(reasonRows.length&&reasonsList)entrance(reasonRows,reasonsList,{y:15,stagger:.09});
+  const footerBottom=one(".footer-bottom");if(footerBottom)entrance(footerBottom,footerBottom,{y:10});
 }
 
 export function HomeMotion() {
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger, MotionPathPlugin);
     const media = gsap.matchMedia();
+    let active = true;
+    let orientationTimer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => { if (active) ScrollTrigger.refresh(); };
+    const onOrientationChange = () => { orientationTimer = setTimeout(refresh, 250); };
+    const pendingImages = many<HTMLImageElement>("main img, footer img").filter(image => !image.complete);
+    pendingImages.forEach(image => { image.addEventListener("load", refresh, { once: true }); image.addEventListener("error", refresh, { once: true }); });
+    window.addEventListener("load", refresh);
+    window.addEventListener("orientationchange", onOrientationChange);
+    const initialFrame = requestAnimationFrame(refresh);
+    void document.fonts.ready.then(refresh);
     media.add("(max-width: 700px) and (prefers-reduced-motion: no-preference)", () => {
       // This branch intentionally has no Lenis or custom scroller.
       mobileMotion();
-      let active = true;
-      let orientationTimer: ReturnType<typeof setTimeout> | undefined;
-      const refresh = () => { if (active) ScrollTrigger.refresh(); };
-      const onOrientationChange = () => { orientationTimer = setTimeout(refresh, 250); };
-      window.addEventListener("load", refresh);
-      window.addEventListener("orientationchange", onOrientationChange);
-      requestAnimationFrame(refresh);
-      void document.fonts.ready.then(refresh);
-      return () => {
-        active = false;
-        if (orientationTimer) clearTimeout(orientationTimer);
-        window.removeEventListener("load", refresh);
-        window.removeEventListener("orientationchange", onOrientationChange);
-      };
     });
     media.add("(min-width: 701px) and (prefers-reduced-motion: no-preference)", () => {
       const lenis = new Lenis({ duration: 1.05, smoothWheel: true });
@@ -249,7 +254,15 @@ export function HomeMotion() {
       ScrollTrigger.refresh();
       return () => { cancelAnimationFrame(frame); lenis.destroy(); };
     });
-    return () => media.revert();
+    return () => {
+      active = false;
+      cancelAnimationFrame(initialFrame);
+      if (orientationTimer) clearTimeout(orientationTimer);
+      window.removeEventListener("load", refresh);
+      window.removeEventListener("orientationchange", onOrientationChange);
+      pendingImages.forEach(image => { image.removeEventListener("load", refresh); image.removeEventListener("error", refresh); });
+      media.revert();
+    };
   }, []);
   return null;
 }
