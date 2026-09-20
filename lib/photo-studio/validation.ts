@@ -1,5 +1,6 @@
 import "server-only";
-import { photoStudioModes, type PhotoStudioBackground, type PhotoStudioMode, type PhotoStudioSettings, type PhotoStudioSize } from "./types";
+import { getPhotoStudioModeConfig } from "./modes";
+import { photoStudioModes, photoStudioSizes, type PhotoStudioAspectRatio, type PhotoStudioBackground, type PhotoStudioMode, type PhotoStudioSettings, type PhotoStudioTextSafeArea } from "./types";
 
 export class PhotoStudioValidationError extends Error {}
 const formats = new Map([
@@ -9,19 +10,40 @@ const formats = new Map([
 ]);
 
 export async function validateSourceImage(file: File) {
-  if (!(file instanceof File) || !formats.has(file.type)) throw new PhotoStudioValidationError("Rasm formati qo‘llab-quvvatlanmaydi.");
-  if (!file.size || file.size > 10 * 1024 * 1024) throw new PhotoStudioValidationError("Rasm hajmi juda katta.");
+  if (!(file instanceof File) || !formats.has(file.type)) throw new PhotoStudioValidationError("Rasm formati qo‘llab-quvvatlanmaydi. PNG, JPG yoki WebP yuklang.");
+  if (!file.size || file.size > 10 * 1024 * 1024) throw new PhotoStudioValidationError("Rasm hajmi juda katta. Maksimal hajm 10 MB.");
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (!formats.get(file.type)!(bytes)) throw new PhotoStudioValidationError("Rasm formati qo‘llab-quvvatlanmaydi.");
+  if (!formats.get(file.type)!(bytes)) throw new PhotoStudioValidationError("Rasm fayli buzilgan yoki formati noto‘g‘ri.");
   return { bytes, type: file.type, name: file.name.replace(/[^A-Za-z0-9._-]/g, "_").slice(-100) || "product.png" };
 }
 
-export function parsePhotoStudioRequest(value: Record<string, FormDataEntryValue>): { mode: PhotoStudioMode; settings: PhotoStudioSettings } {
-  const mode = String(value.mode) as PhotoStudioMode;
-  const background = String(value.background) as PhotoStudioBackground;
-  const size = Number(value.size) as PhotoStudioSize;
-  if (!photoStudioModes.includes(mode) || !["white", "transparent", "original"].includes(background) || ![1000, 1500, 2000].includes(size)) throw new PhotoStudioValidationError("Foto Studio sozlamalari noto‘g‘ri.");
-  const flag = (key: string) => value[key] === "true";
-  return { mode, settings: { background, size, removeBackground: flag("removeBackground"), enhanceQuality: flag("enhanceQuality"), correctColors: flag("correctColors"), improveLighting: flag("improveLighting"), protectProduct: flag("protectProduct") } };
-}
+const allowedBackgrounds: Record<PhotoStudioMode, PhotoStudioBackground[]> = {
+  card: ["white", "light-gray"],
+  detail: ["premium-neutral", "premium-industrial"],
+  project: ["original"],
+  transparent: ["transparent"],
+  ad: ["premium-industrial"],
+};
+const allowedRatios: Record<PhotoStudioMode, PhotoStudioAspectRatio[]> = {
+  card: ["1:1"], detail: ["1:1"], project: ["original", "1:1", "4:5", "16:9"], transparent: ["1:1"], ad: ["1:1", "4:5", "9:16", "16:9"],
+};
 
+export function parsePhotoStudioRequest(value: Record<string, FormDataEntryValue>): { mode: PhotoStudioMode; settings: PhotoStudioSettings } {
+  const rawMode = String(value.mode);
+  if (!photoStudioModes.includes(rawMode as PhotoStudioMode)) throw new PhotoStudioValidationError("Foto Studio rejimi noto‘g‘ri.");
+  const mode = rawMode as PhotoStudioMode;
+  const size = Number(value.size);
+  const background = String(value.background) as PhotoStudioBackground;
+  const aspectRatio = String(value.aspectRatio) as PhotoStudioAspectRatio;
+  if (!photoStudioSizes.includes(size as 1000 | 1500 | 2000) || !allowedBackgrounds[mode].includes(background) || !allowedRatios[mode].includes(aspectRatio)) throw new PhotoStudioValidationError("Tanlangan rejim sozlamalari noto‘g‘ri.");
+  const flag = (key: keyof PhotoStudioSettings) => value[key] === "true";
+  const choice = <T extends string>(key: string, allowed: readonly T[], fallback: T) => allowed.includes(String(value[key]) as T) ? String(value[key]) as T : fallback;
+  const defaults = getPhotoStudioModeConfig(mode).defaults;
+  const settings: PhotoStudioSettings = { ...defaults, size: size as 1000 | 1500 | 2000, background, aspectRatio };
+  if (mode === "card") Object.assign(settings, { removeBackground: flag("removeBackground"), enhanceQuality: flag("enhanceQuality"), correctColors: flag("correctColors"), improveLighting: flag("improveLighting"), protectProduct: flag("protectProduct") });
+  if (mode === "detail") Object.assign(settings, { premiumLighting: flag("premiumLighting"), detailEnhancement: flag("detailEnhancement"), naturalShadow: flag("naturalShadow"), protectProduct: flag("protectProduct") });
+  if (mode === "project") Object.assign(settings, { exposure: flag("exposure"), whiteBalance: flag("whiteBalance"), perspectiveCorrection: flag("perspectiveCorrection"), clutterCleanup: flag("clutterCleanup"), detailEnhancement: flag("detailEnhancement"), preserveEnvironment: true, protectProduct: true });
+  if (mode === "transparent") Object.assign(settings, { removeBackground: true, edgeQuality: flag("edgeQuality"), fineDetailProtection: flag("fineDetailProtection"), protectProduct: flag("protectProduct") });
+  if (mode === "ad") Object.assign(settings, { composition: choice("composition", ["balanced", "dynamic", "minimal"] as const, "dynamic"), textSafeArea: choice<PhotoStudioTextSafeArea>("textSafeArea", ["left", "right", "top", "auto"], "auto"), premiumLighting: flag("premiumLighting"), protectProduct: flag("protectProduct") });
+  return { mode, settings };
+}

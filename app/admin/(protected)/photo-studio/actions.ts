@@ -3,24 +3,28 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { attachGeneratedProductImage, ProductNotFoundError } from "@/lib/products/mutations";
-import { editProductImage, OpenAINotConfiguredError, PhotoStudioAIError, PhotoStudioRateLimitError } from "@/lib/photo-studio/openai";
+import { editProductImage, OpenAINotConfiguredError, PhotoStudioAIError, PhotoStudioNoImageError, PhotoStudioRateLimitError, PhotoStudioTimeoutError, PhotoStudioTransparencyError } from "@/lib/photo-studio/openai";
+import type { PhotoStudioMode } from "@/lib/photo-studio/types";
 import { parsePhotoStudioRequest, PhotoStudioValidationError, validateSourceImage } from "@/lib/photo-studio/validation";
 
-export type ProcessImageResult = { error?: string; image?: string; contentType?: "image/png"; width?: number; height?: number };
+export type ProcessImageResult = { error?: string; image?: string; contentType?: "image/png"; width?: number; height?: number; mode?: PhotoStudioMode };
+
 export async function processPhotoStudioImageAction(formData: FormData): Promise<ProcessImageResult> {
   await requireAdmin();
   try {
     const file = formData.get("image");
     if (!(file instanceof File)) throw new PhotoStudioValidationError("Rasmni tanlang.");
     const source = await validateSourceImage(file);
-    const values = Object.fromEntries(formData.entries());
-    const { mode, settings } = parsePhotoStudioRequest(values);
+    const { mode, settings } = parsePhotoStudioRequest(Object.fromEntries(formData.entries()));
     const result = await editProductImage({ ...source, mode, settings });
-    return { image: result.bytes.toString("base64"), contentType: result.contentType, width: result.width, height: result.height };
+    return { image: result.bytes.toString("base64"), contentType: result.contentType, width: result.width, height: result.height, mode };
   } catch (error) {
     if (error instanceof PhotoStudioValidationError) return { error: error.message };
     if (error instanceof OpenAINotConfiguredError) return { error: "OpenAI API sozlanmagan." };
     if (error instanceof PhotoStudioRateLimitError) return { error: "So‘rovlar soni vaqtincha cheklangan. Birozdan so‘ng qayta urinib ko‘ring." };
+    if (error instanceof PhotoStudioTimeoutError) return { error: "AI xizmati javob berishga ulgurmadi. Qayta yaratishni o‘zingiz boshlashingiz mumkin." };
+    if (error instanceof PhotoStudioNoImageError) return { error: "AI xizmati rasm qaytarmadi. Qayta urinib ko‘ring." };
+    if (error instanceof PhotoStudioTransparencyError) return { error: "Shaffof PNG yaratilmadi. Natijada haqiqiy alpha shaffofligi topilmadi." };
     if (error instanceof PhotoStudioAIError) return { error: "Rasmni qayta ishlash amalga oshmadi. Qayta urinib ko‘ring." };
     return { error: "AI xizmatiga ulanishda xatolik yuz berdi." };
   }
@@ -38,6 +42,8 @@ export async function saveApprovedPhotoStudioImageAction(raw: { productId: strin
     return { success: true };
   } catch (error) {
     if (error instanceof PhotoStudioValidationError || error instanceof ProductNotFoundError) return { error: error instanceof ProductNotFoundError ? "Mahsulot topilmadi." : error.message };
+    if (error && typeof error === "object" && "$metadata" in error) return { error: "Rasmni doimiy xotiraga yuklash amalga oshmadi." };
+    if (error instanceof Error && /Prisma|database|connect/i.test(`${error.name} ${error.message}`)) return { error: "Ma’lumotlar bazasida rasmni biriktirish amalga oshmadi." };
     return { error: "Rasmni saqlashda xatolik yuz berdi." };
   }
 }
