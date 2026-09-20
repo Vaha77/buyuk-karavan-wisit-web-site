@@ -25,6 +25,13 @@ enum AdminRole {
   MANAGER
 }
 
+enum Product360Status {
+  DRAFT
+  PROCESSING
+  READY
+  FAILED
+}
+
 model Product {
   id               String              @id @default(cuid())
   name             String
@@ -44,9 +51,25 @@ model Product {
   seoDescription   String?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+  asset360         Product360Asset?
 
   @@index([isVisible, order])
   @@index([category])
+}
+
+model Product360Asset {
+  id           String           @id @default(cuid())
+  productId    String           @unique
+  status       Product360Status @default(DRAFT)
+  sourceImages Json             @default("{}")
+  frames       String[]         @default([])
+  frameCount   Int              @default(0)
+  posterImage  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  product      Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([status])
 }
 
 model HomeContent {

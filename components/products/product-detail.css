@@ -4,6 +4,7 @@
 .detail-breadcrumb::-webkit-scrollbar{display:none}.detail-breadcrumb a:hover{color:#245487}.detail-breadcrumb strong{color:#203a56;font-weight:700}.detail-breadcrumb>span{color:#7e9ab7}
 .detail-hero{display:grid;grid-template-columns:minmax(0,524px) minmax(0,1fr);gap:72px;margin-top:39px}
 .detail-main-media{height:440px;position:relative;background:#f2f8ff;border:1px solid #d3e4f9;border-radius:26px;overflow:hidden;display:grid;place-items:center;color:#245487}
+.detail-media-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:12px;padding:4px;background:#edf4fa;border-radius:11px}.detail-media-tabs button{min-height:37px;border:0;border-radius:8px;background:transparent;color:#658098;font-size:10px;font-weight:700}.detail-media-tabs button.is-active{background:#fff;color:#245487;box-shadow:0 3px 10px #183e6315}.detail-media-tabs button:disabled{opacity:.48}
 .detail-media-badge{position:absolute;top:20px;left:20px;background:#fff;padding:7px 15px;border-radius:999px;color:#245487;font-size:11px;font-weight:700;letter-spacing:.08em;z-index:1}
 .detail-main-media-content{position:relative;width:100%;height:100%;display:grid;place-items:center;animation:detail-image-in .28s ease-out both}
 .detail-main-media-content svg{width:96px;height:96px}.detail-real-image{object-fit:contain;padding:45px}
