@@ -1,17 +1,21 @@
 import "server-only";
 import OpenAI, { APIError, toFile } from "openai";
 import sharp from "sharp";
+import { composeCreativeAdvertisement } from "./advertising";
 import { buildPhotoStudioPrompt } from "./prompts";
-import type { PhotoStudioAspectRatio, PhotoStudioMode, PhotoStudioSettings } from "./types";
+import type { PhotoStudioAdvertisingData, PhotoStudioAspectRatio, PhotoStudioMode, PhotoStudioSettings } from "./types";
 
 export class OpenAINotConfiguredError extends Error {}
 export class PhotoStudioRateLimitError extends Error {}
 export class PhotoStudioTimeoutError extends Error {}
 export class PhotoStudioNoImageError extends Error {}
 export class PhotoStudioTransparencyError extends Error {}
+export class PhotoStudioCompositionError extends Error {}
 export class PhotoStudioAIError extends Error {}
 
 const PHOTO_STUDIO_MODEL = "gpt-image-2.5-sunburst";
+const CREATIVE_AD_NATIVE_SIZE = "1440x2560";
+const CREATIVE_AD_OUTPUT = { width: 1440, height: 2560 } as const;
 
 function dimensions(size: number, ratio: PhotoStudioAspectRatio, source?: { width?: number; height?: number }) {
   if (ratio === "4:5") return { width: Math.round(size * 0.8), height: size };
@@ -39,12 +43,12 @@ async function hasRealTransparency(bytes: Buffer) {
   return false;
 }
 
-export async function editProductImage(input: { bytes: Uint8Array; type: string; name: string; mode: PhotoStudioMode; settings: PhotoStudioSettings }) {
+export async function editProductImage(input: { bytes: Uint8Array; type: string; name: string; mode: PhotoStudioMode; settings: PhotoStudioSettings; advertising?: PhotoStudioAdvertisingData }) {
   if (!process.env.OPENAI_API_KEY) throw new OpenAINotConfiguredError();
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 90_000, maxRetries: 0 });
   const apiEdge = input.settings.size === 1000 ? 1024 : input.settings.size === 1500 ? 1504 : 2000;
   const transparent = input.mode === "transparent";
-  const apiSize = `${apiEdge}x${apiEdge}`;
+  const apiSize = input.mode === "ad" ? CREATIVE_AD_NATIVE_SIZE : `${apiEdge}x${apiEdge}`;
   try {
     const sourceMetadata = await sharp(input.bytes).metadata();
     const response = await client.images.edit({
@@ -53,7 +57,7 @@ export async function editProductImage(input: { bytes: Uint8Array; type: string;
       prompt: buildPhotoStudioPrompt(input.mode, input.settings),
       background: transparent ? "transparent" : "opaque",
       output_format: "png",
-      quality: "high",
+      quality: input.mode === "ad" ? "max" : "high",
       size: apiSize,
       n: 1,
     });
@@ -61,12 +65,19 @@ export async function editProductImage(input: { bytes: Uint8Array; type: string;
     if (!encoded) throw new PhotoStudioNoImageError();
     const generated = Buffer.from(encoded, "base64");
     if (transparent && !(await hasRealTransparency(generated))) throw new PhotoStudioTransparencyError();
-    const output = dimensions(input.settings.size, input.settings.aspectRatio, sourceMetadata);
-    const result = await sharp(generated).resize(output.width, output.height, { fit: "contain", background: canvasBackground(input.settings), withoutEnlargement: false }).png({ quality: 100 }).toBuffer();
+    const output = input.mode === "ad" ? CREATIVE_AD_OUTPUT : dimensions(input.settings.size, input.settings.aspectRatio, sourceMetadata);
+    let result: Buffer<ArrayBufferLike> = input.mode === "ad"
+      ? await sharp(generated).resize(output.width, output.height, { fit: "cover", position: "centre", withoutEnlargement: true }).png({ compressionLevel: 6 }).toBuffer()
+      : await sharp(generated).resize(output.width, output.height, { fit: "contain", position: "centre", background: canvasBackground(input.settings), withoutEnlargement: false }).png({ quality: 100 }).toBuffer();
+    if (input.mode === "ad") {
+      if (!input.advertising || input.advertising.command !== "/creativeads") throw new PhotoStudioCompositionError();
+      try { result = await composeCreativeAdvertisement({ visual: result, ...output, data: input.advertising }); }
+      catch (error) { if (error instanceof PhotoStudioCompositionError) throw error; throw new PhotoStudioCompositionError(); }
+    }
     if (transparent && !(await hasRealTransparency(result))) throw new PhotoStudioTransparencyError();
     return { bytes: result, contentType: "image/png" as const, ...output };
   } catch (error) {
-    if (error instanceof PhotoStudioNoImageError || error instanceof PhotoStudioTransparencyError) throw error;
+    if (error instanceof PhotoStudioNoImageError || error instanceof PhotoStudioTransparencyError || error instanceof PhotoStudioCompositionError) throw error;
     if (error instanceof APIError) {
       console.error("Photo Studio OpenAI API error", { status: error.status, code: error.code, type: error.type, message: error.message, param: error.param, model: PHOTO_STUDIO_MODEL, size: apiSize });
       if (error.status === 429) throw new PhotoStudioRateLimitError();

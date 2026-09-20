@@ -6,6 +6,19 @@ export type PhotoStudioSize = (typeof photoStudioSizes)[number];
 export type PhotoStudioBackground = "white" | "light-gray" | "premium-neutral" | "premium-industrial" | "original" | "transparent";
 export type PhotoStudioAspectRatio = "original" | "1:1" | "4:5" | "9:16" | "16:9";
 export type PhotoStudioTextSafeArea = "left" | "right" | "top" | "auto";
+export const photoStudioAdCommands = ["/creativeads"] as const;
+export type PhotoStudioAdCommand = (typeof photoStudioAdCommands)[number];
+export type PhotoStudioAdvertisingData = {
+  command: PhotoStudioAdCommand;
+  brand: string;
+  headline: string;
+  subheadline: string;
+  benefits: string[];
+  applications: string[];
+  phone: string;
+  website: string;
+  cta: string;
+};
 
 export type PhotoStudioSettings = {
   background: PhotoStudioBackground;
@@ -25,7 +38,6 @@ export type PhotoStudioSettings = {
   preserveEnvironment: boolean;
   edgeQuality: boolean;
   fineDetailProtection: boolean;
-  composition: "balanced" | "dynamic" | "minimal";
   textSafeArea: PhotoStudioTextSafeArea;
   protectProduct: boolean;
 };

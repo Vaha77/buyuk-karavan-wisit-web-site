@@ -1,6 +1,6 @@
 import "server-only";
 import { getPhotoStudioModeConfig } from "./modes";
-import { photoStudioModes, photoStudioSizes, type PhotoStudioAspectRatio, type PhotoStudioBackground, type PhotoStudioMode, type PhotoStudioSettings, type PhotoStudioTextSafeArea } from "./types";
+import { photoStudioAdCommands, photoStudioModes, photoStudioSizes, type PhotoStudioAdvertisingData, type PhotoStudioAspectRatio, type PhotoStudioBackground, type PhotoStudioMode, type PhotoStudioSettings } from "./types";
 
 export class PhotoStudioValidationError extends Error {}
 const formats = new Map([
@@ -25,10 +25,22 @@ const allowedBackgrounds: Record<PhotoStudioMode, PhotoStudioBackground[]> = {
   ad: ["premium-industrial"],
 };
 const allowedRatios: Record<PhotoStudioMode, PhotoStudioAspectRatio[]> = {
-  card: ["1:1"], detail: ["1:1"], project: ["original", "1:1", "4:5", "16:9"], transparent: ["1:1"], ad: ["1:1", "4:5", "9:16", "16:9"],
+  card: ["1:1"], detail: ["1:1"], project: ["original", "1:1", "4:5", "16:9"], transparent: ["1:1"], ad: ["9:16"],
 };
 
-export function parsePhotoStudioRequest(value: Record<string, FormDataEntryValue>): { mode: PhotoStudioMode; settings: PhotoStudioSettings } {
+function advertisingText(value: Record<string, FormDataEntryValue>, key: string, max: number) {
+  const result = String(value[key] ?? "").trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
+  if (result.length > max) throw new PhotoStudioValidationError("Reklama ma’lumotlaridan biri juda uzun.");
+  return result;
+}
+
+function advertisingList(value: Record<string, FormDataEntryValue>, key: string, maxItems: number) {
+  const raw = advertisingText(value, key, 800); const items = raw.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+  if (items.length > maxItems || items.some(item => item.length > 140)) throw new PhotoStudioValidationError("Reklama ro‘yxatidagi ma’lumotlar juda uzun.");
+  return items;
+}
+
+export function parsePhotoStudioRequest(value: Record<string, FormDataEntryValue>): { mode: PhotoStudioMode; settings: PhotoStudioSettings; advertising?: PhotoStudioAdvertisingData } {
   const rawMode = String(value.mode);
   if (!photoStudioModes.includes(rawMode as PhotoStudioMode)) throw new PhotoStudioValidationError("Foto Studio rejimi noto‘g‘ri.");
   const mode = rawMode as PhotoStudioMode;
@@ -37,13 +49,17 @@ export function parsePhotoStudioRequest(value: Record<string, FormDataEntryValue
   const aspectRatio = String(value.aspectRatio) as PhotoStudioAspectRatio;
   if (!photoStudioSizes.includes(size as 1000 | 1500 | 2000) || !allowedBackgrounds[mode].includes(background) || !allowedRatios[mode].includes(aspectRatio)) throw new PhotoStudioValidationError("Tanlangan rejim sozlamalari noto‘g‘ri.");
   const flag = (key: keyof PhotoStudioSettings) => value[key] === "true";
-  const choice = <T extends string>(key: string, allowed: readonly T[], fallback: T) => allowed.includes(String(value[key]) as T) ? String(value[key]) as T : fallback;
   const defaults = getPhotoStudioModeConfig(mode).defaults;
   const settings: PhotoStudioSettings = { ...defaults, size: size as 1000 | 1500 | 2000, background, aspectRatio };
   if (mode === "card") Object.assign(settings, { removeBackground: flag("removeBackground"), enhanceQuality: flag("enhanceQuality"), correctColors: flag("correctColors"), improveLighting: flag("improveLighting"), protectProduct: flag("protectProduct") });
   if (mode === "detail") Object.assign(settings, { premiumLighting: flag("premiumLighting"), detailEnhancement: flag("detailEnhancement"), naturalShadow: flag("naturalShadow"), protectProduct: flag("protectProduct") });
   if (mode === "project") Object.assign(settings, { exposure: flag("exposure"), whiteBalance: flag("whiteBalance"), perspectiveCorrection: flag("perspectiveCorrection"), clutterCleanup: flag("clutterCleanup"), detailEnhancement: flag("detailEnhancement"), preserveEnvironment: true, protectProduct: true });
   if (mode === "transparent") Object.assign(settings, { removeBackground: true, edgeQuality: flag("edgeQuality"), fineDetailProtection: flag("fineDetailProtection"), protectProduct: flag("protectProduct") });
-  if (mode === "ad") Object.assign(settings, { composition: choice("composition", ["balanced", "dynamic", "minimal"] as const, "dynamic"), textSafeArea: choice<PhotoStudioTextSafeArea>("textSafeArea", ["left", "right", "top", "auto"], "auto"), premiumLighting: flag("premiumLighting"), protectProduct: flag("protectProduct") });
+  if (mode === "ad") {
+    Object.assign(settings, { aspectRatio: "9:16" as const, textSafeArea: "auto" as const, premiumLighting: flag("premiumLighting"), protectProduct: flag("protectProduct") });
+    if (!photoStudioAdCommands.includes(String(value.adCommand) as "/creativeads")) throw new PhotoStudioValidationError("Reklama komandasi noto‘g‘ri.");
+    const advertising: PhotoStudioAdvertisingData = { command: "/creativeads", brand: advertisingText(value, "adBrand", 100), headline: advertisingText(value, "adHeadline", 180), subheadline: advertisingText(value, "adSubheadline", 240), benefits: advertisingList(value, "adBenefits", 3), applications: advertisingList(value, "adApplications", 4), phone: advertisingText(value, "adPhone", 80), website: advertisingText(value, "adWebsite", 120), cta: advertisingText(value, "adCta", 80) };
+    return { mode, settings, advertising };
+  }
   return { mode, settings };
 }

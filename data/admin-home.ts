@@ -31,7 +31,7 @@ export const homeSectionMeta: { key: HomeSectionKey; name: string; description: 
 ];
 
 export const initialHomeContent: HomeContent = {
-  hero: { isVisible: true, order: 1, eyebrow: "SANOAT SOVUTISH TIZIMLARI", headline: "SOVUQLIKNI BIZ BOSHQARAMIZ", subtitle: "−40°C dan +5°C gacha professional sovutish yechimlari", primaryButton: "Bepul hisob-kitob", secondaryButton: "Loyihalarni ko‘rish", minimum: "−40°C", maximum: "+5°C", image: null },
+  hero: { isVisible: true, order: 1, eyebrow: "SANOAT SOVUTISH TIZIMLARI", headline: "SOVUQLIKNI\nBIZ BOSHQARAMIZ", subtitle: "−40°C dan +5°C gacha professional sovutish yechimlari", primaryButton: "Mahsulotlar", secondaryButton: "Loyihalarni ko‘rish", minimum: "−40°C", maximum: "+5°C", image: null },
   selector: { isVisible: true, order: 2, eyebrow: "Tanlov", title: "Sizga qanday sovutish kamerasi kerak?", description: "Mahsulot turini tanlang — sizga mos sovutish yechimini topamiz.", items: productTypes.map((item,index)=>({id:item.id,title:item.label,description:"",icon:item.icon,image:null,isVisible:true,order:index+1})) },
   solutions: { isVisible: true, order: 3, eyebrow: "Yechimlar", title: "Sovutish yechimlari", items: solutions.map(item=>({...item,image:null})) },
   featuredProducts: { isVisible: true, order: 4, eyebrow: "Mahsulotlar", title: "Sovutish uskunalari ekotizimi", description: "", items: ["p01","p02","p03","p04"].map((productId,index)=>({productId,isVisible:true,order:index+1})) },

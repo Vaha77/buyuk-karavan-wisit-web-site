@@ -15,8 +15,8 @@ export function HomeTextField({ label, value, onChange, multiline = false }: { l
 }
 export function AdminImageField({ label, value, ratio, onChange }: { label: string; value: string | null; ratio: string; onChange: (value: string | null) => void }) {
   const inputRef=useRef<HTMLInputElement>(null);
-  const choose=(file?:File)=>{if(!file||!file.type.startsWith("image/"))return; if(value?.startsWith("blob:"))URL.revokeObjectURL(value);onChange(URL.createObjectURL(file));};
-  const remove=()=>{if(value?.startsWith("blob:"))URL.revokeObjectURL(value);onChange(null);};
+  const choose=(file?:File)=>{if(!file||!["image/jpeg","image/png","image/webp"].includes(file.type)||file.size>10*1024*1024)return;const reader=new FileReader();reader.onload=()=>{if(typeof reader.result==="string")onChange(reader.result);};reader.readAsDataURL(file);};
+  const remove=()=>onChange(null);
   return <div className="home-image-field"><div className="home-image-heading"><strong>{label}</strong><span>Tavsiya etilgan nisbat: {ratio}</span></div>
     <input ref={inputRef} className="sr-only" type="file" accept="image/*" onChange={event=>{choose(event.target.files?.[0]);event.target.value="";}}/>
     <div className="home-image-preview" onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();choose(event.dataTransfer.files[0]);}}>{value ? <Image unoptimized src={value} alt={label} fill sizes="400px"/> : <><ImagePlus size={24}/><span>Rasm hali tanlanmagan</span></>}</div>

@@ -3,7 +3,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { attachGeneratedProductImage, ProductNotFoundError } from "@/lib/products/mutations";
-import { editProductImage, OpenAINotConfiguredError, PhotoStudioAIError, PhotoStudioNoImageError, PhotoStudioRateLimitError, PhotoStudioTimeoutError, PhotoStudioTransparencyError } from "@/lib/photo-studio/openai";
+import { editProductImage, OpenAINotConfiguredError, PhotoStudioAIError, PhotoStudioCompositionError, PhotoStudioNoImageError, PhotoStudioRateLimitError, PhotoStudioTimeoutError, PhotoStudioTransparencyError } from "@/lib/photo-studio/openai";
 import type { PhotoStudioMode } from "@/lib/photo-studio/types";
 import { parsePhotoStudioRequest, PhotoStudioValidationError, validateSourceImage } from "@/lib/photo-studio/validation";
 
@@ -15,8 +15,8 @@ export async function processPhotoStudioImageAction(formData: FormData): Promise
     const file = formData.get("image");
     if (!(file instanceof File)) throw new PhotoStudioValidationError("Rasmni tanlang.");
     const source = await validateSourceImage(file);
-    const { mode, settings } = parsePhotoStudioRequest(Object.fromEntries(formData.entries()));
-    const result = await editProductImage({ ...source, mode, settings });
+    const { mode, settings, advertising } = parsePhotoStudioRequest(Object.fromEntries(formData.entries()));
+    const result = await editProductImage({ ...source, mode, settings, advertising });
     return { image: result.bytes.toString("base64"), contentType: result.contentType, width: result.width, height: result.height, mode };
   } catch (error) {
     if (error instanceof PhotoStudioValidationError) return { error: error.message };
@@ -25,6 +25,7 @@ export async function processPhotoStudioImageAction(formData: FormData): Promise
     if (error instanceof PhotoStudioTimeoutError) return { error: "AI xizmati javob berishga ulgurmadi. Qayta yaratishni o‘zingiz boshlashingiz mumkin." };
     if (error instanceof PhotoStudioNoImageError) return { error: "AI xizmati rasm qaytarmadi. Qayta urinib ko‘ring." };
     if (error instanceof PhotoStudioTransparencyError) return { error: "Shaffof PNG yaratilmadi. Natijada haqiqiy alpha shaffofligi topilmadi." };
+    if (error instanceof PhotoStudioCompositionError) return { error: "Reklama matn qatlamini tayyorlash amalga oshmadi." };
     if (error instanceof PhotoStudioAIError) return { error: "Rasmni qayta ishlash amalga oshmadi. Qayta urinib ko‘ring." };
     return { error: "AI xizmatiga ulanishda xatolik yuz berdi." };
   }
