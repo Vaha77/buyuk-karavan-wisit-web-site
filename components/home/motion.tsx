@@ -230,6 +230,16 @@ export function HomeMotion() {
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger, MotionPathPlugin);
     const media = gsap.matchMedia();
+    let desktopLenis: Lenis | null = null;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const scrollHomeTop = (immediate = false) => {
+      if (desktopLenis) desktopLenis.scrollTo(0, { immediate, duration: immediate ? undefined : 1.05 });
+      else window.scrollTo({ top: 0, left: 0, behavior: immediate || reducedMotion ? "auto" : "smooth" });
+    };
+    const onHomeTop = () => scrollHomeTop(false);
+    const forceHomeTop = sessionStorage.getItem("buyuk-karavan:force-home-top") === "1";
+    if (forceHomeTop) { sessionStorage.removeItem("buyuk-karavan:force-home-top"); window.scrollTo(0, 0); }
+    window.addEventListener("buyuk-karavan:home-top", onHomeTop);
     let active = true;
     let orientationTimer: ReturnType<typeof setTimeout> | undefined;
     const refresh = () => { if (active) ScrollTrigger.refresh(); };
@@ -246,13 +256,15 @@ export function HomeMotion() {
     });
     media.add("(min-width: 701px) and (prefers-reduced-motion: no-preference)", () => {
       const lenis = new Lenis({ duration: 1.05, smoothWheel: true });
+      desktopLenis = lenis;
+      if (forceHomeTop) lenis.scrollTo(0, { immediate: true });
       let frame = 0;
       const raf = (time: number) => { lenis.raf(time); frame = requestAnimationFrame(raf); };
       frame = requestAnimationFrame(raf);
       lenis.on("scroll", ScrollTrigger.update);
       desktopMotion();
       ScrollTrigger.refresh();
-      return () => { cancelAnimationFrame(frame); lenis.destroy(); };
+      return () => { desktopLenis = null; cancelAnimationFrame(frame); lenis.destroy(); };
     });
     return () => {
       active = false;
@@ -260,6 +272,7 @@ export function HomeMotion() {
       if (orientationTimer) clearTimeout(orientationTimer);
       window.removeEventListener("load", refresh);
       window.removeEventListener("orientationchange", onOrientationChange);
+      window.removeEventListener("buyuk-karavan:home-top", onHomeTop);
       pendingImages.forEach(image => { image.removeEventListener("load", refresh); image.removeEventListener("error", refresh); });
       media.revert();
     };

@@ -17,6 +17,18 @@ enum LeadStatus {
   REVIEWING
   CONTACTED
   COMPLETED
+  IN_PROGRESS
+  WON
+  LOST
+}
+
+enum LeadSource {
+  CONTACT_FORM
+  MADINA
+  PRODUCT
+  PROJECT
+  HOME_CTA
+  OTHER
 }
 
 enum AdminRole {
@@ -120,9 +132,11 @@ model Lead {
   temperature  String?
   region       String?
   notes        String?
+  source       LeadSource @default(OTHER)
   status       LeadStatus @default(NEW)
   aiSummary    String?
   chatHistory  Json       @default("[]")
+  managerNote  String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
