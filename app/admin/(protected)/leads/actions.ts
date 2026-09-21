@@ -1,0 +1,5 @@
+"use server";
+import { revalidatePath } from "next/cache";import { requireAdmin } from "@/lib/auth/require-admin";import { getDb } from "@/lib/db";import type { LeadStatus } from "@/lib/leads/types";
+const statuses:Record<LeadStatus,"NEW"|"REVIEWING"|"CONTACTED"|"COMPLETED"|"IN_PROGRESS"|"WON"|"LOST">={new:"NEW",reviewing:"REVIEWING",contacted:"CONTACTED",completed:"COMPLETED",in_progress:"IN_PROGRESS",won:"WON",lost:"LOST"};
+export async function updateLeadStatusAction(id:string,status:LeadStatus){await requireAdmin();if(!statuses[status])return{error:"Holat noto‘g‘ri."};try{await getDb().lead.update({where:{id},data:{status:statuses[status]}});revalidatePath("/admin/leads");return{};}catch{return{error:"Holatni saqlab bo‘lmadi."};}}
+export async function updateLeadNoteAction(id:string,note:string){await requireAdmin();const value=note.trim();if(value.length>2000)return{error:"Izoh juda uzun."};try{await getDb().lead.update({where:{id},data:{managerNote:value||null}});revalidatePath("/admin/leads");return{};}catch{return{error:"Izohni saqlab bo‘lmadi."};}}

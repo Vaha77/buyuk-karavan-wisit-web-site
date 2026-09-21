@@ -1,0 +1,6 @@
+export type LeadStatus = "new" | "reviewing" | "contacted" | "completed" | "in_progress" | "won" | "lost";
+export type LeadSource = "contact_form" | "madina" | "product" | "project" | "home_cta" | "other";
+export type ConversationMessage = { id: string; role: "madina" | "customer"; text: string };
+export type Lead = { id:string; customerName:string; phone:string; telegram:string; requestType:string; product:string; dimensions:string; capacity:string; temperature:string; region:string; dateLabel:string; dateGroup:"today"|"yesterday"|"week"; status:LeadStatus; source:LeadSource; isUnread:boolean; additional:string; summary:string; conversation:ConversationMessage[]; managerNote:string; createdAt:string; assignedAgentName:string; claimedAt:string; privateDeliveryFailed:boolean };
+export const leadStatusLabels:Record<LeadStatus,string>={new:"Yangi",reviewing:"Jarayonda",contacted:"Bog‘lanildi",completed:"Muvaffaqiyatli",in_progress:"Jarayonda",won:"Muvaffaqiyatli",lost:"Yopildi"};
+export const leadSourceLabels:Record<LeadSource,string>={contact_form:"Aloqa formasi",madina:"Madina",product:"Mahsulot",project:"Loyiha",home_cta:"Home CTA",other:"Boshqa"};

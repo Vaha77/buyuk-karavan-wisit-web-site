@@ -1,0 +1,10 @@
+import "dotenv/config";
+import { createHash } from "node:crypto";
+const token=process.env.TELEGRAM_BOT_TOKEN,url=process.argv[2]||process.env.TELEGRAM_WEBHOOK_URL;
+if(!token)throw new Error("TELEGRAM_BOT_TOKEN is missing.");
+if(!url||!url.startsWith("https://"))throw new Error("Provide an HTTPS webhook URL as the first argument or TELEGRAM_WEBHOOK_URL.");
+const secret=createHash("sha256").update(token).digest("hex");
+const response=await fetch(`https://api.telegram.org/bot${token}/setWebhook`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url,secret_token:secret,allowed_updates:["message","callback_query"],drop_pending_updates:false})});
+const result=await response.json().catch(()=>null);
+if(!response.ok||!result?.ok)throw new Error("Telegram webhook registration failed.");
+console.log("Telegram webhook registered successfully.");

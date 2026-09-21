@@ -1,30 +1,4 @@
 "use client";
-
-import { useMemo, useState } from "react";
-import { mockLeads, type Lead, type LeadStatus } from "@/data/leads";
-import { LeadDrawer, LeadFilters, LeadMobileCard, LeadStats, LeadTable, type LeadFiltersState } from "./lead-components";
-
-const initialFilters: LeadFiltersState = { query:"", status:"all", date:"all", region:"all", requestType:"all" };
-export function AdminLeadsPage() {
-  const [records,setRecords]=useState<Lead[]>(mockLeads);
-  const [filters,setFilters]=useState<LeadFiltersState>(initialFilters);
-  const [selectedId,setSelectedId]=useState<string|null>(null);
-  const selected=records.find(lead=>lead.id===selectedId);
-  const visible=useMemo(()=>records.filter(lead=>{
-    const query=filters.query.trim().toLocaleLowerCase();
-    return (!query||`${lead.customerName} ${lead.phone} ${lead.requestType} ${lead.product}`.toLocaleLowerCase().includes(query))
-      && (filters.status==="all"||lead.status===filters.status)
-      && (filters.date==="all"||lead.dateGroup===filters.date)
-      && (filters.region==="all"||lead.region===filters.region)
-      && (filters.requestType==="all"||lead.requestType===filters.requestType);
-  }),[records,filters]);
-  const update=(id:string,patch:Partial<Lead>)=>setRecords(current=>current.map(lead=>lead.id===id?{...lead,...patch}:lead));
-  const open=(id:string)=>{setSelectedId(id);update(id,{isUnread:false});};
-  return <div className="admin-leads-page"><div className="admin-page-heading"><div><h1>Mijoz so‘rovlari</h1><p>Madina AI orqali kelgan mijoz murojaatlari</p></div></div>
-    <LeadStats leads={records}/>
-    <section className="admin-panel lead-panel"><div className="admin-panel-heading"><h2>So‘rovlar ro‘yxati</h2><span>{visible.length} ta murojaat</span></div><LeadFilters value={filters} onChange={setFilters} leads={records}/>
-      {visible.length ? <><LeadTable leads={visible} onOpen={open}/><div className="lead-mobile-list">{visible.map(lead=><LeadMobileCard key={lead.id} lead={lead} onOpen={open}/>)}</div></> : <p className="admin-empty">Filtrlarga mos so‘rov topilmadi.</p>}
-    </section>
-    {selected&&<LeadDrawer key={selected.id} lead={selected} onClose={()=>setSelectedId(null)} onStatusChange={(status:LeadStatus)=>update(selected.id,{status})} onSaveNote={managerNote=>update(selected.id,{managerNote})}/>}
-  </div>;
-}
+import { useMemo,useState,useTransition } from "react";import { useRouter } from "next/navigation";import type { Lead,LeadStatus } from "@/lib/leads/types";import { updateLeadNoteAction,updateLeadStatusAction } from "@/app/admin/(protected)/leads/actions";import { LeadDrawer,LeadFilters,LeadMobileCard,LeadStats,LeadTable,type LeadFiltersState } from "./lead-components";
+const initialFilters:LeadFiltersState={query:"",status:"all",date:"all",region:"all",requestType:"all"};
+export function AdminLeadsPage({leads}:{leads:Lead[]}){const [records,setRecords]=useState(leads),[filters,setFilters]=useState(initialFilters),[selectedId,setSelectedId]=useState<string|null>(null),[feedback,setFeedback]=useState(""),[pending,start]=useTransition();const router=useRouter(),selected=records.find(x=>x.id===selectedId);const visible=useMemo(()=>records.filter(lead=>{const q=filters.query.trim().toLocaleLowerCase();return(!q||`${lead.customerName} ${lead.phone} ${lead.requestType} ${lead.product}`.toLocaleLowerCase().includes(q))&&(filters.status==="all"||lead.status===filters.status)&&(filters.date==="all"||lead.dateGroup===filters.date)&&(filters.region==="all"||lead.region===filters.region)&&(filters.requestType==="all"||lead.requestType===filters.requestType)}),[records,filters]);const update=(id:string,patch:Partial<Lead>)=>setRecords(current=>current.map(x=>x.id===id?{...x,...patch}:x));const status=(id:string,value:LeadStatus)=>start(async()=>{const result=await updateLeadStatusAction(id,value);if(result.error){setFeedback(result.error);return;}update(id,{status:value,isUnread:false});setFeedback("Holat saqlandi.");router.refresh()});const note=(id:string,value:string)=>start(async()=>{const result=await updateLeadNoteAction(id,value);if(result.error){setFeedback(result.error);return;}update(id,{managerNote:value});setFeedback("Izoh saqlandi.");router.refresh()});return <div className="admin-leads-page" aria-busy={pending}><div className="admin-page-heading"><div><h1>Mijoz so‘rovlari</h1><p>Saytdan kelgan mijoz murojaatlari</p></div></div><LeadStats leads={records}/>{feedback&&<p className="admin-form-feedback" role="status">{feedback}</p>}<section className="admin-panel lead-panel"><div className="admin-panel-heading"><h2>So‘rovlar ro‘yxati</h2><span>{visible.length} ta murojaat</span></div><LeadFilters value={filters} onChange={setFilters} leads={records}/>{visible.length?<><LeadTable leads={visible} onOpen={setSelectedId}/><div className="lead-mobile-list">{visible.map(lead=><LeadMobileCard key={lead.id} lead={lead} onOpen={setSelectedId}/>)}</div></>:<p className="admin-empty">Hozircha yangi murojaatlar yo‘q.</p>}</section>{selected&&<LeadDrawer key={selected.id} lead={selected} onClose={()=>setSelectedId(null)} onStatusChange={value=>status(selected.id,value)} onSaveNote={value=>note(selected.id,value)}/>}</div>}

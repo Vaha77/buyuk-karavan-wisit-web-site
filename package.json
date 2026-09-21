@@ -12,6 +12,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "admin:create": "node scripts/admin-create.mjs",
+    "telegram:set-webhook": "node scripts/telegram-set-webhook.mjs",
     "db:seed-products": "node scripts/seed-products.mjs"
   },
   "dependencies": {

@@ -31,6 +31,13 @@ enum LeadSource {
   OTHER
 }
 
+enum TelegramNotificationStatus {
+  PENDING
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
 enum AdminRole {
   SUPER_ADMIN
   ADMIN
@@ -137,10 +144,42 @@ model Lead {
   aiSummary    String?
   chatHistory  Json       @default("[]")
   managerNote  String?
+  assignedAgentId String?
+  claimedAt DateTime?
+  telegramChatId String?
+  telegramMessageId Int?
+  telegramPublishedAt DateTime?
+  telegramNotificationStatus TelegramNotificationStatus @default(PENDING)
+  telegramPublishFailedAt DateTime?
+  telegramPrivateDeliveryFailedAt DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  assignedAgent SalesAgent? @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
+  @@index([assignedAgentId, claimedAt])
+  @@index([telegramNotificationStatus])
+}
+
+model SalesAgent {
+  id String @id @default(cuid())
+  telegramUserId BigInt @unique
+  telegramUsername String?
+  firstName String
+  lastName String?
+  isActive Boolean @default(true)
+  isApproved Boolean @default(false)
+  joinedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  assignedLeads Lead[]
+
+  @@index([isApproved, isActive])
+}
+
+model TelegramUpdate {
+  updateId BigInt @id
+  createdAt DateTime @default(now())
 }
 
 model AdminUser {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emptyLead, fieldOrder, isValidPhone, normalizeAnswer, questions, welcome } from "./madina-mock-flow";
 import type { ChatMessage, LeadField, MadinaLead } from "./madina-types";
+import { submitLeadAction } from "@/app/lead-actions";
 
 type Stage = LeadField | "confirm" | "edit" | "success";
 const firstMessage: ChatMessage = { id: 0, role: "madina", text: welcome };
@@ -74,12 +75,19 @@ export function useMadinaChat() {
     reply("Qaysi ma’lumotni o‘zgartirmoqchisiz?", "edit");
   }, [append, reply, stage]);
 
-  const confirm = useCallback(() => {
+  const confirm = useCallback(async () => {
     if (busy.current || stage !== "confirm") return;
     busy.current = true;
     append("customer", "Tasdiqlash");
-    reply(`Rahmat, ${lead.customerName}.\n\nMa’lumotlaringiz qabul qilindi. BUYUK KARAVAN mutaxassisi tez orada siz bilan bog‘lanadi.`, "success");
-  }, [append, lead.customerName, reply, stage]);
+    setTyping(true);
+    const result = await submitLeadAction({ ...lead, source: "MADINA", website: "", chatHistory: messages.map(message => ({ role: message.role, text: message.text })) });
+    setTyping(false);
+    busy.current = false;
+    if (result.ok) {
+      append("madina", "Rahmat! Ma’lumotlaringiz qabul qilindi. Mutaxassisimiz siz bilan bog‘lanadi.");
+      setStage("success");
+    } else append("madina", result.error);
+  }, [append, lead, messages, stage]);
 
   const reset = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
