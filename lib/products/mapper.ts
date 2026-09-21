@@ -1,19 +1,12 @@
 import "server-only";
-import type { Product as DbProduct } from "@/generated/prisma/client";
-import type { Product, ProductCategory, ProductSpecification } from "./types";
-import { productCategories } from "./types";
+import type { Product as DbProduct, ProductCategory as DbProductCategory } from "@/generated/prisma/client";
+import type { Product, ProductSpecification } from "./types";
 
 export type StoredSpecifications = {
   rows: ProductSpecification[];
   cardSpecs?: string[];
   descriptionBullets?: string[];
   applications?: { id: string; label: string }[];
-};
-
-const badges: Record<ProductCategory, string> = {
-  compressors: "KOMPRESSOR", evaporators: "EVAPORATOR", condensers: "KONDENSATOR",
-  chillers: "CHILLER", panels: "SANDWICH PANEL", doors: "SOVUTISH ESHIGI",
-  pipes: "MIS QUVUR", accessories: "AKSESSUAR",
 };
 
 function stringList(value: unknown): string[] {
@@ -37,13 +30,13 @@ export function readSpecifications(value: unknown): StoredSpecifications {
   };
 }
 
-export function mapProduct(row: DbProduct): Product {
-  const category = productCategories.some(item => item.id === row.category && item.id !== "all") ? row.category as ProductCategory : "accessories";
+export function mapProduct(row: DbProduct & { category: DbProductCategory }): Product {
   const stored = readSpecifications(row.specifications);
   const specs = stored.cardSpecs?.length ? stored.cardSpecs : row.tags.length ? row.tags : stored.rows.map(item => item.value).filter(Boolean).slice(0, 2);
   return {
     id: row.id, slug: row.slug, name: row.name, brand: row.brand, model: row.model,
-    category, badge: badges[category], image: row.images[0] ?? null, images: row.images,
+    categoryId: row.categoryId, category: row.category.slug, categoryName: row.category.name,
+    badge: row.category.name.toLocaleUpperCase("uz-UZ"), image: row.images[0] ?? null, images: row.images,
     shortDescription: row.shortDescription ?? undefined, description: row.description ?? undefined,
     descriptionBullets: stored.descriptionBullets, specifications: stored.rows, applications: stored.applications,
     tags: row.tags, specs, availability: row.availability === "AVAILABLE" ? "available" : "order",

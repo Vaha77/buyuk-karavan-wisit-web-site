@@ -8,9 +8,10 @@ import type { Product } from "@/lib/products/types";
 const icons = { compressors: CircuitBoard, evaporators: Activity, condensers: PanelsTopLeft, chillers: Snowflake, panels: PanelsTopLeft, doors: DoorClosed, pipes: Waves, accessories: Radio } as const;
 
 export function ProductGallery({ product }: { product: Product }) {
+  const CategoryIcon = icons[product.category as keyof typeof icons] ?? Radio;
   const realImages = [...new Set([product.image, ...(product.images || [])].filter((value): value is string => Boolean(value)))];
-  const slides = realImages.length ? realImages.map((src, index) => ({ key: src, src, icon: index === 0 ? icons[product.category] : PanelsTopLeft })) : [
-    { key: "front", src: null, icon: icons[product.category] },
+  const slides = realImages.length ? realImages.map((src, index) => ({ key: src, src, icon: index === 0 ? CategoryIcon : PanelsTopLeft })) : [
+    { key: "front", src: null, icon: CategoryIcon },
     { key: "details", src: null, icon: PanelsTopLeft },
     { key: "installation", src: null, icon: House },
   ];

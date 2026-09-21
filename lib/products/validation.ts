@@ -1,13 +1,11 @@
 import { z } from "zod";
 
-const categories = ["compressors", "evaporators", "condensers", "chillers", "panels", "doors", "pipes", "accessories"] as const;
-
 export const productInputSchema = z.object({
   name: z.string().trim().min(1, "Mahsulot nomini kiriting.").max(120, "Mahsulot nomi juda uzun."),
   brand: z.string().trim().min(1, "Brendni kiriting.").max(120, "Brend juda uzun."),
   model: z.string().trim().min(1, "Modelni kiriting.").max(120, "Model juda uzun."),
   slug: z.string().trim().max(160, "Slug juda uzun."),
-  category: z.enum(categories, { error: "Kategoriyani tanlang." }),
+  categoryId: z.string().trim().min(1, "Kategoriyani tanlang.").max(100),
   shortDescription: z.string().trim().max(500, "Qisqa tavsif juda uzun."),
   description: z.string().trim().max(10000, "Tavsif juda uzun."),
   specifications: z.array(z.object({ id: z.string().min(1).max(100), name: z.string().trim().min(1, "Xususiyat nomini kiriting.").max(120), value: z.string().trim().min(1, "Xususiyat qiymatini kiriting.").max(500), mobileOrder: z.number().int().optional() })).max(60, "Xususiyatlar soni juda ko‘p."),

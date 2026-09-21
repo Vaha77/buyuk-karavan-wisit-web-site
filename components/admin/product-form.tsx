@@ -2,23 +2,26 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Settings2, Trash2, X } from "lucide-react";
 import { ProductImageUploader, type ProductImagePreview } from "./product-image-uploader";
-import { productCategories, type Product, type ProductAvailability, type ProductCategory } from "@/lib/products/types";
+import type { Product, ProductAvailability } from "@/lib/products/types";
+import type { ProductCategoryRecord } from "@/lib/product-categories/types";
 import { saveProductAction } from "@/app/admin/(protected)/products/actions";
+import { createCategoryAction } from "@/app/admin/(protected)/products/category-actions";
+import { ProductCategoriesManager } from "./product-categories-manager";
 
 type Specification = { id: string; name: string; value: string };
 type FormState = {
-  name: string; brand: string; model: string; category: ProductCategory;
+  name: string; brand: string; model: string; categoryId: string;
   shortDescription: string; description: string; specifications: Specification[];
   tags: string[]; availability: ProductAvailability; isVisible: boolean; order: number;
   slug: string; seoTitle: string; seoDescription: string;
 };
-const blank: FormState = { name: "", brand: "", model: "", category: "compressors", shortDescription: "", description: "", specifications: [{ id: "spec-1", name: "", value: "" }], tags: [], availability: "available", isVisible: true, order: 1, slug: "", seoTitle: "", seoDescription: "" };
+const blank: FormState = { name: "", brand: "", model: "", categoryId: "", shortDescription: "", description: "", specifications: [{ id: "spec-1", name: "", value: "" }], tags: [], availability: "available", isVisible: true, order: 1, slug: "", seoTitle: "", seoDescription: "" };
 const slugify = (text: string) => text.toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 function fromProduct(product?: Product): FormState {
   if (!product) return blank;
-  return { name: product.name, brand: product.brand, model: product.model, category: product.category,
+  return { name: product.name, brand: product.brand, model: product.model, categoryId: product.categoryId || "",
     shortDescription: product.shortDescription || "", description: product.description || "",
     specifications: product.specifications?.length ? product.specifications : product.specs.map((value,index)=>({id:`spec-${index}`,name:"Xususiyat",value})),
     tags: product.tags || product.specs, availability: product.availability, isVisible: product.isVisible, order: product.order,
@@ -45,8 +48,13 @@ export function ProductSeoFields({ state, update }: { state: FormState; update: 
 export function AdminSaveBar({ onSave, onDraft, pending }: { onSave: () => void; onDraft: () => void; pending: boolean }) {
   return <div className="admin-save-bar"><Link href="/admin/products">Bekor qilish</Link><div><button type="button" disabled={pending} onClick={onDraft}>Qoralama saqlash</button><button className="admin-primary-button" type="button" disabled={pending} onClick={onSave}>{pending ? "Saqlanmoqda..." : "Mahsulotni saqlash"}</button></div></div>;
 }
-export function ProductForm({ product }: { product?: Product }) {
-  const [state,setState]=useState<FormState>(()=>fromProduct(product));
+export function ProductForm({ product, categories: initialCategories }: { product?: Product; categories: ProductCategoryRecord[] }) {
+  const [categories,setCategories]=useState(initialCategories);
+  const [state,setState]=useState<FormState>(()=>{const initial=fromProduct(product);return {...initial,categoryId:initial.categoryId||initialCategories.find(x=>x.isActive)?.id||""};});
+  const [newCategory,setNewCategory]=useState("");
+  const [categoryCreatorOpen,setCategoryCreatorOpen]=useState(false);
+  const [categoryManagerOpen,setCategoryManagerOpen]=useState(false);
+  const categoryInputRef=useRef<HTMLInputElement>(null);
   const [images,setImages]=useState<ProductImagePreview[]>(()=> (product?.images || []).map((url,index)=>({id:`existing-${index}`,url,name:`${index+1}-rasm`})));
   const previewUrls=useRef<string[]>([]);
   useEffect(()=>{previewUrls.current=images.filter(image=>image.file).map(image=>image.url);},[images]);
@@ -60,13 +68,34 @@ export function ProductForm({ product }: { product?: Product }) {
     const result=await saveProductAction(product?.id??null,{...state,isVisible:draft?false:state.isVisible,specifications:state.specifications.filter(row=>row.name.trim()||row.value.trim())},images.map(image=>image.file?{file:image.file}:{url:image.url}));
     if(result.error)setFeedback(result.error);
   });
+  const closeCategoryCreator=()=>{setCategoryCreatorOpen(false);setNewCategory("");};
+  const createCategory=()=>{
+    if(!newCategory.trim()||pending)return;
+    startTransition(async()=>{
+      const result=await createCategoryAction(newCategory);
+      if(result.error){setFeedback(result.error);return;}
+      const category=result.category;
+      if(category){
+        setCategories(current=>[...current,{...category,productCount:0}]);
+        update("categoryId",category.id);
+        setFeedback(`“${category.name}” kategoriyasi yaratildi va tanlandi.`);
+        closeCategoryCreator();
+      }
+    });
+  };
   return <div className="admin-form-page"><div className="admin-page-heading"><div><Link className="admin-back-link" href="/admin/products">← Mahsulotlarga qaytish</Link><h1>{product?"Mahsulotni tahrirlash":"Yangi mahsulot"}</h1><p>{product?"Mahsulot ma’lumotlarini yangilash":"Sayt katalogiga yangi mahsulot qo‘shish"}</p></div></div>
     <div className="admin-form-layout"><div className="admin-form-main">
       <section className="admin-form-card"><div className="admin-form-card-heading"><h2>Asosiy ma’lumotlar</h2></div><div className="admin-form-grid">
         <FormField label="Mahsulot nomi"><input value={state.name} onChange={e=>updateIdentity("name",e.target.value)} placeholder="Masalan: XUE YING"/></FormField>
         <FormField label="Brend"><input value={state.brand} onChange={e=>update("brand",e.target.value)} placeholder="Masalan: XUE YING"/></FormField>
         <FormField label="Model"><input value={state.model} onChange={e=>updateIdentity("model",e.target.value)} placeholder="Masalan: BR +20PG"/></FormField>
-        <FormField label="Kategoriya"><select value={state.category} onChange={e=>update("category",e.target.value)}>{productCategories.filter(item=>item.id!=="all").map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></FormField>
+        <div className="admin-category-field">
+          <div className="admin-category-select-row"><FormField label="Kategoriya"><select value={state.categoryId} onChange={e=>update("categoryId",e.target.value)}>{categories.filter(item=>item.isActive||item.id===state.categoryId).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField><button className="admin-category-manage-button" type="button" onClick={()=>setCategoryManagerOpen(true)}><Settings2 size={15}/>Boshqarish</button></div>
+          <button className="admin-category-create-toggle" type="button" aria-expanded={categoryCreatorOpen} aria-controls="category-inline-creator" onClick={()=>{if(categoryCreatorOpen)closeCategoryCreator();else{setCategoryCreatorOpen(true);requestAnimationFrame(()=>categoryInputRef.current?.focus());}}}><Plus size={16}/>Yangi kategoriya qo‘shish</button>
+          <div id="category-inline-creator" className={`admin-category-inline${categoryCreatorOpen?" is-open":""}`} aria-hidden={!categoryCreatorOpen}>
+            <div className="admin-category-inline-inner"><label className="admin-form-field"><span>Kategoriya nomi</span><input ref={categoryInputRef} disabled={!categoryCreatorOpen} value={newCategory} onChange={e=>setNewCategory(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();createCategory();}else if(e.key==="Escape"){e.preventDefault();closeCategoryCreator();}}} placeholder="Masalan: Havo sovutgichlar"/></label><div className="admin-category-inline-actions"><button type="button" disabled={pending} onClick={closeCategoryCreator}>Bekor qilish</button><button className="admin-primary-button" type="button" disabled={pending||!newCategory.trim()} onClick={createCategory}><Plus size={15}/>{pending?"Yaratilmoqda...":"Kategoriya yaratish"}</button></div></div>
+          </div>
+        </div>
         <FormField label="Qisqa tavsif"><textarea value={state.shortDescription} onChange={e=>update("shortDescription",e.target.value)} rows={3}/></FormField>
         <FormField label="Mahsulot haqida"><textarea value={state.description} onChange={e=>update("description",e.target.value)} rows={5}/></FormField>
       </div></section>
@@ -80,6 +109,7 @@ export function ProductForm({ product }: { product?: Product }) {
       <section className="admin-form-card"><div className="admin-form-card-heading"><h2>Tartib</h2></div><FormField label="Ko‘rsatish tartibi"><input type="number" min={1} value={state.order} onChange={e=>update("order",Number(e.target.value))}/></FormField></section>
     </aside></div>
     {feedback&&<p className="admin-form-feedback" role="status">{feedback}</p>}
+    {categoryManagerOpen&&<ProductCategoriesManager categories={categories} onCategoriesChange={setCategories} onClose={()=>setCategoryManagerOpen(false)}/>} 
     <AdminSaveBar onDraft={()=>save(true)} onSave={()=>save(false)} pending={pending}/>
   </div>;
 }

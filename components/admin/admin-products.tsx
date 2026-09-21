@@ -4,13 +4,9 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Copy, Edit3, Eye, EyeOff, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
-import { productCategories, type Product } from "@/lib/products/types";
+import type { Product } from "@/lib/products/types";
+import type { ProductCategoryRecord } from "@/lib/product-categories/types";
 import { copyProductAction, deleteProductAction, toggleVisibilityAction } from "@/app/admin/(protected)/products/actions";
-
-const categoryNames: Record<Product["category"], string> = {
-  compressors: "Kompressor", evaporators: "Evaporator", condensers: "Kondensator", chillers: "Chiller",
-  panels: "Sandwich panel", doors: "Sovutish eshigi", pipes: "Mis quvur", accessories: "Aksessuar",
-};
 
 export function ProductStatusBadge({ product }: { product: Product }) {
   return <span className={`admin-status admin-status-${product.availability}`}><i/>{product.availability === "available" ? "Mavjud" : "Buyurtma asosida"}</span>;
@@ -41,7 +37,7 @@ export function ProductManagementTable({ rows, selected, onSelect, onSelectAll, 
   </tr></thead><tbody>{rows.map(product => <tr key={product.id}>
     <td><input type="checkbox" aria-label={`${product.name} tanlash`} checked={selected.includes(product.id)} onChange={() => onSelect(product.id)}/></td>
     <td><span className="admin-product-thumb"><PackageGlyph/></span></td>
-    <td><strong>{product.name}</strong></td><td>{categoryNames[product.category]}</td><td>{product.model}</td>
+    <td><strong>{product.name}</strong></td><td>{product.categoryName}</td><td>{product.model}</td>
     <td><ProductStatusBadge product={product}/></td><td><ProductVisibilityToggle product={product} onChange={() => onVisibility(product.id)}/></td>
     <td>{String(product.order).padStart(2,"0")}</td><td>{product.updatedAt || "Bugun"}</td>
     <td><RowActions product={product} selected={selected.includes(product.id)} onSelect={() => onSelect(product.id)} onVisibility={() => onVisibility(product.id)} onCopy={() => onCopy(product.id)} onDelete={() => onDelete(product.id)}/></td>
@@ -51,19 +47,19 @@ function PackageGlyph() { return <span aria-hidden="true">▣</span>; }
 export function ProductManagementCard({ product, selected, onSelect, onVisibility, onCopy, onDelete }: RowProps) {
   return <article className="admin-product-card">
     <div className="admin-product-card-top"><input type="checkbox" aria-label={`${product.name} tanlash`} checked={selected} onChange={onSelect}/><span className="admin-product-thumb"><PackageGlyph/></span><div><strong>{product.name}</strong><span>{product.model}</span></div><ProductActionsMenu product={product} onHide={onVisibility} onCopy={onCopy} onDelete={onDelete}/></div>
-    <div className="admin-product-card-meta"><span>{categoryNames[product.category]}</span><ProductStatusBadge product={product}/></div>
+    <div className="admin-product-card-meta"><span>{product.categoryName}</span><ProductStatusBadge product={product}/></div>
     <div className="admin-product-card-bottom"><ProductVisibilityToggle product={product} onChange={onVisibility}/><span>#{String(product.order).padStart(2,"0")}</span><Link href={`/admin/products/${product.id}/edit`}>Tahrirlash →</Link></div>
   </article>;
 }
-export function ProductFilters({ query, onQuery, category, onCategory, status, onStatus }: {
-  query: string; onQuery: (value: string) => void; category: string; onCategory: (value: string) => void; status: string; onStatus: (value: string) => void;
+export function ProductFilters({ query, onQuery, category, onCategory, status, onStatus, categories }: {
+  query: string; onQuery: (value: string) => void; category: string; onCategory: (value: string) => void; status: string; onStatus: (value: string) => void; categories: ProductCategoryRecord[];
 }) {
   return <div className="admin-filters"><label className="admin-filter-search"><Search size={17}/><span className="sr-only">Mahsulot qidirish</span><input value={query} onChange={event => onQuery(event.target.value)} placeholder="Mahsulot, brend yoki model qidirish..."/></label>
-    <label><span className="sr-only">Kategoriya</span><select value={category} onChange={event => onCategory(event.target.value)}>{productCategories.map(item => <option value={item.id} key={item.id}>{item.label}</option>)}</select></label>
+    <label><span className="sr-only">Kategoriya</span><select value={category} onChange={event => onCategory(event.target.value)}><option value="all">Barchasi</option>{categories.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
     <label><span className="sr-only">Holati</span><select value={status} onChange={event => onStatus(event.target.value)}><option value="all">Barchasi</option><option value="available">Mavjud</option><option value="order">Buyurtma asosida</option><option value="hidden">Yashirilgan</option></select></label>
   </div>;
 }
-export function AdminProductsPage({ products, saved }: { products: Product[]; saved?: "created" | "updated" }) {
+export function AdminProductsPage({ products, categories, saved }: { products: Product[]; categories: ProductCategoryRecord[]; saved?: "created" | "updated" }) {
   const records = products;
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState(saved ? "Mahsulot saqlandi." : "");
@@ -73,7 +69,7 @@ export function AdminProductsPage({ products, saved }: { products: Product[]; sa
   const [status, setStatus] = useState("all");
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const rows = useMemo(() => records.filter(p => (category === "all" || p.category === category) && (status === "all" || (status === "hidden" ? !p.isVisible : p.availability === status)) && `${p.name} ${p.brand} ${p.model}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).sort((a,b) => a.order-b.order), [records, query, category, status]);
+  const rows = useMemo(() => records.filter(p => (category === "all" || p.categoryId === category) && (status === "all" || (status === "hidden" ? !p.isVisible : p.availability === status)) && `${p.name} ${p.brand} ${p.model}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).sort((a,b) => a.order-b.order), [records, query, category, status]);
   const run = (action: (id: string) => Promise<{ error?: string }>, id: string, success: string) => startTransition(async () => {
     const result = await action(id);
     if (result.error) { setFeedback(result.error); return; }
@@ -90,7 +86,7 @@ export function AdminProductsPage({ products, saved }: { products: Product[]; sa
     </div>
     {feedback && <p className="admin-form-feedback" role="status">{feedback}</p>}
     <section className="admin-panel admin-management-panel"><div className="admin-panel-heading"><h2>Mahsulotlar ro‘yxati</h2><span>{rows.length} ta mahsulot</span></div>
-      <ProductFilters query={query} onQuery={setQuery} category={category} onCategory={setCategory} status={status} onStatus={setStatus}/>
+      <ProductFilters query={query} onQuery={setQuery} category={category} onCategory={setCategory} status={status} onStatus={setStatus} categories={categories}/>
       {rows.length ? <><ProductManagementTable rows={rows} selected={selected} onSelect={toggleSelected} onSelectAll={() => setSelected(rows.every(p=>selected.includes(p.id)) ? [] : rows.map(p=>p.id))} onVisibility={toggleVisibility} onCopy={copyProduct} onDelete={setDeleting}/>
         <div className="admin-mobile-products">{rows.map(p=><ProductManagementCard key={p.id} product={p} selected={selected.includes(p.id)} onSelect={()=>toggleSelected(p.id)} onVisibility={()=>toggleVisibility(p.id)} onCopy={()=>copyProduct(p.id)} onDelete={()=>setDeleting(p.id)}/>)}</div></> : <p className="admin-empty">Mos mahsulot topilmadi.</p>}
     </section>

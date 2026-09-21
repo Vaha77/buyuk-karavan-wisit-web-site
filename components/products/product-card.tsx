@@ -15,7 +15,7 @@ const iconByCategory = {
 } as const;
 
 export function ProductCard({ product }: { product: Product }) {
-  const Icon = iconByCategory[product.category];
+  const Icon = iconByCategory[product.category as keyof typeof iconByCategory] ?? Radio;
   return <Link className="catalog-card" href={`/products/${product.slug}`} aria-label={`${product.name} ${product.model} — batafsil`}>
     <div className="catalog-card-image">
       <span className="catalog-card-badge">{product.badge}</span>

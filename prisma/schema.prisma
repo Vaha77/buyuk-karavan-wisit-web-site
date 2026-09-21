@@ -124,7 +124,8 @@ model Product {
   brand            String
   model            String
   slug             String              @unique
-  category         String
+  categoryId       String
+  category         ProductCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   shortDescription String?
   description      String?
   images           String[]            @default([])
@@ -140,7 +141,20 @@ model Product {
   asset360         Product360Asset?
 
   @@index([isVisible, order])
-  @@index([category])
+  @@index([categoryId])
+}
+
+model ProductCategory {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  isActive  Boolean   @default(true)
+  order     Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+
+  @@index([isActive, order])
 }
 
 model Product360Asset {

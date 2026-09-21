@@ -1,16 +1,4 @@
-export const productCategories = [
-  { id: "all", label: "Barchasi" },
-  { id: "compressors", label: "Kompressorlar" },
-  { id: "evaporators", label: "Evaporatorlar" },
-  { id: "condensers", label: "Kondensatorlar" },
-  { id: "chillers", label: "Chillerlar" },
-  { id: "panels", label: "Sandwich panellar" },
-  { id: "doors", label: "Sovutish eshiklari" },
-  { id: "pipes", label: "Mis quvurlar" },
-  { id: "accessories", label: "Aksessuarlar" },
-] as const;
-
-export type ProductCategory = Exclude<(typeof productCategories)[number]["id"], "all">;
+export type ProductCategory = { id: string; name: string; slug: string; isActive: boolean; order: number; productCount?: number };
 export type ProductAvailability = "available" | "order";
 export type ProductSpecification = { id: string; name: string; value: string; mobileOrder?: number };
 export type Product = {
@@ -19,7 +7,9 @@ export type Product = {
   name: string;
   brand: string;
   model: string;
-  category: ProductCategory;
+  categoryId?: string;
+  category: string;
+  categoryName?: string;
   badge: string;
   image: string | null;
   images?: string[];

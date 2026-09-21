@@ -68,7 +68,7 @@ function dbData(input: ProductInput, previous?: unknown) {
   const existing = readSpecifications(previous);
   return {
     name: input.name, brand: input.brand, model: input.model, slug: input.slug,
-    category: input.category, shortDescription: input.shortDescription || null,
+    categoryId: input.categoryId, shortDescription: input.shortDescription || null,
     description: input.description || null,
     specifications: { ...existing, rows: input.specifications, cardSpecs: input.tags.length ? input.tags : input.specifications.map(spec => spec.value).filter(Boolean).slice(0, 2) },
     tags: input.tags, availability: input.availability === "available" ? "AVAILABLE" as const : "ORDER" as const,
@@ -171,7 +171,7 @@ export async function copyProduct(id: string) {
       const copy = await getDb().product.create({ data: {
         name: `${source.name} — nusxa`, brand: source.brand, model: source.model,
         slug: `${source.slug}-nusxa${suffix === 1 ? "" : `-${suffix}`}`,
-        category: source.category, shortDescription: source.shortDescription, description: source.description,
+        categoryId: source.categoryId, shortDescription: source.shortDescription, description: source.description,
         images: source.images, specifications: source.specifications ?? {}, tags: source.tags,
         availability: source.availability, isVisible: false, order: (maxOrder._max.order ?? 0) + 1,
         seoTitle: source.seoTitle, seoDescription: source.seoDescription,

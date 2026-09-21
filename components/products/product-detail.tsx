@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { CircleHelp, Droplet, House, PanelsTopLeft, Refrigerator } from "lucide-react";
-import { productCategories, type Product } from "@/lib/products/types";
+import type { Product } from "@/lib/products/types";
 import { ProductCard } from "./product-card";
 import { ProductGallery } from "./product-gallery";
 import { ProductDetailMotion } from "./product-detail-motion";
 import { MadinaPlaceholder } from "./madina-placeholder";
 
 const applicationIcons = { rooms: House, produce: Droplet, meat: Refrigerator, industrial: PanelsTopLeft } as const;
-const categoryName = (product: Product) => productCategories.find(item=>item.id===product.category)?.label || product.badge;
+const categoryName = (product: Product) => product.categoryName;
 type Spec = { id: string; name: string; value: string; mobileOrder?: number };
 function detailSpecs(product: Product) {
   const given = product.specifications || product.specs.map((value,index):Spec=>({ id:`feature-${index}`, name:`Xususiyat ${index+1}`, value }));
