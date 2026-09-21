@@ -9,7 +9,7 @@ import type { ProductCategoryRecord } from "@/lib/product-categories/types";
 import { saveProductAction } from "@/app/admin/(protected)/products/actions";
 import { createCategoryAction } from "@/app/admin/(protected)/products/category-actions";
 import { ProductCategoriesManager } from "./product-categories-manager";
-import { formatUsd, formatUzs, usdToUzs } from "@/lib/pricing/money";
+import { formatUsd, formatUzs, usdToSellingUzs } from "@/lib/pricing/money";
 import { autofillProductAction } from "@/app/admin/(protected)/products/ai-actions";
 import type { UsdUzsRate } from "@/lib/currency/cbu";
 
@@ -92,7 +92,7 @@ export function ProductForm({ product, categories: initialCategories, exchangeRa
     setAiState("loading");setFeedback("");
     startTransition(async()=>{const result=await autofillProductAction({...state,productId:product?.id??null});if(result.error||!result.suggestions){setAiState("error");setFeedback(result.error||"AI xizmatida xatolik yuz berdi.");return;}const suggestion=result.suggestions;setState(current=>({...current,brand:current.brand||suggestion.brand||"",model:current.model||suggestion.model||"",categoryId:current.categoryId||suggestion.categoryId||"",shortDescription:current.shortDescription||suggestion.shortDescription||"",description:current.description||suggestion.description||"",tags:current.tags.length?current.tags:suggestion.tags,slug:current.slug||suggestion.slug||"",seoTitle:current.seoTitle||suggestion.seoTitle||"",seoDescription:current.seoDescription||suggestion.seoDescription||""}));setAiState("success");setFeedback("AI takliflari tayyorlandi. Saqlashdan oldin tekshiring.");});
   };
-  const uzsPreview=state.priceUsd&&exchangeRate?usdToUzs(state.priceUsd,exchangeRate.rate):null;
+  const uzsPreview=state.priceUsd&&exchangeRate?usdToSellingUzs(state.priceUsd,exchangeRate.rate):null;
   return <div className="admin-form-page"><div className="admin-page-heading"><div><Link className="admin-back-link" href="/admin/products">← Mahsulotlarga qaytish</Link><h1>{product?"Mahsulotni tahrirlash":"Yangi mahsulot"}</h1><p>{product?"Mahsulot ma’lumotlarini yangilash":"Sayt katalogiga yangi mahsulot qo‘shish"}</p></div></div>
     <div className="admin-form-layout"><div className="admin-form-main">
       <section className="admin-form-card"><div className="admin-form-card-heading"><h2>Asosiy ma’lumotlar</h2></div><div className="admin-form-grid">
@@ -106,7 +106,7 @@ export function ProductForm({ product, categories: initialCategories, exchangeRa
             <div className="admin-category-inline-inner"><label className="admin-form-field"><span>Kategoriya nomi</span><input ref={categoryInputRef} disabled={!categoryCreatorOpen} value={newCategory} onChange={e=>setNewCategory(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();createCategory();}else if(e.key==="Escape"){e.preventDefault();closeCategoryCreator();}}} placeholder="Masalan: Havo sovutgichlar"/></label><div className="admin-category-inline-actions"><button type="button" disabled={pending} onClick={closeCategoryCreator}>Bekor qilish</button><button className="admin-primary-button" type="button" disabled={pending||!newCategory.trim()} onClick={createCategory}><Plus size={15}/>{pending?"Yaratilmoqda...":"Kategoriya yaratish"}</button></div></div>
           </div>
         </div>
-        <div className="admin-price-field"><FormField label="Narxi (USD)"><input inputMode="decimal" value={state.priceUsd} onChange={e=>update("priceUsd",e.target.value.replace(/[^0-9.]/g,""))} placeholder="1250"/></FormField>{state.priceUsd&&<div className="admin-price-preview"><strong>{formatUsd(state.priceUsd)}</strong>{uzsPreview!==null&&<span>≈ {formatUzs(uzsPreview)}</span>}{exchangeRate?<small>Markaziy bank kursi bo‘yicha · {new Intl.DateTimeFormat("uz-UZ",{dateStyle:"short",timeZone:"UTC"}).format(new Date(exchangeRate.effectiveDate))}</small>:<small>CBU kursi vaqtincha mavjud emas</small>}</div>}</div>
+        <div className="admin-price-field"><FormField label="Narxi (USD)"><input inputMode="decimal" value={state.priceUsd} onChange={e=>update("priceUsd",e.target.value.replace(/[^0-9.]/g,""))} placeholder="1250"/></FormField>{state.priceUsd&&<div className="admin-price-preview"><strong>{formatUsd(state.priceUsd)}</strong>{uzsPreview!==null&&<span>Saytda: {formatUzs(uzsPreview)}</span>}{exchangeRate?<small>Markaziy bank kursi bo‘yicha · {new Intl.DateTimeFormat("uz-UZ",{dateStyle:"short",timeZone:"UTC"}).format(new Date(exchangeRate.effectiveDate))}</small>:<small>CBU kursi vaqtincha mavjud emas</small>}</div>}</div>
         <FormField label="Qisqa tavsif"><textarea value={state.shortDescription} onChange={e=>update("shortDescription",e.target.value)} rows={3}/></FormField>
         <FormField label="Mahsulot haqida"><textarea value={state.description} onChange={e=>update("description",e.target.value)} rows={5}/></FormField>
       </div></section>
