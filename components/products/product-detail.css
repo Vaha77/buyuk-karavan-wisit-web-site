@@ -43,3 +43,4 @@
 @media(max-width:375px){.detail-container{width:calc(100% - 32px)}.detail-info h1{font-size:28px}.detail-application-card{padding:13px}.detail-consultation-content{padding-inline:21px}}
 @media(prefers-reduced-motion:reduce){.detail-main-media-content{animation:none}.detail-button{transition:none}}
 @media(max-width:700px){.detail-shell .site-header{top:15px}.detail-hero{margin-top:14px}.detail-spec-grid,.detail-spec-full{display:none}.detail-spec-mobile{display:block}.detail-spec-mobile .detail-spec-column .detail-spec-row:last-child{border-bottom:0}}
+.detail-info>.product-price{margin:18px 0 4px}.detail-info>.product-price strong{font-size:25px}.detail-info>.product-price span{font-size:13px}.detail-info>.product-price-request{margin-top:18px;font-size:13px}.detail-description-copy p{white-space:pre-line}@media(max-width:700px){.detail-info>.product-price{margin-top:15px}.detail-info>.product-price strong{font-size:22px}}

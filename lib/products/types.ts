@@ -10,6 +10,7 @@ export type Product = {
   categoryId?: string;
   category: string;
   categoryName?: string;
+  priceUsd?: string | null;
   badge: string;
   image: string | null;
   images?: string[];

@@ -1,0 +1,2 @@
+import { formatUsd,formatUzs,usdToUzs } from "@/lib/pricing/money";
+export function ProductPrice({priceUsd,exchangeRate,compact=false}:{priceUsd?:string|null;exchangeRate:string|null;compact?:boolean}){if(!priceUsd)return <span className={`product-price-request${compact?" is-compact":""}`}>Narxni so‘rash</span>;const uzs=exchangeRate?usdToUzs(priceUsd,exchangeRate):null;return <div className={`product-price${compact?" is-compact":""}`}><strong>{formatUsd(priceUsd)}</strong>{uzs!==null&&<><span>≈ {formatUzs(uzs)}</span><small>CBU kursi bo‘yicha</small></>}</div>}

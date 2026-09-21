@@ -126,6 +126,7 @@ model Product {
   slug             String              @unique
   categoryId       String
   category         ProductCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  priceUsd         Decimal?            @db.Decimal(18, 2)
   shortDescription String?
   description      String?
   images           String[]            @default([])
@@ -142,6 +143,17 @@ model Product {
 
   @@index([isVisible, order])
   @@index([categoryId])
+}
+
+model SiteSettings {
+  id               String    @id @default("global")
+  usdToUzs         Decimal   @default(12200) @db.Decimal(18, 4)
+  currencySource   String?
+  cbuNominal       Int?
+  cbuEffectiveDate DateTime?
+  cbuLastSyncedAt  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model ProductCategory {
@@ -209,38 +221,38 @@ model HomeContent {
 }
 
 model Lead {
-  id           String     @id @default(cuid())
-  submissionKey String?   @unique
-  customerName String?
-  phone        String?
-  telegram     String?
-  requestType  String
-  product      String?
-  dimensions   String?
-  capacity     String?
-  temperature  String?
-  region       String?
-  notes        String?
-  source       LeadSource @default(OTHER)
-  status       LeadStatus @default(NEW)
-  aiSummary    String?
-  chatHistory  Json       @default("[]")
-  managerNote  String?
-  assignedAgentId String?
-  claimedAt DateTime?
-  telegramChatId String?
-  telegramMessageId Int?
-  telegramPublishedAt DateTime?
-  telegramNotificationStatus TelegramNotificationStatus @default(PENDING)
-  telegramPublishFailedAt DateTime?
+  id                              String                      @id @default(cuid())
+  submissionKey                   String?                     @unique
+  customerName                    String?
+  phone                           String?
+  telegram                        String?
+  requestType                     String
+  product                         String?
+  dimensions                      String?
+  capacity                        String?
+  temperature                     String?
+  region                          String?
+  notes                           String?
+  source                          LeadSource                  @default(OTHER)
+  status                          LeadStatus                  @default(NEW)
+  aiSummary                       String?
+  chatHistory                     Json                        @default("[]")
+  managerNote                     String?
+  assignedAgentId                 String?
+  claimedAt                       DateTime?
+  telegramChatId                  String?
+  telegramMessageId               Int?
+  telegramPublishedAt             DateTime?
+  telegramNotificationStatus      TelegramNotificationStatus  @default(PENDING)
+  telegramPublishFailedAt         DateTime?
   telegramPrivateDeliveryFailedAt DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  assignedAgent SalesAgent? @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
-  activities LeadActivity[]
-  followUps LeadFollowUp[]
-  telegramConversations TelegramConversationState[]
-  sale Sale?
+  createdAt                       DateTime                    @default(now())
+  updatedAt                       DateTime                    @updatedAt
+  assignedAgent                   SalesAgent?                 @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  activities                      LeadActivity[]
+  followUps                       LeadFollowUp[]
+  telegramConversations           TelegramConversationState[]
+  sale                            Sale?
 
   @@index([status, createdAt])
   @@index([assignedAgentId, claimedAt])
@@ -248,55 +260,55 @@ model Lead {
 }
 
 model SalesAgent {
-  id String @id @default(cuid())
-  telegramUserId BigInt @unique
-  telegramUsername String?
-  firstName String
-  lastName String?
-  isActive Boolean @default(true)
-  isApproved Boolean @default(false)
-  joinedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  assignedLeads Lead[]
-  activities LeadActivity[]
-  followUps LeadFollowUp[]
+  id                   String                     @id @default(cuid())
+  telegramUserId       BigInt                     @unique
+  telegramUsername     String?
+  firstName            String
+  lastName             String?
+  isActive             Boolean                    @default(true)
+  isApproved           Boolean                    @default(false)
+  joinedAt             DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  assignedLeads        Lead[]
+  activities           LeadActivity[]
+  followUps            LeadFollowUp[]
   telegramConversation TelegramConversationState?
-  sales Sale[]
-  marjaTransactions MarjaTransaction[]
-  rewardRedemptions RewardRedemption[]
+  sales                Sale[]
+  marjaTransactions    MarjaTransaction[]
+  rewardRedemptions    RewardRedemption[]
 
   @@index([isApproved, isActive])
 }
 
 model LeadActivity {
-  id String @id @default(cuid())
-  leadId String
-  agentId String?
-  type LeadActivityType
-  comment String?
-  metadata Json?
-  createdAt DateTime @default(now())
-  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  agent SalesAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  id        String           @id @default(cuid())
+  leadId    String
+  agentId   String?
+  type      LeadActivityType
+  comment   String?
+  metadata  Json?
+  createdAt DateTime         @default(now())
+  lead      Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agent     SalesAgent?      @relation(fields: [agentId], references: [id], onDelete: SetNull)
 
   @@index([leadId, createdAt])
   @@index([agentId, createdAt])
 }
 
 model LeadFollowUp {
-  id String @id @default(cuid())
-  leadId String
-  agentId String
-  scheduledFor DateTime
-  status LeadFollowUpStatus @default(SCHEDULED)
+  id             String                      @id @default(cuid())
+  leadId         String
+  agentId        String
+  scheduledFor   DateTime
+  status         LeadFollowUpStatus          @default(SCHEDULED)
   reminderSentAt DateTime?
-  completedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  agent SalesAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  conversations TelegramConversationState[]
+  completedAt    DateTime?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  lead           Lead                        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agent          SalesAgent                  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  conversations  TelegramConversationState[]
 
   @@index([status, scheduledFor])
   @@index([leadId, status])
@@ -304,134 +316,134 @@ model LeadFollowUp {
 }
 
 model TelegramConversationState {
-  agentId String @id
-  leadId String
-  step TelegramConversationStep
-  outcome LeadOutcome?
+  agentId    String                   @id
+  leadId     String
+  step       TelegramConversationStep
+  outcome    LeadOutcome?
   followUpId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  agent SalesAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  followUp LeadFollowUp? @relation(fields: [followUpId], references: [id], onDelete: SetNull)
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
+  agent      SalesAgent               @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  lead       Lead                     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  followUp   LeadFollowUp?            @relation(fields: [followUpId], references: [id], onDelete: SetNull)
 
   @@index([leadId])
 }
 
 model TelegramUpdate {
-  updateId BigInt @id
+  updateId  BigInt   @id
   createdAt DateTime @default(now())
 }
 
 model AdminUser {
-  id           String    @id @default(cuid())
-  name         String
-  phone        String    @unique
-  passwordHash String
-  role         AdminRole @default(MANAGER)
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  sessions     AdminSession[]
-  approvedSales Sale[] @relation("SaleApprover")
-  marjaAdjustments MarjaTransaction[]
+  id                  String             @id @default(cuid())
+  name                String
+  phone               String             @unique
+  passwordHash        String
+  role                AdminRole          @default(MANAGER)
+  isActive            Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  sessions            AdminSession[]
+  approvedSales       Sale[]             @relation("SaleApprover")
+  marjaAdjustments    MarjaTransaction[]
   reviewedRedemptions RewardRedemption[]
-  backups BackupRun[]
+  backups             BackupRun[]
 }
 
 model Sale {
-  id String @id @default(cuid())
-  leadId String @unique
-  agentId String
-  status SaleStatus @default(PENDING)
-  customerName String?
+  id                 String            @id @default(cuid())
+  leadId             String            @unique
+  agentId            String
+  status             SaleStatus        @default(PENDING)
+  customerName       String?
   productDescription String
-  saleAmount Decimal? @db.Decimal(18, 2)
-  currency String? @db.VarChar(8)
-  comment String?
-  reportedAt DateTime @default(now())
-  approvedAt DateTime?
-  approvedByAdminId String?
-  rejectedAt DateTime?
-  rejectionReason String?
-  celebrationSentAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  lead Lead @relation(fields:[leadId],references:[id],onDelete:Cascade)
-  agent SalesAgent @relation(fields:[agentId],references:[id],onDelete:Restrict)
-  approvedByAdmin AdminUser? @relation("SaleApprover",fields:[approvedByAdminId],references:[id],onDelete:SetNull)
-  marjaTransaction MarjaTransaction?
+  saleAmount         Decimal?          @db.Decimal(18, 2)
+  currency           String?           @db.VarChar(8)
+  comment            String?
+  reportedAt         DateTime          @default(now())
+  approvedAt         DateTime?
+  approvedByAdminId  String?
+  rejectedAt         DateTime?
+  rejectionReason    String?
+  celebrationSentAt  DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  lead               Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agent              SalesAgent        @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  approvedByAdmin    AdminUser?        @relation("SaleApprover", fields: [approvedByAdminId], references: [id], onDelete: SetNull)
+  marjaTransaction   MarjaTransaction?
 
   @@index([status, reportedAt])
   @@index([agentId, status])
 }
 
 model MarjaTransaction {
-  id String @id @default(cuid())
-  agentId String
-  saleId String? @unique
-  rewardRedemptionId String? @unique
-  adminUserId String?
-  type MarjaTransactionType
-  amount Int
-  description String
-  createdAt DateTime @default(now())
-  agent SalesAgent @relation(fields:[agentId],references:[id],onDelete:Restrict)
-  sale Sale? @relation(fields:[saleId],references:[id],onDelete:Restrict)
-  rewardRedemption RewardRedemption? @relation(fields:[rewardRedemptionId],references:[id],onDelete:Restrict)
-  adminUser AdminUser? @relation(fields:[adminUserId],references:[id],onDelete:SetNull)
+  id                 String               @id @default(cuid())
+  agentId            String
+  saleId             String?              @unique
+  rewardRedemptionId String?              @unique
+  adminUserId        String?
+  type               MarjaTransactionType
+  amount             Int
+  description        String
+  createdAt          DateTime             @default(now())
+  agent              SalesAgent           @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  sale               Sale?                @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  rewardRedemption   RewardRedemption?    @relation(fields: [rewardRedemptionId], references: [id], onDelete: Restrict)
+  adminUser          AdminUser?           @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
 
   @@index([agentId, createdAt])
   @@index([type, createdAt])
 }
 
 model Reward {
-  id String @id @default(cuid())
-  name String
+  id            String             @id @default(cuid())
+  name          String
   requiredMarja Int
-  description String?
-  isActive Boolean @default(true)
-  order Int @default(0)
-  seedKey String? @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  redemptions RewardRedemption[]
+  description   String?
+  isActive      Boolean            @default(true)
+  order         Int                @default(0)
+  seedKey       String?            @unique
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  redemptions   RewardRedemption[]
 
   @@index([isActive, order])
 }
 
 model RewardRedemption {
-  id String @id @default(cuid())
-  agentId String
-  rewardId String
-  status RewardRedemptionStatus @default(PENDING)
-  requiredMarja Int
-  requestedAt DateTime @default(now())
-  reviewedAt DateTime?
+  id                String                 @id @default(cuid())
+  agentId           String
+  rewardId          String
+  status            RewardRedemptionStatus @default(PENDING)
+  requiredMarja     Int
+  requestedAt       DateTime               @default(now())
+  reviewedAt        DateTime?
   reviewedByAdminId String?
-  rejectionReason String?
-  fulfilledAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  agent SalesAgent @relation(fields:[agentId],references:[id],onDelete:Restrict)
-  reward Reward @relation(fields:[rewardId],references:[id],onDelete:Restrict)
-  reviewedByAdmin AdminUser? @relation(fields:[reviewedByAdminId],references:[id],onDelete:SetNull)
-  marjaTransaction MarjaTransaction?
+  rejectionReason   String?
+  fulfilledAt       DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  agent             SalesAgent             @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  reward            Reward                 @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+  reviewedByAdmin   AdminUser?             @relation(fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+  marjaTransaction  MarjaTransaction?
 
   @@index([status, requestedAt])
   @@index([agentId, status])
 }
 
 model BackupRun {
-  id String @id @default(cuid())
-  status BackupStatus @default(PROCESSING)
-  storageKey String?
-  sizeBytes Int?
-  errorType String?
+  id               String       @id @default(cuid())
+  status           BackupStatus @default(PROCESSING)
+  storageKey       String?
+  sizeBytes        Int?
+  errorType        String?
   createdByAdminId String?
-  startedAt DateTime @default(now())
-  completedAt DateTime?
-  createdByAdmin AdminUser? @relation(fields:[createdByAdminId],references:[id],onDelete:SetNull)
+  startedAt        DateTime     @default(now())
+  completedAt      DateTime?
+  createdByAdmin   AdminUser?   @relation(fields: [createdByAdminId], references: [id], onDelete: SetNull)
 
   @@index([startedAt])
 }

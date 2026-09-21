@@ -1,0 +1,11 @@
+ALTER TABLE "Product" ADD COLUMN "priceUsd" DECIMAL(18,2);
+
+CREATE TABLE "SiteSettings" (
+  "id" TEXT NOT NULL DEFAULT 'global',
+  "usdToUzs" DECIMAL(18,4) NOT NULL DEFAULT 12200,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "SiteSettings_pkey" PRIMARY KEY ("id")
+);
+
+INSERT INTO "SiteSettings" ("id", "usdToUzs") VALUES ('global', 12200);

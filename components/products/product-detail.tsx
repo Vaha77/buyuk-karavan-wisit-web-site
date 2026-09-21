@@ -5,6 +5,7 @@ import { ProductCard } from "./product-card";
 import { ProductGallery } from "./product-gallery";
 import { ProductDetailMotion } from "./product-detail-motion";
 import { MadinaPlaceholder } from "./madina-placeholder";
+import { ProductPrice } from "./product-price";
 
 const applicationIcons = { rooms: House, produce: Droplet, meat: Refrigerator, industrial: PanelsTopLeft } as const;
 const categoryName = (product: Product) => product.categoryName;
@@ -22,7 +23,7 @@ function detailSpecs(product: Product) {
 }
 function SpecRows({ rows }: { rows: Spec[] }) { return <div className="detail-spec-column">{rows.map(item=><div className="detail-spec-row" key={item.id}><span>{item.name}</span><strong className={item.id==="status"&&item.value==="Mavjud"?"is-available":""}>{item.value || "—"}</strong></div>)}</div>; }
 
-export function ProductDetail({ product, related }: { product: Product; related: Product[] }) {
+export function ProductDetail({ product, related, exchangeRate }: { product: Product; related: Product[]; exchangeRate: string|null }) {
   const specs = detailSpecs(product);
   return <main className="products-page detail-page">
     <div className="container detail-container">
@@ -34,6 +35,7 @@ export function ProductDetail({ product, related }: { product: Product; related:
           <h1>{product.name}</h1>
           <p className="detail-model">{product.model}</p>
           <span className={`detail-availability ${product.availability==="available"?"is-available":"is-order"}`}><i/>{product.availability==="available"?"Mavjud":"Buyurtma asosida"}</span>
+          <ProductPrice priceUsd={product.priceUsd} exchangeRate={exchangeRate}/>
           <div className="detail-tags">{(product.tags?.length?product.tags:product.specs).map(tag=><span key={tag}>{tag}</span>)}</div>
           {product.shortDescription&&<p className="detail-short-description">{product.shortDescription}</p>}
           <div className="detail-hero-actions"><a className="detail-button detail-button-primary" href="#aloqa">Maslahat olish</a><MadinaPlaceholder className="detail-button detail-button-secondary">Madina AI’dan so‘rash</MadinaPlaceholder></div>
@@ -44,7 +46,7 @@ export function ProductDetail({ product, related }: { product: Product; related:
       <section className="detail-description"><h2>Mahsulot haqida</h2><div className="detail-description-copy"><p>{product.description || "—"}</p>{Boolean(product.descriptionBullets?.length)&&<ul>{product.descriptionBullets?.map(item=><li key={item}>{item}</li>)}</ul>}</div></section>
       {Boolean(product.applications?.length)&&<section className="detail-applications"><h2>Qayerda ishlatiladi?</h2><div className="detail-application-grid">{product.applications?.map(item=>{const Icon=applicationIcons[item.id as keyof typeof applicationIcons] || PanelsTopLeft;return <article className="detail-application-card" key={item.id}><span><Icon size={21} strokeWidth={1.5} aria-hidden="true"/></span><h3>{item.label}</h3></article>;})}</div></section>}
       <section className="detail-consultation"><div className="detail-consultation-content"><h2>Qaysi uskuna sizga mosligini<br className="detail-consultation-break"/> bilmayapsizmi?</h2><p>Mutaxassislarimiz loyiha va harorat talablariga qarab to‘g‘ri uskunani tanlashda yordam beradi.</p><div className="detail-consultation-actions"><a className="detail-button detail-button-light" href="#aloqa">Bepul maslahat olish</a><MadinaPlaceholder className="detail-button detail-button-dark-outline">Madina AI bilan gaplashish</MadinaPlaceholder></div></div></section>
-      <section className="detail-related"><h2>O‘xshash mahsulotlar</h2><div className="detail-related-grid">{related.map(item=><ProductCard product={item} key={item.id}/>)}</div></section>
+      <section className="detail-related"><h2>O‘xshash mahsulotlar</h2><div className="detail-related-grid">{related.map(item=><ProductCard product={item} exchangeRate={exchangeRate} key={item.id}/>)}</div></section>
     </div>
     <ProductDetailMotion/>
   </main>;

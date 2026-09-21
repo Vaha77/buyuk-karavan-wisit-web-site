@@ -9,19 +9,22 @@ import type { ProductCategoryRecord } from "@/lib/product-categories/types";
 import { saveProductAction } from "@/app/admin/(protected)/products/actions";
 import { createCategoryAction } from "@/app/admin/(protected)/products/category-actions";
 import { ProductCategoriesManager } from "./product-categories-manager";
+import { formatUsd, formatUzs, usdToUzs } from "@/lib/pricing/money";
+import { autofillProductAction } from "@/app/admin/(protected)/products/ai-actions";
+import type { UsdUzsRate } from "@/lib/currency/cbu";
 
 type Specification = { id: string; name: string; value: string };
 type FormState = {
-  name: string; brand: string; model: string; categoryId: string;
+  name: string; brand: string; model: string; categoryId: string; priceUsd: string;
   shortDescription: string; description: string; specifications: Specification[];
   tags: string[]; availability: ProductAvailability; isVisible: boolean; order: number;
   slug: string; seoTitle: string; seoDescription: string;
 };
-const blank: FormState = { name: "", brand: "", model: "", categoryId: "", shortDescription: "", description: "", specifications: [{ id: "spec-1", name: "", value: "" }], tags: [], availability: "available", isVisible: true, order: 1, slug: "", seoTitle: "", seoDescription: "" };
+const blank: FormState = { name: "", brand: "", model: "", categoryId: "", priceUsd: "", shortDescription: "", description: "", specifications: [{ id: "spec-1", name: "", value: "" }], tags: [], availability: "available", isVisible: true, order: 1, slug: "", seoTitle: "", seoDescription: "" };
 const slugify = (text: string) => text.toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 function fromProduct(product?: Product): FormState {
   if (!product) return blank;
-  return { name: product.name, brand: product.brand, model: product.model, categoryId: product.categoryId || "",
+  return { name: product.name, brand: product.brand, model: product.model, categoryId: product.categoryId || "", priceUsd: product.priceUsd || "",
     shortDescription: product.shortDescription || "", description: product.description || "",
     specifications: product.specifications?.length ? product.specifications : product.specs.map((value,index)=>({id:`spec-${index}`,name:"Xususiyat",value})),
     tags: product.tags || product.specs, availability: product.availability, isVisible: product.isVisible, order: product.order,
@@ -48,9 +51,9 @@ export function ProductSeoFields({ state, update }: { state: FormState; update: 
 export function AdminSaveBar({ onSave, onDraft, pending }: { onSave: () => void; onDraft: () => void; pending: boolean }) {
   return <div className="admin-save-bar"><Link href="/admin/products">Bekor qilish</Link><div><button type="button" disabled={pending} onClick={onDraft}>Qoralama saqlash</button><button className="admin-primary-button" type="button" disabled={pending} onClick={onSave}>{pending ? "Saqlanmoqda..." : "Mahsulotni saqlash"}</button></div></div>;
 }
-export function ProductForm({ product, categories: initialCategories }: { product?: Product; categories: ProductCategoryRecord[] }) {
+export function ProductForm({ product, categories: initialCategories, exchangeRate }: { product?: Product; categories: ProductCategoryRecord[]; exchangeRate: UsdUzsRate|null }) {
   const [categories,setCategories]=useState(initialCategories);
-  const [state,setState]=useState<FormState>(()=>{const initial=fromProduct(product);return {...initial,categoryId:initial.categoryId||initialCategories.find(x=>x.isActive)?.id||""};});
+  const [state,setState]=useState<FormState>(()=>fromProduct(product));
   const [newCategory,setNewCategory]=useState("");
   const [categoryCreatorOpen,setCategoryCreatorOpen]=useState(false);
   const [categoryManagerOpen,setCategoryManagerOpen]=useState(false);
@@ -62,6 +65,7 @@ export function ProductForm({ product, categories: initialCategories }: { produc
   const [slugEdited,setSlugEdited]=useState(Boolean(product));
   const [feedback,setFeedback]=useState("");
   const [pending,startTransition]=useTransition();
+  const [aiState,setAiState]=useState<"idle"|"loading"|"success"|"error">("idle");
   const update=(key:keyof FormState,value:string|number|boolean|Specification[]|string[])=>setState(current=>({...current,[key]:value}));
   const updateIdentity=(key:"name"|"model",value:string)=>setState(current=>{const next={...current,[key]:value};return slugEdited?next:{...next,slug:slugify(`${next.name} ${next.model}`)};});
   const save=(draft:boolean)=>startTransition(async()=>{
@@ -83,19 +87,26 @@ export function ProductForm({ product, categories: initialCategories }: { produc
       }
     });
   };
+  const runAutofill=()=>{
+    if(!state.name.trim()){setFeedback("Avval mahsulot nomini kiriting.");return;}
+    setAiState("loading");setFeedback("");
+    startTransition(async()=>{const result=await autofillProductAction({...state,productId:product?.id??null});if(result.error||!result.suggestions){setAiState("error");setFeedback(result.error||"AI xizmatida xatolik yuz berdi.");return;}const suggestion=result.suggestions;setState(current=>({...current,brand:current.brand||suggestion.brand||"",model:current.model||suggestion.model||"",categoryId:current.categoryId||suggestion.categoryId||"",shortDescription:current.shortDescription||suggestion.shortDescription||"",description:current.description||suggestion.description||"",tags:current.tags.length?current.tags:suggestion.tags,slug:current.slug||suggestion.slug||"",seoTitle:current.seoTitle||suggestion.seoTitle||"",seoDescription:current.seoDescription||suggestion.seoDescription||""}));setAiState("success");setFeedback("AI takliflari tayyorlandi. Saqlashdan oldin tekshiring.");});
+  };
+  const uzsPreview=state.priceUsd&&exchangeRate?usdToUzs(state.priceUsd,exchangeRate.rate):null;
   return <div className="admin-form-page"><div className="admin-page-heading"><div><Link className="admin-back-link" href="/admin/products">← Mahsulotlarga qaytish</Link><h1>{product?"Mahsulotni tahrirlash":"Yangi mahsulot"}</h1><p>{product?"Mahsulot ma’lumotlarini yangilash":"Sayt katalogiga yangi mahsulot qo‘shish"}</p></div></div>
     <div className="admin-form-layout"><div className="admin-form-main">
       <section className="admin-form-card"><div className="admin-form-card-heading"><h2>Asosiy ma’lumotlar</h2></div><div className="admin-form-grid">
-        <FormField label="Mahsulot nomi"><input value={state.name} onChange={e=>updateIdentity("name",e.target.value)} placeholder="Masalan: XUE YING"/></FormField>
+        <div className="admin-product-name-ai"><FormField label="Mahsulot nomi"><input value={state.name} onChange={e=>{updateIdentity("name",e.target.value);setAiState("idle");}} placeholder="Masalan: BR +20PG"/></FormField><button className={`admin-ai-fill-button is-${aiState}`} type="button" disabled={pending||aiState==="loading"} onClick={runAutofill}>{aiState==="loading"?"✨ AI tayyorlamoqda...":aiState==="success"?"✓ Tayyorlandi":aiState==="error"?"Qayta urinib ko‘ring":"✨ AI bilan to‘ldirish"}</button></div>
         <FormField label="Brend"><input value={state.brand} onChange={e=>update("brand",e.target.value)} placeholder="Masalan: XUE YING"/></FormField>
         <FormField label="Model"><input value={state.model} onChange={e=>updateIdentity("model",e.target.value)} placeholder="Masalan: BR +20PG"/></FormField>
         <div className="admin-category-field">
-          <div className="admin-category-select-row"><FormField label="Kategoriya"><select value={state.categoryId} onChange={e=>update("categoryId",e.target.value)}>{categories.filter(item=>item.isActive||item.id===state.categoryId).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField><button className="admin-category-manage-button" type="button" onClick={()=>setCategoryManagerOpen(true)}><Settings2 size={15}/>Boshqarish</button></div>
+          <div className="admin-category-select-row"><FormField label="Kategoriya"><select value={state.categoryId} onChange={e=>update("categoryId",e.target.value)}><option value="">Kategoriyani tanlang</option>{categories.filter(item=>item.isActive||item.id===state.categoryId).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField><button className="admin-category-manage-button" type="button" onClick={()=>setCategoryManagerOpen(true)}><Settings2 size={15}/>Boshqarish</button></div>
           <button className="admin-category-create-toggle" type="button" aria-expanded={categoryCreatorOpen} aria-controls="category-inline-creator" onClick={()=>{if(categoryCreatorOpen)closeCategoryCreator();else{setCategoryCreatorOpen(true);requestAnimationFrame(()=>categoryInputRef.current?.focus());}}}><Plus size={16}/>Yangi kategoriya qo‘shish</button>
           <div id="category-inline-creator" className={`admin-category-inline${categoryCreatorOpen?" is-open":""}`} aria-hidden={!categoryCreatorOpen}>
             <div className="admin-category-inline-inner"><label className="admin-form-field"><span>Kategoriya nomi</span><input ref={categoryInputRef} disabled={!categoryCreatorOpen} value={newCategory} onChange={e=>setNewCategory(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();createCategory();}else if(e.key==="Escape"){e.preventDefault();closeCategoryCreator();}}} placeholder="Masalan: Havo sovutgichlar"/></label><div className="admin-category-inline-actions"><button type="button" disabled={pending} onClick={closeCategoryCreator}>Bekor qilish</button><button className="admin-primary-button" type="button" disabled={pending||!newCategory.trim()} onClick={createCategory}><Plus size={15}/>{pending?"Yaratilmoqda...":"Kategoriya yaratish"}</button></div></div>
           </div>
         </div>
+        <div className="admin-price-field"><FormField label="Narxi (USD)"><input inputMode="decimal" value={state.priceUsd} onChange={e=>update("priceUsd",e.target.value.replace(/[^0-9.]/g,""))} placeholder="1250"/></FormField>{state.priceUsd&&<div className="admin-price-preview"><strong>{formatUsd(state.priceUsd)}</strong>{uzsPreview!==null&&<span>≈ {formatUzs(uzsPreview)}</span>}{exchangeRate?<small>Markaziy bank kursi bo‘yicha · {new Intl.DateTimeFormat("uz-UZ",{dateStyle:"short",timeZone:"UTC"}).format(new Date(exchangeRate.effectiveDate))}</small>:<small>CBU kursi vaqtincha mavjud emas</small>}</div>}</div>
         <FormField label="Qisqa tavsif"><textarea value={state.shortDescription} onChange={e=>update("shortDescription",e.target.value)} rows={3}/></FormField>
         <FormField label="Mahsulot haqida"><textarea value={state.description} onChange={e=>update("description",e.target.value)} rows={5}/></FormField>
       </div></section>

@@ -35,7 +35,7 @@ export function mapProduct(row: DbProduct & { category: DbProductCategory }): Pr
   const specs = stored.cardSpecs?.length ? stored.cardSpecs : row.tags.length ? row.tags : stored.rows.map(item => item.value).filter(Boolean).slice(0, 2);
   return {
     id: row.id, slug: row.slug, name: row.name, brand: row.brand, model: row.model,
-    categoryId: row.categoryId, category: row.category.slug, categoryName: row.category.name,
+    categoryId: row.categoryId, category: row.category.slug, categoryName: row.category.name, priceUsd: row.priceUsd?.toString() ?? null,
     badge: row.category.name.toLocaleUpperCase("uz-UZ"), image: row.images[0] ?? null, images: row.images,
     shortDescription: row.shortDescription ?? undefined, description: row.description ?? undefined,
     descriptionBullets: stored.descriptionBullets, specifications: stored.rows, applications: stored.applications,
