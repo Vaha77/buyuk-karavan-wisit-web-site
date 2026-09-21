@@ -2,6 +2,7 @@ import "server-only";
 import { getDb } from "@/lib/db";
 import { answerCallbackQuery,editMessageText,sendMessage,telegramGroupChatId } from "./client";
 import { agentName,claimedLeadGroupText,newLeadGroupText,privateLeadText,registrationText,welcomeText } from "./messages";
+import { contactedKeyboard,handleCrmCallback,handleCrmText } from "./crm";
 import type { TelegramCallbackQuery,TelegramMessage,TelegramUpdate } from "./types";
 
 const claimKeyboard=(leadId:string)=>({inline_keyboard:[[{text:"🙋 Mijozni olish",callback_data:`claim:${leadId}`}]]});
@@ -37,11 +38,12 @@ async function claimLead(callback:TelegramCallbackQuery){
   if(!agent.isActive){await rejectClaim(callback,"Hisobingiz faol emas.");return true;}
   const claimedAt=new Date(),result=await getDb().lead.updateMany({where:{id:match[1],assignedAgentId:null},data:{assignedAgentId:agent.id,claimedAt}});
   if(result.count!==1){await rejectClaim(callback,"Bu mijozni boshqa sotuvchi olib bo‘ldi.");return true;}
+  await getDb().leadActivity.create({data:{leadId:match[1],agentId:agent.id,type:"CLAIMED"}});
   await answerCallbackQuery(callback.id,"Mijoz sizga biriktirildi.");
   const lead=await getDb().lead.findUnique({where:{id:match[1]}});if(!lead)return true;
   const seller=agentName(agent);
   if(lead.telegramChatId&&lead.telegramMessageId)await editMessageText(lead.telegramChatId,lead.telegramMessageId,claimedLeadGroupText(lead,seller)).catch(error=>safeError("Telegram group edit failed",error));
-  try{await sendMessage(String(agent.telegramUserId),privateLeadText(lead));await getDb().lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:null}});}catch(error){await getDb().lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:new Date()}}).catch(()=>undefined);safeError("Telegram private delivery failed",error);}
+  try{await sendMessage(String(agent.telegramUserId),privateLeadText(lead),contactedKeyboard(lead.id));await getDb().lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:null}});}catch(error){await getDb().lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:new Date()}}).catch(()=>undefined);safeError("Telegram private delivery failed",error);}
   return true;
 }
-export async function handleTelegramUpdate(update:TelegramUpdate){if(update.message){if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;}if(update.callback_query)await claimLead(update.callback_query);}
+export async function handleTelegramUpdate(update:TelegramUpdate){if(update.message){if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await claimLead(update.callback_query))return;await handleCrmCallback(update.callback_query);}}

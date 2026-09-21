@@ -38,6 +38,46 @@ enum TelegramNotificationStatus {
   FAILED
 }
 
+enum LeadActivityType {
+  LEAD_CREATED
+  CLAIMED
+  CONTACTED
+  COMMENT_ADDED
+  FOLLOW_UP_SCHEDULED
+  FOLLOW_UP_COMPLETED
+  FOLLOW_UP_POSTPONED
+  STATUS_CHANGED
+  SALE_REPORTED
+  REJECTED
+}
+
+enum LeadFollowUpStatus {
+  SCHEDULED
+  REMINDER_RESERVED
+  REMINDER_SENT
+  COMPLETED
+  CANCELLED
+}
+
+enum LeadOutcome {
+  THINKING
+  LATER
+  OFFER_SENT
+  NEGOTIATING
+  NO_ANSWER
+  SALE
+  REJECTED
+  INVALID
+}
+
+enum TelegramConversationStep {
+  AWAITING_COMMENT
+  AWAITING_FOLLOW_UP
+  AWAITING_CUSTOM_DATE
+  AWAITING_POSTPONE
+  AWAITING_POSTPONE_DATE
+}
+
 enum AdminRole {
   SUPER_ADMIN
   ADMIN
@@ -155,6 +195,9 @@ model Lead {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   assignedAgent SalesAgent? @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  activities LeadActivity[]
+  followUps LeadFollowUp[]
+  telegramConversations TelegramConversationState[]
 
   @@index([status, createdAt])
   @@index([assignedAgentId, claimedAt])
@@ -173,8 +216,60 @@ model SalesAgent {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   assignedLeads Lead[]
+  activities LeadActivity[]
+  followUps LeadFollowUp[]
+  telegramConversation TelegramConversationState?
 
   @@index([isApproved, isActive])
+}
+
+model LeadActivity {
+  id String @id @default(cuid())
+  leadId String
+  agentId String?
+  type LeadActivityType
+  comment String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agent SalesAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, createdAt])
+  @@index([agentId, createdAt])
+}
+
+model LeadFollowUp {
+  id String @id @default(cuid())
+  leadId String
+  agentId String
+  scheduledFor DateTime
+  status LeadFollowUpStatus @default(SCHEDULED)
+  reminderSentAt DateTime?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agent SalesAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  conversations TelegramConversationState[]
+
+  @@index([status, scheduledFor])
+  @@index([leadId, status])
+  @@index([agentId, scheduledFor])
+}
+
+model TelegramConversationState {
+  agentId String @id
+  leadId String
+  step TelegramConversationStep
+  outcome LeadOutcome?
+  followUpId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  agent SalesAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  followUp LeadFollowUp? @relation(fields: [followUpId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
 }
 
 model TelegramUpdate {
