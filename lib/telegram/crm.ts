@@ -3,10 +3,14 @@ import "server-only";
 import { getDb } from "@/lib/db";
 import type { LeadOutcome, SalesAgent } from "@/generated/prisma/client";
 import { answerCallbackQuery, sendMessage } from "./client";
+import { reportPendingSale } from "@/lib/crm/sales";
+import { marjaBalance } from "@/lib/crm/marja";
+import { requestReward } from "@/lib/crm/rewards";
 import type { InlineKeyboard, TelegramCallbackQuery, TelegramMessage } from "./types";
 
 const TIME_ZONE = "Asia/Tashkent";
 const COMMENT_LIMIT = 1000;
+export const mainMenu:InlineKeyboard={inline_keyboard:[[{text:"👥 Mijozlarim",callback_data:"menu:leads"},{text:"⏰ Eslatmalar",callback_data:"menu:reminders"}],[{text:"💎 Mening Marjam",callback_data:"menu:marja"},{text:"🎁 Mukofotlar",callback_data:"menu:rewards"}],[{text:"📊 Natijalarim",callback_data:"menu:stats"}]]};
 
 const outcomes: Record<string, { value: LeadOutcome; label: string; final: boolean; status: "IN_PROGRESS" | "WON" | "LOST" }> = {
   thinking: { value: "THINKING", label: "O‘ylab ko‘radi", final: false, status: "IN_PROGRESS" },
@@ -140,7 +144,8 @@ async function selectOutcome(callback: TelegramCallbackQuery, leadId: string, co
   });
   await answerCallbackQuery(callback.id, selected.label);
   const customer = context.lead.customerName || "Ko‘rsatilmagan";
-  await sendMessage(String(context.agent.telegramUserId), `Izoh yozing.\n\nMijoz: ${customer}\nNatija: ${selected.label}\n\nMasalan:\n100 tonnalik kamera kerak.\nBir haftadan keyin pul tushadi.\n28-sentyabrda qayta qo‘ng‘iroq qilish kerak.`);
+  const prompt=selected.value==="SALE"?`🎉 Savdo ma’lumotlarini kiriting.\n\nMijoz: ${customer}\nNima sotildi, summa (ixtiyoriy) va qisqa izohni bitta xabarda yozing.`:`Izoh yozing.\n\nMijoz: ${customer}\nNatija: ${selected.label}\n\nMasalan:\n100 tonnalik kamera kerak.\nBir haftadan keyin pul tushadi.\n28-sentyabrda qayta qo‘ng‘iroq qilish kerak.`;
+  await sendMessage(String(context.agent.telegramUserId),prompt);
   return true;
 }
 
@@ -213,8 +218,21 @@ export async function handleCrmCallback(callback: TelegramCallbackQuery) {
   if (schedule) return chooseSchedule(callback, schedule[1] as "follow" | "post", schedule[2]);
   const delayed = callback.data?.match(/^postpone:([a-z0-9]+)$/i);
   if (delayed) return postpone(callback, delayed[1]);
+  const menu=callback.data?.match(/^menu:(leads|reminders|marja|rewards|stats)$/);
+  if(menu)return handleMenu(callback,menu[1]);
+  const reward=callback.data?.match(/^reward:([a-z0-9]+)$/i);
+  if(reward)return handleRewardRequest(callback,reward[1]);
   return false;
 }
+
+async function menuAgent(callback:TelegramCallbackQuery){const agent=await getDb().salesAgent.findUnique({where:{telegramUserId:BigInt(callback.from.id)}});if(!agent?.isApproved||!agent.isActive){await reject(callback,"Faol sotuvchi hisobi kerak.");return null;}return agent;}
+async function handleMenu(callback:TelegramCallbackQuery,section:string){const agent=await menuAgent(callback);if(!agent)return true;await answerCallbackQuery(callback.id,"Tayyorlanmoqda.");
+  if(section==="marja"||section==="rewards"){const balance=await marjaBalance(agent.id),rewards=await getDb().reward.findMany({where:{isActive:true},orderBy:[{order:"asc"},{requiredMarja:"asc"}]});const text=[`💎 Sizning Marjangiz: ${balance}`,"",section==="rewards"?"🎁 Mavjud mukofotlar:":"Mukofotlar:",...rewards.map(r=>`${r.requiredMarja} — ${r.name} ${balance>=r.requiredMarja?"✅":"🔒"}`)].join("\n");const keyboard=section==="rewards"?{inline_keyboard:rewards.filter(r=>balance>=r.requiredMarja).map(r=>[{text:`🎁 ${r.name}`,callback_data:`reward:${r.id}`}])}:mainMenu;await sendMessage(String(agent.telegramUserId),text,keyboard.inline_keyboard.length?keyboard:mainMenu);return true;}
+  if(section==="stats"){const [claimed,active,sales,overdue,balance]=await Promise.all([getDb().lead.count({where:{assignedAgentId:agent.id}}),getDb().lead.count({where:{assignedAgentId:agent.id,status:{in:["NEW","REVIEWING","CONTACTED","IN_PROGRESS"]}}}),getDb().sale.count({where:{agentId:agent.id,status:"APPROVED"}}),getDb().leadFollowUp.count({where:{agentId:agent.id,status:{in:["SCHEDULED","REMINDER_RESERVED","REMINDER_SENT"]},scheduledFor:{lt:new Date()}}}),marjaBalance(agent.id)]);await sendMessage(String(agent.telegramUserId),["📊 NATIJALARINGIZ","",`👥 Olingan mijozlar: ${claimed}`,`📞 Faol mijozlar: ${active}`,`✅ Tasdiqlangan savdolar: ${sales}`,`💎 Marja: ${balance}`,`⏰ Muddati o‘tgan follow-up: ${overdue}`].join("\n"),mainMenu);return true;}
+  if(section==="leads"){const leads=await getDb().lead.findMany({where:{assignedAgentId:agent.id},orderBy:{updatedAt:"desc"},take:10,include:{followUps:{where:{status:{in:["SCHEDULED","REMINDER_RESERVED","REMINDER_SENT"]}},orderBy:{scheduledFor:"asc"},take:1}}});const text=["👥 MIJOZLARIM","",...leads.flatMap(l=>[`${l.customerName||"Ko‘rsatilmagan"} · ${l.region||"Hudud yo‘q"} · ${l.status}`,l.followUps[0]?`Keyingi aloqa: ${formatFollowUpDate(l.followUps[0].scheduledFor)}`:"—",""])].join("\n");await sendMessage(String(agent.telegramUserId),text||"Mijozlar yo‘q.",mainMenu);return true;}
+  const followups=await getDb().leadFollowUp.findMany({where:{agentId:agent.id,status:{in:["SCHEDULED","REMINDER_RESERVED","REMINDER_SENT"]}},orderBy:{scheduledFor:"asc"},take:15,include:{lead:true}});const now=Date.now(),text=["⏰ ESLATMALAR","",...followups.map(f=>`${f.scheduledFor.getTime()<now?"🔴":"🔵"} ${f.lead.customerName||"Ko‘rsatilmagan"} — ${formatFollowUpDate(f.scheduledFor)}`)].join("\n");await sendMessage(String(agent.telegramUserId),text,mainMenu);return true;
+}
+async function handleRewardRequest(callback:TelegramCallbackQuery,rewardId:string){const agent=await menuAgent(callback);if(!agent)return true;const result=await requestReward(agent.id,rewardId);await answerCallbackQuery(callback.id,result.error||"Mukofot so‘rovi yuborildi.",Boolean(result.error));if(!result.error)await sendMessage(String(agent.telegramUserId),"✅ Mukofot so‘rovi administratorga yuborildi.",mainMenu);return true;}
 
 export async function handleCrmText(message: TelegramMessage) {
   if (message.chat.type !== "private" || !message.from || message.from.is_bot || !message.text || message.text.startsWith("/")) return false;
@@ -232,11 +250,17 @@ export async function handleCrmText(message: TelegramMessage) {
     }
     const selected = Object.values(outcomes).find((item) => item.value === state.outcome);
     if (!selected) return false;
+    if(selected.value==="SALE"){
+      await reportPendingSale(state.leadId,agent.id,comment);
+      await getDb().telegramConversationState.deleteMany({where:{agentId:agent.id}});
+      await sendMessage(String(agent.telegramUserId),"✅ Savdo tasdiqlash uchun administratorga yuborildi.");
+      return true;
+    }
     await getDb().$transaction(async (tx) => {
       await tx.leadActivity.create({
         data: {
           leadId: state.leadId, agentId: agent.id,
-          type: selected.value === "SALE" ? "SALE_REPORTED" : selected.final ? "REJECTED" : "STATUS_CHANGED",
+          type: selected.final ? "REJECTED" : "STATUS_CHANGED",
           metadata: { outcome: selected.value, label: selected.label },
         },
       });
@@ -250,7 +274,7 @@ export async function handleCrmText(message: TelegramMessage) {
       }
     });
     if (selected.final) {
-      await sendMessage(String(agent.telegramUserId), selected.value === "SALE" ? "🟢 Sotuv qayd etildi. Faol eslatmalar yopildi." : "🔴 Yakuniy natija qayd etildi. Faol eslatmalar yopildi.");
+      await sendMessage(String(agent.telegramUserId),"🔴 Yakuniy natija qayd etildi. Faol eslatmalar yopildi.");
     } else {
       await sendMessage(String(agent.telegramUserId), "⏰ Qachon yana bog‘lanamiz?", followUpKeyboard("follow"));
     }

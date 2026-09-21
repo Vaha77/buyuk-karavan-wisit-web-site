@@ -48,7 +48,34 @@ enum LeadActivityType {
   FOLLOW_UP_POSTPONED
   STATUS_CHANGED
   SALE_REPORTED
+  SALE_CONFIRMED
+  SALE_REJECTED
   REJECTED
+}
+
+enum SaleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MarjaTransactionType {
+  SALE_EARNED
+  REWARD_SPENT
+  ADMIN_ADJUSTMENT
+}
+
+enum RewardRedemptionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FULFILLED
+}
+
+enum BackupStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 enum LeadFollowUpStatus {
@@ -169,6 +196,7 @@ model HomeContent {
 
 model Lead {
   id           String     @id @default(cuid())
+  submissionKey String?   @unique
   customerName String?
   phone        String?
   telegram     String?
@@ -198,6 +226,7 @@ model Lead {
   activities LeadActivity[]
   followUps LeadFollowUp[]
   telegramConversations TelegramConversationState[]
+  sale Sale?
 
   @@index([status, createdAt])
   @@index([assignedAgentId, claimedAt])
@@ -219,6 +248,9 @@ model SalesAgent {
   activities LeadActivity[]
   followUps LeadFollowUp[]
   telegramConversation TelegramConversationState?
+  sales Sale[]
+  marjaTransactions MarjaTransaction[]
+  rewardRedemptions RewardRedemption[]
 
   @@index([isApproved, isActive])
 }
@@ -287,6 +319,107 @@ model AdminUser {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sessions     AdminSession[]
+  approvedSales Sale[] @relation("SaleApprover")
+  marjaAdjustments MarjaTransaction[]
+  reviewedRedemptions RewardRedemption[]
+  backups BackupRun[]
+}
+
+model Sale {
+  id String @id @default(cuid())
+  leadId String @unique
+  agentId String
+  status SaleStatus @default(PENDING)
+  customerName String?
+  productDescription String
+  saleAmount Decimal? @db.Decimal(18, 2)
+  currency String? @db.VarChar(8)
+  comment String?
+  reportedAt DateTime @default(now())
+  approvedAt DateTime?
+  approvedByAdminId String?
+  rejectedAt DateTime?
+  rejectionReason String?
+  celebrationSentAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lead Lead @relation(fields:[leadId],references:[id],onDelete:Cascade)
+  agent SalesAgent @relation(fields:[agentId],references:[id],onDelete:Restrict)
+  approvedByAdmin AdminUser? @relation("SaleApprover",fields:[approvedByAdminId],references:[id],onDelete:SetNull)
+  marjaTransaction MarjaTransaction?
+
+  @@index([status, reportedAt])
+  @@index([agentId, status])
+}
+
+model MarjaTransaction {
+  id String @id @default(cuid())
+  agentId String
+  saleId String? @unique
+  rewardRedemptionId String? @unique
+  adminUserId String?
+  type MarjaTransactionType
+  amount Int
+  description String
+  createdAt DateTime @default(now())
+  agent SalesAgent @relation(fields:[agentId],references:[id],onDelete:Restrict)
+  sale Sale? @relation(fields:[saleId],references:[id],onDelete:Restrict)
+  rewardRedemption RewardRedemption? @relation(fields:[rewardRedemptionId],references:[id],onDelete:Restrict)
+  adminUser AdminUser? @relation(fields:[adminUserId],references:[id],onDelete:SetNull)
+
+  @@index([agentId, createdAt])
+  @@index([type, createdAt])
+}
+
+model Reward {
+  id String @id @default(cuid())
+  name String
+  requiredMarja Int
+  description String?
+  isActive Boolean @default(true)
+  order Int @default(0)
+  seedKey String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  redemptions RewardRedemption[]
+
+  @@index([isActive, order])
+}
+
+model RewardRedemption {
+  id String @id @default(cuid())
+  agentId String
+  rewardId String
+  status RewardRedemptionStatus @default(PENDING)
+  requiredMarja Int
+  requestedAt DateTime @default(now())
+  reviewedAt DateTime?
+  reviewedByAdminId String?
+  rejectionReason String?
+  fulfilledAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  agent SalesAgent @relation(fields:[agentId],references:[id],onDelete:Restrict)
+  reward Reward @relation(fields:[rewardId],references:[id],onDelete:Restrict)
+  reviewedByAdmin AdminUser? @relation(fields:[reviewedByAdminId],references:[id],onDelete:SetNull)
+  marjaTransaction MarjaTransaction?
+
+  @@index([status, requestedAt])
+  @@index([agentId, status])
+}
+
+model BackupRun {
+  id String @id @default(cuid())
+  status BackupStatus @default(PROCESSING)
+  storageKey String?
+  sizeBytes Int?
+  errorType String?
+  createdByAdminId String?
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+  createdByAdmin AdminUser? @relation(fields:[createdByAdminId],references:[id],onDelete:SetNull)
+
+  @@index([startedAt])
 }
 
 model AdminSession {

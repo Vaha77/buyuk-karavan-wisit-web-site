@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   approveSalesAgentAction,
+  adjustMarjaAction,
   toggleSalesAgentAction,
 } from "@/app/admin/(protected)/sales-agents/actions";
 import type { AdminSalesAgent } from "@/lib/sales-agents/queries";
@@ -73,7 +74,7 @@ export function AdminSalesAgents({ agents }: { agents: AdminSalesAgent[] }) {
               <thead>
                 <tr>
                   <th>Ism</th><th>Telegram</th><th>Ro‘yxatdan o‘tgan</th>
-                  <th>Tasdiq</th><th>Faollik</th><th>Amal</th>
+                  <th>Tasdiq</th><th>Faollik</th><th>CRM</th><th>Marja</th><th>Amal</th>
                 </tr>
               </thead>
               <tbody>
@@ -90,6 +91,8 @@ export function AdminSalesAgents({ agents }: { agents: AdminSalesAgent[] }) {
                           {agent.isActive ? "Faol" : "Faol emas"}
                         </span>
                       </td>
+                      <td>{agent.sales}/{agent.claimed} savdo · {agent.conversion}% · {agent.overdue} kechikkan</td>
+                      <td><strong>{agent.marja}</strong> <small>({agent.earned} / -{agent.spent})</small><form action={adjustMarjaAction}><input type="hidden" name="agentId" value={agent.id}/><input name="amount" type="number" required placeholder="± Marja"/><input name="reason" required minLength={3} placeholder="Sabab"/><button className="sales-agent-button is-primary">Kiritish</button></form></td>
                       <td>
                         <div className="admin-row-tools sales-agent-actions">
                           {!agent.isApproved && (

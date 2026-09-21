@@ -2,7 +2,7 @@ import "server-only";
 import { getDb } from "@/lib/db";
 import { answerCallbackQuery,editMessageText,sendMessage,telegramGroupChatId } from "./client";
 import { agentName,claimedLeadGroupText,newLeadGroupText,privateLeadText,registrationText,welcomeText } from "./messages";
-import { contactedKeyboard,handleCrmCallback,handleCrmText } from "./crm";
+import { contactedKeyboard,handleCrmCallback,handleCrmText,mainMenu } from "./crm";
 import type { TelegramCallbackQuery,TelegramMessage,TelegramUpdate } from "./types";
 
 const claimKeyboard=(leadId:string)=>({inline_keyboard:[[{text:"🙋 Mijozni olish",callback_data:`claim:${leadId}`}]]});
@@ -23,7 +23,7 @@ export async function publishLeadToTelegram(leadId:string){
 async function registerAgent(message:TelegramMessage){
   if(message.chat.type!=="private"||!message.from||message.from.is_bot||!message.text?.trim().startsWith("/start"))return false;
   const user=message.from,agent=await getDb().salesAgent.upsert({where:{telegramUserId:BigInt(user.id)},create:{telegramUserId:BigInt(user.id),telegramUsername:user.username||null,firstName:user.first_name,lastName:user.last_name||null},update:{telegramUsername:user.username||null,firstName:user.first_name,lastName:user.last_name||null}});
-  await sendMessage(String(user.id),registrationText(user.first_name,agent.isApproved&&agent.isActive));return true;
+  await sendMessage(String(user.id),registrationText(user.first_name,agent.isApproved&&agent.isActive),mainMenu);return true;
 }
 async function welcomeMembers(message:TelegramMessage){
   if(!message.new_chat_members?.length||String(message.chat.id)!==telegramGroupChatId())return false;

@@ -12,7 +12,7 @@ const activityLabels: Record<LeadActivityType, string> = {
   CONTACTED:"Sotuvchi mijoz bilan bog‘landi", COMMENT_ADDED:"Izoh qo‘shildi",
   FOLLOW_UP_SCHEDULED:"Keyingi aloqa belgilandi", FOLLOW_UP_COMPLETED:"Qayta aloqa bajarildi",
   FOLLOW_UP_POSTPONED:"Qayta aloqa keyinga surildi", STATUS_CHANGED:"Suhbat natijasi qayd etildi",
-  SALE_REPORTED:"Sotuv qayd etildi", REJECTED:"Yakuniy rad javobi qayd etildi",
+  SALE_REPORTED:"Sotuv tasdiqlash uchun yuborildi", SALE_CONFIRMED:"Sotuv administrator tomonidan tasdiqlandi", SALE_REJECTED:"Sotuv administrator tomonidan rad etildi", REJECTED:"Yakuniy rad javobi qayd etildi",
 };
 
 function conversation(value: unknown): ConversationMessage[] {

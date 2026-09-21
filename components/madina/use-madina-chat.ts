@@ -7,6 +7,8 @@ import { submitLeadAction } from "@/app/lead-actions";
 
 type Stage = LeadField | "confirm" | "edit" | "success";
 const firstMessage: ChatMessage = { id: 0, role: "madina", text: welcome };
+const makeRequestKey=()=>globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+const clientToken=()=>{try{const key="buyuk-karavan-madina-client";const existing=sessionStorage.getItem(key);if(existing)return existing;const value=makeRequestKey();sessionStorage.setItem(key,value);return value;}catch{return makeRequestKey();}};
 
 export function useMadinaChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([firstMessage]);
@@ -14,9 +16,12 @@ export function useMadinaChat() {
   const [stage, setStage] = useState<Stage>("requestType");
   const [typing, setTyping] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [submitting,setSubmitting]=useState(false);
+  const [submitError,setSubmitError]=useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextId = useRef(1);
   const busy = useRef(false);
+  const submissionKey=useRef(makeRequestKey());
 
   const append = useCallback((role: ChatMessage["role"], text: string) => {
     setMessages(items => [...items, { id: nextId.current++, role, text }]);
@@ -78,16 +83,15 @@ export function useMadinaChat() {
   const confirm = useCallback(async () => {
     if (busy.current || stage !== "confirm") return;
     busy.current = true;
-    append("customer", "Tasdiqlash");
-    setTyping(true);
-    const result = await submitLeadAction({ ...lead, source: "MADINA", website: "", chatHistory: messages.map(message => ({ role: message.role, text: message.text })) });
-    setTyping(false);
-    busy.current = false;
-    if (result.ok) {
-      append("madina", "Rahmat! Ma’lumotlaringiz qabul qilindi. Mutaxassisimiz siz bilan bog‘lanadi.");
-      setStage("success");
-    } else append("madina", result.error);
-  }, [append, lead, messages, stage]);
+    setSubmitting(true);
+    setSubmitError("");
+    try{
+      const result = await submitLeadAction({ ...lead, source: "MADINA", website: "", idempotencyKey:submissionKey.current,clientToken:clientToken(),chatHistory: messages.map(message => ({ role: message.role, text: message.text })) });
+      if (result.ok) setStage("success");
+      else {setSubmitError(result.error);busy.current=false;}
+    }catch{setSubmitError("So‘rovni yuborib bo‘lmadi. Internet aloqasini tekshirib, qayta urinib ko‘ring.");busy.current=false;}
+    finally{setSubmitting(false);}
+  }, [lead, messages, stage]);
 
   const reset = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -99,7 +103,10 @@ export function useMadinaChat() {
     setStage("requestType");
     setTyping(false);
     setEditing(false);
+    setSubmitting(false);
+    setSubmitError("");
+    submissionKey.current=makeRequestKey();
   }, []);
 
-  return { messages, lead, stage, typing, send, chooseEdit, edit, confirm, reset };
+  return { messages, lead, stage, typing, submitting, submitError, send, chooseEdit, edit, confirm, reset };
 }

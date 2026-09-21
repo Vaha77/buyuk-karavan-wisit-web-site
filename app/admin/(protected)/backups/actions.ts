@@ -1,0 +1,1 @@
+"use server";import {revalidatePath} from "next/cache";import {requireAdmin} from "@/lib/auth/require-admin";import {createPersistentBackup} from "@/lib/crm/backup";export async function createBackupAction(){const admin=await requireAdmin();await createPersistentBackup(admin.id);revalidatePath("/admin/backups");}

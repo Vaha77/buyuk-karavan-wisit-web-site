@@ -15,7 +15,7 @@ function Avatar({ small = false }: { small?: boolean }) {
 }
 
 function ChatContent({ onMinimize, onClose }: { onMinimize: () => void; onClose: () => void }) {
-  const { messages, lead, stage, typing, send, chooseEdit, edit, confirm, reset } = useMadinaChat();
+  const { messages, lead, stage, typing, submitting, submitError, send, chooseEdit, edit, confirm, reset } = useMadinaChat();
   const [input, setInput] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -45,9 +45,9 @@ function ChatContent({ onMinimize, onClose }: { onMinimize: () => void; onClose:
         <div className="madina-bubble">{message.text}</div>
       </div>)}
       {typing && <div className="madina-message-row madina"><Avatar small/><div className="madina-bubble madina-typing" aria-label="Madina yozmoqda"><i/><i/><i/></div></div>}
-      {!typing && stage === "confirm" && <div className="madina-confirmation"><h3>Ma’lumotlarni tekshirib oling</h3><dl>{fieldOrder.map(field => <div key={field}><dt>{fieldLabels[field]}</dt><dd>{lead[field] || "—"}</dd></div>)}</dl><div className="madina-confirm-actions"><button type="button" onClick={confirm}>Tasdiqlash</button><button type="button" onClick={edit}>O‘zgartirish</button></div></div>}
+      {!typing && stage === "confirm" && <div className="madina-confirmation"><h3>Ma’lumotlarni tekshirib oling</h3><dl>{fieldOrder.map(field => <div key={field}><dt>{fieldLabels[field]}</dt><dd>{lead[field] || "—"}</dd></div>)}</dl>{submitError&&<p className="madina-submit-error" role="alert">{submitError}</p>}<div className="madina-confirm-actions"><button type="button" onClick={confirm} disabled={submitting}>{submitting?"Yuborilmoqda...":"Tasdiqlash"}</button><button type="button" onClick={edit} disabled={submitting}>O‘zgartirish</button></div></div>}
       {!typing && stage === "edit" && <div className="madina-quick-actions madina-edit-actions">{fieldOrder.map(field => <button type="button" key={field} onClick={() => chooseEdit(field)}>{fieldLabels[field]}</button>)}</div>}
-      {!typing && stage === "success" && <div className="madina-success"><Check size={19} aria-hidden="true"/><span>So‘rov tayyor</span><button type="button" onClick={reset}>Yangi savol boshlash</button></div>}
+      {!typing && stage === "success" && <div className="madina-success"><Check size={19} aria-hidden="true"/><span>Rahmat! Ma’lumotlaringiz qabul qilindi.<br/>Mutaxassisimiz siz bilan bog‘lanadi.</span><button type="button" onClick={reset}>Yangi savol boshlash</button></div>}
       {!typing && quick && stage !== "edit" && stage !== "confirm" && stage !== "success" && <div className="madina-quick-actions">{quick.map(action => <button type="button" key={action} onClick={() => send(action)}>{action}</button>)}</div>}
       <div ref={bottom}/>
     </div>
