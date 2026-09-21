@@ -44,4 +44,4 @@ async function claimLead(callback:TelegramCallbackQuery){
   try{await sendMessage(String(agent.telegramUserId),privateLeadText(lead));await getDb().lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:null}});}catch(error){await getDb().lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:new Date()}}).catch(()=>undefined);safeError("Telegram private delivery failed",error);}
   return true;
 }
-export async function processTelegramUpdate(update:TelegramUpdate){if(update.message){if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;}if(update.callback_query)await claimLead(update.callback_query);}
+export async function handleTelegramUpdate(update:TelegramUpdate){if(update.message){if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;}if(update.callback_query)await claimLead(update.callback_query);}
