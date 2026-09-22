@@ -27,16 +27,19 @@ process.once("SIGTERM", stop);
 async function telegram(method, payload = {}, timeout = 40_000) {
   const controller = new AbortController();
   activeRequest = controller;
-  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeout)]),
-  });
-  activeRequest = undefined;
-  const body = await response.json().catch(() => null);
-  if (!response.ok || !body?.ok) throw new Error(`Telegram ${method} failed with status ${response.status}.`);
-  return body.result;
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeout)]),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body?.ok) throw new Error(`Telegram ${method} failed with status ${response.status}.`);
+    return body.result;
+  } finally {
+    if (activeRequest === controller) activeRequest = undefined;
+  }
 }
 
 async function preparePolling() {
@@ -102,14 +105,41 @@ async function deliverLocally(update) {
   if (!response.ok) throw new Error(`Local Telegram handler returned status ${response.status}.`);
 }
 
-async function waitBeforeRetry() {
-  await new Promise((resolve) => setTimeout(resolve, 2_000));
+async function waitBeforeRetry(delay = 2_000) {
+  await new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+function safeNetworkError(error) {
+  const cause = error?.cause;
+  return {
+    type: error instanceof Error ? error.name : "UnknownError",
+    message: error instanceof Error ? error.message : "Unknown error",
+    causeCode: typeof cause?.code === "string" ? cause.code : null,
+    causeName: typeof cause?.name === "string" ? cause.name : null,
+  };
+}
+
+async function prepareUntilConnected() {
+  let attempt = 0;
+  while (!stopping) {
+    try {
+      await preparePolling();
+      await loadPersistedOffset();
+      return true;
+    } catch (error) {
+      attempt += 1;
+      const delay = Math.min(15_000, 2_000 * (2 ** Math.min(attempt - 1, 3)));
+      console.error("Telegram polling startup temporarily failed; retrying.", { attempt, retryInMs: delay, ...safeNetworkError(error) });
+      await waitBeforeRetry(delay);
+    }
+  }
+  return false;
 }
 
 try {
   await acquirePollerLock();
-  await preparePolling();
-  await loadPersistedOffset();
+  if (!(await prepareUntilConnected())) process.exitCode = 0;
+  else {
   console.log(`Telegram development polling started. Local handler: ${localWebhookUrl}`);
 
   while (!stopping) {
@@ -127,12 +157,10 @@ try {
       }
     } catch (error) {
       if (stopping) break;
-      console.error("Telegram polling temporarily failed.", {
-        type: error instanceof Error ? error.name : "UnknownError",
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
+      console.error("Telegram polling temporarily failed.", safeNetworkError(error));
       await waitBeforeRetry();
     }
+  }
   }
 } finally {
   await releasePollerLock();
