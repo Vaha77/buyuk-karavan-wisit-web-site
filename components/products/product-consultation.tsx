@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect,useRef,useState } from "react";
+import { createPortal } from "react-dom";
 import { CheckCircle2,Phone,X } from "lucide-react";
 import { submitLeadAction } from "@/app/lead-actions";
 
@@ -24,7 +25,7 @@ export function ProductConsultation({productId,productName,productSlug,className
   }
   return <>
     <button type="button" className={className} onClick={show}>{label}</button>
-    {open&&<div className="consultation-overlay" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)close();}}>
+    {open&&createPortal(<div className="consultation-overlay" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)close();}}>
       <section className="consultation-dialog" role="dialog" aria-modal="true" aria-labelledby="consultation-title">
         <button type="button" className="consultation-close" onClick={close} disabled={pending} aria-label="Oynani yopish"><X size={20}/></button>
         {sent?<div className="consultation-success"><span><CheckCircle2 size={27}/></span><h2 id="consultation-title">So‘rovingiz qabul qilindi!</h2><p>Mutaxassisimiz tez orada siz bilan telefon orqali bog‘lanadi.</p><p>Kutishni istamasangiz, <a href="tel:+998916377777">+998 91 637 77 77</a> raqamiga hoziroq qo‘ng‘iroq qilib maslahat olishingiz mumkin.</p><div className="consultation-actions"><a className="consultation-call" href="tel:+998916377777"><Phone size={17}/>Qo‘ng‘iroq qilish</a><button type="button" className="consultation-ok" onClick={close}>OK</button></div></div>:
@@ -40,6 +41,6 @@ export function ProductConsultation({productId,productName,productSlug,className
           <button type="submit" className="consultation-submit" disabled={pending}>{pending?<><i/>Yuborilmoqda…</>:"So‘rov yuborish"}</button>
         </form></>}
       </section>
-    </div>}
+    </div>,document.body)}
   </>;
 }
