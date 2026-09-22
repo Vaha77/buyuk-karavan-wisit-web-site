@@ -1,0 +1,3 @@
+import type {Metadata} from "next";import {redirect} from "next/navigation";import {getAdminSession} from "@/lib/auth/session";import {RegisterForm} from "./register-form";import "../login/login.css";
+export const metadata:Metadata={title:"Ro‘yxatdan o‘tish — Admin | BUYUK KARAVAN"};
+export default async function RegisterPage(){if(await getAdminSession())redirect("/admin");return <main className="admin-login"><div className="admin-login-card"><div className="admin-login-brand"><span className="admin-login-mark">✳</span><strong>BUYUK KARAVAN</strong></div><div className="admin-login-intro"><span>XODIM HISOBI</span><h1>Ro‘yxatdan o‘tish</h1><p>Admin hisobini tasdiqlash uchun so‘rov yuboring.</p></div><RegisterForm/></div></main>}

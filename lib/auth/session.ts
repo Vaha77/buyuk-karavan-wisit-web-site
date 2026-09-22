@@ -37,7 +37,7 @@ export async function getAdminSession() {
     include: { user: true },
   });
   if (!session) return null;
-  if (session.expiresAt <= new Date() || !session.user.isActive) {
+  if (session.expiresAt <= new Date() || !session.user.isActive || session.user.approvalStatus!=="APPROVED") {
     await getDb().adminSession.deleteMany({ where: { id: session.id } });
     return null;
   }

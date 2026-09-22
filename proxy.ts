@@ -31,7 +31,7 @@ async function hasValidSession(tokenHash: string) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const result = await pool.query(
-        'SELECT 1 FROM "AdminSession" s JOIN "AdminUser" u ON u.id = s."userId" WHERE s."tokenHash" = $1 AND s."expiresAt" > now() AND u."isActive" = true LIMIT 1',
+        'SELECT 1 FROM "AdminSession" s JOIN "AdminUser" u ON u.id = s."userId" WHERE s."tokenHash" = $1 AND s."expiresAt" > now() AND u."isActive" = true AND u."approvalStatus" = \'APPROVED\' LIMIT 1',
         [tokenHash],
       );
       return result.rowCount === 1;
@@ -44,7 +44,7 @@ async function hasValidSession(tokenHash: string) {
 }
 
 export async function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname === "/admin/login") return NextResponse.next();
+  if (request.nextUrl.pathname === "/admin/login" || request.nextUrl.pathname === "/admin/register") return NextResponse.next();
 
   const token = request.cookies.get(COOKIE_NAME)?.value;
   let valid = false;

@@ -112,6 +112,12 @@ enum AdminRole {
   MANAGER
 }
 
+enum AdminApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum Product360Status {
   DRAFT
   PROCESSING
@@ -340,22 +346,25 @@ model TelegramUpdate {
 }
 
 model AdminUser {
-  id                  String             @id @default(cuid())
+  id                  String              @id @default(cuid())
   name                String
-  phone               String             @unique
+  phone               String              @unique
   passwordHash        String
-  role                AdminRole          @default(MANAGER)
-  isActive            Boolean            @default(true)
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  role                AdminRole           @default(MANAGER)
+  isActive            Boolean             @default(true)
+  approvalStatus      AdminApprovalStatus @default(APPROVED)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
   sessions            AdminSession[]
-  approvedSales       Sale[]             @relation("SaleApprover")
+  approvedSales       Sale[]              @relation("SaleApprover")
   marjaAdjustments    MarjaTransaction[]
   reviewedRedemptions RewardRedemption[]
   backups             BackupRun[]
-  auditLogs           AuditLog[]         @relation("AuditActor")
-  createdPhotoAssets  PhotoStudioAsset[] @relation("PhotoAssetCreator")
-  attachedPhotoAssets PhotoStudioAsset[] @relation("PhotoAssetAttacher")
+  auditLogs           AuditLog[]          @relation("AuditActor")
+  createdPhotoAssets  PhotoStudioAsset[]  @relation("PhotoAssetCreator")
+  attachedPhotoAssets PhotoStudioAsset[]  @relation("PhotoAssetAttacher")
+
+  @@index([approvalStatus, isActive])
 }
 
 model AuditLog {

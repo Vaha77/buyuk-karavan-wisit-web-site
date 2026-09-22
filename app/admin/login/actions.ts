@@ -20,7 +20,8 @@ export async function loginAction(_state: LoginState, formData: FormData): Promi
   if (!phone) return { error: INVALID };
   if (await isLoginLimited(phone)) return { error: INVALID };
   const user = await getDb().adminUser.findUnique({ where: { phone } });
-  if (!user || !user.isActive || !(await verifyPassword(passwordInput, user.passwordHash))) {
+  if (user?.approvalStatus==="PENDING"&&await verifyPassword(passwordInput,user.passwordHash)) return {error:"Hisobingiz hali administrator tomonidan tasdiqlanmagan."};
+  if (!user || !user.isActive || user.approvalStatus!=="APPROVED" || !(await verifyPassword(passwordInput, user.passwordHash))) {
     await recordLoginFailure(phone);
     return { error: INVALID };
   }
