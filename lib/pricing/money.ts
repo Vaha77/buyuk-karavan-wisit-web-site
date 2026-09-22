@@ -16,4 +16,4 @@ export function usdToSellingUzs(priceUsd:string,rate:string):bigint|null {
   return ((numerator+denominator*thousand-BigInt(1))/(denominator*thousand))*thousand;
 }
 export function formatUsd(value:string){const parsed=Number(value);return Number.isFinite(parsed)?new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",minimumFractionDigits:parsed%1?2:0,maximumFractionDigits:2}).format(parsed):"";}
-export function formatUzs(value:bigint){return `${new Intl.NumberFormat("uz-UZ").format(value)} so‘m`;}
+export function formatUzs(value:bigint){const digits=value.toString(),sign=digits.startsWith("-")?"-":"",absolute=sign?digits.slice(1):digits;return `${sign}${absolute.replace(/\B(?=(\d{3})+(?!\d))/g," ")} so‘m`;}

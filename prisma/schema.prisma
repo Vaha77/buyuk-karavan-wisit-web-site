@@ -26,6 +26,7 @@ enum LeadSource {
   CONTACT_FORM
   MADINA
   PRODUCT
+  PRODUCT_CONSULTATION
   PROJECT
   HOME_CTA
   OTHER
@@ -228,6 +229,8 @@ model Lead {
   telegram                        String?
   requestType                     String
   product                         String?
+  productId                       String?
+  productSlug                     String?
   dimensions                      String?
   capacity                        String?
   temperature                     String?
@@ -255,6 +258,7 @@ model Lead {
   sale                            Sale?
 
   @@index([status, createdAt])
+  @@index([productId])
   @@index([assignedAgentId, claimedAt])
   @@index([telegramNotificationStatus])
 }

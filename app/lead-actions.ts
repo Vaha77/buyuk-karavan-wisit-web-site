@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 import { headers } from "next/headers";
+import { getDb } from "@/lib/db";
 import { createLead, findLeadSubmission } from "@/lib/leads/service";
 
 const attempts = new Map<string,{count:number;start:number;submissions:Set<string>}>();
@@ -46,6 +47,25 @@ export async function submitLeadAction(input:unknown) {
     const fingerprint = [trustedClientIp(h),h.get("user-agent")||"unknown",clientToken||"anonymous"].join("|");
     const key = createHash("sha256").update(fingerprint).digest("hex");
     if (limited(key,Date.now(),idempotencyKey)) return {ok:false as const,error:"Juda ko‘p urinish. Birozdan keyin qayta urinib ko‘ring."};
+  }
+
+  if (input && typeof input === "object" && (input as Record<string,unknown>).source === "PRODUCT_CONSULTATION") {
+    const candidate = input as Record<string,unknown>;
+    const productId = typeof candidate.productId === "string" ? candidate.productId.trim() : "";
+    const productSlug = typeof candidate.productSlug === "string" ? candidate.productSlug.trim() : "";
+    const product = productId && productSlug ? await getDb().product.findFirst({
+      where:{ id:productId, slug:productSlug, isVisible:true, category:{isActive:true} },
+      select:{ id:true, slug:true, name:true, model:true },
+    }) : null;
+    if (!product) return {ok:false as const,error:"Mahsulot topilmadi. Sahifani yangilab, qayta urinib ko‘ring."};
+    return createLead({
+      ...candidate,
+      source:"PRODUCT_CONSULTATION",
+      requestType:"Mahsulot bo‘yicha maslahat",
+      product:[product.name,product.model].filter(Boolean).join(" "),
+      productId:product.id,
+      productSlug:product.slug,
+    });
   }
 
   return createLead(input);

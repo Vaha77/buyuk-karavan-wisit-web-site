@@ -39,6 +39,7 @@
 .catalog-card:hover .catalog-card-more svg{transform:translateX(4px)}
 .availability-mobile{display:none}
 .catalog-empty{min-height:240px;display:grid;place-items:center;color:#5d7084;text-align:center}
+.catalog-load-more{min-height:47px;margin:32px auto 0;padding:0 24px;display:block;border:1px solid #bdd5ee;border-radius:999px;background:#fff;color:#245487;font-size:13px;font-weight:800;transition:background .2s,border-color .2s,transform .2s}.catalog-load-more:hover{background:#f1f7fd;border-color:#8db5de;transform:translateY(-1px)}.catalog-load-more:focus-visible{outline:3px solid #3b78b72b;outline-offset:3px}
 .product-detail-placeholder{padding:150px 0 140px}
 .product-detail-placeholder a{display:inline-block;color:#245487;font-weight:700;margin-bottom:40px}
 .product-detail-placeholder h1{font-size:36px;color:var(--navy);margin-bottom:10px}

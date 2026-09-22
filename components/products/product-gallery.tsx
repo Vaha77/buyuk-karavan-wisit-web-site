@@ -21,7 +21,7 @@ export function ProductGallery({ product }: { product: Product }) {
   return <div className="detail-gallery">
     <div className="detail-main-media" aria-live="polite">
       <span className="detail-media-badge">{product.badge}</span>
-      <div className="detail-main-media-content" key={slide.key}>{slide.src ? <Image src={slide.src} alt={`${product.name} ${product.model} — ${selected + 1}-rasm`} fill sizes="(max-width: 700px) 100vw, 524px" className="detail-real-image"/> : <Icon size={96} strokeWidth={1.4} aria-label={`${product.name} tasviri o‘rni`}/>}</div>
+      <div className="detail-main-media-content" key={slide.key}>{slide.src ? <Image src={slide.src} alt={`${product.name} ${product.model} — ${selected + 1}-rasm`} fill sizes="(max-width: 700px) 100vw, 524px" className="detail-real-image" loading={selected===0?"eager":"lazy"}/> : <Icon size={96} strokeWidth={1.4} aria-label={`${product.name} tasviri o‘rni`}/>}</div>
     </div>
     <div className="detail-thumbnails" aria-label="Mahsulot rasmlari">{slides.map((item,index)=>{
       const Thumb = item.icon;

@@ -12,7 +12,7 @@ export async function publishLeadToTelegram(leadId:string){
   const reserved=await getDb().lead.updateMany({where:{id:leadId,telegramNotificationStatus:"PENDING"},data:{telegramNotificationStatus:"PUBLISHING"}});
   if(reserved.count!==1)return false;
   try{
-    const lead=await getDb().lead.findUnique({where:{id:leadId},select:{id:true,customerName:true,region:true,requestType:true,product:true,temperature:true}});
+    const lead=await getDb().lead.findUnique({where:{id:leadId},select:{id:true,customerName:true,region:true,requestType:true,product:true,temperature:true,source:true}});
     if(!lead)throw new Error("Lead missing");
     const message=await sendMessage(telegramGroupChatId(),newLeadGroupText(lead),claimKeyboard(lead.id));
     await getDb().lead.update({where:{id:lead.id},data:{telegramNotificationStatus:"PUBLISHED",telegramChatId:String(message.chat.id),telegramMessageId:message.message_id,telegramPublishedAt:new Date(),telegramPublishFailedAt:null}});
