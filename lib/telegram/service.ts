@@ -1,12 +1,12 @@
 import "server-only";
 import { getDb } from "@/lib/db";
-import { answerCallbackQuery,editMessageText,sendMessage,telegramGroupChatId } from "./client";
+import { answerCallbackQuery,editMessageText,sendMessage,telegramErrorDetails,telegramGroupChatId } from "./client";
 import { agentName,claimedLeadGroupText,newLeadGroupText,privateLeadText,registrationText,welcomeText } from "./messages";
 import { contactedKeyboard,handleCrmCallback,handleCrmText,mainMenu } from "./crm";
 import type { TelegramCallbackQuery,TelegramMessage,TelegramUpdate } from "./types";
 
 const claimKeyboard=(leadId:string)=>({inline_keyboard:[[{text:"🙋 Mijozni olish",callback_data:`claim:${leadId}`}]]});
-function safeError(label:string,error:unknown){console.error(label,{type:error instanceof Error?error.name:"UnknownError"});}
+function safeError(label:string,error:unknown){console.error(label,telegramErrorDetails(error));}
 
 export async function publishLeadToTelegram(leadId:string){
   const reserved=await getDb().lead.updateMany({where:{id:leadId,telegramNotificationStatus:"PENDING"},data:{telegramNotificationStatus:"PUBLISHING"}});
