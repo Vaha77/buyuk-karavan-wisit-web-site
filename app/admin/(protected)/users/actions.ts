@@ -1,0 +1,11 @@
+"use server";
+import {revalidatePath} from "next/cache";
+import {requireRole} from "@/lib/auth/require-admin";
+import {normalizeUzPhone} from "@/lib/auth/phone";
+import {hashPassword} from "@/lib/auth/password";
+import {getDb} from "@/lib/db";
+import {writeAudit} from "@/lib/audit/service";
+import type {AdminRole} from "@/generated/prisma/client";
+const roles=new Set<AdminRole>(["SUPER_ADMIN","ADMIN","MANAGER"]);
+export async function createAdminUserAction(form:FormData){const actor=await requireRole("SUPER_ADMIN"),name=String(form.get("name")||"").trim(),phone=normalizeUzPhone(String(form.get("phone")||"")),password=String(form.get("password")||""),role=String(form.get("role")||"") as AdminRole;if(!name||name.length>120||!phone||!roles.has(role))return;const passwordHash=await hashPassword(password);const row=await getDb().adminUser.create({data:{name,phone,passwordHash,role}});await writeAudit(actor,{action:"CREATE",entityType:"ADMIN_USER",entityId:row.id,entityName:row.name,summary:"Admin foydalanuvchi yaratdi",after:{name:row.name,phone:row.phone,role:row.role,isActive:row.isActive}});revalidatePath("/admin/users");}
+export async function updateAdminUserAction(form:FormData){const actor=await requireRole("SUPER_ADMIN"),id=String(form.get("id")||""),name=String(form.get("name")||"").trim(),phone=normalizeUzPhone(String(form.get("phone")||"")),role=String(form.get("role")||"") as AdminRole,isActive=form.get("isActive")==="on";if(!id||!name||!phone||!roles.has(role)||id===actor.id&&!isActive)return;const previous=await getDb().adminUser.findUniqueOrThrow({where:{id}});const row=await getDb().adminUser.update({where:{id},data:{name,phone,role,isActive}});if(!isActive)await getDb().adminSession.deleteMany({where:{userId:id}});await writeAudit(actor,{action:"UPDATE",entityType:"ADMIN_USER",entityId:row.id,entityName:row.name,summary:"Admin foydalanuvchini yangiladi",before:{name:previous.name,phone:previous.phone,role:previous.role,isActive:previous.isActive},after:{name:row.name,phone:row.phone,role:row.role,isActive:row.isActive}});revalidatePath("/admin/users");}

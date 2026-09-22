@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Boxes, CalendarDays, Camera, ChevronLeft, FolderKanban, LayoutDashboard, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
+import { Bell, Boxes, CalendarDays, Camera, ChevronLeft, FolderKanban, History, LayoutDashboard, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 
 const navigation = [
@@ -20,7 +20,8 @@ const navigation = [
   { label: "Backup", href: "/admin/backups", icon: Settings },
   { label: "Hisob-kitoblar", href: "#", icon: CalendarDays },
   { label: "Kontent", href: "/admin/content/home", icon: Boxes },
-  { label: "Foydalanuvchilar", href: "#", icon: Users },
+  { label: "Foydalanuvchilar", href: "/admin/users", icon: Users,superOnly:true },
+  { label: "Faoliyat tarixi", href: "/admin/activity", icon: History,superOnly:true },
   { label: "Sozlamalar", href: "/admin/settings", icon: Settings },
 ];
 
@@ -43,9 +44,9 @@ export function AdminShell({ children, user }: { children: React.ReactNode; user
     <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
       <div className="admin-sidebar-brand"><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong><button className="admin-sidebar-close" onClick={() => setOpen(false)} aria-label="Menyuni yopish"><X size={18}/></button><span className="admin-sidebar-collapse"><ChevronLeft size={15}/></span></div>
       <span className="admin-sidebar-label">ADMIN</span>
-      <nav aria-label="Admin navigatsiya">{navigation.map(item => {
+      <nav aria-label="Admin navigatsiya">{navigation.filter(item=>!("superOnly" in item)||user.role==="SUPER_ADMIN").map(item => {
         const Icon = item.icon;
-        const active = item.href === "/admin" ? pathname==="/admin" : item.href === "/admin/products" ? pathname.startsWith("/admin/products") : item.href === "/admin/projects" ? projectsRoute : item.href === "/admin/sales-agents" ? salesAgentsRoute : item.href === "/admin/sales" ? salesRoute : item.href === "/admin/rewards" ? rewardsRoute : item.href === "/admin/backups" ? backupsRoute : item.href === "/admin/settings" ? settingsRoute : item.href === "/admin/photo-studio" ? photoStudioRoute : item.href === "/admin/content/home" ? homeContentRoute : item.href === "/admin/leads" && leadsRoute;
+        const active = item.href === "/admin" ? pathname==="/admin" : pathname.startsWith(item.href);
         return <div key={item.label}>{item.href === "#" ? <span className="admin-nav-item is-disabled"><Icon size={17}/>{item.label}</span> : <Link className={`admin-nav-item ${active ? "is-active" : ""}`} href={item.href} onClick={() => setOpen(false)}><Icon size={17}/>{item.label}</Link>}{item.label === "Kontent" && <Link className={`admin-nav-child ${homeContentRoute ? "is-active" : ""}`} href="/admin/content/home" onClick={() => setOpen(false)}>Home Page</Link>}</div>;
       })}</nav>
     </aside>

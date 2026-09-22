@@ -2,6 +2,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { writeAudit } from "@/lib/audit/service";
 
 export class CategoryValidationError extends Error {}
 export class CategoryInUseError extends Error { constructor(public count: number) { super(`Bu kategoriyada ${count} ta mahsulot mavjud.`); } }
@@ -30,18 +31,18 @@ async function ensureUniqueName(name: string, excludeId?: string) {
 function refresh() { revalidatePath("/admin/products"); revalidatePath("/products"); revalidatePath("/"); }
 
 export async function createProductCategory(rawName: string) {
-  await requireAdmin(); const name = cleanName(rawName); await ensureUniqueName(name);
+  const actor=await requireAdmin(); const name = cleanName(rawName); await ensureUniqueName(name);
   const max = await getDb().productCategory.aggregate({ _max: { order: true } });
   const row = await getDb().productCategory.create({ data: { name, slug: await uniqueSlug(name), order: (max._max.order ?? -1) + 1 } });
-  refresh(); return row;
+  await writeAudit(actor,{action:"CREATE",entityType:"CATEGORY",entityId:row.id,entityName:row.name,summary:"Kategoriya yaratdi",after:{name:row.name,slug:row.slug,isActive:row.isActive,order:row.order}}); refresh(); return row;
 }
 export async function updateProductCategory(id: string, input: { name: string; isActive: boolean; order: number }) {
-  await requireAdmin(); const name = cleanName(input.name); await ensureUniqueName(name, id);
+  const actor=await requireAdmin(); const previous=await getDb().productCategory.findUniqueOrThrow({where:{id}}); const name = cleanName(input.name); await ensureUniqueName(name, id);
   const row = await getDb().productCategory.update({ where: { id }, data: { name, slug: await uniqueSlug(name, id), isActive: input.isActive, order: Math.max(0, Math.trunc(input.order)) } });
-  refresh(); return row;
+  await writeAudit(actor,{action:"UPDATE",entityType:"CATEGORY",entityId:row.id,entityName:row.name,summary:"Kategoriyani yangiladi",before:{name:previous.name,slug:previous.slug,isActive:previous.isActive,order:previous.order},after:{name:row.name,slug:row.slug,isActive:row.isActive,order:row.order}}); refresh(); return row;
 }
 export async function deleteProductCategory(id: string, moveToId?: string) {
-  await requireAdmin();
+  const actor=await requireAdmin(); const previous=await getDb().productCategory.findUniqueOrThrow({where:{id}});
   const count = await getDb().product.count({ where: { categoryId: id } });
   if (count && !moveToId) throw new CategoryInUseError(count);
   if (moveToId === id) throw new CategoryValidationError("Boshqa kategoriyani tanlang.");
@@ -53,5 +54,6 @@ export async function deleteProductCategory(id: string, moveToId?: string) {
     }
     await tx.productCategory.delete({ where: { id } });
   });
+  await writeAudit(actor,{action:"DELETE",entityType:"CATEGORY",entityId:id,entityName:previous.name,summary:"Kategoriyani o‘chirdi",before:{name:previous.name,slug:previous.slug},metadata:{movedProducts:count,targetCategoryId:moveToId||null}});
   refresh();
 }

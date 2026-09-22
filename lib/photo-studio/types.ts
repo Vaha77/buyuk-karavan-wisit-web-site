@@ -53,6 +53,7 @@ export type PhotoStudioModeConfig = {
 };
 
 export type PhotoStudioResult = {
+  assetId: string;
   image: string;
   contentType: "image/png";
   width: number;

@@ -353,6 +353,45 @@ model AdminUser {
   marjaAdjustments    MarjaTransaction[]
   reviewedRedemptions RewardRedemption[]
   backups             BackupRun[]
+  auditLogs           AuditLog[]         @relation("AuditActor")
+  createdPhotoAssets  PhotoStudioAsset[] @relation("PhotoAssetCreator")
+  attachedPhotoAssets PhotoStudioAsset[] @relation("PhotoAssetAttacher")
+}
+
+model AuditLog {
+  id                String    @id @default(cuid())
+  actorAdminId      String
+  actorNameSnapshot String
+  action            String
+  entityType        String
+  entityId          String
+  entityName        String?
+  summary           String
+  before            Json?
+  after             Json?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  actor             AdminUser @relation("AuditActor", fields: [actorAdminId], references: [id], onDelete: Restrict)
+
+  @@index([actorAdminId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model PhotoStudioAsset {
+  id                String     @id @default(cuid())
+  mode              String
+  creatorAdminId    String
+  attachedProductId String?
+  attachedByAdminId String?
+  attachedAt        DateTime?
+  createdAt         DateTime   @default(now())
+  creator           AdminUser  @relation("PhotoAssetCreator", fields: [creatorAdminId], references: [id], onDelete: Restrict)
+  attachedBy        AdminUser? @relation("PhotoAssetAttacher", fields: [attachedByAdminId], references: [id], onDelete: Restrict)
+
+  @@index([creatorAdminId])
+  @@index([attachedProductId])
+  @@index([createdAt])
 }
 
 model Sale {

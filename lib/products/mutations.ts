@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { readSpecifications } from "./mapper";
 import type { ProductInput } from "./validation";
 import { deleteOwnedImage, imageOwnerId, ImageValidationError, uploadProductImage } from "./storage";
+import { productSnapshot,writeAudit } from "@/lib/audit/service";
 
 export class DuplicateSlugError extends Error {}
 export class ProductNotFoundError extends Error {}
@@ -78,7 +79,7 @@ function dbData(input: ProductInput, previous?: unknown) {
 }
 
 export async function createProduct(input: ProductInput, rawImages: unknown = []) {
-  await requireAdmin();
+  const actor=await requireAdmin();
   const images = checkedImages(rawImages, []);
   try {
     const row = await getDb().product.create({ data: { ...dbData(input), isVisible: false } });
@@ -86,6 +87,7 @@ export async function createProduct(input: ProductInput, rawImages: unknown = []
       const result = await uploadImages(row.id, images);
       try {
         const saved = await getDb().product.update({ where: { id: row.id }, data: { images: result.urls, isVisible: input.isVisible } });
+        await writeAudit(actor,{action:"CREATE",entityType:"PRODUCT",entityId:saved.id,entityName:saved.name,summary:"Mahsulot yaratdi",after:productSnapshot(saved)});
         revalidateProducts(saved.slug);
         return saved;
       } catch (error) {
@@ -103,7 +105,7 @@ export async function createProduct(input: ProductInput, rawImages: unknown = []
 }
 
 export async function updateProduct(id: string, input: ProductInput, rawImages?: unknown) {
-  await requireAdmin();
+  const actor=await requireAdmin();
   const previous = await getDb().product.findUnique({ where: { id } });
   if (!previous) throw new ProductNotFoundError();
   const images = checkedImages(rawImages ?? previous.images.map(url => ({ url })), previous.images);
@@ -117,6 +119,13 @@ export async function updateProduct(id: string, input: ProductInput, rawImages?:
       throw error;
     }
     revalidateProducts(previous.slug, row.slug);
+    const before=productSnapshot(previous),after=productSnapshot(row);
+    await writeAudit(actor,{action:"UPDATE",entityType:"PRODUCT",entityId:row.id,entityName:row.name,summary:"Mahsulot ma’lumotlarini tahrirladi",before,after});
+    if(before.priceUsd!==after.priceUsd)await writeAudit(actor,{action:"PRICE_CHANGE",entityType:"PRODUCT",entityId:row.id,entityName:row.name,summary:"Narxni o‘zgartirdi",before:{priceUsd:before.priceUsd},after:{priceUsd:after.priceUsd}});
+    if(before.categoryId!==after.categoryId)await writeAudit(actor,{action:"CATEGORY_CHANGE",entityType:"PRODUCT",entityId:row.id,entityName:row.name,summary:"Kategoriyani o‘zgartirdi",before:{categoryId:before.categoryId},after:{categoryId:after.categoryId}});
+    if(before.seoTitle!==after.seoTitle||before.seoDescription!==after.seoDescription||before.slug!==after.slug)await writeAudit(actor,{action:"SEO_CHANGE",entityType:"PRODUCT",entityId:row.id,entityName:row.name,summary:"SEO ma’lumotlarini yangiladi",before:{slug:before.slug,seoTitle:before.seoTitle,seoDescription:before.seoDescription},after:{slug:after.slug,seoTitle:after.seoTitle,seoDescription:after.seoDescription}});
+    if(JSON.stringify(before.images)!==JSON.stringify(after.images))await writeAudit(actor,{action:"IMAGE_CHANGE",entityType:"PRODUCT",entityId:row.id,entityName:row.name,summary:"Mahsulot rasmlarini yangiladi",before:{images:before.images},after:{images:after.images}});
+    if(before.isVisible!==after.isVisible||before.availability!==after.availability)await writeAudit(actor,{action:"STATUS_CHANGE",entityType:"PRODUCT",entityId:row.id,entityName:row.name,summary:"Mahsulot holatini o‘zgartirdi",before:{isVisible:before.isVisible,availability:before.availability},after:{isVisible:after.isVisible,availability:after.availability}});
     await cleanupUnreferenced(id, previous.images.filter(url => !row.images.includes(url)));
     return row;
   } catch (error) {
@@ -126,25 +135,27 @@ export async function updateProduct(id: string, input: ProductInput, rawImages?:
 }
 
 export async function deleteProduct(id: string) {
-  await requireAdmin();
+  const actor=await requireAdmin();
   const row = await getDb().product.findUnique({ where: { id } });
   if (!row) throw new ProductNotFoundError();
   await getDb().product.delete({ where: { id } });
+  await writeAudit(actor,{action:"DELETE",entityType:"PRODUCT",entityId:row.id,entityName:row.name,summary:"Mahsulotni o‘chirdi",before:productSnapshot(row)});
   revalidateProducts(row.slug);
   await cleanupUnreferenced(id, row.images);
 }
 
 export async function toggleProductVisibility(id: string) {
-  await requireAdmin();
+  const actor=await requireAdmin();
   const row = await getDb().product.findUnique({ where: { id } });
   if (!row) throw new ProductNotFoundError();
   const updated = await getDb().product.update({ where: { id }, data: { isVisible: !row.isVisible } });
+  await writeAudit(actor,{action:"STATUS_CHANGE",entityType:"PRODUCT",entityId:updated.id,entityName:updated.name,summary:updated.isVisible?"Mahsulotni saytda ko‘rsatdi":"Mahsulotni saytda yashirdi",before:{isVisible:row.isVisible},after:{isVisible:updated.isVisible}});
   revalidateProducts(row.slug);
   return updated;
 }
 
 export async function attachGeneratedProductImage(id: string, file: File, placement: "main" | "gallery") {
-  await requireAdmin();
+  const actor=await requireAdmin();
   const previous = await getDb().product.findUnique({ where: { id } });
   if (!previous) throw new ProductNotFoundError();
   const url = await uploadProductImage(id, file);
@@ -157,12 +168,13 @@ export async function attachGeneratedProductImage(id: string, file: File, placem
     throw error;
   }
   revalidateProducts(updated.slug);
+  await writeAudit(actor,{action:"IMAGE_ATTACH",entityType:"PRODUCT",entityId:updated.id,entityName:updated.name,summary:`Photo Studio rasmini mahsulotga biriktirdi`,before:{images:previous.images},after:{images:updated.images},metadata:{placement}});
   if (placement === "main" && previous.images[0]) await Promise.allSettled([cleanupUnreferenced(id, [previous.images[0]])]);
   return updated;
 }
 
 export async function copyProduct(id: string) {
-  await requireAdmin();
+  const actor=await requireAdmin();
   const source = await getDb().product.findUnique({ where: { id } });
   if (!source) throw new ProductNotFoundError();
   const maxOrder = await getDb().product.aggregate({ _max: { order: true } });
@@ -177,6 +189,7 @@ export async function copyProduct(id: string) {
         seoTitle: source.seoTitle, seoDescription: source.seoDescription,
       } });
       revalidateProducts(copy.slug);
+      await writeAudit(actor,{action:"CREATE",entityType:"PRODUCT",entityId:copy.id,entityName:copy.name,summary:"Mahsulot nusxasini yaratdi",after:productSnapshot(copy),metadata:{copiedFromId:source.id}});
       return copy;
     } catch (error) {
       if (!isUniqueError(error)) throw error;

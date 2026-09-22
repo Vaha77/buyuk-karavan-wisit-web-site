@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { getHomeContent, HomeContentValidationError, persistHomeContent, validateHomeContent } from "@/lib/home/content";
 import { deleteOwnedHomeImage, HomeImageValidationError, ownedHomeImageKey, uploadHomeImage } from "@/lib/home/storage";
 import type { HomeContent } from "@/data/admin-home";
+import { writeAudit } from "@/lib/audit/service";
 
 type Result = { content?: HomeContent; error?: string };
 
@@ -24,13 +25,14 @@ async function uploadDataImages(content: HomeContent) {
 }
 
 export async function saveHomeContentAction(raw: unknown): Promise<Result> {
-  await requireAdmin();
+  const actor=await requireAdmin();
   try {
     const oldContent = await getHomeContent();
     const validated = validateHomeContent(raw);
     const prepared = await uploadDataImages(validated);
     try {
       const saved = await persistHomeContent(prepared.content);
+      await writeAudit(actor,{action:"UPDATE",entityType:"HOME_CONTENT",entityId:"global",entityName:"Home Page",summary:"Bosh sahifa kontentini yangiladi",metadata:{sections:Object.keys(saved)}});
       const retained = imageUrls(saved); const oldOwned = [...imageUrls(oldContent)].filter(url => ownedHomeImageKey(url) && !retained.has(url));
       await Promise.allSettled(oldOwned.map(deleteOwnedHomeImage));
       revalidatePath("/"); revalidatePath("/admin/content/home");
