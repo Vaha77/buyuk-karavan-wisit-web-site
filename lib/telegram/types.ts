@@ -1,5 +1,5 @@
 export type TelegramUser = { id: number; is_bot: boolean; first_name: string; last_name?: string; username?: string };
-export type TelegramChat = { id: number; type: "private"|"group"|"supergroup"|"channel" };
+export type TelegramChat = { id: number; type: "private"|"group"|"supergroup"|"channel"; title?: string };
 export type TelegramMessage = { message_id: number; chat: TelegramChat; from?: TelegramUser; text?: string; new_chat_members?: TelegramUser[] };
 export type TelegramCallbackQuery = { id: string; from: TelegramUser; message?: TelegramMessage; data?: string };
 export type TelegramUpdate = { update_id: number; message?: TelegramMessage; callback_query?: TelegramCallbackQuery };

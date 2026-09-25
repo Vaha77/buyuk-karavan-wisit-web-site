@@ -15,6 +15,7 @@
     "telegram:dev": "node scripts/telegram-dev.mjs",
     "telegram:webhook:delete": "node scripts/telegram-delete-webhook.mjs",
     "telegram:webhook:set": "node scripts/telegram-set-webhook.mjs",
+    "telegram:webhook:info": "node scripts/telegram-webhook-info.mjs",
     "telegram:set-webhook": "node scripts/telegram-set-webhook.mjs",
     "followups:dev": "node scripts/followups-dev.mjs",
     "backup:crm": "node scripts/backup-crm.mjs",

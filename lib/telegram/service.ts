@@ -8,6 +8,19 @@ import type { TelegramCallbackQuery,TelegramMessage,TelegramUpdate } from "./typ
 const claimKeyboard=(leadId:string)=>({inline_keyboard:[[{text:"🙋 Mijozni olish",callback_data:`claim:${leadId}`}]]});
 function safeError(label:string,error:unknown){console.error(label,telegramErrorDetails(error));}
 
+async function reportChatIdentity(message: TelegramMessage) {
+  const command = message.text?.trim().split(/\s+/, 1)[0]?.toLowerCase();
+  if (!command?.match(/^\/chatid(?:@[a-z0-9_]+)?$/) || message.chat.type === "private") return false;
+  const title = message.chat.title?.trim() || "(nomlanmagan chat)";
+  await sendMessage(String(message.chat.id), [
+    "BKLead Telegram chat diagnostikasi",
+    `Nomi: ${title}`,
+    `Turi: ${message.chat.type}`,
+    `Chat ID: ${message.chat.id}`,
+  ].join("\n"));
+  return true;
+}
+
 export async function publishLeadToTelegram(leadId:string){
   const reserved=await getDb().lead.updateMany({where:{id:leadId,telegramNotificationStatus:"PENDING"},data:{telegramNotificationStatus:"PUBLISHING"}});
   if(reserved.count!==1)return false;
@@ -46,4 +59,4 @@ async function claimLead(callback:TelegramCallbackQuery){
   try{await sendMessage(String(agent.telegramUserId),privateLeadText(lead),contactedKeyboard(lead.id));await getDb().lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:null}});}catch(error){await getDb().lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:new Date()}}).catch(()=>undefined);safeError("Telegram private delivery failed",error);}
   return true;
 }
-export async function handleTelegramUpdate(update:TelegramUpdate){if(update.message){if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await claimLead(update.callback_query))return;await handleCrmCallback(update.callback_query);}}
+export async function handleTelegramUpdate(update:TelegramUpdate){if(update.message){if(await reportChatIdentity(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await claimLead(update.callback_query))return;await handleCrmCallback(update.callback_query);}}
