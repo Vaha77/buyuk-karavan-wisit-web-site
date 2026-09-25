@@ -4,6 +4,11 @@ import type { InlineKeyboard } from "./types";
 
 type TelegramResponse<T> = { ok: boolean; result?: T; error_code?: number; description?: string };
 type SentMessage = { message_id: number; chat: { id: number } };
+type CallbackAck = { promise: Promise<boolean>; expiresAt: number };
+
+const globalForTelegram = globalThis as unknown as { telegramCallbackAcks?: Map<string, CallbackAck> };
+const callbackAcks = globalForTelegram.telegramCallbackAcks ?? new Map<string, CallbackAck>();
+globalForTelegram.telegramCallbackAcks = callbackAcks;
 
 type TelegramFailureStage="env_detection"|"request"|"response_parse"|"bot_api_response";
 type SafeTelegramError={type:string;stage:TelegramFailureStage;method?:string;httpStatus?:number;errorCode?:number;description?:string;message?:string;cause?:{type?:string;code?:string;message?:string}};
@@ -58,4 +63,12 @@ async function call<T>(method:string,payload:Record<string,unknown>):Promise<T>{
 }
 export function sendMessage(chatId:string,text:string,replyMarkup?:InlineKeyboard){return call<SentMessage>("sendMessage",{chat_id:chatId,text,...(replyMarkup?{reply_markup:replyMarkup}:{})});}
 export function editMessageText(chatId:string,messageId:number,text:string){return call<SentMessage>("editMessageText",{chat_id:chatId,message_id:messageId,text,reply_markup:{inline_keyboard:[]}});}
-export function answerCallbackQuery(id:string,text:string,showAlert=false){return call<boolean>("answerCallbackQuery",{callback_query_id:id,text,show_alert:showAlert});}
+export function answerCallbackQuery(id:string,text:string,showAlert=false){
+  const now=Date.now(),existing=callbackAcks.get(id);
+  if(existing&&existing.expiresAt>now)return existing.promise;
+  for(const [key,value] of callbackAcks)if(value.expiresAt<=now)callbackAcks.delete(key);
+  const promise=call<boolean>("answerCallbackQuery",{callback_query_id:id,text,show_alert:showAlert});
+  callbackAcks.set(id,{promise,expiresAt:now+60_000});
+  void promise.catch(()=>{if(callbackAcks.get(id)?.promise===promise)callbackAcks.delete(id);});
+  return promise;
+}

@@ -23,9 +23,8 @@ export function getDb(): PrismaClient {
   if (!connectionString) throw new Error("DATABASE_URL is required to connect to PostgreSQL.");
 
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
-  if (process.env.NODE_ENV !== "production") {
-    globalForDb.buyukKaravanDb = db;
-    globalForDb.buyukKaravanDbRevision = DB_SCHEMA_REVISION;
-  }
+  // Reuse one client (and its pg pool) for the lifetime of a warm Vercel runtime.
+  globalForDb.buyukKaravanDb = db;
+  globalForDb.buyukKaravanDbRevision = DB_SCHEMA_REVISION;
   return db;
 }

@@ -5,6 +5,8 @@ import { agentName,claimedLeadGroupText,newLeadGroupText,privateLeadText,registr
 import { contactedKeyboard,handleCrmCallback,handleCrmText,mainMenu } from "./crm";
 import type { TelegramCallbackQuery,TelegramMessage,TelegramUpdate } from "./types";
 
+type WebhookPerformance={callbackAcknowledged:boolean;timings:Record<string,number>};
+
 const claimKeyboard=(leadId:string)=>({inline_keyboard:[[{text:"🙋 Mijozni olish",callback_data:`claim:${leadId}`}]]});
 function safeError(label:string,error:unknown){console.error(label,telegramErrorDetails(error));}
 
@@ -42,21 +44,30 @@ async function welcomeMembers(message:TelegramMessage){
   if(!message.new_chat_members?.length||String(message.chat.id)!==telegramGroupChatId())return false;
   for(const user of message.new_chat_members){if(!user.is_bot){await getDb().salesAgent.updateMany({where:{telegramUserId:BigInt(user.id)},data:{joinedAt:new Date()}});await sendMessage(String(message.chat.id),welcomeText(user.first_name));}}return true;
 }
-async function rejectClaim(callback:TelegramCallbackQuery,text:string){await answerCallbackQuery(callback.id,text,true);}
-async function claimLead(callback:TelegramCallbackQuery){
+async function rejectClaim(callback:TelegramCallbackQuery,text:string,acknowledged=false){
+  if(acknowledged){await sendMessage(String(callback.from.id),text).catch(error=>safeError("Telegram claim rejection delivery failed",error));return;}
+  await answerCallbackQuery(callback.id,text,true);
+}
+async function claimLead(callback:TelegramCallbackQuery,metrics?:WebhookPerformance){
   const match=callback.data?.match(/^claim:([a-z0-9]+)$/i);if(!match||!callback.message||String(callback.message.chat.id)!==telegramGroupChatId())return false;
-  const agent=await getDb().salesAgent.findUnique({where:{telegramUserId:BigInt(callback.from.id)}});
-  if(!agent){await rejectClaim(callback,"Avval botga kirib START tugmasini bosing.");return true;}
-  if(!agent.isApproved){await rejectClaim(callback,"Administrator tasdig‘i kutilmoqda.");return true;}
-  if(!agent.isActive){await rejectClaim(callback,"Hisobingiz faol emas.");return true;}
-  const claimedAt=new Date(),result=await getDb().lead.updateMany({where:{id:match[1],assignedAgentId:null},data:{assignedAgentId:agent.id,claimedAt}});
-  if(result.count!==1){await rejectClaim(callback,"Bu mijozni boshqa sotuvchi olib bo‘ldi.");return true;}
-  await getDb().leadActivity.create({data:{leadId:match[1],agentId:agent.id,type:"CLAIMED"}});
-  await answerCallbackQuery(callback.id,"Mijoz sizga biriktirildi.");
-  const lead=await getDb().lead.findUnique({where:{id:match[1]}});if(!lead)return true;
+  const dbStarted=performance.now(),db=getDb();
+  const agent=await db.salesAgent.findUnique({where:{telegramUserId:BigInt(callback.from.id)}});
+  if(!agent){await rejectClaim(callback,"Avval botga kirib START tugmasini bosing.",metrics?.callbackAcknowledged);return true;}
+  if(!agent.isApproved){await rejectClaim(callback,"Administrator tasdig‘i kutilmoqda.",metrics?.callbackAcknowledged);return true;}
+  if(!agent.isActive){await rejectClaim(callback,"Hisobingiz faol emas.",metrics?.callbackAcknowledged);return true;}
+  const claimedAt=new Date(),result=await db.lead.updateMany({where:{id:match[1],assignedAgentId:null},data:{assignedAgentId:agent.id,claimedAt}});
+  if(result.count!==1){await rejectClaim(callback,"Bu mijozni boshqa sotuvchi olib bo‘ldi.",metrics?.callbackAcknowledged);return true;}
+  const [,lead]=await Promise.all([db.leadActivity.create({data:{leadId:match[1],agentId:agent.id,type:"CLAIMED"}}),db.lead.findUnique({where:{id:match[1]}})]);
+  if(metrics)metrics.timings.db_claim_ms=Math.round(performance.now()-dbStarted);
+  if(!metrics?.callbackAcknowledged)await answerCallbackQuery(callback.id,"Mijoz sizga biriktirildi.");
+  if(!lead)return true;
   const seller=agentName(agent);
-  if(lead.telegramChatId&&lead.telegramMessageId)await editMessageText(lead.telegramChatId,lead.telegramMessageId,claimedLeadGroupText(lead,seller)).catch(error=>safeError("Telegram group edit failed",error));
-  try{await sendMessage(String(agent.telegramUserId),privateLeadText(lead),contactedKeyboard(lead.id));await getDb().lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:null}});}catch(error){await getDb().lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:new Date()}}).catch(()=>undefined);safeError("Telegram private delivery failed",error);}
+  const groupStarted=performance.now();
+  const groupUpdate=lead.telegramChatId&&lead.telegramMessageId?editMessageText(lead.telegramChatId,lead.telegramMessageId,claimedLeadGroupText(lead,seller)).catch(error=>safeError("Telegram group edit failed",error)).finally(()=>{if(metrics)metrics.timings.group_update_ms=Math.round(performance.now()-groupStarted);}):Promise.resolve();
+  if(metrics&&!(lead.telegramChatId&&lead.telegramMessageId))metrics.timings.group_update_ms=0;
+  const privateStarted=performance.now();
+  const privateMessage=(async()=>{try{await sendMessage(String(agent.telegramUserId),privateLeadText(lead),contactedKeyboard(lead.id));if(metrics)metrics.timings.private_message_ms=Math.round(performance.now()-privateStarted);await db.lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:null}});}catch(error){if(metrics)metrics.timings.private_message_ms=Math.round(performance.now()-privateStarted);await db.lead.update({where:{id:lead.id},data:{telegramPrivateDeliveryFailedAt:new Date()}}).catch(()=>undefined);safeError("Telegram private delivery failed",error);}})();
+  await Promise.all([groupUpdate,privateMessage]);
   return true;
 }
-export async function handleTelegramUpdate(update:TelegramUpdate){if(update.message){if(await reportChatIdentity(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await claimLead(update.callback_query))return;await handleCrmCallback(update.callback_query);}}
+export async function handleTelegramUpdate(update:TelegramUpdate,metrics?:WebhookPerformance){if(update.message){if(await reportChatIdentity(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await claimLead(update.callback_query,metrics))return;await handleCrmCallback(update.callback_query);}}
