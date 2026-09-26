@@ -3,6 +3,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { attachGeneratedProductImage, ProductNotFoundError } from "@/lib/products/mutations";
+import { ImageValidationError } from "@/lib/products/storage";
 import { editProductImage, OpenAINotConfiguredError, PhotoStudioAIError, PhotoStudioCompositionError, PhotoStudioNoImageError, PhotoStudioRateLimitError, PhotoStudioTimeoutError, PhotoStudioTransparencyError } from "@/lib/photo-studio/openai";
 import type { PhotoStudioMode } from "@/lib/photo-studio/types";
 import { parsePhotoStudioRequest, PhotoStudioValidationError, validateSourceImage } from "@/lib/photo-studio/validation";
@@ -33,22 +34,53 @@ export async function processPhotoStudioImageAction(formData: FormData): Promise
   }
 }
 
+type AttachStage = "authorization" | "input_validation" | "image_decode" | "product_lookup" | "asset_lookup" | "storage_upload" | "product_update" | "storage_cleanup" | "attachment_record";
+const GENERATED_IMAGE_LIMIT = 20 * 1024 * 1024;
+
+function safeAttachError(error: unknown) {
+  const name = error instanceof Error ? error.name : "UnknownError";
+  let message = error instanceof Error ? error.message : "Unknown attach error";
+  for (const secret of [process.env.AWS_SECRET_ACCESS_KEY, process.env.AWS_ACCESS_KEY_ID, process.env.DATABASE_URL, process.env.OPENAI_API_KEY]) {
+    if (secret) message = message.replaceAll(secret, "[REDACTED]");
+  }
+  return { errorName: name, errorMessage: message.slice(0, 500) };
+}
+
+function attachMessage(stage: AttachStage, error: unknown) {
+  if (error instanceof PhotoStudioValidationError || error instanceof ImageValidationError) return error.message;
+  if (error instanceof ProductNotFoundError) return "Mahsulot topilmadi.";
+  if (stage === "authorization") return "Sessiya tekshirilmadi. Qayta kirib urinib ko‘ring.";
+  if (stage === "storage_upload" || stage === "storage_cleanup") return "Rasmni doimiy xotiraga yuklash amalga oshmadi.";
+  if (stage === "product_update") return "Rasm yuklandi, lekin mahsulot ma’lumotini yangilab bo‘lmadi. Yuklangan fayl xavfsiz tozalandi.";
+  if (stage === "attachment_record") return "Rasm mahsulotga biriktirildi, lekin Photo Studio tarixini yangilab bo‘lmadi.";
+  return "Rasmni biriktirish ma’lumotlarini tekshirib bo‘lmadi.";
+}
+
 export async function saveApprovedPhotoStudioImageAction(raw: { productId: string; placement: "main" | "gallery"; image: string;assetId:string }): Promise<{ error?: string; success?: true }> {
-  const actor=await requireAdmin();
+  let stage: AttachStage = "authorization";
   try {
+    const actor=await requireAdmin();
+    stage="input_validation";
     if (!raw || !/^[A-Za-z0-9_-]{1,64}$/.test(raw.productId) || !/^[A-Za-z0-9_-]{1,64}$/.test(raw.assetId) || !["main", "gallery"].includes(raw.placement) || typeof raw.image !== "string") throw new PhotoStudioValidationError("Saqlash ma’lumotlari noto‘g‘ri.");
+    stage="image_decode";
     const bytes = Buffer.from(raw.image, "base64");
-    if (!bytes.length || bytes.length > 20 * 1024 * 1024 || bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47) throw new PhotoStudioValidationError("Tayyor rasm noto‘g‘ri.");
+    if (!bytes.length || bytes.length > GENERATED_IMAGE_LIMIT || bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47) throw new PhotoStudioValidationError("Tayyor PNG rasm noto‘g‘ri yoki 20 MB limitdan katta.");
+    stage="product_lookup";
     const product = await getDb().product.findUnique({ where: { id: raw.productId },select:{id:true,name:true} });
     if (!product) throw new ProductNotFoundError();
-    const asset=await getDb().photoStudioAsset.findUnique({where:{id:raw.assetId}});if(!asset||asset.attachedAt)throw new PhotoStudioValidationError("Photo Studio natijasi topilmadi yoki avval biriktirilgan.");
-    await attachGeneratedProductImage(raw.productId, new File([bytes], "ai-product.png", { type: "image/png" }), raw.placement);
+    stage="asset_lookup";
+    const asset=await getDb().photoStudioAsset.findUnique({where:{id:raw.assetId},select:{id:true,attachedAt:true}});
+    if(!asset||asset.attachedAt)throw new PhotoStudioValidationError("Photo Studio natijasi topilmadi yoki avval biriktirilgan.");
+    await attachGeneratedProductImage(raw.productId, new File([bytes], "ai-product.png", { type: "image/png" }), raw.placement, {
+      maxSize: GENERATED_IMAGE_LIMIT,
+      skipAudit: true,
+      onStage: nextStage => { stage = nextStage; },
+    });
+    stage="attachment_record";
     if(!await recordPhotoStudioAttachment(actor,asset.id,product,raw.placement))throw new PhotoStudioValidationError("Photo Studio natijasi avval biriktirilgan.");
     return { success: true };
   } catch (error) {
-    if (error instanceof PhotoStudioValidationError || error instanceof ProductNotFoundError) return { error: error instanceof ProductNotFoundError ? "Mahsulot topilmadi." : error.message };
-    if (error && typeof error === "object" && "$metadata" in error) return { error: "Rasmni doimiy xotiraga yuklash amalga oshmadi." };
-    if (error instanceof Error && /Prisma|database|connect/i.test(`${error.name} ${error.message}`)) return { error: "Ma’lumotlar bazasida rasmni biriktirish amalga oshmadi." };
-    return { error: "Rasmni saqlashda xatolik yuz berdi." };
+    console.error("[PhotoStudioAttach]", { stage, ...safeAttachError(error) });
+    return { error: attachMessage(stage, error) };
   }
 }

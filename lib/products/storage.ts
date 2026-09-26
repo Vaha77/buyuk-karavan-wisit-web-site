@@ -50,16 +50,16 @@ export function imageOwnerId(url: string): string | null {
   } catch { return null; }
 }
 
-export async function uploadProductImage(productId: string, file: File): Promise<string> {
+export async function uploadProductImage(productId: string, file: File, maxSize = MAX_IMAGE_SIZE): Promise<string> {
   if (!(file instanceof File)) throw new ImageValidationError("Rasmni tanlang.");
   const format = formats.get(file.type);
   if (!format) throw new ImageValidationError("Rasm formati qo‘llab-quvvatlanmaydi.");
-  if (!file.size || file.size > MAX_IMAGE_SIZE) throw new ImageValidationError("Rasm hajmi juda katta.");
+  if (!file.size || file.size > maxSize) throw new ImageValidationError("Rasm hajmi juda katta.");
   const buffer = new Uint8Array(await file.arrayBuffer());
   if (!format.signature(buffer)) throw new ImageValidationError("Rasm formati qo‘llab-quvvatlanmaydi.");
   const c = config();
   const key = `products/${productId}/${randomUUID()}.${format.extension}`;
-  await client().send(new PutObjectCommand({ Bucket: c.bucket, Key: key, Body: buffer, ContentType: file.type }));
+  await client().send(new PutObjectCommand({ Bucket: c.bucket, Key: key, Body: buffer, ContentType: file.type, CacheControl: "public, max-age=31536000, immutable" }));
   return `${c.endpoint}/${c.bucket}/${key}`;
 }
 

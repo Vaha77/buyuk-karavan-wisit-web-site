@@ -155,23 +155,28 @@ export async function toggleProductVisibility(id: string) {
   return updated;
 }
 
-export async function attachGeneratedProductImage(id: string, file: File, placement: "main" | "gallery") {
+type GeneratedImageAttachOptions = { maxSize?: number; skipAudit?: boolean; onStage?: (stage: "product_lookup" | "storage_upload" | "product_update" | "storage_cleanup") => void };
+export async function attachGeneratedProductImage(id: string, file: File, placement: "main" | "gallery", options: GeneratedImageAttachOptions = {}) {
   const actor=await requireAdmin();
+  options.onStage?.("product_lookup");
   const previous = await getDb().product.findUnique({ where: { id } });
   if (!previous) throw new ProductNotFoundError();
-  const url = await uploadProductImage(id, file);
+  options.onStage?.("storage_upload");
+  const url = await uploadProductImage(id, file, options.maxSize);
   const images = placement === "main" ? [url, ...previous.images.slice(1)] : [...previous.images, url];
   let updated;
   try {
+    options.onStage?.("product_update");
     updated = await getDb().product.update({ where: { id }, data: { images } });
   } catch (error) {
+    options.onStage?.("storage_cleanup");
     await Promise.allSettled([deleteOwnedImage(url, id)]);
     throw error;
   }
   revalidateProducts(updated.slug);
-  await writeAudit(actor,{action:"IMAGE_ATTACH",entityType:"PRODUCT",entityId:updated.id,entityName:updated.name,summary:`Photo Studio rasmini mahsulotga biriktirdi`,before:{images:previous.images},after:{images:updated.images},metadata:{placement}});
+  if (!options.skipAudit) await writeAudit(actor,{action:"IMAGE_ATTACH",entityType:"PRODUCT",entityId:updated.id,entityName:updated.name,summary:`Photo Studio rasmini mahsulotga biriktirdi`,before:{images:previous.images},after:{images:updated.images},metadata:{placement}});
   if (placement === "main" && previous.images[0]) await Promise.allSettled([cleanupUnreferenced(id, [previous.images[0]])]);
-  return updated;
+  return { product: updated, url };
 }
 
 export async function copyProduct(id: string) {
