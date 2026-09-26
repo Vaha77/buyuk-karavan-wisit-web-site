@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { isPublicNeonProductImage } from "@/lib/products/image-delivery";
 import { Activity, ArrowRight, CircuitBoard, DoorClosed, PanelsTopLeft, Radio, Snowflake, Waves } from "lucide-react";
 import type { Product } from "@/lib/products/types";
 import { ProductPrice } from "./product-price";
@@ -20,7 +21,7 @@ export function ProductCard({ product, exchangeRate }: { product: Product; excha
   return <Link className="catalog-card" href={`/products/${product.slug}`} aria-label={`${product.name} ${product.model} — batafsil`}>
     <div className="catalog-card-image">
       <span className="catalog-card-badge">{product.badge}</span>
-      {product.image ? <Image className="catalog-card-real-image" src={product.image} alt={`${product.name} ${product.model}`} fill sizes="(max-width: 700px) 100vw, 380px" /> : <Icon className="catalog-card-icon" size={38} strokeWidth={1.7} aria-hidden="true" />}
+      {product.image ? <Image unoptimized={isPublicNeonProductImage(product.image)} className="catalog-card-real-image" src={product.image} alt={`${product.name} ${product.model}`} fill sizes="(max-width: 700px) 100vw, 380px" /> : <Icon className="catalog-card-icon" size={38} strokeWidth={1.7} aria-hidden="true" />}
     </div>
     <div className="catalog-card-body">
       <div className="catalog-card-identification"><h2>{product.name}</h2><p>{product.model}</p></div>
