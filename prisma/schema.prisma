@@ -125,6 +125,23 @@ enum Product360Status {
   FAILED
 }
 
+enum CalculationStatus {
+  DRAFT
+  READY
+}
+
+enum CalculationRoomType {
+  ROOM
+  CORRIDOR
+}
+
+enum CalculationDoorSide {
+  TOP
+  BOTTOM
+  LEFT
+  RIGHT
+}
+
 model Product {
   id               String              @id @default(cuid())
   name             String
@@ -363,8 +380,56 @@ model AdminUser {
   auditLogs           AuditLog[]          @relation("AuditActor")
   createdPhotoAssets  PhotoStudioAsset[]  @relation("PhotoAssetCreator")
   attachedPhotoAssets PhotoStudioAsset[]  @relation("PhotoAssetAttacher")
+  calculations        Calculation[]
 
   @@index([approvalStatus, isActive])
+}
+
+model Calculation {
+  id                 String            @id @default(cuid())
+  customerName       String
+  phone              String?
+  region             String?
+  projectName        String
+  capacityTons       Decimal?          @db.Decimal(10, 2)
+  cameraCount        Int               @default(0)
+  temperatureMin     Decimal?          @db.Decimal(6, 2)
+  temperatureMax     Decimal?          @db.Decimal(6, 2)
+  notes              String?
+  buildingWidth      Decimal           @db.Decimal(10, 2)
+  buildingLength     Decimal           @db.Decimal(10, 2)
+  buildingHeight     Decimal           @db.Decimal(10, 2)
+  status             CalculationStatus @default(DRAFT)
+  createdByAdminId   String
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  createdBy          AdminUser         @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  rooms              CalculationRoom[]
+
+  @@index([status, updatedAt])
+  @@index([createdByAdminId, updatedAt])
+}
+
+model CalculationRoom {
+  id             String               @id
+  calculationId  String
+  name           String
+  type           CalculationRoomType
+  x              Decimal              @db.Decimal(10, 2)
+  y              Decimal              @db.Decimal(10, 2)
+  width          Decimal              @db.Decimal(10, 2)
+  length         Decimal              @db.Decimal(10, 2)
+  height         Decimal?             @db.Decimal(10, 2)
+  capacityTons   Decimal?             @db.Decimal(10, 2)
+  temperatureMin Decimal?             @db.Decimal(6, 2)
+  temperatureMax Decimal?             @db.Decimal(6, 2)
+  doorEnabled    Boolean              @default(false)
+  doorSide       CalculationDoorSide?
+  order          Int
+  calculation    Calculation          @relation(fields: [calculationId], references: [id], onDelete: Cascade)
+
+  @@unique([calculationId, order])
+  @@index([calculationId])
 }
 
 model AuditLog {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Boxes, CalendarDays, Camera, ChevronLeft, FolderKanban, History, LayoutDashboard, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
+import { Bell, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, FolderKanban, History, LayoutDashboard, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 
 const navigation = [
@@ -19,7 +19,7 @@ const navigation = [
   { label: "Sotuvlar", href: "/admin/sales", icon: ShoppingBag },
   { label: "Mukofotlar", href: "/admin/rewards", icon: CalendarDays },
   { label: "Backup", href: "/admin/backups", icon: Settings },
-  { label: "Hisob-kitoblar", href: "#", icon: CalendarDays },
+  { label: "Hisob-kitob", href: "/admin/calculations", icon: Calculator },
   { label: "Kontent", href: "/admin/content/home", icon: Boxes },
   { label: "Foydalanuvchilar", href: "/admin/users", icon: Users,superOnly:true },
   { label: "Faoliyat tarixi", href: "/admin/activity", icon: History,superOnly:true },
