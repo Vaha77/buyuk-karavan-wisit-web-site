@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { initialHomeContent, type HomeContent } from "@/data/admin-home";
 import { getDb } from "@/lib/db";
+import { unstable_cache } from "next/cache";
 
 const sectionKeys = ["hero", "selector", "solutions", "featuredProducts", "temperature", "projects", "reasons", "cta", "footer"] as const;
 
@@ -74,10 +75,11 @@ export async function getHomeContent(): Promise<HomeContent> {
   return mapRow(await db.homeContent.create({ data: columns(defaults) }));
 }
 
-export async function getPublicHomeContent(): Promise<HomeContent> {
+const loadPublicHomeContent = unstable_cache(async (): Promise<HomeContent> => {
   try { return await getHomeContent(); }
   catch { return cloneDefaults(); }
-}
+}, ["public-home-content-v1"], { revalidate: 300, tags: ["public-home"] });
+export async function getPublicHomeContent(): Promise<HomeContent> { return loadPublicHomeContent(); }
 
 export async function persistHomeContent(content: HomeContent): Promise<HomeContent> {
   const db = getDb();

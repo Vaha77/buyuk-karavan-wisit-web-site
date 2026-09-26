@@ -1,5 +1,5 @@
 import "server-only";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getDb } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import type { ProjectInput } from "./validation";
@@ -11,7 +11,7 @@ async function upload(id:string,images:ProjectImageInput[]){const uploaded:strin
 async function cleanup(id:string,urls:string[]){for(const url of urls){const count=await getDb().project.count({where:{images:{has:url}}});if(!count)await deleteOwnedProjectImage(url,id).catch(()=>console.error("Project image cleanup failed",{projectId:id}));}}
 const data=(i:ProjectInput)=>({title:i.title,slug:i.slug,shortDescription:i.shortDescription||null,description:i.description||null,location:i.location||null,temperature:i.temperature||null,capacity:i.capacity||null,category:i.category||null,isVisible:i.isVisible,isFeatured:i.isFeatured,order:i.order});
 const unique=(e:unknown)=>!!e&&typeof e==="object"&&"code" in e&&e.code==="P2002";
-function refresh(...slugs:string[]){revalidatePath("/");revalidatePath("/admin/projects");revalidatePath("/projects/[slug]","page");slugs.forEach(s=>revalidatePath(`/projects/${s}`));}
+function refresh(...slugs:string[]){revalidateTag("public-projects","max");revalidatePath("/");revalidatePath("/admin/projects");revalidatePath("/projects/[slug]","page");slugs.forEach(s=>revalidatePath(`/projects/${s}`));}
 export async function createProject(input:ProjectInput,raw:unknown){await requireAdmin();const images=checked(raw,[]);try{const row=await getDb().project.create({data:{...data(input),isVisible:false}});try{const result=await upload(row.id,images);try{const saved=await getDb().project.update({where:{id:row.id},data:{images:result.urls,coverImage:result.urls[0],isVisible:input.isVisible}});refresh(saved.slug);return saved;}catch(e){await Promise.allSettled(result.uploaded.map(url=>deleteOwnedProjectImage(url,row.id)));throw e;}}catch(e){await getDb().project.delete({where:{id:row.id}});throw e;}}catch(e){if(unique(e))throw new ProjectSlugError();throw e;}}
 export async function updateProject(id:string,input:ProjectInput,raw:unknown){await requireAdmin();const previous=await getDb().project.findUnique({where:{id}});if(!previous)throw new ProjectNotFoundError();const images=checked(raw,previous.images);try{const result=await upload(id,images);let saved;try{saved=await getDb().project.update({where:{id},data:{...data(input),images:result.urls,coverImage:result.urls[0]}});}catch(e){await Promise.allSettled(result.uploaded.map(url=>deleteOwnedProjectImage(url,id)));throw e;}refresh(previous.slug,saved.slug);await cleanup(id,previous.images.filter(url=>!saved.images.includes(url)));return saved;}catch(e){if(unique(e))throw new ProjectSlugError();throw e;}}
 export async function deleteProject(id:string){await requireAdmin();const row=await getDb().project.findUnique({where:{id}});if(!row)throw new ProjectNotFoundError();await getDb().project.delete({where:{id}});refresh(row.slug);await cleanup(id,row.images);}
