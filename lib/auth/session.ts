@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { getDb } from "@/lib/db";
 
 export const ADMIN_COOKIE = "bk_admin_session";
@@ -28,10 +29,7 @@ export async function createAdminSession(userId: string): Promise<void> {
   (await cookies()).set(ADMIN_COOKIE, token, { ...cookieOptions(), expires: expiresAt });
 }
 
-export async function getAdminSession() {
-  const token = (await cookies()).get(ADMIN_COOKIE)?.value;
-  if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
-  const tokenHash = hashToken(token);
+const findAdminSession = cache(async (tokenHash: string) => {
   const session = await getDb().adminSession.findUnique({
     where: { tokenHash },
     include: { user: true },
@@ -42,6 +40,12 @@ export async function getAdminSession() {
     return null;
   }
   return session;
+});
+
+export async function getAdminSession() {
+  const token = (await cookies()).get(ADMIN_COOKIE)?.value;
+  if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  return findAdminSession(hashToken(token));
 }
 
 export async function deleteAdminSession(): Promise<void> {

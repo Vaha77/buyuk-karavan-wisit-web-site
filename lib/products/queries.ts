@@ -50,6 +50,10 @@ export async function getAdminProducts() {
   return rows.map(mapProductCard);
 }
 
+export async function getAdminProductOptions() {
+  return getDb().product.findMany({ select: { id: true, name: true, model: true }, orderBy });
+}
+
 export async function getAdminProductById(id: string) {
   const row = await getDb().product.findUnique({ where: { id }, include: { category: true } });
   return row ? mapProduct(row) : null;
