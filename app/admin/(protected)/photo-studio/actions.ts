@@ -8,6 +8,7 @@ import { editProductImage, OpenAINotConfiguredError, PhotoStudioAIError, PhotoSt
 import type { PhotoStudioMode } from "@/lib/photo-studio/types";
 import { parsePhotoStudioRequest, PhotoStudioValidationError, validateSourceImage } from "@/lib/photo-studio/validation";
 import { recordPhotoStudioAttachment,recordPhotoStudioCreation } from "@/lib/audit/photo-studio";
+import { getProductBySlug } from "@/lib/products/queries";
 
 export type ProcessImageResult = { error?: string; image?: string; contentType?: "image/png"; width?: number; height?: number; mode?: PhotoStudioMode; assetId?:string };
 
@@ -34,7 +35,7 @@ export async function processPhotoStudioImageAction(formData: FormData): Promise
   }
 }
 
-type AttachStage = "authorization" | "input_validation" | "image_decode" | "product_lookup" | "asset_lookup" | "storage_upload" | "product_update" | "storage_cleanup" | "attachment_record";
+type AttachStage = "authorization" | "input_validation" | "image_decode" | "product_lookup" | "asset_lookup" | "storage_upload" | "product_update" | "storage_cleanup" | "product_verification" | "attachment_record" | "public_query_verification";
 const GENERATED_IMAGE_LIMIT = 20 * 1024 * 1024;
 
 function safeAttachError(error: unknown) {
@@ -79,7 +80,9 @@ function attachMessage(stage: AttachStage, error: unknown) {
   if (stage === "authorization") return "Sessiya tekshirilmadi. Qayta kirib urinib ko‘ring.";
   if (stage === "storage_upload" || stage === "storage_cleanup") return "Rasmni doimiy xotiraga yuklash amalga oshmadi.";
   if (stage === "product_update") return "Rasm yuklandi, lekin mahsulot ma’lumotini yangilab bo‘lmadi. Yuklangan fayl xavfsiz tozalandi.";
+  if (stage === "product_verification") return "Mahsulot yangilandi, lekin saqlangan rasm manzilini tasdiqlab bo‘lmadi.";
   if (stage === "attachment_record") return "Rasm mahsulotga biriktirildi, lekin Photo Studio tarixini yangilab bo‘lmadi.";
+  if (stage === "public_query_verification") return "Rasm saqlandi, lekin mahsulot sahifasi hali yangi rasmni qabul qilmadi.";
   return "Rasmni biriktirish ma’lumotlarini tekshirib bo‘lmadi.";
 }
 
@@ -98,13 +101,25 @@ export async function saveApprovedPhotoStudioImageAction(raw: { productId: strin
     stage="asset_lookup";
     const asset=await getDb().photoStudioAsset.findUnique({where:{id:raw.assetId},select:{id:true,attachedAt:true}});
     if(!asset||asset.attachedAt)throw new PhotoStudioValidationError("Photo Studio natijasi topilmadi yoki avval biriktirilgan.");
-    await attachGeneratedProductImage(raw.productId, new File([bytes], "ai-product.png", { type: "image/png" }), raw.placement, {
+    const attached = await attachGeneratedProductImage(raw.productId, new File([bytes], "ai-product.png", { type: "image/png" }), raw.placement, {
       maxSize: GENERATED_IMAGE_LIMIT,
       skipAudit: true,
       onStage: nextStage => { stage = nextStage; },
     });
+    stage="product_verification";
+    const stored=await getDb().product.findUnique({where:{id:raw.productId},select:{slug:true,images:true,isVisible:true,category:{select:{isActive:true}}}});
+    const dbVerified=Boolean(stored&&(raw.placement==="main"?stored.images[0]===attached.url:stored.images.includes(attached.url)));
+    if(!stored||!dbVerified)throw new Error("Stored Product images do not contain the uploaded object URL in the requested placement");
     stage="attachment_record";
     if(!await recordPhotoStudioAttachment(actor,asset.id,product,raw.placement))throw new PhotoStudioValidationError("Photo Studio natijasi avval biriktirilgan.");
+    stage="public_query_verification";
+    let publicQueryVerified: boolean | "not-public" = "not-public";
+    if(stored.isVisible&&stored.category.isActive){
+      const publicProduct=await getProductBySlug(stored.slug);
+      publicQueryVerified=Boolean(publicProduct&&(raw.placement==="main"?publicProduct.image===attached.url:publicProduct.images?.includes(attached.url)));
+      if(!publicQueryVerified)throw new Error("Public product query returned stale image data after cache invalidation");
+    }
+    console.info("[PhotoStudioAttach]",{stage:"completed",productId:raw.productId,placement:raw.placement,objectUrl:attached.url,dbVerified,publicQueryVerified});
     return { success: true };
   } catch (error) {
     console.error("[PhotoStudioAttach]", { stage, ...safeAttachError(error), ...(stage === "storage_upload" ? { storage: safeStorageConfig() } : {}) });

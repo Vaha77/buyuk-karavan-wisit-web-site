@@ -1,5 +1,5 @@
 import "server-only";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { getDb } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { readSpecifications } from "./mapper";
@@ -59,7 +59,7 @@ function isUniqueError(error: unknown): boolean {
 }
 
 function revalidateProducts(...slugs: string[]) {
-  revalidateTag("public-products", "max");
+  updateTag("public-products");
   revalidatePath("/admin/products");
   revalidatePath("/products");
   revalidatePath("/products/[slug]", "page");
