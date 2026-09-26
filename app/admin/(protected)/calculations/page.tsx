@@ -3,6 +3,115 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getCalculations } from "@/lib/calculations/queries";
 import "@/components/admin/calculation-planner.css";
+import "@/components/admin/calculation-proposal.css";
 
-const statusLabel={DRAFT:"Qoralama",READY:"Tayyor"};
-export default async function CalculationsPage(){const rows=await getCalculations();return <div className="admin-products-page calculation-dashboard"><div className="admin-page-heading"><div><h1>Hisob-kitob</h1><p>Mijoz uchun loyiha va tijorat hisob-kitoblarini tayyorlash</p></div><Link className="admin-primary-button" href="/admin/calculations/new"><Plus size={18}/>Yangi hisob-kitob</Link></div><section className="admin-panel admin-management-panel"><div className="admin-panel-heading"><h2>Saqlangan hisob-kitoblar</h2><span>{rows.length} ta</span></div>{rows.length?<><div className="admin-table-wrap"><table className="admin-products-table calculation-table"><thead><tr><th>№</th><th>Mijoz</th><th>Loyiha</th><th>Sotuvchi</th><th>Holat</th><th>Sana</th><th/></tr></thead><tbody>{rows.map((row,index)=><tr key={row.id}><td>{index+1}</td><td><strong>{row.customerName}</strong></td><td>{row.projectName}</td><td>{row.seller}</td><td><span className={`calculation-status is-${row.status.toLowerCase()}`}>{statusLabel[row.status]}</span></td><td>{new Intl.DateTimeFormat("uz-UZ",{dateStyle:"medium"}).format(new Date(row.updatedAt))}</td><td><Link className="calculation-open" href={`/admin/calculations/${row.id}`}>Ochish</Link></td></tr>)}</tbody></table></div><div className="calculation-mobile-list">{rows.map(row=><Link href={`/admin/calculations/${row.id}`} key={row.id}><div><strong>{row.projectName}</strong><span>{row.customerName}</span></div><span className={`calculation-status is-${row.status.toLowerCase()}`}>{statusLabel[row.status]}</span><small>{row.seller} · {new Intl.DateTimeFormat("uz-UZ",{dateStyle:"short"}).format(new Date(row.updatedAt))}</small></Link>)}</div></>:<div className="calculation-empty"><p>Hozircha hisob-kitob qoralamalari yo'q.</p><Link href="/admin/calculations/new">Birinchi hisob-kitobni yarating</Link></div>}</section></div>}
+const statusLabel = {
+  DRAFT: "Qoralama",
+  READY: "Tayyor",
+  SENT: "Yuborildi",
+  NEGOTIATION: "Muzokara",
+  APPROVED: "Tasdiqlandi",
+  REJECTED: "Rad etildi",
+};
+export default async function CalculationsPage() {
+  const rows = await getCalculations();
+  return (
+    <div className="admin-products-page calculation-dashboard">
+      <div className="admin-page-heading">
+        <div>
+          <h1>Hisob-kitob</h1>
+          <p>Mijoz uchun loyiha va tijorat hisob-kitoblarini tayyorlash</p>
+        </div>
+        <Link className="admin-primary-button" href="/admin/calculations/new">
+          <Plus size={18} />
+          Yangi hisob-kitob
+        </Link>
+      </div>
+      <section className="admin-panel admin-management-panel">
+        <div className="admin-panel-heading">
+          <h2>Saqlangan hisob-kitoblar</h2>
+          <span>{rows.length} ta</span>
+        </div>
+        {rows.length ? (
+          <>
+            <div className="admin-table-wrap">
+              <table className="admin-products-table calculation-table">
+                <thead>
+                  <tr>
+                    <th>№</th>
+                    <th>Mijoz</th>
+                    <th>Loyiha</th>
+                    <th>Sotuvchi</th>
+                    <th>Holat</th>
+                    <th>Sana</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, index) => (
+                    <tr key={row.id}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <strong>{row.customerName}</strong>
+                      </td>
+                      <td>{row.projectName}</td>
+                      <td>{row.seller}</td>
+                      <td>
+                        <span
+                          className={`calculation-status is-${row.status.toLowerCase()}`}
+                        >
+                          {statusLabel[row.status]}
+                        </span>
+                      </td>
+                      <td>
+                        {new Intl.DateTimeFormat("uz-UZ", {
+                          dateStyle: "medium",
+                        }).format(new Date(row.updatedAt))}
+                      </td>
+                      <td>
+                        <Link
+                          className="calculation-open"
+                          href={`/admin/calculations/${row.id}`}
+                        >
+                          Ochish
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="calculation-mobile-list">
+              {rows.map((row) => (
+                <Link href={`/admin/calculations/${row.id}`} key={row.id}>
+                  <div>
+                    <strong>{row.projectName}</strong>
+                    <span>{row.customerName}</span>
+                  </div>
+                  <span
+                    className={`calculation-status is-${row.status.toLowerCase()}`}
+                  >
+                    {statusLabel[row.status]}
+                  </span>
+                  <small>
+                    {row.seller} ·{" "}
+                    {new Intl.DateTimeFormat("uz-UZ", {
+                      dateStyle: "short",
+                    }).format(new Date(row.updatedAt))}
+                  </small>
+                </Link>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="calculation-empty">
+            <p>Hozircha hisob-kitob qoralamalari yo'q.</p>
+            <Link href="/admin/calculations/new">
+              Birinchi hisob-kitobni yarating
+            </Link>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
