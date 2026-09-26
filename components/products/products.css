@@ -22,6 +22,7 @@
 .catalog-card-badge{position:absolute;top:14px;left:14px;border-radius:999px;padding:6px 11px 5px;background:#fff;color:#1c507f;font-size:10px;font-weight:700;letter-spacing:.07em;line-height:1;white-space:nowrap}
 .catalog-card-icon{transition:transform .3s ease}
 .catalog-card-real-image{object-fit:cover}
+.catalog-section .catalog-card-real-image{object-fit:contain;transform:scale(.87);transform-origin:center}
 .catalog-card-image:has(.catalog-card-real-image) .catalog-card-badge{z-index:1}
 .catalog-card:hover .catalog-card-icon{transform:scale(1.08)}
 .catalog-card-body{padding:18px 20px 16px;display:flex;flex-direction:column;flex:1;min-height:153px}
