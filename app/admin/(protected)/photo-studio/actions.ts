@@ -43,7 +43,34 @@ function safeAttachError(error: unknown) {
   for (const secret of [process.env.AWS_SECRET_ACCESS_KEY, process.env.AWS_ACCESS_KEY_ID, process.env.DATABASE_URL, process.env.OPENAI_API_KEY]) {
     if (secret) message = message.replaceAll(secret, "[REDACTED]");
   }
-  return { errorName: name, errorMessage: message.slice(0, 500) };
+  const record = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const metadata = record.$metadata && typeof record.$metadata === "object" ? record.$metadata as Record<string, unknown> : {};
+  const errorCode = [record.Code, record.code, record.__type].find(value => typeof value === "string");
+  const httpStatus = typeof metadata.httpStatusCode === "number" ? metadata.httpStatusCode : undefined;
+  const requestId = [metadata.requestId, record.requestId, record.RequestId].find(value => typeof value === "string");
+  return {
+    errorName: name,
+    errorMessage: message.slice(0, 500),
+    ...(httpStatus !== undefined ? { httpStatus } : {}),
+    ...(errorCode ? { s3ErrorCode: errorCode } : {}),
+    ...(requestId ? { requestId } : {}),
+  };
+}
+
+function safeStorageConfig() {
+  const endpoint = process.env.AWS_ENDPOINT_URL_S3;
+  let endpointHost: string | undefined;
+  try { endpointHost = endpoint ? new URL(endpoint).hostname : undefined; } catch { endpointHost = "invalid-url"; }
+  return {
+    endpointHost,
+    region: process.env.AWS_REGION || undefined,
+    bucket: process.env.NEON_STORAGE_BUCKET || undefined,
+    endpointConfigured: Boolean(endpoint),
+    regionConfigured: Boolean(process.env.AWS_REGION),
+    bucketConfigured: Boolean(process.env.NEON_STORAGE_BUCKET),
+    accessKeyConfigured: Boolean(process.env.AWS_ACCESS_KEY_ID),
+    secretKeyConfigured: Boolean(process.env.AWS_SECRET_ACCESS_KEY),
+  };
 }
 
 function attachMessage(stage: AttachStage, error: unknown) {
@@ -57,7 +84,7 @@ function attachMessage(stage: AttachStage, error: unknown) {
 }
 
 export async function saveApprovedPhotoStudioImageAction(raw: { productId: string; placement: "main" | "gallery"; image: string;assetId:string }): Promise<{ error?: string; success?: true }> {
-  let stage: AttachStage = "authorization";
+  let stage: string = "authorization";
   try {
     const actor=await requireAdmin();
     stage="input_validation";
@@ -80,7 +107,7 @@ export async function saveApprovedPhotoStudioImageAction(raw: { productId: strin
     if(!await recordPhotoStudioAttachment(actor,asset.id,product,raw.placement))throw new PhotoStudioValidationError("Photo Studio natijasi avval biriktirilgan.");
     return { success: true };
   } catch (error) {
-    console.error("[PhotoStudioAttach]", { stage, ...safeAttachError(error) });
-    return { error: attachMessage(stage, error) };
+    console.error("[PhotoStudioAttach]", { stage, ...safeAttachError(error), ...(stage === "storage_upload" ? { storage: safeStorageConfig() } : {}) });
+    return { error: attachMessage(stage as AttachStage, error) };
   }
 }
