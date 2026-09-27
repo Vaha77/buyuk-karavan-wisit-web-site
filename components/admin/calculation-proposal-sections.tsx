@@ -170,12 +170,12 @@ function ConfigurationCard({
           onChange={(v) => set("operatingHoursPerDay", num(v))}
         />
         <Input
-          label="Sovutgich agent"
+          label="Freon turi"
           value={item.refrigerant}
           onChange={(v) => set("refrigerant", v)}
         />
         <Input
-          label="Elektr panel"
+          label="Elektr shit"
           value={item.electricalPanel}
           onChange={(v) => set("electricalPanel", v)}
         />
@@ -213,13 +213,20 @@ export function CalculationProposalSections({
   draft,
   setDraft,
   products,
+  dirty,
+  saving,
+  onSave,
 }: {
   draft: CalculationDraft;
   setDraft: Dispatch<SetStateAction<CalculationDraft>>;
   products: ProductProposalOption[];
+  dirty: boolean;
+  saving: boolean;
+  onSave: () => Promise<string | null>;
 }) {
   const [preview, setPreview] = useState(false),
     [pdfBusy, setPdfBusy] = useState(false),
+    [pdfError, setPdfError] = useState(""),
     set = <K extends keyof CalculationDraft>(
       key: K,
       value: CalculationDraft[K],
@@ -266,19 +273,42 @@ export function CalculationProposalSections({
         x.id === id ? { ...x, [key]: value } : x,
       ),
     }));
-  const pdfUrl = draft.id ? `/admin/calculations/${draft.id}/pdf` : "";
-  const download = () => {
-    if (!pdfUrl) return;
-    const a = document.createElement("a");
-    a.href = pdfUrl;
-    a.download = "";
-    a.click();
+  const pdfUrl = (id = draft.id) => id ? `/admin/calculations/${id}/pdf` : "";
+  const ensureSaved = async () => (!draft.id || dirty ? onSave() : draft.id);
+  const download = async () => {
+    setPdfBusy(true);
+    setPdfError("");
+    try {
+      const id = await ensureSaved();
+      if (!id) return;
+      const response = await fetch(pdfUrl(id));
+      if (!response.ok) throw new Error("PDF");
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `${draft.proposalNumber || "tijorat-taklifi"}.pdf`;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      setPdfError("PDF yaratishda xatolik yuz berdi. Qayta urinib ko‘ring.");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+  const viewPdf = async () => {
+    setPdfBusy(true);
+    setPdfError("");
+    const id = await ensureSaved();
+    if (id) setPreview(true);
+    setPdfBusy(false);
   };
   const share = async () => {
-    if (!pdfUrl) return;
     setPdfBusy(true);
+    setPdfError("");
     try {
-      const response = await fetch(pdfUrl);
+      const id = await ensureSaved();
+      if (!id) return;
+      const response = await fetch(pdfUrl(id));
       if (!response.ok) throw new Error("PDF");
       const blob = await response.blob(),
         file = new File(
@@ -291,9 +321,9 @@ export function CalculationProposalSections({
           title: "BUYUK KARAVAN tijorat taklifi",
           files: [file],
         });
-      else download();
+      else await download();
     } catch {
-      download();
+      setPdfError("PDF yaratishda xatolik yuz berdi. Qayta urinib ko‘ring.");
     } finally {
       setPdfBusy(false);
     }
@@ -616,7 +646,7 @@ export function CalculationProposalSections({
           ))}
         </div>
       </section>
-      <section className="admin-form-card proposal-pdf">
+      <section className="admin-form-card proposal-pdf" id="proposal-pdf-section">
         <div className="proposal-section-heading">
           <div>
             <span>06–08</span>
@@ -626,34 +656,30 @@ export function CalculationProposalSections({
             </p>
           </div>
         </div>
-        {!draft.id ? (
-          <p className="proposal-disclaimer">
-            PDF yaratish uchun avval taklifni saqlang.
-          </p>
-        ) : (
-          <>
-            <div className="proposal-pdf-actions">
-              <button type="button" onClick={() => setPreview((x) => !x)}>
+        {!draft.id && (
+          <p className="proposal-disclaimer">PDF yaratish uchun tijorat taklifini avval saqlang.</p>
+        )}
+        <div className="proposal-pdf-actions">
+              <button type="button" disabled={pdfBusy || saving} onClick={() => void viewPdf()}>
                 <Eye size={16} />
-                PDF ko‘rish
+                {pdfBusy ? "PDF tayyorlanmoqda..." : !draft.id || dirty ? "Saqlash va PDF ko‘rish" : "PDF ko‘rish"}
               </button>
-              <button type="button" onClick={download}>
+              {draft.id && <button type="button" disabled={pdfBusy || saving} onClick={() => void download()}>
                 <Download size={16} />
                 PDF yuklab olish
-              </button>
-              <button type="button" disabled={pdfBusy} onClick={share}>
+              </button>}
+              {draft.id && <button type="button" disabled={pdfBusy || saving} onClick={share}>
                 <Share2 size={16} />
-                {pdfBusy ? "Tayyorlanmoqda…" : "Ulashish"}
-              </button>
-            </div>
+                {pdfBusy ? "PDF tayyorlanmoqda..." : "Ulashish"}
+              </button>}
+        </div>
+        {pdfError && <p className="proposal-pdf-error" role="alert">{pdfError}</p>}
             {preview && (
               <iframe
                 title="Tijorat taklifi PDF ko‘rinishi"
-                src={`${pdfUrl}?inline=1`}
+                src={`${pdfUrl()}?inline=1`}
               />
             )}
-          </>
-        )}
       </section>
     </div>
   );

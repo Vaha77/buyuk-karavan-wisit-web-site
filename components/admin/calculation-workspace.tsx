@@ -11,6 +11,7 @@ import {
   Trash2,
   ZoomIn,
   ZoomOut,
+  FileText,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { saveCalculationAction } from "@/app/admin/(protected)/calculations/actions";
@@ -271,6 +272,11 @@ function PlannerSvg({
               strokeWidth=".025"
             />
           </pattern>
+          {draft.rooms.map((room) => (
+            <clipPath id={`room-label-${room.id}`} key={room.id}>
+              <rect x={room.x + 0.28} y={room.y + 0.28} width={Math.max(0, room.width - 0.56)} height={Math.max(0, room.length - 0.56)} />
+            </clipPath>
+          ))}
         </defs>
         <rect
           className="calc-building"
@@ -316,12 +322,17 @@ function PlannerSvg({
           {draft.buildingLength} m
         </text>
         {draft.rooms.map((room) => {
-          const font = Math.max(
-              0.42,
-              Math.min(0.72, Math.min(room.width, room.length) / 7),
-            ),
+          const font = Math.min(0.72, Math.max(0.48, room.width / 8)),
             volume =
-              room.width * room.length * (room.height || draft.buildingHeight);
+              room.width * room.length * (room.height || draft.buildingHeight),
+            maxChars = Math.max(3, Math.floor(room.width / (font * 0.58))),
+            displayName = room.name.length > maxChars
+              ? `${room.name.slice(0, Math.max(2, maxChars - 1)).trimEnd()}…`
+              : room.name,
+            showAllDetails = room.type === "ROOM" && room.length >= font * 7 && room.width >= 3.2,
+            showVolume = room.type === "ROOM" && (showAllDetails || (room.length >= font * 4.5 && room.width >= 2.3)),
+            lineCount = 1 + (showVolume ? 1 : 0) + (showAllDetails ? 2 : 0),
+            firstLineY = room.y + room.length / 2 - ((lineCount - 1) * font * 1.25) / 2;
           return (
             <g
               className={`calc-room is-${room.type.toLowerCase()}${selected === room.id ? " is-selected" : ""}`}
@@ -337,27 +348,26 @@ function PlannerSvg({
               <DoorMarker room={room} />
               <text
                 x={room.x + room.width / 2}
-                y={room.y + room.length / 2 - font * 1.5}
+                y={firstLineY}
                 style={{ fontSize: font }}
+                clipPath={`url(#room-label-${room.id})`}
               >
                 <tspan
                   x={room.x + room.width / 2}
                   dy="0"
                   className="calc-room-name"
                 >
-                  {room.name}
+                  {displayName}
                 </tspan>
-                {room.type === "ROOM" && (
+                {showVolume && (
                   <>
                     <tspan x={room.x + room.width / 2} dy={font * 1.25}>
                       {volume.toFixed(0)} m³
                     </tspan>
-                    <tspan x={room.x + room.width / 2} dy={font * 1.25}>
-                      {room.capacityTons} tonna
-                    </tspan>
-                    <tspan x={room.x + room.width / 2} dy={font * 1.25}>
-                      {room.temperatureMax} / {room.temperatureMin}°C
-                    </tspan>
+                    {showAllDetails && <>
+                      <tspan x={room.x + room.width / 2} dy={font * 1.25}>{room.capacityTons} tonna</tspan>
+                      <tspan x={room.x + room.width / 2} dy={font * 1.25}>{room.temperatureMin} / {room.temperatureMax}°C</tspan>
+                    </>}
                   </>
                 )}
               </text>
@@ -515,7 +525,9 @@ export function CalculationWorkspace({
     ),
     [zoom, setZoom] = useState(1),
     [saving, setSaving] = useState(false),
-    [feedback, setFeedback] = useState("");
+    [feedback, setFeedback] = useState(""),
+    [savedSnapshot, setSavedSnapshot] = useState(initial ? JSON.stringify(draft) : "");
+  const dirty = JSON.stringify(draft) !== savedSnapshot;
   const warnings = useMemo(
     () =>
       geometryWarnings(draft.rooms, draft.buildingWidth, draft.buildingLength),
@@ -568,10 +580,13 @@ export function CalculationWorkspace({
     if (selected === id) setSelected(null);
   };
   const duplicate = (source: PlannerRoom) => {
+    const baseName = source.name.replace(/(?:\s+nusxa)+(?:\s*\(\d+\))?$/i, "").replace(/\s+\(\d+\)$/i, "");
+    let copyNumber = 2;
+    while (draft.rooms.some((item) => item.name === `${baseName} (${copyNumber})`)) copyNumber += 1;
     const copy = {
       ...source,
       id: crypto.randomUUID(),
-      name: `${source.name} nusxa`,
+      name: `${baseName} (${copyNumber})`,
       order: draft.rooms.length,
     };
     set(
@@ -588,25 +603,37 @@ export function CalculationWorkspace({
       "rooms",
       autoPlaceRooms(draft.rooms, draft.buildingWidth, draft.buildingLength),
     );
-  const save = async () => {
-    if (saving) return;
+  const save = async (): Promise<string | null> => {
+    if (saving) return null;
     if (warnings.outside) {
       setFeedback("Kamera bino chegarasidan tashqariga chiqdi.");
-      return;
+      return null;
     }
     if (warnings.overlap) {
       setFeedback("Kameralar bir-birining ustiga tushib qolgan.");
-      return;
+      return null;
     }
     setSaving(true);
     setFeedback("");
-    const result = await saveCalculationAction(draft.id || null, draft);
+    let result;
+    try {
+      result = await saveCalculationAction(draft.id || null, draft);
+    } catch {
+      setSaving(false);
+      setFeedback("Taklif saqlanmadi. Qayta urinib ko‘ring.");
+      return null;
+    }
     setSaving(false);
     if (result.error) {
       setFeedback(result.error);
-      return;
+      return null;
     }
     if (result.id) {
+      setSavedSnapshot(JSON.stringify({
+        ...draft,
+        id: result.id,
+        proposalNumber: result.proposalNumber || draft.proposalNumber,
+      }));
       setDraft((current) => ({
         ...current,
         id: result.id,
@@ -615,7 +642,9 @@ export function CalculationWorkspace({
       setFeedback("Taklif saqlandi.");
       router.replace(`/admin/calculations/${result.id}?saved=1`);
       router.refresh();
+      return result.id;
     }
+    return null;
   };
   return (
     <div className="calculation-workspace">
@@ -635,15 +664,16 @@ export function CalculationWorkspace({
             </span>
           </div>
         </div>
-        <button
-          className="admin-primary-button"
-          type="button"
-          disabled={saving}
-          onClick={save}
-        >
-          <Save size={17} />
-          {saving ? "Saqlanmoqda..." : "Saqlash"}
-        </button>
+        <div className="calculation-header-actions">
+          <span className={`calculation-save-state ${dirty ? "is-dirty" : "is-saved"}`}>
+            {saving ? "Saqlanmoqda..." : dirty ? "Saqlanmagan o‘zgarishlar" : draft.id ? "Saqlandi · PDF tayyor" : "Saqlashga tayyor"}
+          </span>
+          <button className="admin-primary-button" type="button" disabled={saving || !dirty} onClick={() => void save()}>
+            <Save size={17} />
+            {saving ? "Saqlanmoqda..." : draft.id ? "Saqlash" : "Saqlash va davom etish"}
+          </button>
+          {draft.id && <button className="calculation-pdf-shortcut" type="button" disabled={saving} onClick={() => document.getElementById("proposal-pdf-section")?.scrollIntoView({ behavior: "smooth" })}><FileText size={16}/>PDF amallari</button>}
+        </div>
       </header>
       {feedback && (
         <p className="admin-form-feedback" role="status">
@@ -835,7 +865,14 @@ export function CalculationWorkspace({
         draft={draft}
         setDraft={setDraft}
         products={products}
+        dirty={dirty}
+        saving={saving}
+        onSave={save}
       />
+      <div className="calculation-mobile-actions" aria-label="Hisob-kitob amallari">
+        <button type="button" disabled={saving || !dirty} onClick={() => void save()}><Save size={17}/>{saving ? "Saqlanmoqda..." : "Saqlash"}</button>
+        <button type="button" disabled={saving} onClick={() => document.getElementById("proposal-pdf-section")?.scrollIntoView({ behavior: "smooth" })}><FileText size={17}/>PDF</button>
+      </div>
     </div>
   );
 }
