@@ -4,6 +4,10 @@ import { useEffect } from "react";
 export function HomeMotion() {
   useEffect(() => {
     const scrollToHash = (hash: string, behavior: ScrollBehavior = "smooth") => {
+      if (hash === "#top") {
+        window.scrollTo({ top: 0, left: 0, behavior });
+        return;
+      }
       const target = document.getElementById(decodeURIComponent(hash.replace(/^#/, "")));
       if (target) target.scrollIntoView({ behavior, block: "start" });
     };
