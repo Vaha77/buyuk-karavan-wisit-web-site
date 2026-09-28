@@ -4,3 +4,6 @@
 @media(max-width:390px){.electricity-summary{grid-template-columns:1fr}.proposal-checks{display:grid}.proposal-checks label{min-height:44px}}
 .calculation-mobile-list .calculation-status.is-sent,.calculation-mobile-list .calculation-status.is-negotiation{color:#275f90}.calculation-mobile-list .calculation-status.is-approved{color:#287654}.calculation-mobile-list .calculation-status.is-rejected{color:#9e4650}
 .proposal-pdf-error{margin:12px 0 0;padding:11px 13px;border-radius:9px;background:#fff0f1;color:#9e4650;font-size:11px;font-weight:800}.proposal-pdf-actions button:disabled{cursor:not-allowed;opacity:.55}.electricity-summary{padding-top:10px;border-top:1px solid #d6e4ee}.electricity-summary dd{font-size:12px}
+.proposal-item{grid-template-columns:25px minmax(150px,1.1fr) minmax(220px,1.7fr) 80px minmax(100px,.7fr) minmax(140px,.9fr) 86px minmax(120px,.8fr) 36px;gap:10px}
+.proposal-rate{margin:10px 0 0;color:#315b80;font-size:11px;font-weight:800}.proposal-pdf{scroll-margin-top:120px}
+@media(max-width:650px){.proposal-item{grid-template-columns:24px minmax(0,1fr)}.proposal-item input,.proposal-item select{min-width:0}.proposal-item>button{margin-top:8px}}

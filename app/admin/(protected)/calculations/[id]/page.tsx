@@ -7,6 +7,12 @@ import {
 import { getUsdUzsRate } from "@/lib/currency/cbu";
 import "@/components/admin/calculation-planner.css";
 import "@/components/admin/calculation-proposal.css";
+import type { Metadata } from "next";
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const row = await getCalculation(id);
+  return { title: `${row?.proposalNumber || "Tijorat taklifi"} | BUYUK KARAVAN Admin` };
+}
 export default async function CalculationPage({
   params,
 }: {
@@ -24,6 +30,7 @@ export default async function CalculationPage({
       initial={row}
       products={products}
       exchangeRate={rate ? Number(rate.rate) : null}
+      exchangeRateDate={rate?.effectiveDate || null}
     />
   );
 }

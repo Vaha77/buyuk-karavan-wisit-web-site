@@ -3,6 +3,10 @@ import { geometryWarnings } from "./geometry";
 const positive = z.number().finite().positive().max(1_000_000),
   optionalNumber = z.number().finite().min(0).max(1_000_000_000).nullable(),
   text = (max: number) => z.string().trim().max(max);
+const phone = text(40).refine(
+  (value) => !value || (/^[+\d][\d\s().-]*$/.test(value) && value.replace(/\D/g, "").length >= 7),
+  "Telefon raqamini to‘g‘ri kiriting.",
+);
 const room = z.object({
   id: z.string().uuid(),
   name: text(80).min(1),
@@ -38,8 +42,8 @@ const configuration = z.object({
   installationAccessories: text(1000),
   includedEquipment: text(3000),
   priceUsd: optionalNumber,
-  powerKw: optionalNumber,
-  operatingHoursPerDay: z.number().finite().min(0).max(24).nullable(),
+  powerKw: z.number().finite().positive("Quvvat 0 dan katta bo‘lishi kerak.").max(1_000_000).nullable(),
+  operatingHoursPerDay: z.number().finite().positive("Ish vaqti 0 dan katta bo‘lishi kerak.").max(24, "Ish vaqti 24 soatdan oshmasligi kerak.").nullable(),
   order: z.number().int().min(0).max(2),
 });
 const lineItem = z.object({
@@ -55,7 +59,7 @@ const lineItem = z.object({
 export const calculationSchema = z
   .object({
     customerName: text(160).min(1, "Mijoz nomini kiriting."),
-    phone: text(40),
+    phone,
     region: text(160),
     projectName: text(200).min(1, "Loyiha nomini kiriting."),
     capacityTons: z.number().finite().min(0).max(100000),
@@ -94,6 +98,20 @@ export const calculationSchema = z
     exchangeRate: optionalNumber.optional(),
   })
   .superRefine((value, ctx) => {
+    if (value.temperatureMin > value.temperatureMax)
+      ctx.addIssue({
+        code: "custom",
+        path: ["temperatureMin"],
+        message: "Minimal harorat maksimal haroratdan katta bo‘lishi mumkin emas.",
+      });
+    value.rooms.forEach((item, index) => {
+      if (item.type === "ROOM" && item.temperatureMin > item.temperatureMax)
+        ctx.addIssue({
+          code: "custom",
+          path: ["rooms", index, "temperatureMin"],
+          message: `${item.name}: minimal harorat maksimal haroratdan katta bo‘lishi mumkin emas.`,
+        });
+    });
     if (new Set(value.rooms.map((x) => x.id)).size !== value.rooms.length)
       ctx.addIssue({
         code: "custom",

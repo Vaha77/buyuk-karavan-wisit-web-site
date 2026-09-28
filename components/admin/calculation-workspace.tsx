@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Copy,
@@ -31,7 +31,7 @@ import type {
 
 const conclusion =
   "Ushbu konfiguratsiya kamera hajmi, maqsadli harorat va foydalanish sharoitini hisobga olgan holda mutaxassis tomonidan tanlandi. Maqsad faqat kerakli haroratga erishish emas, balki tizimning barqaror ish rejimini ta’minlashdir.";
-const fresh = (exchangeRate: number | null): CalculationDraft => ({
+const fresh = (exchangeRate: number | null, exchangeRateDate: string | null): CalculationDraft => ({
   customerName: "",
   phone: "",
   region: "",
@@ -86,6 +86,7 @@ const fresh = (exchangeRate: number | null): CalculationDraft => ({
   commercialNotes: "",
   discountPercent: null,
   exchangeRate,
+  exchangeRateDate,
 });
 const numberValue = (value: string) => {
   const parsed = Number(value);
@@ -511,14 +512,18 @@ export function CalculationWorkspace({
   initial,
   products,
   exchangeRate,
+  exchangeRateDate,
 }: {
   initial?: CalculationDraft;
   products: ProductProposalOption[];
   exchangeRate: number | null;
+  exchangeRateDate: string | null;
 }) {
   const router = useRouter(),
     [draft, setDraft] = useState<CalculationDraft>(() =>
-      initial ? { ...initial, exchangeRate } : fresh(exchangeRate),
+      initial
+        ? { ...initial, exchangeRate, exchangeRateDate }
+        : fresh(exchangeRate, exchangeRateDate),
     ),
     [selected, setSelected] = useState<string | null>(
       initial?.rooms[0]?.id || null,
@@ -526,13 +531,27 @@ export function CalculationWorkspace({
     [zoom, setZoom] = useState(1),
     [saving, setSaving] = useState(false),
     [feedback, setFeedback] = useState(""),
-    [savedSnapshot, setSavedSnapshot] = useState(initial ? JSON.stringify(draft) : "");
+    [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(draft));
   const dirty = JSON.stringify(draft) !== savedSnapshot;
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
   const warnings = useMemo(
     () =>
       geometryWarnings(draft.rooms, draft.buildingWidth, draft.buildingLength),
     [draft.rooms, draft.buildingWidth, draft.buildingLength],
   );
+  const cameraRooms = draft.rooms.filter((item) => item.type === "ROOM"),
+    derivedTonnage =
+      cameraRooms.length > 0 && cameraRooms.every((item) => item.capacityTons > 0)
+        ? cameraRooms.reduce((sum, item) => sum + item.capacityTons, 0)
+        : null;
   const set = <K extends keyof CalculationDraft>(
     key: K,
     value: CalculationDraft[K],
@@ -550,8 +569,14 @@ export function CalculationWorkspace({
     length: type === "ROOM" ? 12 : 3,
     height: type === "ROOM" ? draft.buildingHeight : 0,
     capacityTons: 0,
-    temperatureMin: -20,
-    temperatureMax: -5,
+    temperatureMin:
+      type === "ROOM" && draft.temperatureMin <= draft.temperatureMax
+        ? draft.temperatureMin
+        : 0,
+    temperatureMax:
+      type === "ROOM" && draft.temperatureMin <= draft.temperatureMax
+        ? draft.temperatureMax
+        : 0,
     doorEnabled: false,
     doorSide: "BOTTOM",
     order: draft.rooms.length,
@@ -650,7 +675,20 @@ export function CalculationWorkspace({
     <div className="calculation-workspace">
       <header className="calculation-workspace-header">
         <div>
-          <Link href="/admin/calculations">← Hisob-kitoblar</Link>
+          <Link
+            href="/admin/calculations"
+            onClick={(event) => {
+              if (
+                dirty &&
+                !window.confirm(
+                  "Sizda saqlanmagan o‘zgarishlar bor. Chiqishni xohlaysizmi?",
+                )
+              )
+                event.preventDefault();
+            }}
+          >
+            ← Hisob-kitoblar
+          </Link>
           <div>
             <h1>
               {initial
@@ -717,19 +755,14 @@ export function CalculationWorkspace({
                 placeholder="310 tonnalik sovutish majmuasi"
                 onChange={(value) => set("projectName", value)}
               />
-              <NumberField
-                label="Umumiy sig'im (tonna)"
-                value={draft.capacityTons}
-                min={0}
-                onChange={(value) => set("capacityTons", value)}
-              />
-              <NumberField
-                label="Kamera soni"
-                value={draft.cameraCount}
-                min={0}
-                step={1}
-                onChange={(value) => set("cameraCount", Math.round(value))}
-              />
+              <div className="calculation-derived-field">
+                <span>Umumiy sig‘im (kameralardan)</span>
+                <strong>{derivedTonnage === null ? "To‘liq kiritilmagan" : `${derivedTonnage} tonna`}</strong>
+              </div>
+              <div className="calculation-derived-field">
+                <span>Kamera soni</span>
+                <strong>{cameraRooms.length}</strong>
+              </div>
               <NumberField
                 label="Harorat MIN"
                 value={draft.temperatureMin}

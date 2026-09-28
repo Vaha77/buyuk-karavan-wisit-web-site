@@ -9,6 +9,7 @@ import type {
   PlannerRoom,
   ProductProposalOption,
 } from "./types";
+import { quotationTotals } from "./money";
 const n = (value: unknown) =>
     value === null || value === undefined ? null : Number(value),
   s = (value: string | null) => value || "";
@@ -37,13 +38,35 @@ export function defaultRecommended(): CalculationConfiguration {
     order: 0,
   };
 }
-export async function getCalculations(): Promise<CalculationListItem[]> {
+export async function getCalculations(search = ""): Promise<CalculationListItem[]> {
   await requireAdmin();
   const rows = await getDb().calculation.findMany({
+    where: search
+      ? {
+          OR: [
+            { proposalNumber: { contains: search, mode: "insensitive" } },
+            { customerName: { contains: search, mode: "insensitive" } },
+            { projectName: { contains: search, mode: "insensitive" } },
+            { region: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : undefined,
     orderBy: { updatedAt: "desc" },
-    include: { createdBy: { select: { name: true } } },
+    include: {
+      createdBy: { select: { name: true } },
+      lineItems: true,
+    },
   });
-  return rows.map((row) => ({
+  return rows.map((row) => {
+    const totals = quotationTotals(
+      row.lineItems.map((item) => ({
+        ...item,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+      })),
+      Number(row.discountPercent || 0),
+    );
+    return {
     id: row.id,
     customerName: row.customerName,
     projectName: row.projectName,
@@ -51,7 +74,10 @@ export async function getCalculations(): Promise<CalculationListItem[]> {
     status: row.status,
     proposalNumber: row.proposalNumber || "—",
     updatedAt: row.updatedAt.toISOString(),
-  }));
+    usdTotal: totals.usdTotal,
+    uzsTotal: totals.uzsTotal,
+    };
+  });
 }
 export async function getCalculation(
   id: string,

@@ -45,21 +45,28 @@ export function quotationTotals(
   const sum = (currency: "USD" | "UZS") =>
       items
         .filter((item) => item.currency === currency)
-        .reduce(
-          (total, item) =>
-            total + (multiply(item.quantity, item.unitPrice) ?? 0),
-          0,
-        ),
-    pct = Math.min(100, Math.max(0, discountPercent ?? 0)),
-    usdSubtotal = sum("USD"),
-    uzsSubtotal = sum("UZS");
+        .reduce((total, item) => {
+          const quantity = scaled(item.quantity),
+            price = scaled(item.unitPrice);
+          return quantity === null || price === null
+            ? total
+            : total + (quantity * price) / SCALE;
+        }, BigInt(0)),
+    pct = scaled((discountPercent ?? 0) / 100) ?? BigInt(0),
+    usdSubtotalScaled = sum("USD"),
+    uzsSubtotalScaled = sum("UZS"),
+    usdDiscountScaled = (usdSubtotalScaled * pct) / SCALE,
+    uzsDiscountScaled = (uzsSubtotalScaled * pct) / SCALE,
+    toNumber = (value: bigint) => Number(value) / Number(SCALE),
+    usdSubtotal = toNumber(usdSubtotalScaled),
+    uzsSubtotal = toNumber(uzsSubtotalScaled);
   return {
     usdSubtotal,
     uzsSubtotal,
-    usdDiscount: (usdSubtotal * pct) / 100,
-    uzsDiscount: (uzsSubtotal * pct) / 100,
-    usdTotal: Math.max(0, usdSubtotal * (1 - pct / 100)),
-    uzsTotal: Math.max(0, uzsSubtotal * (1 - pct / 100)),
+    usdDiscount: toNumber(usdDiscountScaled),
+    uzsDiscount: toNumber(uzsDiscountScaled),
+    usdTotal: toNumber(usdSubtotalScaled - usdDiscountScaled),
+    uzsTotal: toNumber(uzsSubtotalScaled - uzsDiscountScaled),
   };
 }
 export function comparison(

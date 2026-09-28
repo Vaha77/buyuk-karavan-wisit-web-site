@@ -70,12 +70,18 @@ function Input({
   onChange,
   type = "text",
   step,
+  min,
+  max,
+  placeholder,
 }: {
   label: string;
   value: string | number | null;
   onChange: (value: string) => void;
   type?: string;
   step?: string;
+  min?: number;
+  max?: number;
+  placeholder?: string;
 }) {
   return (
     <label className="calculation-field">
@@ -83,6 +89,9 @@ function Input({
       <input
         type={type}
         step={step}
+        min={min}
+        max={max}
+        placeholder={placeholder}
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -149,7 +158,7 @@ function ConfigurationCard({
           onChange={(v) => set("evaporator", v)}
         />
         <Input
-          label="Komplekt narxi (USD)"
+          label="Taqqoslash uchun komplekt narxi (USD)"
           type="number"
           step="0.01"
           value={item.priceUsd}
@@ -159,6 +168,7 @@ function ConfigurationCard({
           label="Quvvat (kW)"
           type="number"
           step="0.001"
+          min={0.001}
           value={item.powerKw}
           onChange={(v) => set("powerKw", num(v))}
         />
@@ -166,6 +176,8 @@ function ConfigurationCard({
           label="Ish rejimi (soat/kun)"
           type="number"
           step="0.1"
+          min={0.1}
+          max={24}
           value={item.operatingHoursPerDay}
           onChange={(v) => set("operatingHoursPerDay", num(v))}
         />
@@ -225,7 +237,7 @@ export function CalculationProposalSections({
   onSave: () => Promise<string | null>;
 }) {
   const [preview, setPreview] = useState(false),
-    [pdfBusy, setPdfBusy] = useState(false),
+    [pdfBusy, setPdfBusy] = useState<"preview" | "download" | "share" | null>(null),
     [pdfError, setPdfError] = useState(""),
     set = <K extends keyof CalculationDraft>(
       key: K,
@@ -276,7 +288,7 @@ export function CalculationProposalSections({
   const pdfUrl = (id = draft.id) => id ? `/admin/calculations/${id}/pdf` : "";
   const ensureSaved = async () => (!draft.id || dirty ? onSave() : draft.id);
   const download = async () => {
-    setPdfBusy(true);
+    setPdfBusy("download");
     setPdfError("");
     try {
       const id = await ensureSaved();
@@ -292,18 +304,18 @@ export function CalculationProposalSections({
     } catch {
       setPdfError("PDF yaratishda xatolik yuz berdi. Qayta urinib ko‘ring.");
     } finally {
-      setPdfBusy(false);
+      setPdfBusy(null);
     }
   };
   const viewPdf = async () => {
-    setPdfBusy(true);
+    setPdfBusy("preview");
     setPdfError("");
     const id = await ensureSaved();
     if (id) setPreview(true);
-    setPdfBusy(false);
+    setPdfBusy(null);
   };
   const share = async () => {
-    setPdfBusy(true);
+    setPdfBusy("share");
     setPdfError("");
     try {
       const id = await ensureSaved();
@@ -325,7 +337,7 @@ export function CalculationProposalSections({
     } catch {
       setPdfError("PDF yaratishda xatolik yuz berdi. Qayta urinib ko‘ring.");
     } finally {
-      setPdfBusy(false);
+      setPdfBusy(null);
     }
   };
   return (
@@ -378,6 +390,14 @@ export function CalculationProposalSections({
           ))}
         </div>
         <p className="proposal-disclaimer">{disclaimer}</p>
+        {draft.exchangeRate && (
+          <p className="proposal-rate">
+            Hisob-kitob kursi: 1 USD = {money(draft.exchangeRate)} · Markaziy bank
+            {draft.exchangeRateDate
+              ? ` · ${new Intl.DateTimeFormat("uz-UZ", { timeZone: "UTC" }).format(new Date(draft.exchangeRateDate))}`
+              : ""}
+          </p>
+        )}
         {draft.configurations.length > 1 && (
           <div className="comparison-grid">
             {draft.configurations
@@ -427,7 +447,8 @@ export function CalculationProposalSections({
         <div className="proposal-section-heading">
           <div>
             <span>04</span>
-            <h2>Smeta / mahsulot va xizmatlar</h2>
+            <h2>Taklifning yakuniy smetasi</h2>
+            <p>Konfiguratsiyadagi taqqoslash narxi smetaga avtomatik qo‘shilmaydi.</p>
           </div>
           <button type="button" onClick={addItem}>
             <Plus size={15} />
@@ -451,7 +472,9 @@ export function CalculationProposalSections({
                       updateItem(
                         item.id,
                         "name",
-                        `${product.name} ${product.model}`.trim(),
+                        product.model && !product.name.toLocaleLowerCase().includes(product.model.toLocaleLowerCase())
+                          ? `${product.name} ${product.model}`.trim()
+                          : product.name,
                       );
                       if (product.priceUsd)
                         updateItem(
@@ -484,6 +507,7 @@ export function CalculationProposalSections({
                 label="Miqdor"
                 type="number"
                 step="0.001"
+                min={0.001}
                 value={item.quantity}
                 onChange={(v) => updateItem(item.id, "quantity", num(v) ?? 0)}
               />
@@ -491,6 +515,7 @@ export function CalculationProposalSections({
                 label="Birlik narxi"
                 type="number"
                 step="0.01"
+                min={0}
                 value={item.unitPrice}
                 onChange={(v) => updateItem(item.id, "unitPrice", num(v) ?? 0)}
               />
@@ -531,6 +556,8 @@ export function CalculationProposalSections({
             label="Chegirma (%)"
             type="number"
             step="0.01"
+            min={0}
+            max={100}
             value={draft.discountPercent}
             onChange={(v) => set("discountPercent", num(v))}
           />
@@ -542,6 +569,14 @@ export function CalculationProposalSections({
             <div>
               <dt>UZS subtotal</dt>
               <dd>{money(totals.uzsSubtotal)}</dd>
+            </div>
+            <div>
+              <dt>Chegirma ({draft.discountPercent || 0}%) — USD</dt>
+              <dd>−{money(totals.usdDiscount, "USD")}</dd>
+            </div>
+            <div>
+              <dt>Chegirma summasi — UZS</dt>
+              <dd>−{money(totals.uzsDiscount)}</dd>
             </div>
             <div>
               <dt>Jami USD</dt>
@@ -564,7 +599,8 @@ export function CalculationProposalSections({
         <div className="proposal-fields">
           <Input
             label="Taklif raqami"
-            value={draft.proposalNumber || "Saqlanganda yaratiladi"}
+            value={draft.proposalNumber}
+            placeholder="Saqlanganda avtomatik yaratiladi"
             onChange={() => {}}
           />
           <Input
@@ -660,17 +696,17 @@ export function CalculationProposalSections({
           <p className="proposal-disclaimer">PDF yaratish uchun tijorat taklifini avval saqlang.</p>
         )}
         <div className="proposal-pdf-actions">
-              <button type="button" disabled={pdfBusy || saving} onClick={() => void viewPdf()}>
+              <button type="button" disabled={pdfBusy !== null || saving} onClick={() => void viewPdf()}>
                 <Eye size={16} />
-                {pdfBusy ? "PDF tayyorlanmoqda..." : !draft.id || dirty ? "Saqlash va PDF ko‘rish" : "PDF ko‘rish"}
+                {pdfBusy === "preview" ? "Tayyorlanmoqda..." : !draft.id || dirty ? "Saqlash va PDF ko‘rish" : "PDF ko‘rish"}
               </button>
-              {draft.id && <button type="button" disabled={pdfBusy || saving} onClick={() => void download()}>
+              {draft.id && <button type="button" disabled={pdfBusy !== null || saving} onClick={() => void download()}>
                 <Download size={16} />
-                PDF yuklab olish
+                {pdfBusy === "download" ? "Tayyorlanmoqda..." : "PDF yuklab olish"}
               </button>}
-              {draft.id && <button type="button" disabled={pdfBusy || saving} onClick={share}>
+              {draft.id && <button type="button" disabled={pdfBusy !== null || saving} onClick={share}>
                 <Share2 size={16} />
-                {pdfBusy ? "PDF tayyorlanmoqda..." : "Ulashish"}
+                {pdfBusy === "share" ? "Tayyorlanmoqda..." : "Ulashish"}
               </button>}
         </div>
         {pdfError && <p className="proposal-pdf-error" role="alert">{pdfError}</p>}

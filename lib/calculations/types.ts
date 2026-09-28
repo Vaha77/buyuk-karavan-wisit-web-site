@@ -97,6 +97,7 @@ export type CalculationDraft = {
   discountPercent: number | null;
   sellerName?: string;
   exchangeRate?: number | null;
+  exchangeRateDate?: string | null;
 };
 export type CalculationListItem = {
   id: string;
@@ -106,4 +107,6 @@ export type CalculationListItem = {
   status: PlannerStatus;
   proposalNumber: string;
   updatedAt: string;
+  usdTotal: number;
+  uzsTotal: number;
 };

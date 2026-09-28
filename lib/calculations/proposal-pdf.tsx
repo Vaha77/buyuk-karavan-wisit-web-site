@@ -13,15 +13,17 @@ import {
   pdf,
   StyleSheet,
 } from "@react-pdf/renderer";
-import { comparison, electricity, quotationTotals } from "./money";
+import { comparison, electricity, ownershipCost, quotationTotals } from "./money";
 import type { CalculationDraft } from "./types";
+import type { UsdUzsRate } from "../currency/cbu";
 
 Font.register({
   family: "NotoSans",
-  src: path.join(
-    process.cwd(),
-    "node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff",
-  ),
+  fonts: [
+    { src: path.join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff"), fontWeight: 400 },
+    { src: path.join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-600-normal.woff"), fontWeight: 600 },
+    { src: path.join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-700-normal.woff"), fontWeight: 700 },
+  ],
 });
 const c = {
   navy: "#153d5d",
@@ -49,8 +51,8 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     marginBottom: 16,
   },
-  brand: { fontSize: 15, color: c.blue },
-  title: { fontSize: 20, letterSpacing: 1.1 },
+  brand: { fontSize: 15, color: c.blue, fontWeight: 700 },
+  title: { fontSize: 20, letterSpacing: 1.1, fontWeight: 700 },
   meta: { textAlign: "right", fontSize: 7, color: c.muted, lineHeight: 1.5 },
   section: { marginBottom: 15 },
   heading: {
@@ -216,8 +218,15 @@ function Planner({ draft }: { draft: CalculationDraft }) {
         stroke={c.navy}
         strokeWidth={1}
       />
-      {draft.rooms.map((room) => (
-        <React.Fragment key={room.id}>
+      {draft.rooms.map((room) => {
+        const rw = room.width * scale,
+          rh = room.length * scale,
+          large = room.type === "ROOM" && rw >= 72 && rh >= 55,
+          medium = room.type === "ROOM" && rw >= 45 && rh >= 36,
+          volume = room.width * room.length * (room.height || draft.buildingHeight),
+          cx = ox + (room.x + room.width / 2) * scale,
+          cy = oy + (room.y + room.length / 2) * scale;
+        return <React.Fragment key={room.id}>
           <Rect
             x={ox + room.x * scale}
             y={oy + room.y * scale}
@@ -228,24 +237,29 @@ function Planner({ draft }: { draft: CalculationDraft }) {
             strokeWidth={0.8}
           />
           <Text
-            x={ox + (room.x + room.width / 2) * scale}
-            y={oy + (room.y + room.length / 2) * scale}
+            x={cx}
+            y={cy - (large ? 10 : medium ? 5 : 0)}
             style={{
               fontSize: Math.max(5, Math.min(8, (room.width * scale) / 6)),
               textAnchor: "middle",
             }}
           >
-            {room.name} · {room.width}×{room.length} m
+            {room.name}
           </Text>
-          {room.doorEnabled && (
+          {medium && <Text x={cx} y={cy + 5} style={{ fontSize: 5.5, textAnchor: "middle" }}>{room.capacityTons} t · {room.temperatureMin}…{room.temperatureMax}°C</Text>}
+          {large && <Text x={cx} y={cy + 14} style={{ fontSize: 5.5, textAnchor: "middle" }}>{room.width}×{room.length} m · {number(volume)} m²</Text>}
+          {room.doorEnabled && room.doorSide === "BOTTOM" && (
             <Path
               d={`M ${ox + (room.x + room.width * 0.38) * scale} ${oy + (room.y + room.length) * scale} L ${ox + (room.x + room.width * 0.62) * scale} ${oy + (room.y + room.length) * scale}`}
               stroke="#fff"
               strokeWidth={3}
             />
           )}
+          {room.doorEnabled && room.doorSide === "TOP" && <Path d={`M ${ox + (room.x + room.width * .38) * scale} ${oy + room.y * scale} L ${ox + (room.x + room.width * .62) * scale} ${oy + room.y * scale}`} stroke="#fff" strokeWidth={3} />}
+          {room.doorEnabled && room.doorSide === "LEFT" && <Path d={`M ${ox + room.x * scale} ${oy + (room.y + room.length * .38) * scale} L ${ox + room.x * scale} ${oy + (room.y + room.length * .62) * scale}`} stroke="#fff" strokeWidth={3} />}
+          {room.doorEnabled && room.doorSide === "RIGHT" && <Path d={`M ${ox + (room.x + room.width) * scale} ${oy + (room.y + room.length * .38) * scale} L ${ox + (room.x + room.width) * scale} ${oy + (room.y + room.length * .62) * scale}`} stroke="#fff" strokeWidth={3} />}
         </React.Fragment>
-      ))}
+      })}
     </Svg>
   );
 }
@@ -254,10 +268,14 @@ function ProposalDocument({
   rate,
 }: {
   draft: CalculationDraft;
-  rate: number | null;
+  rate: UsdUzsRate | null;
 }) {
   const totals = quotationTotals(draft.lineItems, draft.discountPercent),
-    recommended = draft.configurations.find((x) => x.type === "RECOMMENDED")!;
+    recommended = draft.configurations.find((x) => x.type === "RECOMMENDED")!,
+    rateValue = rate ? Number(rate.rate) : null,
+    cameras = draft.rooms.filter((room) => room.type === "ROOM"),
+    completeTonnage = cameras.length > 0 && cameras.every((room) => room.capacityTons > 0),
+    totalTonnage = completeTonnage ? cameras.reduce((sum, room) => sum + room.capacityTons, 0) : null;
   return (
     <Document
       title={`${draft.proposalNumber} — ${draft.projectName}`}
@@ -272,8 +290,9 @@ function ProposalDocument({
               ["Mijoz", draft.customerName],
               ["Hudud", draft.region || "—"],
               ["Loyiha", draft.projectName],
-              ["Kamera soni", String(draft.cameraCount)],
-              ["Umumiy sig‘im", `${draft.capacityTons} tonna`],
+              ["Telefon", draft.phone || "—"],
+              ["Kamera soni", String(cameras.length)],
+              ["Umumiy sig‘im", totalTonnage === null ? "To‘liq kiritilmagan" : `${totalTonnage} tonna`],
               [
                 "Harorat",
                 `${draft.temperatureMin}°C ... ${draft.temperatureMax}°C`,
@@ -306,7 +325,7 @@ function ProposalDocument({
                     ["Kompressor", item.compressor || "—"],
                     ["Kondensator", item.condenser || "—"],
                     ["Evaporator", item.evaporator || "—"],
-                    ["Komplekt narxi", money(item.priceUsd, "USD")],
+                    ["Taqqoslash narxi", money(item.priceUsd, "USD")],
                     ["Quvvat", number(item.powerKw, " kW")],
                     [
                       "Ish rejimi",
@@ -346,7 +365,12 @@ function ProposalDocument({
                     recommended,
                     item,
                     draft.electricityTariff,
-                    rate,
+                    rateValue,
+                  );
+                  const ownership = ownershipCost(
+                    item,
+                    draft.electricityTariff,
+                    rateValue,
                   );
                   return (
                     <View style={styles.comparisonCard} key={item.id}>
@@ -364,11 +388,24 @@ function ProposalDocument({
                           {value.paybackMonths.toFixed(1)} oy
                         </Text>
                       )}
+                      {value.paybackMonths === null && (
+                        <Text>Qoplanish hisoblanmaydi</Text>
+                      )}
+                      {ownership && (
+                        <Text>
+                          Hisobiy umumiy xarajat — 1 yillik: {money(ownership.oneYear)} · 3 yillik: {money(ownership.threeYears)}
+                        </Text>
+                      )}
                     </View>
                   );
                 })}
             </View>
           </View>
+        )}
+        {rate && (
+          <Text style={styles.disclaimer}>
+            Hisob-kitob kursi: 1 USD = {number(rateValue)} so‘m · Markaziy bank · {new Intl.DateTimeFormat("uz-UZ", { timeZone: "UTC" }).format(new Date(rate.effectiveDate))}
+          </Text>
         )}
         <View style={styles.section}>
           <Text style={styles.heading}>KAMERA CHIZMASI</Text>
@@ -412,7 +449,8 @@ function ProposalDocument({
           {[
             ["USD subtotal", money(totals.usdSubtotal, "USD")],
             ["UZS subtotal", money(totals.uzsSubtotal)],
-            [`Chegirma (${draft.discountPercent || 0}%)`, ""],
+            [`Chegirma (${draft.discountPercent || 0}%) — USD`, `−${money(totals.usdDiscount, "USD")}`],
+            ["Chegirma summasi — UZS", `−${money(totals.uzsDiscount)}`],
             ["JAMI USD", money(totals.usdTotal, "USD")],
             ["JAMI UZS", money(totals.uzsTotal)],
           ].map(([a, b]) => (
@@ -487,7 +525,7 @@ function ProposalDocument({
 }
 export async function renderProposalPdf(
   draft: CalculationDraft,
-  rate: number | null,
+  rate: UsdUzsRate | null,
 ) {
   return pdf(<ProposalDocument draft={draft} rate={rate} />).toBuffer();
 }

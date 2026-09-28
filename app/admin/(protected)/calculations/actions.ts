@@ -26,8 +26,13 @@ export async function saveCalculationAction(
       phone: input.phone || null,
       region: input.region || null,
       projectName: input.projectName,
-      capacityTons: input.capacityTons || null,
-      cameraCount: input.cameraCount,
+      capacityTons: (() => {
+        const cameras = input.rooms.filter((room) => room.type === "ROOM");
+        return cameras.length && cameras.every((room) => room.capacityTons > 0)
+          ? cameras.reduce((sum, room) => sum + room.capacityTons, 0)
+          : null;
+      })(),
+      cameraCount: input.rooms.filter((room) => room.type === "ROOM").length,
       temperatureMin: input.temperatureMin,
       temperatureMax: input.temperatureMax,
       notes: input.notes || null,

@@ -4,6 +4,9 @@ import { Plus } from "lucide-react";
 import { getCalculations } from "@/lib/calculations/queries";
 import "@/components/admin/calculation-planner.css";
 import "@/components/admin/calculation-proposal.css";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Hisob-kitoblar | BUYUK KARAVAN Admin" };
 
 const statusLabel = {
   DRAFT: "Qoralama",
@@ -13,8 +16,9 @@ const statusLabel = {
   APPROVED: "Tasdiqlandi",
   REJECTED: "Rad etildi",
 };
-export default async function CalculationsPage() {
-  const rows = await getCalculations();
+export default async function CalculationsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const { q = "" } = await searchParams;
+  const rows = await getCalculations(q.trim());
   return (
     <div className="admin-products-page calculation-dashboard">
       <div className="admin-page-heading">
@@ -28,6 +32,10 @@ export default async function CalculationsPage() {
         </Link>
       </div>
       <section className="admin-panel admin-management-panel">
+        <form className="calculation-search" role="search">
+          <label htmlFor="calculation-search">Taklif, mijoz, loyiha yoki hudud bo‘yicha qidirish</label>
+          <div><input id="calculation-search" name="q" defaultValue={q} placeholder="Qidirish…" /><button type="submit">Qidirish</button></div>
+        </form>
         <div className="admin-panel-heading">
           <h2>Saqlangan hisob-kitoblar</h2>
           <span>{rows.length} ta</span>
@@ -41,6 +49,7 @@ export default async function CalculationsPage() {
                     <th>№</th>
                     <th>Mijoz</th>
                     <th>Loyiha</th>
+                    <th>Jami</th>
                     <th>Sotuvchi</th>
                     <th>Holat</th>
                     <th>Sana</th>
@@ -56,6 +65,11 @@ export default async function CalculationsPage() {
                       </td>
                       <td>{row.projectName}</td>
                       <td>{row.seller}</td>
+                      <td>
+                        <span className="calculation-money-summary">
+                          {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(row.usdTotal)} + {new Intl.NumberFormat("uz-UZ").format(row.uzsTotal)} so‘m
+                        </span>
+                      </td>
                       <td>
                         <span
                           className={`calculation-status is-${row.status.toLowerCase()}`}
