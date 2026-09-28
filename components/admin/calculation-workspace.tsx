@@ -31,6 +31,8 @@ import type {
 
 const conclusion =
   "Ushbu konfiguratsiya kamera hajmi, maqsadli harorat va foydalanish sharoitini hisobga olgan holda mutaxassis tomonidan tanlandi. Maqsad faqat kerakli haroratga erishish emas, balki tizimning barqaror ish rejimini ta’minlashdir.";
+const defaultProposalNote =
+  "Транспортные расходы, стяжка пола и силовая кабельная линия не включены в смету.";
 const fresh = (exchangeRate: number | null, exchangeRateDate: string | null): CalculationDraft => ({
   customerName: "",
   phone: "",
@@ -84,6 +86,9 @@ const fresh = (exchangeRate: number | null, exchangeRateDate: string | null): Ca
   commissioningIncluded: null,
   warranty: "",
   commercialNotes: "",
+  renderImageUrl: "",
+  manualUzsTotalWithVat: null,
+  proposalNote: defaultProposalNote,
   discountPercent: null,
   exchangeRate,
   exchangeRateDate,
@@ -465,6 +470,12 @@ function RoomEditor({
               value={room.temperatureMax}
               onChange={(value) => set("temperatureMax", value)}
             />
+            <TextField
+              label="Uskuna modeli"
+              value={room.equipmentModel}
+              placeholder="Masalan: BIZEER HP20Z BR"
+              onChange={(value) => set("equipmentModel", value)}
+            />
             <label className="calculation-field">
               <span>Eshik</span>
               <select
@@ -579,6 +590,7 @@ export function CalculationWorkspace({
         : 0,
     doorEnabled: false,
     doorSide: "BOTTOM",
+    equipmentModel: "",
     order: draft.rooms.length,
   });
   const add = (type: "ROOM" | "CORRIDOR") => {

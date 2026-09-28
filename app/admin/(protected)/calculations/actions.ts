@@ -53,6 +53,9 @@ export async function saveCalculationAction(
       commissioningIncluded: input.commissioningIncluded,
       warranty: input.warranty || null,
       commercialNotes: input.commercialNotes || null,
+      renderImageUrl: input.renderImageUrl || null,
+      manualUzsTotalWithVat: input.manualUzsTotalWithVat,
+      proposalNote: input.proposalNote || null,
       discountPercent: input.discountPercent,
     };
   const rooms = input.rooms.map((x, order) => ({
@@ -69,6 +72,7 @@ export async function saveCalculationAction(
     temperatureMax: x.type === "ROOM" ? x.temperatureMax : null,
     doorEnabled: x.type === "ROOM" && x.doorEnabled,
     doorSide: x.type === "ROOM" && x.doorEnabled ? x.doorSide : null,
+    equipmentModel: x.type === "ROOM" ? x.equipmentModel || null : null,
     order,
   }));
   const configurations = input.configurations.map((x, order) => ({

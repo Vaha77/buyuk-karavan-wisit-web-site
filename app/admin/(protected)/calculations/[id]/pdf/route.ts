@@ -1,6 +1,5 @@
 import { getCalculation } from "@/lib/calculations/queries";
 import { renderProposalPdf } from "@/lib/calculations/proposal-pdf";
-import { getUsdUzsRate } from "@/lib/currency/cbu";
 import { calculationSchema } from "@/lib/calculations/validation";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +17,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params,
-    [draft, rate] = await Promise.all([getCalculation(id), getUsdUzsRate()]);
+    draft = await getCalculation(id);
   if (!draft) return new Response("Taklif topilmadi.", { status: 404 });
   const validated = calculationSchema.safeParse(draft);
   if (!validated.success) {
@@ -30,7 +29,7 @@ export async function GET(
   try {
     const stream = await renderProposalPdf(
         { ...draft, ...validated.data },
-        rate || null,
+        null,
       ),
       chunks: Uint8Array[] = [];
     for await (const chunk of stream)

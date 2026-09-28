@@ -132,6 +132,7 @@ export async function getCalculation(
     temperatureMax: Number(x.temperatureMax || 0),
     doorEnabled: x.doorEnabled,
     doorSide: x.doorSide || "BOTTOM",
+    equipmentModel: s(x.equipmentModel),
     order: x.order,
   }));
   const lineItems: CalculationLineItem[] = row.lineItems.map((x) => ({
@@ -178,6 +179,9 @@ export async function getCalculation(
     commissioningIncluded: row.commissioningIncluded,
     warranty: s(row.warranty),
     commercialNotes: s(row.commercialNotes),
+    renderImageUrl: s(row.renderImageUrl),
+    manualUzsTotalWithVat: n(row.manualUzsTotalWithVat),
+    proposalNote: s(row.proposalNote),
     discountPercent: n(row.discountPercent),
     sellerName: row.createdBy.name,
   };

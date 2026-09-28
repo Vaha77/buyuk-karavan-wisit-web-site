@@ -21,6 +21,7 @@ const room = z.object({
   temperatureMax: z.number().finite().min(-100).max(1000),
   doorEnabled: z.boolean(),
   doorSide: z.enum(["TOP", "BOTTOM", "LEFT", "RIGHT"]),
+  equipmentModel: text(200),
   order: z.number().int().min(0).max(999),
 });
 const configuration = z.object({
@@ -93,6 +94,9 @@ export const calculationSchema = z
     commissioningIncluded: z.boolean().nullable(),
     warranty: text(1000),
     commercialNotes: text(3000),
+    renderImageUrl: text(2000),
+    manualUzsTotalWithVat: optionalNumber,
+    proposalNote: text(2000),
     discountPercent: z.number().finite().min(0).max(100).nullable(),
     sellerName: text(160).optional(),
     exchangeRate: optionalNumber.optional(),

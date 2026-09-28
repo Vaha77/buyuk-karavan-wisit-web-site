@@ -4,7 +4,6 @@ import {
   getCalculation,
   getProposalProductOptions,
 } from "@/lib/calculations/queries";
-import { getUsdUzsRate } from "@/lib/currency/cbu";
 import "@/components/admin/calculation-planner.css";
 import "@/components/admin/calculation-proposal.css";
 import type { Metadata } from "next";
@@ -19,18 +18,17 @@ export default async function CalculationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params,
-    [row, products, rate] = await Promise.all([
+    [row, products] = await Promise.all([
       getCalculation(id),
       getProposalProductOptions(),
-      getUsdUzsRate(),
     ]);
   if (!row) notFound();
   return (
     <CalculationWorkspace
       initial={row}
       products={products}
-      exchangeRate={rate ? Number(rate.rate) : null}
-      exchangeRateDate={rate?.effectiveDate || null}
+      exchangeRate={null}
+      exchangeRateDate={null}
     />
   );
 }

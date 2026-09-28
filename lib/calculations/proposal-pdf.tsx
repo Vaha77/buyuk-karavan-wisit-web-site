@@ -1,531 +1,58 @@
 import "server-only";
+/* eslint-disable jsx-a11y/alt-text -- @react-pdf/renderer Image has no HTML alt prop */
 import path from "node:path";
 import React from "react";
-import {
-  Document,
-  Font,
-  Page,
-  Path,
-  Rect,
-  Svg,
-  Text,
-  View,
-  pdf,
-  StyleSheet,
-} from "@react-pdf/renderer";
-import { comparison, electricity, ownershipCost, quotationTotals } from "./money";
-import type { CalculationDraft } from "./types";
+import { Document, Font, Image, Line, Page, Path, Rect, Svg, Text, View, pdf, StyleSheet } from "@react-pdf/renderer";
+import { quotationTotals } from "./money";
+import type { CalculationDraft, PlannerRoom } from "./types";
 import type { UsdUzsRate } from "../currency/cbu";
 
-Font.register({
-  family: "NotoSans",
-  fonts: [
-    { src: path.join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff"), fontWeight: 400 },
-    { src: path.join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-600-normal.woff"), fontWeight: 600 },
-    { src: path.join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-700-normal.woff"), fontWeight: 700 },
-  ],
+Font.register({family:"NotoSans",fonts:[
+  {src:path.join(process.cwd(),"node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-400-normal.woff"),fontWeight:400},
+  {src:path.join(process.cwd(),"node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-600-normal.woff"),fontWeight:600},
+  {src:path.join(process.cwd(),"node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-700-normal.woff"),fontWeight:700},
+  {src:path.join(process.cwd(),"node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-400-italic.woff"),fontWeight:400,fontStyle:"italic"},
+]});
+const color={purple:"#4b2677",red:"#a12028",wall:"#77343a",green:"#397243",cyan:"#53b5cf",pink:"#f5dfe5",blue:"#e5f1f7",mint:"#e4f2e8",line:"#806b75",ink:"#2f2630"};
+const styles=StyleSheet.create({
+  page:{fontFamily:"NotoSans",fontSize:7.2,color:color.ink,padding:22,paddingBottom:28},
+  header:{flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8},
+  proposalTitle:{width:"78%",color:color.purple,fontSize:9.5,fontWeight:700,letterSpacing:.35},
+  tonnage:{color:color.red,fontSize:17,fontWeight:700,textAlign:"right"},
+  render:{height:110,objectFit:"contain",marginBottom:7},
+  mainTitle:{textAlign:"center",color:color.purple,fontSize:12,fontWeight:700,letterSpacing:2.1,marginVertical:7},
+  planBox:{height:225,marginBottom:8},
+  tableHeader:{flexDirection:"row",backgroundColor:color.pink,borderTop:`1px solid ${color.line}`,borderLeft:`1px solid ${color.line}`},
+  tableRow:{flexDirection:"row",borderLeft:`1px solid ${color.line}`,backgroundColor:"#fff"},
+  alternate:{backgroundColor:color.blue},
+  cell:{padding:3,borderRight:`1px solid ${color.line}`,borderBottom:`1px solid ${color.line}`},
+  no:{width:"5%",textAlign:"center"},name:{width:"39%",fontStyle:"italic"},unit:{width:"12%",textAlign:"center"},qty:{width:"12%",textAlign:"right"},price:{width:"16%",textAlign:"right"},total:{width:"16%",textAlign:"right"},
+  totals:{marginLeft:"55%",marginTop:5},totalRow:{flexDirection:"row",justifyContent:"space-between",padding:3,borderBottom:`.6px solid ${color.line}`},
+  vat:{marginTop:5,padding:5,backgroundColor:color.mint,flexDirection:"row",justifyContent:"space-between",fontWeight:700},
+  note:{marginTop:7,color:color.red,fontSize:7.4,lineHeight:1.35},validity:{marginTop:4,color:color.purple,fontWeight:600},
+  footer:{position:"absolute",bottom:12,left:22,right:22,flexDirection:"row",justifyContent:"space-between",fontSize:6,color:"#736778"},
 });
-const c = {
-  navy: "#153d5d",
-  blue: "#2c6f9d",
-  ice: "#eef7fc",
-  line: "#cddde8",
-  green: "#e8f6ef",
-  muted: "#627b8e",
-  white: "#ffffff",
-};
-const styles = StyleSheet.create({
-  page: {
-    fontFamily: "NotoSans",
-    fontSize: 8.2,
-    color: c.navy,
-    paddingTop: 32,
-    paddingBottom: 36,
-    paddingHorizontal: 34,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    borderBottom: `1px solid ${c.line}`,
-    paddingBottom: 12,
-    marginBottom: 16,
-  },
-  brand: { fontSize: 15, color: c.blue, fontWeight: 700 },
-  title: { fontSize: 20, letterSpacing: 1.1, fontWeight: 700 },
-  meta: { textAlign: "right", fontSize: 7, color: c.muted, lineHeight: 1.5 },
-  section: { marginBottom: 15 },
-  heading: {
-    fontSize: 10.5,
-    color: c.blue,
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  summary: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    backgroundColor: c.ice,
-    padding: 10,
-    borderRadius: 5,
-  },
-  summaryItem: { width: "33.333%", padding: 4 },
-  label: {
-    fontSize: 6.5,
-    color: c.muted,
-    textTransform: "uppercase",
-    marginBottom: 2,
-  },
-  value: { fontSize: 8.5 },
-  configs: { flexDirection: "row", gap: 7 },
-  config: {
-    flexGrow: 1,
-    flexBasis: 0,
-    border: `1px solid ${c.line}`,
-    borderRadius: 5,
-    padding: 8,
-  },
-  recommended: { backgroundColor: c.green, border: `1px solid #9ccdb5` },
-  configTitle: { fontSize: 8.5, color: c.blue, marginBottom: 6 },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 6,
-    borderBottom: `.5px solid ${c.line}`,
-    paddingVertical: 3,
-  },
-  rowLabel: { fontSize: 6.5, color: c.muted },
-  rowValue: { fontSize: 7, textAlign: "right", maxWidth: "62%" },
-  disclaimer: {
-    fontSize: 6.3,
-    lineHeight: 1.45,
-    color: c.muted,
-    backgroundColor: c.ice,
-    padding: 7,
-    marginTop: 8,
-  },
-  comparison: { flexDirection: "row", gap: 8 },
-  comparisonCard: {
-    flexGrow: 1,
-    flexBasis: 0,
-    padding: 8,
-    border: `1px solid ${c.line}`,
-    borderRadius: 4,
-  },
-  planner: { height: 190, border: `1px solid ${c.line}`, padding: 7 },
-  tableHeader: {
-    flexDirection: "row",
-    backgroundColor: c.navy,
-    color: c.white,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottom: `.5px solid ${c.line}`,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    minHeight: 24,
-  },
-  colNo: { width: "6%" },
-  colName: { width: "40%" },
-  colUnit: { width: "12%" },
-  colQty: { width: "12%", textAlign: "right" },
-  colPrice: { width: "15%", textAlign: "right" },
-  colTotal: { width: "15%", textAlign: "right" },
-  totals: {
-    marginLeft: "55%",
-    marginTop: 10,
-    borderTop: `1px solid ${c.navy}`,
-    paddingTop: 5,
-  },
-  terms: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  term: { width: "48%", padding: 7, backgroundColor: c.ice },
-  conclusion: {
-    padding: 10,
-    borderLeft: `3px solid ${c.blue}`,
-    backgroundColor: c.ice,
-    lineHeight: 1.5,
-  },
-  footer: {
-    position: "absolute",
-    bottom: 18,
-    left: 34,
-    right: 34,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    fontSize: 6.5,
-    color: c.muted,
-  },
-  signature: {
-    marginTop: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  signatureBox: {
-    width: "43%",
-    borderTop: `1px solid ${c.line}`,
-    paddingTop: 5,
-    color: c.muted,
-  },
-});
-const money = (value: number | null, currency = "UZS") =>
-  value === null
-    ? "—"
-    : new Intl.NumberFormat(currency === "USD" ? "en-US" : "uz-UZ", {
-        style: "currency",
-        currency,
-        maximumFractionDigits: currency === "USD" ? 2 : 0,
-      }).format(value);
-const number = (value: number | null, suffix = "") =>
-  value === null
-    ? "—"
-    : `${new Intl.NumberFormat("uz-UZ", { maximumFractionDigits: 2 }).format(value)}${suffix}`;
-function Header({ draft }: { draft: CalculationDraft }) {
-  return (
-    <View style={styles.header} fixed>
-      <View>
-        <Text style={styles.brand}>BUYUK KARAVAN</Text>
-        <Text style={styles.title}>TIJORAT TAKLIFI</Text>
-      </View>
-      <Text style={styles.meta}>
-        {draft.proposalNumber || "TAKLIF"}
-        {"\n"}
-        {draft.proposalDate}
-        {"\n"}
-        {draft.validityDays ? `${draft.validityDays} kun amal qiladi` : ""}
-      </Text>
-    </View>
-  );
-}
-function Planner({ draft }: { draft: CalculationDraft }) {
-  const w = 500,
-    h = 170,
-    p = 12,
-    scale = Math.min(
-      (w - p * 2) / draft.buildingWidth,
-      (h - p * 2) / draft.buildingLength,
-    ),
-    ox = (w - draft.buildingWidth * scale) / 2,
-    oy = (h - draft.buildingLength * scale) / 2;
-  return (
-    <Svg viewBox={`0 0 ${w} ${h}`} style={styles.planner}>
-      <Rect
-        x={ox}
-        y={oy}
-        width={draft.buildingWidth * scale}
-        height={draft.buildingLength * scale}
-        fill="#fff"
-        stroke={c.navy}
-        strokeWidth={1}
-      />
-      {draft.rooms.map((room) => {
-        const rw = room.width * scale,
-          rh = room.length * scale,
-          large = room.type === "ROOM" && rw >= 72 && rh >= 55,
-          medium = room.type === "ROOM" && rw >= 45 && rh >= 36,
-          volume = room.width * room.length * (room.height || draft.buildingHeight),
-          cx = ox + (room.x + room.width / 2) * scale,
-          cy = oy + (room.y + room.length / 2) * scale;
-        return <React.Fragment key={room.id}>
-          <Rect
-            x={ox + room.x * scale}
-            y={oy + room.y * scale}
-            width={room.width * scale}
-            height={room.length * scale}
-            fill={room.type === "ROOM" ? "#dceeff" : "#eef1f4"}
-            stroke={room.type === "ROOM" ? c.blue : "#7890a5"}
-            strokeWidth={0.8}
-          />
-          <Text
-            x={cx}
-            y={cy - (large ? 10 : medium ? 5 : 0)}
-            style={{
-              fontSize: Math.max(5, Math.min(8, (room.width * scale) / 6)),
-              textAnchor: "middle",
-            }}
-          >
-            {room.name}
-          </Text>
-          {medium && <Text x={cx} y={cy + 5} style={{ fontSize: 5.5, textAnchor: "middle" }}>{room.capacityTons} t · {room.temperatureMin}…{room.temperatureMax}°C</Text>}
-          {large && <Text x={cx} y={cy + 14} style={{ fontSize: 5.5, textAnchor: "middle" }}>{room.width}×{room.length} m · {number(volume)} m²</Text>}
-          {room.doorEnabled && room.doorSide === "BOTTOM" && (
-            <Path
-              d={`M ${ox + (room.x + room.width * 0.38) * scale} ${oy + (room.y + room.length) * scale} L ${ox + (room.x + room.width * 0.62) * scale} ${oy + (room.y + room.length) * scale}`}
-              stroke="#fff"
-              strokeWidth={3}
-            />
-          )}
-          {room.doorEnabled && room.doorSide === "TOP" && <Path d={`M ${ox + (room.x + room.width * .38) * scale} ${oy + room.y * scale} L ${ox + (room.x + room.width * .62) * scale} ${oy + room.y * scale}`} stroke="#fff" strokeWidth={3} />}
-          {room.doorEnabled && room.doorSide === "LEFT" && <Path d={`M ${ox + room.x * scale} ${oy + (room.y + room.length * .38) * scale} L ${ox + room.x * scale} ${oy + (room.y + room.length * .62) * scale}`} stroke="#fff" strokeWidth={3} />}
-          {room.doorEnabled && room.doorSide === "RIGHT" && <Path d={`M ${ox + (room.x + room.width) * scale} ${oy + (room.y + room.length * .38) * scale} L ${ox + (room.x + room.width) * scale} ${oy + (room.y + room.length * .62) * scale}`} stroke="#fff" strokeWidth={3} />}
-        </React.Fragment>
-      })}
-    </Svg>
-  );
-}
-function ProposalDocument({
-  draft,
-  rate,
-}: {
-  draft: CalculationDraft;
-  rate: UsdUzsRate | null;
-}) {
-  const totals = quotationTotals(draft.lineItems, draft.discountPercent),
-    recommended = draft.configurations.find((x) => x.type === "RECOMMENDED")!,
-    rateValue = rate ? Number(rate.rate) : null,
-    cameras = draft.rooms.filter((room) => room.type === "ROOM"),
-    completeTonnage = cameras.length > 0 && cameras.every((room) => room.capacityTons > 0),
-    totalTonnage = completeTonnage ? cameras.reduce((sum, room) => sum + room.capacityTons, 0) : null;
-  return (
-    <Document
-      title={`${draft.proposalNumber} — ${draft.projectName}`}
-      author="BUYUK KARAVAN"
-    >
-      <Page size="A4" style={styles.page}>
-        <Header draft={draft} />
-        <View style={styles.section}>
-          <Text style={styles.heading}>MIJOZ VA LOYIHA</Text>
-          <View style={styles.summary}>
-            {[
-              ["Mijoz", draft.customerName],
-              ["Hudud", draft.region || "—"],
-              ["Loyiha", draft.projectName],
-              ["Telefon", draft.phone || "—"],
-              ["Kamera soni", String(cameras.length)],
-              ["Umumiy sig‘im", totalTonnage === null ? "To‘liq kiritilmagan" : `${totalTonnage} tonna`],
-              [
-                "Harorat",
-                `${draft.temperatureMin}°C ... ${draft.temperatureMax}°C`,
-              ],
-            ].map(([a, b]) => (
-              <View style={styles.summaryItem} key={a}>
-                <Text style={styles.label}>{a}</Text>
-                <Text style={styles.value}>{b}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-        <View style={styles.section}>
-          <Text style={styles.heading}>SIZNING LOYIHANGIZ UCHUN YECHIMLAR</Text>
-          <View style={styles.configs}>
-            {draft.configurations.map((item) => {
-              const e = electricity(item, draft.electricityTariff);
-              return (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.config,
-                    item.type === "RECOMMENDED" ? styles.recommended : {},
-                  ]}
-                >
-                  <Text style={styles.configTitle}>
-                    {item.label.toLocaleUpperCase("uz-UZ")}
-                  </Text>
-                  {[
-                    ["Kompressor", item.compressor || "—"],
-                    ["Kondensator", item.condenser || "—"],
-                    ["Evaporator", item.evaporator || "—"],
-                    ["Taqqoslash narxi", money(item.priceUsd, "USD")],
-                    ["Quvvat", number(item.powerKw, " kW")],
-                    [
-                      "Ish rejimi",
-                      number(item.operatingHoursPerDay, " soat/kun"),
-                    ],
-                    ["Elektr sarfi", number(e.dailyEnergyKwh, " kWh/kun")],
-                    ["Oylik elektr", money(e.monthlyElectricityCost)],
-                    ["Yillik elektr", money(e.annualElectricityCost)],
-                  ].map(([a, b]) => (
-                    <View style={styles.row} key={a}>
-                      <Text style={styles.rowLabel}>{a}</Text>
-                      <Text style={styles.rowValue}>{b}</Text>
-                    </View>
-                  ))}
-                </View>
-              );
-            })}
-          </View>
-          <Text style={styles.disclaimer}>
-            Ish vaqti va elektr sarfi loyiha sharoitlari asosidagi hisobiy
-            ko‘rsatkichlardir. Haqiqiy sarf tashqi harorat, issiqlik
-            izolyatsiyasi, mahsulot yuklanishi, eshiklarning ochilish
-            chastotasi, belgilangan harorat va foydalanish sharoitlariga qarab
-            farq qilishi mumkin.
-          </Text>
-        </View>
-        {draft.configurations.length > 1 && (
-          <View style={styles.section}>
-            <Text style={styles.heading}>
-              BOSHLANG‘ICH XARAJAT VA EKSPLUATATSIYA XARAJATI
-            </Text>
-            <View style={styles.comparison}>
-              {draft.configurations
-                .filter((x) => x.type !== "RECOMMENDED")
-                .map((item) => {
-                  const value = comparison(
-                    recommended,
-                    item,
-                    draft.electricityTariff,
-                    rateValue,
-                  );
-                  const ownership = ownershipCost(
-                    item,
-                    draft.electricityTariff,
-                    rateValue,
-                  );
-                  return (
-                    <View style={styles.comparisonCard} key={item.id}>
-                      <Text style={styles.configTitle}>{item.label}</Text>
-                      <Text>
-                        Boshlang‘ich narx farqi:{" "}
-                        {money(value.priceDifference, "USD")}
-                      </Text>
-                      <Text>
-                        Oylik elektr farqi: {money(value.monthlyDifference)}
-                      </Text>
-                      {value.paybackMonths !== null && (
-                        <Text>
-                          Taxminiy qoplanish muddati: ≈{" "}
-                          {value.paybackMonths.toFixed(1)} oy
-                        </Text>
-                      )}
-                      {value.paybackMonths === null && (
-                        <Text>Qoplanish hisoblanmaydi</Text>
-                      )}
-                      {ownership && (
-                        <Text>
-                          Hisobiy umumiy xarajat — 1 yillik: {money(ownership.oneYear)} · 3 yillik: {money(ownership.threeYears)}
-                        </Text>
-                      )}
-                    </View>
-                  );
-                })}
-            </View>
-          </View>
-        )}
-        {rate && (
-          <Text style={styles.disclaimer}>
-            Hisob-kitob kursi: 1 USD = {number(rateValue)} so‘m · Markaziy bank · {new Intl.DateTimeFormat("uz-UZ", { timeZone: "UTC" }).format(new Date(rate.effectiveDate))}
-          </Text>
-        )}
-        <View style={styles.section}>
-          <Text style={styles.heading}>KAMERA CHIZMASI</Text>
-          <Planner draft={draft} />
-        </View>
-        <View style={styles.footer} fixed>
-          <Text>BUYUK KARAVAN · professional sovutish yechimlari</Text>
-          <Text
-            render={({ pageNumber, totalPages }) =>
-              `${pageNumber} / ${totalPages}`
-            }
-          />
-        </View>
-      </Page>
-      <Page size="A4" style={styles.page} wrap>
-        <Header draft={draft} />
-        <Text style={styles.heading}>SMETA / MAHSULOT VA XIZMATLAR</Text>
-        <View style={styles.tableHeader} fixed>
-          <Text style={styles.colNo}>№</Text>
-          <Text style={styles.colName}>Mahsulot / xizmat</Text>
-          <Text style={styles.colUnit}>Birlik</Text>
-          <Text style={styles.colQty}>Miqdor</Text>
-          <Text style={styles.colPrice}>Narx</Text>
-          <Text style={styles.colTotal}>Jami</Text>
-        </View>
-        {draft.lineItems.map((item, index) => (
-          <View style={styles.tableRow} key={item.id} wrap={false}>
-            <Text style={styles.colNo}>{index + 1}</Text>
-            <Text style={styles.colName}>{item.name}</Text>
-            <Text style={styles.colUnit}>{item.unit}</Text>
-            <Text style={styles.colQty}>{number(item.quantity)}</Text>
-            <Text style={styles.colPrice}>
-              {money(item.unitPrice, item.currency)}
-            </Text>
-            <Text style={styles.colTotal}>
-              {money(item.quantity * item.unitPrice, item.currency)}
-            </Text>
-          </View>
-        ))}
-        <View style={styles.totals} wrap={false}>
-          {[
-            ["USD subtotal", money(totals.usdSubtotal, "USD")],
-            ["UZS subtotal", money(totals.uzsSubtotal)],
-            [`Chegirma (${draft.discountPercent || 0}%) — USD`, `−${money(totals.usdDiscount, "USD")}`],
-            ["Chegirma summasi — UZS", `−${money(totals.uzsDiscount)}`],
-            ["JAMI USD", money(totals.usdTotal, "USD")],
-            ["JAMI UZS", money(totals.uzsTotal)],
-          ].map(([a, b]) => (
-            <View style={styles.row} key={a}>
-              <Text>{a}</Text>
-              <Text>{b}</Text>
-            </View>
-          ))}
-        </View>
-        <View style={styles.section} wrap={false}>
-          <Text style={styles.heading}>TIJORAT SHARTLARI</Text>
-          <View style={styles.terms}>
-            {[
-              ["To‘lov", draft.paymentTerms],
-              ["Yetkazib berish", draft.deliveryTerms],
-              [
-                "Montaj",
-                draft.installationIncluded === null
-                  ? "—"
-                  : draft.installationIncluded
-                    ? "Kiritilgan"
-                    : "Kiritilmagan",
-              ],
-              [
-                "Transport",
-                draft.transportIncluded === null
-                  ? "—"
-                  : draft.transportIncluded
-                    ? "Kiritilgan"
-                    : "Kiritilmagan",
-              ],
-              [
-                "Ishga tushirish",
-                draft.commissioningIncluded === null
-                  ? "—"
-                  : draft.commissioningIncluded
-                    ? "Kiritilgan"
-                    : "Kiritilmagan",
-              ],
-              ["Kafolat", draft.warranty],
-            ].map(([a, b]) => (
-              <View style={styles.term} key={a}>
-                <Text style={styles.label}>{a}</Text>
-                <Text>{b || "—"}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-        {draft.specialistConclusion && (
-          <View style={styles.section} wrap={false}>
-            <Text style={styles.heading}>MUTAXASSIS XULOSASI</Text>
-            <Text style={styles.conclusion}>{draft.specialistConclusion}</Text>
-          </View>
-        )}
-        <View style={styles.signature} wrap={false}>
-          <Text style={styles.signatureBox}>
-            Sotuvchi: {draft.sellerName || "BUYUK KARAVAN"}
-          </Text>
-          <Text style={styles.signatureBox}>Imzo / muhr</Text>
-        </View>
-        <View style={styles.footer} fixed>
-          <Text>BUYUK KARAVAN · {draft.proposalNumber}</Text>
-          <Text
-            render={({ pageNumber, totalPages }) =>
-              `${pageNumber} / ${totalPages}`
-            }
-          />
-        </View>
-      </Page>
-    </Document>
-  );
-}
-export async function renderProposalPdf(
-  draft: CalculationDraft,
-  rate: UsdUzsRate | null,
-) {
-  return pdf(<ProposalDocument draft={draft} rate={rate} />).toBuffer();
-}
+const fmt=(value:number,max=2)=>new Intl.NumberFormat("ru-RU",{maximumFractionDigits:max}).format(value);
+const usd=(value:number)=>`${fmt(value,2)} USD`;
+const date=(value:string)=>new Intl.DateTimeFormat("ru-RU",{timeZone:"UTC"}).format(new Date(`${value}T00:00:00Z`));
+const volume=(room:PlannerRoom)=>room.width*room.length*room.height;
+function doorPath(room:PlannerRoom,x:number,y:number,s:number){const left=x+room.x*s,top=y+room.y*s,w=room.width*s,h=room.length*s,gap=Math.min(w,h)*.28;if(room.doorSide==="TOP")return`M ${left+w/2-gap/2} ${top} L ${left+w/2+gap/2} ${top}`;if(room.doorSide==="LEFT")return`M ${left} ${top+h/2-gap/2} L ${left} ${top+h/2+gap/2}`;if(room.doorSide==="RIGHT")return`M ${left+w} ${top+h/2-gap/2} L ${left+w} ${top+h/2+gap/2}`;return`M ${left+w/2-gap/2} ${top+h} L ${left+w/2+gap/2} ${top+h}`;}
+function Plan({draft}:{draft:CalculationDraft}){const W=550,H=220,p=22,s=Math.min((W-p*2)/draft.buildingWidth,(H-p*2)/draft.buildingLength),ox=(W-draft.buildingWidth*s)/2,oy=(H-draft.buildingLength*s)/2;return <Svg viewBox={`0 0 ${W} ${H}`} style={styles.planBox}>
+  <Rect x={ox} y={oy} width={draft.buildingWidth*s} height={draft.buildingLength*s} fill="#fff" stroke={color.wall} strokeWidth={3}/>
+  <Line x1={ox} y1={oy-12} x2={ox+draft.buildingWidth*s} y2={oy-12} stroke={color.cyan} strokeWidth={.8}/><Text x={W/2} y={oy-15} style={{fontSize:7,textAnchor:"middle",fill:color.cyan}}>{fmt(draft.buildingWidth)}м</Text>
+  <Line x1={ox-12} y1={oy} x2={ox-12} y2={oy+draft.buildingLength*s} stroke={color.cyan} strokeWidth={.8}/><Text x={ox-16} y={H/2} style={{fontSize:7,textAnchor:"middle",fill:color.cyan}} transform={`rotate(-90 ${ox-16} ${H/2})`}>{fmt(draft.buildingLength)}м</Text>
+  {draft.rooms.map(room=>{const x=ox+room.x*s,y=oy+room.y*s,w=room.width*s,h=room.length*s,lines=room.type==="CORRIDOR"?["Коридор"]:[room.name,`H-${fmt(room.height)}м · ${fmt(volume(room),1)}м³`,`${fmt(room.temperatureMin)} / ${fmt(room.temperatureMax)}°C`,room.capacityTons>0?`${fmt(room.capacityTons)} тонн`:"",room.equipmentModel].filter(Boolean),font=Math.max(4.2,Math.min(7,w/11)),visible=lines.slice(0,Math.max(1,Math.floor((h-8)/(font*1.35))));return <React.Fragment key={room.id}><Rect x={x} y={y} width={w} height={h} fill={room.type==="CORRIDOR"?"#f2edf6":"#fff"} stroke={color.wall} strokeWidth={2}/>{visible.map((line,index)=><Text key={line} x={x+w/2} y={y+h/2-((visible.length-1)*font*1.25)/2+index*font*1.25} style={{fontSize:font,textAnchor:"middle",fill:room.type==="CORRIDOR"?color.purple:color.green,fontWeight:index===0?700:400}}>{line}</Text>)}<Text x={x+w/2} y={y-3} style={{fontSize:5.8,textAnchor:"middle",fill:color.cyan}}>{fmt(room.width)}м</Text><Text x={x+3} y={y+h/2} style={{fontSize:5.8,textAnchor:"middle",fill:color.cyan}} transform={`rotate(-90 ${x+3} ${y+h/2})`}>{fmt(room.length)}м</Text>{room.doorEnabled&&<Path d={doorPath(room,ox,oy,s)} stroke={color.cyan} strokeWidth={4}/>}</React.Fragment>})}
+  </Svg>}
+function Proposal({draft}:{draft:CalculationDraft}){const totals=quotationTotals(draft.lineItems,draft.discountPercent),cameras=draft.rooms.filter(room=>room.type==="ROOM"),tons=cameras.reduce((sum,room)=>sum+(room.capacityTons>0?room.capacityTons:0),0);return <Document title={`${draft.proposalNumber} — ${draft.projectName}`} author="BUYUK KARAVAN"><Page size="A4" style={styles.page} wrap>
+  <View style={styles.header}><Text style={styles.proposalTitle}>ПРЕДВАРИТЕЛЬНОЕ КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ {draft.proposalNumber||""} от {date(draft.proposalDate)} г.</Text>{tons>0&&<Text style={styles.tonnage}>{fmt(tons)} тонн</Text>}</View>
+  {draft.renderImageUrl&&<Image src={draft.renderImageUrl} style={styles.render}/>}<Text style={styles.mainTitle}>ПРОЕКТ-СМЕТА ХОЛОДИЛЬНЫХ КАМЕР</Text><Plan draft={draft}/>
+  <View style={styles.tableHeader} wrap={false}>{[
+    {label:"№",style:styles.no},{label:"Наименование товаров и услуг",style:styles.name},{label:"Един. измер",style:styles.unit},{label:"Количество",style:styles.qty},{label:"Цена за единицу",style:styles.price},{label:"Общая сумма",style:styles.total},
+  ].map(column=><Text key={column.label} style={[styles.cell,column.style]}>{column.label}</Text>)}</View>
+  {draft.lineItems.map((item,index)=>{const result=quotationTotals([item],0),row=result[item.currency==="USD"?"usdTotal":"uzsTotal"];return <View key={item.id} style={[styles.tableRow,index%2?styles.alternate:{}]} wrap={false}><Text style={[styles.cell,styles.no]}>{index+1}</Text><Text style={[styles.cell,styles.name]}>{item.name}</Text><Text style={[styles.cell,styles.unit]}>{item.unit}</Text><Text style={[styles.cell,styles.qty]}>{fmt(item.quantity,3)}</Text><Text style={[styles.cell,styles.price]}>{fmt(item.unitPrice,2)} {item.currency}</Text><Text style={[styles.cell,styles.total]}>{fmt(row,2)} {item.currency}</Text></View>})}
+  <View style={styles.totals} wrap={false}><View style={styles.totalRow}><Text>Всего: без НДС</Text><Text>{usd(totals.usdTotal)}</Text></View>{totals.uzsTotal>0&&<View style={styles.totalRow}><Text>Итого UZS</Text><Text>{fmt(totals.uzsTotal)} сум</Text></View>}</View>
+  {draft.manualUzsTotalWithVat!==null&&<View style={styles.vat} wrap={false}><Text>Перечисления с учётом НДС</Text><Text>{fmt(draft.manualUzsTotalWithVat)} сум</Text></View>}
+  {draft.proposalNote&&<Text style={styles.note}>PS. {draft.proposalNote}</Text>}{draft.validityDays&&<Text style={styles.validity}>Цены действуют в течение {draft.validityDays} дней.</Text>}
+  <View style={styles.footer} fixed><Text>BUYUK KARAVAN · {draft.proposalNumber}</Text><Text render={({pageNumber,totalPages})=>`${pageNumber} / ${totalPages}`}/></View>
+  </Page></Document>}
+export async function renderProposalPdf(draft:CalculationDraft,rate:UsdUzsRate|null){void rate;return pdf(<Proposal draft={draft}/>).toBuffer();}

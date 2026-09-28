@@ -23,6 +23,7 @@ export type PlannerRoom = {
   temperatureMax: number;
   doorEnabled: boolean;
   doorSide: PlannerDoorSide;
+  equipmentModel: string;
   order: number;
 };
 export type CalculationConfiguration = {
@@ -94,6 +95,9 @@ export type CalculationDraft = {
   commissioningIncluded: boolean | null;
   warranty: string;
   commercialNotes: string;
+  renderImageUrl: string;
+  manualUzsTotalWithVat: number | null;
+  proposalNote: string;
   discountPercent: number | null;
   sellerName?: string;
   exchangeRate?: number | null;

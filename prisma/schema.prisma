@@ -428,6 +428,9 @@ model Calculation {
   commissioningIncluded Boolean?
   warranty           String?
   commercialNotes    String?
+  renderImageUrl     String?
+  manualUzsTotalWithVat Decimal?        @db.Decimal(18, 2)
+  proposalNote       String?
   discountPercent    Decimal?           @db.Decimal(8, 4)
   createdByAdminId   String
   createdAt          DateTime          @default(now())
@@ -504,6 +507,7 @@ model CalculationRoom {
   temperatureMax Decimal?             @db.Decimal(6, 2)
   doorEnabled    Boolean              @default(false)
   doorSide       CalculationDoorSide?
+  equipmentModel String?
   order          Int
   calculation    Calculation          @relation(fields: [calculationId], references: [id], onDelete: Cascade)
 
