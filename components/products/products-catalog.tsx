@@ -6,10 +6,10 @@ import type { Product } from "@/lib/products/types";
 import type { ProductCategoryRecord } from "@/lib/product-categories/types";
 import { ProductCard } from "./product-card";
 
-export function ProductsCatalog({ products, categories, exchangeRate }: { products: Product[]; categories: ProductCategoryRecord[]; exchangeRate: string|null }) {
+export function ProductsCatalog({ products, categories, exchangeRate, initialCategory = "all" }: { products: Product[]; categories: ProductCategoryRecord[]; exchangeRate: string|null; initialCategory?: string }) {
   const PAGE_SIZE = 12;
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<string>("all");
+  const [category, setCategory] = useState<string>(initialCategory);
   const [shown,setShown]=useState(PAGE_SIZE);
   const visible = useMemo(() => products
     .filter(product => product.isVisible && (category === "all" || product.category === category))

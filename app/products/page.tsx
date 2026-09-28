@@ -9,7 +9,9 @@ import "@/components/products/products.css";
 
 export const metadata: Metadata = { title: "Mahsulotlar — BUYUK KARAVAN", description: "Professional sovutish uskunalari va komponentlari katalogi." };
 
-export default async function ProductsPage() {
+export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
+  const { category = "all" } = await searchParams;
   const [products,categories,exchangeRate] = await Promise.all([getPublicProducts(),getPublicProductCategories(),getUsdUzsRate()]);
-  return <div className="products-shell"><Header onProducts/><main className="products-page"><ProductsCatalog products={products} categories={categories} exchangeRate={exchangeRate?.rate??null}/></main><Footer onProducts/></div>;
+  const initialCategory = categories.some((item) => item.slug === category) ? category : "all";
+  return <div className="products-shell"><Header onProducts/><main className="products-page"><ProductsCatalog products={products} categories={categories} exchangeRate={exchangeRate?.rate??null} initialCategory={initialCategory}/></main><Footer onProducts/></div>;
 }

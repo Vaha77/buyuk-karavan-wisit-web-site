@@ -35,6 +35,14 @@ function limited(key:string,now:number,submissionKey:string) {
 }
 
 export async function submitLeadAction(input:unknown) {
+  if (input && typeof input === "object" && (input as Record<string, unknown>).source === "HOME_CTA") {
+    const candidate = input as Record<string, unknown>;
+    const name = typeof candidate.customerName === "string" ? candidate.customerName.trim() : "";
+    const phone = typeof candidate.phone === "string" ? candidate.phone.trim() : "";
+    if (!name) return { ok: false as const, error: "Ismingizni kiriting." };
+    if (!/^[+\d][\d\s().-]*$/.test(phone) || phone.replace(/\D/g, "").length < 9)
+      return { ok: false as const, error: "Telefon raqamini tekshiring." };
+  }
   const idempotencyKey = inputField(input,"idempotencyKey");
   if (idempotencyKey) {
     const existing = await findLeadSubmission(idempotencyKey);

@@ -59,15 +59,17 @@ function ChatContent({ onMinimize, onClose }: { onMinimize: () => void; onClose:
 
 export function MadinaWidget() {
   const pathname = usePathname();
-  const [view, setView] = useState<View>("greeting");
+  const [view, setView] = useState<View>("minimized");
   const [hasOpened, setHasOpened] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const isAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => { if (sessionStorage.getItem(greetingKey) === "1") setView("minimized"); });
-    return () => cancelAnimationFrame(frame);
+    const timer = window.setTimeout(() => {
+      if (sessionStorage.getItem(greetingKey) !== "1") setView("greeting");
+    }, 7000);
+    return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 700px)");
