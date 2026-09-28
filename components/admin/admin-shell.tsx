@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, FolderKanban, History, LayoutDashboard, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
+import { Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, FolderKanban, History, LayoutDashboard, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 
 const navigation = [
@@ -12,6 +12,7 @@ const navigation = [
   { label: "Mahsulotlar", href: "/admin/products", icon: Package },
   { label: "Loyihalar", href: "/admin/projects", icon: FolderKanban },
   { label: "Foto Studio", href: "/admin/photo-studio", icon: Camera },
+  { label: "AI Ofis", href: "/admin/ai-office", icon: Bot },
   { label: "Buyurtmalar", href: "#", icon: ShoppingBag },
   { label: "Mijozlar", href: "#", icon: Users },
   { label: "Mijoz so‘rovlari", href: "/admin/leads", icon: MessageSquare },
@@ -39,6 +40,7 @@ export function AdminShell({ children, user }: { children: React.ReactNode; user
   const homeContentRoute = pathname.startsWith("/admin/content/home");
   const leadsRoute = pathname.startsWith("/admin/leads");
   const photoStudioRoute = pathname.startsWith("/admin/photo-studio");
+  const aiOfficeRoute = pathname.startsWith("/admin/ai-office");
   const projectsRoute = pathname.startsWith("/admin/projects");
   const salesAgentsRoute = pathname.startsWith("/admin/sales-agents");
   const salesRoute = pathname === "/admin/sales" || pathname.startsWith("/admin/sales/");
@@ -61,7 +63,7 @@ export function AdminShell({ children, user }: { children: React.ReactNode; user
     <div className="admin-main">
       <header className="admin-topbar">
         <div className="admin-mobile-brand"><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong></div>
-        <div className="admin-topbar-title"><strong>{calculationsRoute ? calculationTitle : settingsRoute ? "Sozlamalar" : salesRoute ? "Sotuvlar" : rewardsRoute ? "Mukofotlar" : backupsRoute ? "Backup" : salesAgentsRoute ? "Sotuvchilar" : projectsRoute ? "Loyihalar" : photoStudioRoute ? "AI Foto Studio" : leadsRoute ? "Mijoz so‘rovlari" : homeContentRoute ? "Home Page" : pathname==="/admin"?"BKLead Dashboard":"Mahsulotlar"}</strong><span>{calculationsRoute ? "Tijorat takliflarini tayyorlash va boshqarish" : settingsRoute ? "Markaziy sayt sozlamalari" : salesRoute?"Savdolarni tasdiqlash":rewardsRoute?"Marja mukofotlarini boshqarish":backupsRoute?"CRM ma’lumotlarini himoyalash":salesAgentsRoute ? "BKLead sotuvchilarini boshqarish" : projectsRoute ? "Saytdagi loyihalarni boshqarish" : photoStudioRoute ? "Mahsulot vizuallarini tayyorlash" : leadsRoute ? "Madina orqali kelgan mijoz murojaatlari" : homeContentRoute ? "Bosh sahifa kontentini boshqarish" : "Saytdagi mahsulotlarni boshqarish"}</span></div>
+        <div className="admin-topbar-title"><strong>{calculationsRoute ? calculationTitle : aiOfficeRoute ? "AI Ofis" : settingsRoute ? "Sozlamalar" : salesRoute ? "Sotuvlar" : rewardsRoute ? "Mukofotlar" : backupsRoute ? "Backup" : salesAgentsRoute ? "Sotuvchilar" : projectsRoute ? "Loyihalar" : photoStudioRoute ? "AI Foto Studio" : leadsRoute ? "Mijoz so‘rovlari" : homeContentRoute ? "Home Page" : pathname==="/admin"?"BKLead Dashboard":"Mahsulotlar"}</strong><span>{calculationsRoute ? "Tijorat takliflarini tayyorlash va boshqarish" : aiOfficeRoute ? "AI operatsiyalar uchun vizual makon" : settingsRoute ? "Markaziy sayt sozlamalari" : salesRoute?"Savdolarni tasdiqlash":rewardsRoute?"Marja mukofotlarini boshqarish":backupsRoute?"CRM ma’lumotlarini himoyalash":salesAgentsRoute ? "BKLead sotuvchilarini boshqarish" : projectsRoute ? "Saytdagi loyihalarni boshqarish" : photoStudioRoute ? "Mahsulot vizuallarini tayyorlash" : leadsRoute ? "Madina orqali kelgan mijoz murojaatlari" : homeContentRoute ? "Bosh sahifa kontentini boshqarish" : "Saytdagi mahsulotlarni boshqarish"}</span></div>
         <div className="admin-topbar-actions"><div className="admin-topbar-search"><Search size={14}/><span>Qidirish...</span></div><Bell className="admin-bell" size={18}/><span className="admin-user"><span className="admin-avatar">{user.name.trim().charAt(0).toUpperCase()}</span><span className="admin-user-details"><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span></span><form action={logoutAction}><button className="admin-logout" type="submit" aria-label="Chiqish"><LogOut size={16}/><span>Chiqish</span></button></form><button className="admin-mobile-menu" aria-label="Menyuni ochish" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={21}/></button></div>
       </header>
       <div className="admin-workspace">{children}</div>
