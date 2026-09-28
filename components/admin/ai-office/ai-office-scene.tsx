@@ -1,9 +1,15 @@
+"use client";
+
+import { useState } from "react";
 import { desktopOfficeLayout, mobileOfficeLayout, type OfficeLayout } from "./office-layout";
 import { OfficeCooler } from "./office-cooler";
 import { OfficeDesk } from "./office-desk";
 import { OfficePlant } from "./office-plant";
 import { OfficeTennis } from "./office-tennis";
 import { OfficeWc } from "./office-wc";
+import { OfficeAgent } from "./office-agent";
+import { ProductAgentChat } from "./product-agent-chat";
+import type { ProductAgentStatus } from "@/lib/ai-office/product-agent";
 
 function OfficeWalls({ layout }: { layout: OfficeLayout }) {
   const { bounds, spots } = layout;
@@ -19,7 +25,7 @@ function OfficeWalls({ layout }: { layout: OfficeLayout }) {
   </g>;
 }
 
-function OfficeSvg({ layout }: { layout: OfficeLayout }) {
+function OfficeSvg({ layout, status, onOpen }: { layout: OfficeLayout; status: ProductAgentStatus; onOpen: () => void }) {
   const gridId = `office-grid-${layout.name}`;
   const titleId = `office-title-${layout.name}`;
   const descriptionId = `office-description-${layout.name}`;
@@ -37,6 +43,7 @@ function OfficeSvg({ layout }: { layout: OfficeLayout }) {
     <rect x={layout.workZone.x + 22} y={layout.workZone.y + 18} width="118" height="30" rx="10" fill="#fff" stroke="#d2e2f3"/>
     <text x={layout.workZone.x + 81} y={layout.workZone.y + 38} textAnchor="middle" className="office-zone-title">ISH ZONASI</text>
     <g filter={`url(#office-shadow-${layout.name})`}>{layout.desks.map((desk) => <OfficeDesk key={desk.id} desk={desk}/>)}</g>
+    <OfficeAgent seat={layout.desks[0].seat} status={status} onOpen={onOpen}/>
     <OfficeCooler position={layout.spots.cooler}/>
     <OfficeTennis table={layout.tennisTable}/>
     <OfficeWc room={layout.wcRoom}/>
@@ -46,8 +53,10 @@ function OfficeSvg({ layout }: { layout: OfficeLayout }) {
 }
 
 export function AiOfficeScene() {
-  return <section className="ai-office-frame" aria-label="AI Ofis sahnasi">
-    <div className="ai-office-canvas"><OfficeSvg layout={desktopOfficeLayout}/><OfficeSvg layout={mobileOfficeLayout}/></div>
-    <div className="ai-office-status" aria-label="Ofis holati"><span className="ai-office-status-dot" aria-hidden="true"/>Stollar: 4 <span aria-hidden="true">·</span> Agentlar: 0</div>
-  </section>;
+  const [status, setStatus] = useState<ProductAgentStatus>("idle");
+  const [open, setOpen] = useState(false);
+  return <><section className="ai-office-frame" aria-label="AI Ofis sahnasi">
+    <div className={`ai-office-canvas agent-status-${status}`}><OfficeSvg layout={desktopOfficeLayout} status={status} onOpen={() => setOpen(true)}/><OfficeSvg layout={mobileOfficeLayout} status={status} onOpen={() => setOpen(true)}/></div>
+    <div className="ai-office-status" aria-label="Ofis holati"><span className="ai-office-status-dot" aria-hidden="true"/>Stollar: 4 <span aria-hidden="true">·</span> Agentlar: 1</div>
+  </section><ProductAgentChat open={open} onClose={() => setOpen(false)} status={status} onStatus={setStatus}/></>;
 }
