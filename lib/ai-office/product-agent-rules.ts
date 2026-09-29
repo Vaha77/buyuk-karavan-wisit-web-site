@@ -57,3 +57,21 @@ export function unsupportedTechnicalTokens(specifications: Array<{ value: string
   const normalizedSource = sourceText.toLocaleLowerCase("uz-UZ").replace(/\s+/g, "").replace(/,/g, ".");
   return specifications.flatMap(spec => technicalNumericTokens(spec.value)).filter(token => !normalizedSource.includes(token));
 }
+
+export function normalizeAgentModel(value: string) {
+  const match = value.toUpperCase().match(/\b(BR|BF)\s*([+-]?)\s*(\d+[A-Z]*)/u);
+  return match ? `${match[1]} ${match[2]}${match[3]}`.trim() : value.trim().replace(/\s+/g, " ");
+}
+
+export function normalizedCategoryCore(value: string) {
+  return normalizeRuleText(value).replace(/\b(?:xueying|xueing)\b/g, "").replace(/\baggregatlar\b/g, "agregat").replace(/\bagregatlar\b/g, "agregat").replace(/\s+/g, " ").trim();
+}
+
+export function categorySimilarity(left: string, right: string) {
+  const a = normalizedCategoryCore(left), b = normalizedCategoryCore(right);
+  if (!a || !b) return 0;
+  if (a === b || a.includes(b) || b.includes(a)) return 1;
+  const aa = new Set(a.split(" ")), bb = new Set(b.split(" "));
+  const intersection = [...aa].filter(token => bb.has(token)).length;
+  return intersection / Math.max(aa.size, bb.size);
+}

@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     }
 
     const response = await runProductAgentLoop({ ...parsed.data, adminId: session.user.id, sessionId: session.id, actor: session.user });
-    return Response.json({ ...response, previewToken: response.payload ? signPreview(response.payload, session.tokenHash) : undefined, activePriceList: active ? `${active.filename} (${active.sheetName}, ${active.blockLabel})` : null });
+    return Response.json({ ...response, preview: response.payload, payload: undefined, previewToken: response.payload ? signPreview(response.payload, session.tokenHash) : undefined, activePriceList: active ? `${active.filename} (${active.sheetName}, ${active.blockLabel})` : null });
   } catch (error) {
     if (error instanceof ProductAgentUploadError) return Response.json({ error: error.message }, { status: 400 });
     if (error instanceof ProductAgentProviderError && error.message === "OPENAI_NOT_CONFIGURED") return Response.json({ error: "OpenAI API sozlanmagan." }, { status: 503 });

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { categoryMatches, chatReplyClaimsWrite, directPriceIsValid, findModelHeaderColumns, hasDirectProductCommandIntent, hasPriceListCommandIntent, moneyEquals, normalizeMoney2, requestedSheetNumber, unsupportedTechnicalTokens } from "../lib/ai-office/product-agent-rules.ts";
+import { categoryMatches, categorySimilarity, chatReplyClaimsWrite, directPriceIsValid, findModelHeaderColumns, hasDirectProductCommandIntent, hasPriceListCommandIntent, moneyEquals, normalizeAgentModel, normalizeMoney2, requestedSheetNumber, unsupportedTechnicalTokens } from "../lib/ai-office/product-agent-rules.ts";
 
 test("unrelated first category never matches vazdushniy synonyms", () => {
   const categories = [{ name: "Kompressor XUEYING", slug: "kompressor-xueying" }, { name: "DD/DJ UCS", slug: "dd-dj-ucs" }];
@@ -54,19 +54,44 @@ test("primary route uses the tool-calling loop instead of regex interpreters", a
   assert.doesNotMatch(route, /interpretDirectProductCommand|interpretPriceListCommand|hasDirectProductCommandIntent|hasPriceListCommandIntent/);
 });
 
-test("agent exposes only read and draft tools, strong default model, and six-step cap", async () => {
+test("agent exposes only read and draft tools, strong default model, and ten-step cap", async () => {
   const loop = await readFile(new URL("../lib/ai-office/product-agent-loop.ts", import.meta.url), "utf8");
-  assert.match(loop, /const MAX_TOOL_STEPS = 6/);
+  assert.match(loop, /const MAX_TOOL_STEPS = 10/);
   assert.match(loop, /const DEFAULT_MODEL = "gpt-4\.1"/);
   for (const name of ["listCategories", "findProducts", "lookupPriceList", "proposeCategory", "buildProductDraft"]) assert.match(loop, new RegExp(`name: "${name}"`));
   assert.doesNotMatch(loop, /name: "(?:createProduct|updateProduct|createCategory)"/);
   assert.doesNotMatch(loop, /PRODUCT_AGENT_REFUSAL/);
 });
 
+test("server normalizes model and category aliases", () => {
+  assert.equal(normalizeAgentModel("BR +5pg Fn 43"), "BR +5PG");
+  assert.equal(normalizeAgentModel("br-8pz"), "BR -8PZ");
+  assert.equal(categorySimilarity("Vazdushniy Agregat XUEING", "vazdushniy agregat"), 1);
+  assert.ok(categorySimilarity("Kompressor XUEYING", "vazdushniy agregat") < .66);
+});
+
+test("route returns payload under preview and loop accumulates rows", async () => {
+  const route = await readFile(new URL("../app/api/admin/ai-office/product-agent/route.ts", import.meta.url), "utf8");
+  const loop = await readFile(new URL("../lib/ai-office/product-agent-loop.ts", import.meta.url), "utf8");
+  assert.match(route, /preview: response\.payload/);
+  assert.match(loop, /rows\.push\(row\)/);
+  assert.match(loop, /rows: found/);
+  assert.match(loop, /calculateFinalPrice\(evidence\.price, markup/);
+  assert.match(loop, /tool_choice: toolChoice/);
+});
+
+test("draft repair fills short copy and removes forbidden claims", async () => {
+  const loop = await readFile(new URL("../lib/ai-office/product-agent-loop.ts", import.meta.url), "utf8");
+  assert.match(loop, /shortDescription\.length < 20/);
+  assert.match(loop, /description\.length < 80/);
+  assert.match(loop, /seoDescription\.length < 80/);
+  assert.match(loop, /replace\(FORBIDDEN_CLAIMS/);
+});
+
 test("agent prompt owns descriptions and limits questions to missing price", async () => {
   const loop = await readFile(new URL("../lib/ai-office/product-agent-loop.ts", import.meta.url), "utf8");
   assert.match(loop, /Barcha mahsulot maydonlarini O'ZING to'ldir/);
-  assert.match(loop, /Savol faqat narx umuman topilmasa/);
+  assert.match(loop, /Savol faqat narx foydalanuvchida ham, price-listda ham umuman topilmasa/);
   assert.match(loop, /Tavsifni o'zing yoz/);
-  assert.match(loop, /"Yaratildi", ID yoki DB natijasini hech qachon o'ylab topma/);
+  assert.match(loop, /"Yaratildi", ID yoki DB natijasini o'ylab topma/);
 });
