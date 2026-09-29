@@ -49,3 +49,14 @@ export async function interpretPriceListCommand(args: { command: string; parsed:
   });
   return { payload: { id: crypto.randomUUID(), agentId: "product-agent-01", adminId: args.adminId, sessionId: args.sessionId, createdAt: Date.now(), expiresAt: Date.now() + 30 * 60_000, sourceRef: args.priceListId, rows }, activeLabel };
 }
+
+export async function interpretDirectProductCommand(args: { command: string; adminId: string; sessionId: string }) {
+  const kind = inferProductKind(args.command); const models = extractCommandModels(args.command); const price = explicitPrice(args.command);
+  if (!kind || !models[0] || !price) return { question: { text: "Mahsulot turi, model va narxni tekshiring.", options: kind ? [] : ["Vazdushniy", "Vadinoy"] }, activeLabel: "Qo‘lda kiritilgan buyruq" };
+  const fn = args.command.match(/\bFNV?\s*[- ]?\d+[A-Z]*/iu)?.[0]?.toUpperCase().replace(/\s+/g, "") || "";
+  const hp = args.command.match(/\b\d+(?:[.,]\d+)?\s*HP\b/iu)?.[0]?.toUpperCase().replace(/\s+/g, "") || "";
+  const evaporator = args.command.match(/\b(?:DD|DJ)\s*[- ]?\d+[A-Z]*/iu)?.[0]?.toUpperCase().replace(/\s+/g, "") || "";
+  const row: ParsedPriceRow = { model: models[0], freon: "", compressorPrice: price, receiverLiters: "", receiverPrice: price, waterCondenser: hp, waterPrice: price, airCondenser: fn, airPrice: price, waterKitPrice: price, evaporator, airKitPrice: price, kitParts: "", sourceRow: 0 };
+  const parsed: ParsedPriceList = { version: 1, blocks: [{ key: "direct:main", label: "qo‘lda kiritilgan narx", sheetName: "Direct", startColumn: 1, sourceTitle: "Vaha buyrug‘i", rows: [row] }] };
+  return interpretPriceListCommand({ ...args, parsed, priceListId: "direct-command", filename: "Qo‘lda kiritilgan buyruq" });
+}

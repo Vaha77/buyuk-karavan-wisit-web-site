@@ -4,6 +4,7 @@ import type { ResponseInputContent } from "openai/resources/responses/responses"
 import { z } from "zod";
 import type { AdminUser } from "@/generated/prisma/client";
 import { writeAudit } from "@/lib/audit/service";
+import { chatReplyClaimsWrite } from "./product-agent-rules";
 
 export const PRODUCT_AGENT_ALLOWED_TOOLS = new Set([
   "readUpload", "getActivePriceList", "listCategories", "findProducts", "previewDraft", "createCategory", "createProduct", "updateProduct",
@@ -29,7 +30,7 @@ const OFF_DOMAIN = /(?:rasm(?:ni|ini)?\s+.*(?:qo['‘’]?y|joyla|biriktir)|rasm
 export const isProductAgentOffDomain = (message: string) => OFF_DOMAIN.test(message);
 export const PRODUCT_AGENT_REFUSAL = "Uzr, men faqat mahsulot qo‘shish va narx yangilash bilan ishlayman. Rasm uchun Foto agentga murojaat qiling.";
 
-export const PRODUCT_AGENT_SYSTEM_INSTRUCTION = `Sen BUYUK KARAVAN admin panelidagi “Mahsulot agenti 01”san. Faqat o‘zbek tilida javob ber. Yagona domening: katalogga mahsulot qo‘shish yoki mavjud mahsulotni yangilash uchun ma’lumotlarni o‘qish, tekshirish va tasdiqlashga tayyorlash. Rasm yaratish yoki mahsulot media maydonlarini o‘zgartirish, dizayn, sayt UI, lid, CRM, hisob-kitob, reklama, Telegram va boshqa vazifalarni rad et. Rad javobi: “${PRODUCT_AGENT_REFUSAL}”
+export const PRODUCT_AGENT_SYSTEM_INSTRUCTION = `Sen BUYUK KARAVAN admin panelidagi “Mahsulot agenti 01”san. Faqat o‘zbek tilida javob ber. Mahsulot katalogi uchun ma’lumotlarni tushuntir, tavsif/description va maydonlarni tayyorlashga yordam ber. “Tavsif yoz”, “description yoz” va “o‘zing to‘ldir” sening vazifang hisoblanadi. Hech qachon mahsulot yoki kategoriya yaratildi, yangilandi, bazaga yozildi deb aytma; ID yoki DB natijasini uydirma. Oddiy chat faqat maslahat beradi. Real natija faqat strukturali preview va serverdagi Tasdiqlash actionidan keyin ko‘rsatiladi.
 
 HECH QACHON texnik parametr o‘ylab topma yoki model nomidan xulosa qilma. HP, kW, voltage, refrigerant, temperature, cylinder count, displacement, capacity, dimensions, weight va boshqa texnik qiymatlarni faqat foydalanuvchi xabarida yoki biriktirilgan manbada aniq bo‘lsa ishlat; aks holda bo‘sh qoldir. Internetdan qidirmagin. Images, gallery, 360 va media doim bo‘sh/saqlanganicha qolsin. Ushbu bosqichda DB yozuvi yo‘q: faqat draft/preview tayyorla va tasdiq so‘ra. Mavjud form maydonlari: ${Object.keys(PRODUCT_AGENT_FIELD_CAPABILITIES).join(", ")}.`;
 
@@ -99,7 +100,7 @@ export async function runProductAgentChat(input: z.infer<typeof productAgentRequ
     });
     const reply = response.output_text.trim();
     if (!reply) throw new ProductAgentProviderError("EMPTY_AI_OUTPUT");
-    return { reply, status: "awaiting_confirmation" as ProductAgentStatus };
+    return { reply: chatReplyClaimsWrite(reply) ? "Mahsulot hali yaratilmagan. Model, tur va narxni yuboring — men strukturali preview tayyorlayman; yozish faqat Tasdiqlash tugmasidan keyin bajariladi." : reply, status: "idle" as ProductAgentStatus };
   } catch (error) {
     if (error instanceof APIError) console.error("Product Agent OpenAI error", { status: error.status, code: error.code, type: error.type, message: error.message });
     throw error;

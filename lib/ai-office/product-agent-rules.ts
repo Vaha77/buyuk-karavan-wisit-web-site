@@ -30,6 +30,14 @@ export function hasPriceListCommandIntent(message: string) {
   return /\b(?:BR|BF)\s*[+-]?\s*\d/iu.test(message) || /\b(?:hamma|barcha)\b/iu.test(message);
 }
 
+export function hasDirectProductCommandIntent(message: string) {
+  return /\b(?:BR|BF)\s*[+-]?\s*\d/iu.test(message) && /\bnarx(?:i)?\s*[:=-]?\s*\d/iu.test(message);
+}
+
+export function chatReplyClaimsWrite(message: string) {
+  return /(?:mahsulot|kategoriya).{0,30}(?:yaratildi|qo['‘’]?shildi|yangilandi)|\b(?:product|category)[ _-]?id\b|\bdb\s*(?:ga|da)|bazaga\s+(?:yozildi|saqlandi)/iu.test(message);
+}
+
 export function findModelHeaderColumns(rows: string[][]) {
   const columns = new Set<number>();
   rows.slice(0, 15).forEach(row => row.forEach((value, index) => { if (/model/i.test(value.trim())) columns.add(index + 1); }));

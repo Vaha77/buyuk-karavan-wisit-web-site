@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { categoryMatches, directPriceIsValid, findModelHeaderColumns, hasPriceListCommandIntent, moneyEquals, normalizeMoney2, requestedSheetNumber } from "../lib/ai-office/product-agent-rules.ts";
+import { categoryMatches, chatReplyClaimsWrite, directPriceIsValid, findModelHeaderColumns, hasDirectProductCommandIntent, hasPriceListCommandIntent, moneyEquals, normalizeMoney2, requestedSheetNumber } from "../lib/ai-office/product-agent-rules.ts";
 
 test("unrelated first category never matches vazdushniy synonyms", () => {
   const categories = [{ name: "Kompressor XUEYING", slug: "kompressor-xueying" }, { name: "DD/DJ UCS", slug: "dd-dj-ucs" }];
@@ -28,4 +28,16 @@ test("price-list route requires model or bulk intent", () => {
   assert.equal(hasPriceListCommandIntent("hamma vazdushniy agregatlar"), true);
   assert.equal(hasPriceListCommandIntent("sayt dizaynini o‘zgartir"), false);
   assert.equal(hasPriceListCommandIntent("shu rasmni DD 160 ga qo‘y"), false);
+});
+
+test("no-price-list direct command enters structured preview path", () => {
+  const command = "vazdushniy agregat kategorya och va u yerga BR +5pg Fn 43 narx 1232 qo'sh seo ga agregat deyish kerak";
+  assert.equal(hasDirectProductCommandIntent(command), true);
+  assert.equal(hasPriceListCommandIntent(command), true);
+});
+
+test("ordinary chat write claims are blocked", () => {
+  assert.equal(chatReplyClaimsWrite("Mahsulot yaratildi. Product ID: abc"), true);
+  assert.equal(chatReplyClaimsWrite("Siz uchun tavsif yozib beraman."), false);
+  assert.equal(chatReplyClaimsWrite("Description maydonini o‘zim to‘ldiraman."), false);
 });

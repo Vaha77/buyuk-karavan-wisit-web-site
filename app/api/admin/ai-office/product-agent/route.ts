@@ -1,9 +1,9 @@
 import { getAdminSession } from "@/lib/auth/session";
 import { PRODUCT_AGENT_MAX_TOTAL_BYTES, PRODUCT_AGENT_REFUSAL, ProductAgentProviderError, ProductAgentUploadError, isProductAgentOffDomain, productAgentRequestSchema, runProductAgentChat, validateProductAgentUploads } from "@/lib/ai-office/product-agent";
 import { buildProductPreview, signPreview } from "@/lib/ai-office/product-agent-preview";
-import { interpretPriceListCommand } from "@/lib/ai-office/product-agent-command";
+import { interpretDirectProductCommand, interpretPriceListCommand } from "@/lib/ai-office/product-agent-command";
 import { getActivePriceList, saveActivePriceList } from "@/lib/ai-office/price-list-parser";
-import { hasPriceListCommandIntent } from "@/lib/ai-office/product-agent-rules";
+import { hasDirectProductCommandIntent, hasPriceListCommandIntent } from "@/lib/ai-office/product-agent-rules";
 
 export const runtime = "nodejs";
 
@@ -32,9 +32,11 @@ export async function POST(request: Request) {
     const active = await getActivePriceList();
     if (active && hasPriceListCommandIntent(parsed.data.message)) {
       const interpreted = await interpretPriceListCommand({ command: parsed.data.message, parsed: active.parsed, priceListId: active.id, filename: active.filename, adminId: session.user.id, sessionId: session.id });
+      if (interpreted.question && hasDirectProductCommandIntent(parsed.data.message)) { const direct = await interpretDirectProductCommand({ command: parsed.data.message, adminId: session.user.id, sessionId: session.id }); if (direct.payload) return Response.json({ reply: "Qo‘lda berilgan narx asosida to‘liq preview tayyorlandi. Hali bazaga yozilmadi.", status: "awaiting_confirmation", preview: direct.payload, previewToken: signPreview(direct.payload, session.tokenHash), activePriceList: interpreted.activeLabel }); }
       if (interpreted.question) return Response.json({ reply: interpreted.question.text, status: "idle", question: interpreted.question, activePriceList: interpreted.activeLabel });
       if (interpreted.payload) return Response.json({ reply: `${interpreted.payload.rows.length} ta tayyor kartochka preview qilindi. Hali bazaga yozilmadi.`, status: "awaiting_confirmation", preview: interpreted.payload, previewToken: signPreview(interpreted.payload, session.tokenHash), activePriceList: interpreted.activeLabel });
     }
+    if (!active && hasDirectProductCommandIntent(parsed.data.message)) { const direct = await interpretDirectProductCommand({ command: parsed.data.message, adminId: session.user.id, sessionId: session.id }); if (direct.payload) return Response.json({ reply: "Qo‘lda berilgan narx asosida to‘liq preview tayyorlandi. Hali bazaga yozilmadi.", status: "awaiting_confirmation", preview: direct.payload, previewToken: signPreview(direct.payload, session.tokenHash), activePriceList: null }); return Response.json({ reply: direct.question?.text || "Buyruqni tekshiring.", status: "idle", question: direct.question, activePriceList: null }); }
     if (xlsx) return Response.json({ reply: `Price list saqlandi va faol qilindi: ${active?.filename || xlsx.name}. Endi model yoki “hamma/barcha” bilan buyruq bering.`, status: "idle", activePriceList: active ? `${active.filename} (${active.sheetName}, ${active.blockLabel})` : null });
     if (uploads.length) {
       if (!process.env.OPENAI_API_KEY) return Response.json({ error: "OpenAI API sozlanmagan." }, { status: 503 });
