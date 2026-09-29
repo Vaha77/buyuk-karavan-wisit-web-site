@@ -48,3 +48,12 @@ export function requestedSheetNumber(message: string) {
   const match = message.match(/(?:(\d+)\s*[- ]*(?:list|лист)|(?:list|лист)\s*[- ]?(\d+))/iu);
   return match ? Number(match[1] || match[2]) : null;
 }
+
+function technicalNumericTokens(value: string) {
+  return value.match(/[A-Za-z]*\d+(?:[.,]\d+)?(?:\s*[%°]|\s*[A-Za-z]+)?/g)?.map(item => item.toLocaleLowerCase("uz-UZ").replace(/\s+/g, "").replace(",", ".")) || [];
+}
+
+export function unsupportedTechnicalTokens(specifications: Array<{ value: string }>, sourceText: string) {
+  const normalizedSource = sourceText.toLocaleLowerCase("uz-UZ").replace(/\s+/g, "").replace(/,/g, ".");
+  return specifications.flatMap(spec => technicalNumericTokens(spec.value)).filter(token => !normalizedSource.includes(token));
+}

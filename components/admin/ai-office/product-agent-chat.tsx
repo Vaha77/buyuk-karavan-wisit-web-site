@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, FileText, Paperclip, Send, X } from "lucide-react";
+import { Bot, FileText, Mic, MicOff, Paperclip, Send, X } from "lucide-react";
 import type { ProductAgentStatus } from "@/lib/ai-office/product-agent";
 import type { PreviewPayload } from "@/lib/ai-office/product-agent-preview";
 
@@ -20,9 +20,21 @@ export function ProductAgentChat({ open, onClose, status, onStatus }: Props) {
   const [activePriceList, setActivePriceList] = useState<string | null>(null);
   const [question, setQuestion] = useState<{ text: string; options: string[] } | null>(null);
   const [lastCommand, setLastCommand] = useState("");
+  const [listening, setListening] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const busy = status === "reading" || status === "analyzing" || status === "writing";
+
+  const startVoice = () => {
+    type Recognition = { lang: string; interimResults: boolean; start: () => void; onresult: (event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void; onend: () => void; onerror: () => void };
+    const voiceWindow = window as typeof window & { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
+    const SpeechRecognition = voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
+    if (!SpeechRecognition) { setError("Bu brauzer ovozli kiritishni qo'llamaydi."); return; }
+    const recognition = new SpeechRecognition(); recognition.lang = "uz-UZ"; recognition.interimResults = false;
+    recognition.onresult = event => setInput(current => `${current} ${event.results[0]?.[0]?.transcript || ""}`.trim());
+    recognition.onend = () => setListening(false); recognition.onerror = () => { setListening(false); setError("Ovoz tanilmadi. Qayta urinib ko'ring."); };
+    setError(""); setListening(true); recognition.start();
+  };
 
   useEffect(() => { if (open) endRef.current?.scrollIntoView({ block: "end" }); }, [open, messages]);
   useEffect(() => {
@@ -75,7 +87,7 @@ export function ProductAgentChat({ open, onClose, status, onStatus }: Props) {
       </div>
       <div className="product-agent-attachments">{files.map((file, index) => <span key={`${file.name}-${index}`}><FileText size={13}/>{file.name}<button type="button" aria-label={`${file.name} faylini olib tashlash`} onClick={() => setFiles(current => current.filter((_, item) => item !== index))}><X size={12}/></button></span>)}</div>
       {error && <p className="product-agent-error" role="alert">{error}</p>}
-      <footer><div><button type="button" onClick={() => fileRef.current?.click()} disabled={busy} aria-label="Fayl biriktirish"><Paperclip size={19}/></button><textarea rows={2} value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Mahsulot ma’lumotini yozing..." disabled={busy}/><button className="is-send" type="button" onClick={() => void send()} disabled={busy || !input.trim()} aria-label="Xabarni yuborish"><Send size={18}/></button></div><small>JPG, PNG, WEBP, XLSX, CSV, PDF, DOCX · har biri 10 MB · jami 20 MB</small><input ref={fileRef} type="file" multiple accept={ACCEPT} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/></footer>
+      <footer><div><button type="button" onClick={() => fileRef.current?.click()} disabled={busy} aria-label="Fayl biriktirish"><Paperclip size={19}/></button><button type="button" onClick={startVoice} disabled={busy || listening} aria-label="Ovozli xabar yozish" className={listening ? "is-listening" : ""}>{listening ? <MicOff size={18}/> : <Mic size={18}/>}</button><textarea rows={2} value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Mahsulot ma’lumotini yozing..." disabled={busy}/><button className="is-send" type="button" onClick={() => void send()} disabled={busy || !input.trim()} aria-label="Xabarni yuborish"><Send size={18}/></button></div><small>JPG, PNG, WEBP, XLSX, CSV, PDF, DOCX · har biri 10 MB · jami 20 MB</small><input ref={fileRef} type="file" multiple accept={ACCEPT} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/></footer>
     </section>
   </div>;
 }

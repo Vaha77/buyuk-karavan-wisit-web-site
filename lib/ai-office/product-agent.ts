@@ -7,10 +7,10 @@ import { writeAudit } from "@/lib/audit/service";
 import { chatReplyClaimsWrite } from "./product-agent-rules";
 
 export const PRODUCT_AGENT_ALLOWED_TOOLS = new Set([
-  "readUpload", "getActivePriceList", "listCategories", "findProducts", "previewDraft", "createCategory", "createProduct", "updateProduct",
+  "listCategories", "findProducts", "lookupPriceList", "proposeCategory", "buildProductDraft", "createCategory", "createProduct", "updateProduct",
 ] as const);
 
-export type ProductAgentTool = "readUpload" | "getActivePriceList" | "listCategories" | "findProducts" | "previewDraft" | "createCategory" | "createProduct" | "updateProduct";
+export type ProductAgentTool = "listCategories" | "findProducts" | "lookupPriceList" | "proposeCategory" | "buildProductDraft" | "createCategory" | "createProduct" | "updateProduct";
 export type ProductAgentStatus = "idle" | "reading" | "analyzing" | "awaiting_confirmation" | "writing" | "success" | "error";
 
 export const PRODUCT_AGENT_FIELD_CAPABILITIES = {

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { categoryMatches, chatReplyClaimsWrite, directPriceIsValid, findModelHeaderColumns, hasDirectProductCommandIntent, hasPriceListCommandIntent, moneyEquals, normalizeMoney2, requestedSheetNumber } from "../lib/ai-office/product-agent-rules.ts";
+import { readFile } from "node:fs/promises";
+import { categoryMatches, chatReplyClaimsWrite, directPriceIsValid, findModelHeaderColumns, hasDirectProductCommandIntent, hasPriceListCommandIntent, moneyEquals, normalizeMoney2, requestedSheetNumber, unsupportedTechnicalTokens } from "../lib/ai-office/product-agent-rules.ts";
 
 test("unrelated first category never matches vazdushniy synonyms", () => {
   const categories = [{ name: "Kompressor XUEYING", slug: "kompressor-xueying" }, { name: "DD/DJ UCS", slug: "dd-dj-ucs" }];
@@ -40,4 +41,32 @@ test("ordinary chat write claims are blocked", () => {
   assert.equal(chatReplyClaimsWrite("Mahsulot yaratildi. Product ID: abc"), true);
   assert.equal(chatReplyClaimsWrite("Siz uchun tavsif yozib beraman."), false);
   assert.equal(chatReplyClaimsWrite("Description maydonini o‘zim to‘ldiraman."), false);
+});
+
+test("technical numbers must be present in the user or deterministic lookup source", () => {
+  assert.deepEqual(unsupportedTechnicalTokens([{ value: "Fn 43" }, { value: "R22" }], "BR +5PG Fn 43; lookup: R22"), []);
+  assert.deepEqual(unsupportedTechnicalTokens([{ value: "380V" }], "BR +5PG Fn 43"), ["380v"]);
+});
+
+test("primary route uses the tool-calling loop instead of regex interpreters", async () => {
+  const route = await readFile(new URL("../app/api/admin/ai-office/product-agent/route.ts", import.meta.url), "utf8");
+  assert.match(route, /runProductAgentLoop/);
+  assert.doesNotMatch(route, /interpretDirectProductCommand|interpretPriceListCommand|hasDirectProductCommandIntent|hasPriceListCommandIntent/);
+});
+
+test("agent exposes only read and draft tools, strong default model, and six-step cap", async () => {
+  const loop = await readFile(new URL("../lib/ai-office/product-agent-loop.ts", import.meta.url), "utf8");
+  assert.match(loop, /const MAX_TOOL_STEPS = 6/);
+  assert.match(loop, /const DEFAULT_MODEL = "gpt-4\.1"/);
+  for (const name of ["listCategories", "findProducts", "lookupPriceList", "proposeCategory", "buildProductDraft"]) assert.match(loop, new RegExp(`name: "${name}"`));
+  assert.doesNotMatch(loop, /name: "(?:createProduct|updateProduct|createCategory)"/);
+  assert.doesNotMatch(loop, /PRODUCT_AGENT_REFUSAL/);
+});
+
+test("agent prompt owns descriptions and limits questions to missing price", async () => {
+  const loop = await readFile(new URL("../lib/ai-office/product-agent-loop.ts", import.meta.url), "utf8");
+  assert.match(loop, /Barcha mahsulot maydonlarini O'ZING to'ldir/);
+  assert.match(loop, /Savol faqat narx umuman topilmasa/);
+  assert.match(loop, /Tavsifni o'zing yoz/);
+  assert.match(loop, /"Yaratildi", ID yoki DB natijasini hech qachon o'ylab topma/);
 });
