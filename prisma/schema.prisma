@@ -158,27 +158,27 @@ enum CalculationDoorSide {
 }
 
 model Product {
-  id               String              @id @default(cuid())
-  name             String
-  brand            String
-  model            String
-  slug             String              @unique
-  categoryId       String
-  category         ProductCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  priceUsd         Decimal?            @db.Decimal(18, 2)
-  shortDescription String?
-  description      String?
-  images           String[]            @default([])
-  specifications   Json                @default("[]")
-  tags             String[]            @default([])
-  availability     ProductAvailability @default(AVAILABLE)
-  isVisible        Boolean             @default(true)
-  order            Int                 @default(0)
-  seoTitle         String?
-  seoDescription   String?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  asset360         Product360Asset?
+  id                   String                @id @default(cuid())
+  name                 String
+  brand                String
+  model                String
+  slug                 String                @unique
+  categoryId           String
+  category             ProductCategory       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  priceUsd             Decimal?              @db.Decimal(18, 2)
+  shortDescription     String?
+  description          String?
+  images               String[]              @default([])
+  specifications       Json                  @default("[]")
+  tags                 String[]              @default([])
+  availability         ProductAvailability   @default(AVAILABLE)
+  isVisible            Boolean               @default(true)
+  order                Int                   @default(0)
+  seoTitle             String?
+  seoDescription       String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  asset360             Product360Asset?
   calculationLineItems CalculationLineItem[]
 
   @@index([isVisible, order])
@@ -193,6 +193,7 @@ model SiteSettings {
   cbuNominal       Int?
   cbuEffectiveDate DateTime?
   cbuLastSyncedAt  DateTime?
+  dashboardTips    Json?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -275,6 +276,10 @@ model Lead {
   capacity                        String?
   temperature                     String?
   region                          String?
+  country                         String?                     @db.VarChar(8)
+  regionCode                      String?                     @db.VarChar(16)
+  referralLinkId                  String?
+  visitId                         String?                     @unique
   notes                           String?
   source                          LeadSource                  @default(OTHER)
   status                          LeadStatus                  @default(NEW)
@@ -296,8 +301,13 @@ model Lead {
   followUps                       LeadFollowUp[]
   telegramConversations           TelegramConversationState[]
   sale                            Sale?
+  referralLink                    ReferralLink?               @relation(fields: [referralLinkId], references: [id], onDelete: SetNull)
+  visit                           Visit?                      @relation(fields: [visitId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
+  @@index([createdAt])
+  @@index([country, regionCode])
+  @@index([referralLinkId, createdAt])
   @@index([productId])
   @@index([assignedAgentId, claimedAt])
   @@index([telegramNotificationStatus])
@@ -321,6 +331,7 @@ model SalesAgent {
   sales                Sale[]
   marjaTransactions    MarjaTransaction[]
   rewardRedemptions    RewardRedemption[]
+  referralLinks        ReferralLink[]
 
   @@index([isApproved, isActive])
 }
@@ -380,25 +391,28 @@ model TelegramUpdate {
 }
 
 model AdminUser {
-  id                  String              @id @default(cuid())
-  name                String
-  phone               String              @unique
-  passwordHash        String
-  role                AdminRole           @default(MANAGER)
-  isActive            Boolean             @default(true)
-  approvalStatus      AdminApprovalStatus @default(APPROVED)
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  sessions            AdminSession[]
-  approvedSales       Sale[]              @relation("SaleApprover")
-  marjaAdjustments    MarjaTransaction[]
-  reviewedRedemptions RewardRedemption[]
-  backups             BackupRun[]
-  auditLogs           AuditLog[]          @relation("AuditActor")
-  createdPhotoAssets  PhotoStudioAsset[]  @relation("PhotoAssetCreator")
-  attachedPhotoAssets PhotoStudioAsset[]  @relation("PhotoAssetAttacher")
-  calculations        Calculation[]
-  aiPriceLists        AiPriceList[]
+  id                   String                       @id @default(cuid())
+  name                 String
+  phone                String                       @unique
+  passwordHash         String
+  role                 AdminRole                    @default(MANAGER)
+  isActive             Boolean                      @default(true)
+  approvalStatus       AdminApprovalStatus          @default(APPROVED)
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  sessions             AdminSession[]
+  approvedSales        Sale[]                       @relation("SaleApprover")
+  marjaAdjustments     MarjaTransaction[]
+  reviewedRedemptions  RewardRedemption[]
+  backups              BackupRun[]
+  auditLogs            AuditLog[]                   @relation("AuditActor")
+  createdPhotoAssets   PhotoStudioAsset[]           @relation("PhotoAssetCreator")
+  attachedPhotoAssets  PhotoStudioAsset[]           @relation("PhotoAssetAttacher")
+  calculations         Calculation[]
+  aiPriceLists         AiPriceList[]
+  referralLinks        ReferralLink[]
+  customerSalesCreated RegularCustomerMonthlySale[] @relation("CustomerSaleCreator")
+  customerSalesUpdated RegularCustomerMonthlySale[] @relation("CustomerSaleUpdater")
 
   @@index([approvalStatus, isActive])
 }
@@ -421,43 +435,43 @@ model AiPriceList {
 }
 
 model Calculation {
-  id                 String            @id @default(cuid())
-  customerName       String
-  phone              String?
-  region             String?
-  projectName        String
-  capacityTons       Decimal?          @db.Decimal(10, 2)
-  cameraCount        Int               @default(0)
-  temperatureMin     Decimal?          @db.Decimal(6, 2)
-  temperatureMax     Decimal?          @db.Decimal(6, 2)
-  notes              String?
-  buildingWidth      Decimal           @db.Decimal(10, 2)
-  buildingLength     Decimal           @db.Decimal(10, 2)
-  buildingHeight     Decimal           @db.Decimal(10, 2)
-  status             CalculationStatus @default(DRAFT)
-  electricityTariff  Decimal?          @db.Decimal(18, 2)
-  specialistConclusion String?
-  proposalNumber     String?           @unique
-  proposalDate       DateTime?
-  validityDays       Int?
-  paymentTerms       String?
-  deliveryTerms      String?
-  installationIncluded Boolean?
-  transportIncluded Boolean?
+  id                    String                     @id @default(cuid())
+  customerName          String
+  phone                 String?
+  region                String?
+  projectName           String
+  capacityTons          Decimal?                   @db.Decimal(10, 2)
+  cameraCount           Int                        @default(0)
+  temperatureMin        Decimal?                   @db.Decimal(6, 2)
+  temperatureMax        Decimal?                   @db.Decimal(6, 2)
+  notes                 String?
+  buildingWidth         Decimal                    @db.Decimal(10, 2)
+  buildingLength        Decimal                    @db.Decimal(10, 2)
+  buildingHeight        Decimal                    @db.Decimal(10, 2)
+  status                CalculationStatus          @default(DRAFT)
+  electricityTariff     Decimal?                   @db.Decimal(18, 2)
+  specialistConclusion  String?
+  proposalNumber        String?                    @unique
+  proposalDate          DateTime?
+  validityDays          Int?
+  paymentTerms          String?
+  deliveryTerms         String?
+  installationIncluded  Boolean?
+  transportIncluded     Boolean?
   commissioningIncluded Boolean?
-  warranty           String?
-  commercialNotes    String?
-  renderImageUrl     String?
-  manualUzsTotalWithVat Decimal?        @db.Decimal(18, 2)
-  proposalNote       String?
-  discountPercent    Decimal?           @db.Decimal(8, 4)
-  createdByAdminId   String
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  createdBy          AdminUser         @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
-  rooms              CalculationRoom[]
-  configurations     CalculationConfiguration[]
-  lineItems          CalculationLineItem[]
+  warranty              String?
+  commercialNotes       String?
+  renderImageUrl        String?
+  manualUzsTotalWithVat Decimal?                   @db.Decimal(18, 2)
+  proposalNote          String?
+  discountPercent       Decimal?                   @db.Decimal(8, 4)
+  createdByAdminId      String
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  createdBy             AdminUser                  @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  rooms                 CalculationRoom[]
+  configurations        CalculationConfiguration[]
+  lineItems             CalculationLineItem[]
 
   @@index([status, updatedAt])
   @@index([createdByAdminId, updatedAt])
@@ -486,7 +500,7 @@ model CalculationConfiguration {
   powerKw                 Decimal?                     @db.Decimal(12, 3)
   operatingHoursPerDay    Decimal?                     @db.Decimal(8, 2)
   order                   Int
-  calculation             Calculation                 @relation(fields: [calculationId], references: [id], onDelete: Cascade)
+  calculation             Calculation                  @relation(fields: [calculationId], references: [id], onDelete: Cascade)
 
   @@unique([calculationId, type])
   @@unique([calculationId, order])
@@ -683,4 +697,151 @@ model AdminLoginAttempt {
   key         String   @id @db.VarChar(64)
   attempts    Int      @default(0)
   windowStart DateTime @default(now())
+}
+
+enum ReferralSource {
+  YOUTUBE
+  INSTAGRAM
+  TELEGRAM
+  TIKTOK
+  GOOGLE_ADS
+  BLOGGER
+  QR
+  OTHER
+}
+
+enum ReferralLinkStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum VisitDevice {
+  MOBILE
+  DESKTOP
+  TABLET
+}
+
+enum VisitOutcome {
+  LEFT
+  INTERESTED
+  CONTACT_ATTEMPT
+  LEAD
+  SALE
+}
+
+enum VisitEventType {
+  PAGEVIEW
+  PRODUCT_VIEW
+  TEL_CLICK
+  TELEGRAM_CLICK
+  MADINA_OPEN
+  FORM_SUBMIT
+  HEARTBEAT
+}
+
+enum MoneyCurrency {
+  USD
+  UZS
+}
+
+model ReferralLink {
+  id               String             @id @default(cuid())
+  name             String
+  source           ReferralSource
+  slug             String             @unique @db.VarChar(40)
+  targetPath       String
+  cost             Decimal?           @db.Decimal(18, 2)
+  costCurrency     MoneyCurrency?
+  ownerAgentId     String?
+  status           ReferralLinkStatus @default(ACTIVE)
+  createdByAdminId String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  ownerAgent       SalesAgent?        @relation(fields: [ownerAgentId], references: [id], onDelete: SetNull)
+  createdBy        AdminUser          @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  visits           Visit[]
+  leads            Lead[]
+
+  @@index([status, createdAt])
+  @@index([source])
+}
+
+model Visit {
+  id             String        @id @default(cuid())
+  referralLinkId String?
+  visitorId      String        @db.VarChar(40)
+  firstSeenAt    DateTime      @default(now())
+  lastSeenAt     DateTime      @default(now())
+  country        String?       @db.VarChar(8)
+  regionCode     String?       @db.VarChar(16)
+  device         VisitDevice   @default(DESKTOP)
+  pageCount      Int           @default(0)
+  durationSec    Int           @default(0)
+  outcome        VisitOutcome  @default(LEFT)
+  referralLink   ReferralLink? @relation(fields: [referralLinkId], references: [id], onDelete: SetNull)
+  events         VisitEvent[]
+  lead           Lead?
+
+  @@index([referralLinkId, firstSeenAt])
+  @@index([referralLinkId, outcome])
+  @@index([visitorId, lastSeenAt])
+  @@index([firstSeenAt])
+}
+
+model VisitEvent {
+  id        String         @id @default(cuid())
+  visitId   String
+  type      VisitEventType
+  path      String         @db.VarChar(300)
+  createdAt DateTime       @default(now())
+  visit     Visit          @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@index([visitId, createdAt])
+}
+
+model RegularCustomer {
+  id         String                       @id @default(cuid())
+  name       String
+  country    String                       @default("UZ") @db.VarChar(8)
+  regionCode String?                      @db.VarChar(16)
+  phone      String?
+  note       String?
+  isActive   Boolean                      @default(true)
+  createdAt  DateTime                     @default(now())
+  updatedAt  DateTime                     @updatedAt
+  sales      RegularCustomerMonthlySale[]
+
+  @@index([isActive])
+}
+
+model RegularCustomerMonthlySale {
+  id               String          @id @default(cuid())
+  customerId       String
+  year             Int
+  month            Int
+  amount           Decimal         @db.Decimal(18, 2)
+  currency         MoneyCurrency
+  amountUsd        Decimal         @db.Decimal(18, 2)
+  note             String?
+  createdByAdminId String
+  updatedByAdminId String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  customer         RegularCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy        AdminUser       @relation("CustomerSaleCreator", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  updatedBy        AdminUser?      @relation("CustomerSaleUpdater", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+
+  @@unique([customerId, year, month])
+  @@index([year, month])
+}
+
+model RankingPrize {
+  id        String   @id @default(cuid())
+  year      Int
+  place     Int
+  prizeText String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([year, place])
 }
