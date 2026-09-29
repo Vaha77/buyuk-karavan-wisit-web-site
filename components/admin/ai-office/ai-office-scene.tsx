@@ -9,7 +9,7 @@ import { OfficeTennis } from "./office-tennis";
 import { OfficeWc } from "./office-wc";
 import { OfficeAgent } from "./office-agent";
 import { ProductAgentChat } from "./product-agent-chat";
-import { PhotoAgentChat } from "./photo-agent-chat";
+import { FotoAgentChat } from "./photo-agent-chat";
 import type { ProductAgentStatus } from "@/lib/ai-office/product-agent";
 
 function OfficeWalls({ layout }: { layout: OfficeLayout }) {
@@ -105,5 +105,5 @@ export function AiOfficeScene() {
   return <><section className="ai-office-frame" aria-label="AI Ofis sahnasi">
     <div className={`ai-office-canvas product-status-${productStatus} photo-status-${photoStatus}`}><OfficeSvg layout={desktopOfficeLayout} product={product} photo={photo}/><OfficeSvg layout={mobileOfficeLayout} product={product} photo={photo}/></div>
     <div className="ai-office-status" aria-label="Ofis holati"><span className="ai-office-status-dot" aria-hidden="true"/>Stollar: 4 <span aria-hidden="true">·</span> Agentlar: 2</div>
-  </section><ProductAgentChat open={productOpen} onClose={() => setProductOpen(false)} status={productStatus} onStatus={setProductStatus}/><PhotoAgentChat open={photoOpen} onClose={() => setPhotoOpen(false)} onStatus={setPhotoStatus}/></>;
+  </section><ProductAgentChat open={productOpen} onClose={() => setProductOpen(false)} status={productStatus} onStatus={setProductStatus}/><FotoAgentChat open={photoOpen} onClose={() => setPhotoOpen(false)} status={photoStatus} onStatus={setPhotoStatus}/></>;
 }

@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 const formats = new Map([
@@ -75,4 +75,23 @@ export async function deleteOwnedImage(url: string, productId: string) {
   if (!key) return;
   const c = config();
   await client().send(new DeleteObjectCommand({ Bucket: c.bucket, Key: key }));
+}
+
+// Temporary full-size results awaiting "Tasdiqlash" (Foto agent). Only the random key travels in the signed preview token.
+const PENDING_KEY = /^ai-pending\/photo-agent\/[0-9a-f-]{36}\.png$/;
+export function isPendingPhotoKey(key: string) { return PENDING_KEY.test(key); }
+export async function putPendingPhoto(bytes: Uint8Array) {
+  const c = config(); const key = `ai-pending/photo-agent/${randomUUID()}.png`;
+  await client().send(new PutObjectCommand({ Bucket: c.bucket, Key: key, Body: bytes, ContentLength: bytes.byteLength, ContentType: "image/png", CacheControl: "private, no-store" }));
+  return key;
+}
+export async function getPendingPhoto(key: string) {
+  if (!isPendingPhotoKey(key)) throw new ImageValidationError("Vaqtinchalik rasm kaliti noto‘g‘ri.");
+  const c = config(); const result = await client().send(new GetObjectCommand({ Bucket: c.bucket, Key: key }));
+  if (!result.Body) throw new ImageValidationError("Vaqtinchalik rasm topilmadi.");
+  return Buffer.from(await result.Body.transformToByteArray());
+}
+export async function deletePendingPhoto(key: string) {
+  if (!isPendingPhotoKey(key)) return;
+  const c = config(); await client().send(new DeleteObjectCommand({ Bucket: c.bucket, Key: key }));
 }

@@ -12,8 +12,9 @@ import { writeAudit } from "@/lib/audit/service";
 import { recordPhotoStudioCreation } from "@/lib/audit/photo-studio";
 import { photoStudioModeConfigs } from "@/lib/photo-studio/modes";
 import { editProductImage, OpenAINotConfiguredError, PhotoStudioNoImageError, PhotoStudioRateLimitError, PhotoStudioTimeoutError } from "@/lib/photo-studio/openai";
+import { deletePendingPhoto, getPendingPhoto, isPendingPhotoKey, putPendingPhoto } from "@/lib/products/storage";
 import { assessProcessedImage, PHOTO_QUALITY_MESSAGE } from "./photo-agent-quality";
-import { normalizePhotoQuery, PHOTO_AGENT_DEADLINE_MS, PHOTO_AGENT_MAX_FILE_BYTES, PHOTO_AGENT_MAX_FILES, planPlacements, type PhotoCandidate } from "./photo-agent-rules";
+import { normalizePhotoQuery, PHOTO_AGENT_DEADLINE_MS, PHOTO_AGENT_MAX_FILE_BYTES, planPlacements, type PhotoCandidate } from "./photo-agent-rules";
 import { extractProductModels } from "./product-agent-rules";
 
 /** Server whitelist. The interpreting LLM gets none of them as write access: it only ranks candidates from the image. */
@@ -25,8 +26,6 @@ const PREVIEW_TTL = 30 * 60_000;
 /** Errors whose message is safe and meant for the admin. */
 export class PhotoAgentUserError extends Error {}
 
-export type PhotoPreviewItem = { sha256: string; placement: "main" | "gallery"; width: number; height: number };
-export type PhotoPreviewPayload = { id: string; agentId: typeof PHOTO_AGENT_ID; adminId: string; sessionId: string; createdAt: number; expiresAt: number; product: { id: string; name: string; model: string; category: string }; items: PhotoPreviewItem[] };
 
 // ---- findProducts ----------------------------------------------------------------------------
 
@@ -53,9 +52,8 @@ function isHeic(bytes: Uint8Array, file: File) {
 }
 const magic = { jpeg: (b: Uint8Array) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff, png: (b: Uint8Array) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47, webp: (b: Uint8Array) => new TextDecoder("latin1").decode(b.slice(0, 4)) === "RIFF" && new TextDecoder("latin1").decode(b.slice(8, 12)) === "WEBP" };
 
-export function validatePhotoAgentFiles(files: File[]) {
-  if (files.length > PHOTO_AGENT_MAX_FILES) throw new PhotoAgentUserError(`Bir xabarda ko‘pi bilan ${PHOTO_AGENT_MAX_FILES} ta rasm yuboring.`);
-  if (files.some(file => !file.size || file.size > PHOTO_AGENT_MAX_FILE_BYTES)) throw new PhotoAgentUserError("Har bir rasm 10 MB dan oshmasin.");
+export function validatePhotoAgentFile(file: File) {
+  if (!file.size || file.size > PHOTO_AGENT_MAX_FILE_BYTES) throw new PhotoAgentUserError("Har bir rasm 10 MB dan oshmasin.");
 }
 
 /** JPG/PNG/WEBP/HEIC → EXIF-rotated JPEG without metadata (phone GPS is dropped), longest edge ≤ 2048px. */
@@ -102,18 +100,23 @@ export async function recommendCandidate(candidates: PhotoCandidate[], image: Pr
 // ---- processPhoto ----------------------------------------------------------------------------
 
 export type ProcessedPhoto = { bytes: Buffer; width: number; height: number; original: string };
-/** Foto Studio "card": background removed, white, centered, 1:1, 1500px, natural shadow; protectProduct keeps shape, logo and text. Retries once on a bad result. */
-export async function processPhoto(upload: PreparedUpload, deadline: number): Promise<ProcessedPhoto> {
+/**
+ * Foto Studio "card": background removed, white, centered, 1:1, 1500px, natural shadow; protectProduct keeps shape, logo and text.
+ * One image per request; a bad result is retried once if the 90 s budget allows.
+ */
+export async function processPhoto(upload: PreparedUpload): Promise<ProcessedPhoto> {
+  const deadline = Date.now() + PHOTO_AGENT_DEADLINE_MS;
   const settings = { ...photoStudioModeConfigs.card.defaults, protectProduct: true };
   let lastProblem = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
     if (attempt === 2 && deadline - Date.now() < 35_000) break;
     try {
-      const result = await editProductImage({ bytes: upload.bytes, type: upload.type, name: upload.name, mode: "card", settings });
+      const result = await withDeadline(editProductImage({ bytes: upload.bytes, type: upload.type, name: upload.name, mode: "card", settings }), deadline);
       const quality = await assessProcessedImage(result.bytes);
       if (quality.ok) return { bytes: result.bytes, width: result.width, height: result.height, original: upload.original };
       lastProblem = PHOTO_QUALITY_MESSAGE[quality.reason];
     } catch (error) {
+      if (error instanceof PhotoAgentUserError) throw error;
       if (error instanceof OpenAINotConfiguredError) throw new PhotoAgentUserError("OpenAI API sozlanmagan.");
       if (error instanceof PhotoStudioRateLimitError) throw new PhotoAgentUserError("AI xizmati so‘rovlari vaqtincha cheklangan. Bir daqiqadan so‘ng qayta urinib ko‘ring.");
       if (error instanceof PhotoStudioTimeoutError) throw new PhotoAgentUserError("AI xizmati 90 soniyada javob bermadi. Qayta urinib ko‘ring.");
@@ -123,64 +126,66 @@ export async function processPhoto(upload: PreparedUpload, deadline: number): Pr
   throw new PhotoAgentUserError(`${upload.original}: ${lastProblem || "rasm tayyorlanmadi"}. Mahsulot to‘liq ko‘rinadigan boshqa rasm bilan qayta urinib ko‘ring.`);
 }
 
-/** Processes all uploads (3 at a time) within the 90 s budget. */
-export async function processPhotos(uploads: PreparedUpload[]) {
-  const deadline = Date.now() + PHOTO_AGENT_DEADLINE_MS;
-  const results: ProcessedPhoto[] = new Array(uploads.length);
-  let next = 0;
-  const worker = async () => { while (next < uploads.length) { const index = next++; results[index] = await processPhoto(uploads[index], deadline); } };
+async function withDeadline<T>(work: Promise<T>, deadline: number) {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new PhotoAgentUserError("Ishlov berish 90 soniyadan oshdi. 1–2 ta rasm bilan qayta urinib ko‘ring.")), PHOTO_AGENT_DEADLINE_MS); });
-  try { await Promise.race([Promise.all(Array.from({ length: Math.min(3, uploads.length) }, worker)), timeout]); }
-  finally { clearTimeout(timer); }
-  return results;
+  const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new PhotoAgentUserError("Ishlov berish 90 soniyadan oshdi. Rasmni qayta yuboring yoki boshqa rasm tanlang.")), Math.max(1, deadline - Date.now())); });
+  try { return await Promise.race([work, timeout]); } finally { clearTimeout(timer); }
 }
 
 // ---- buildPhotoPreview (no database writes) --------------------------------------------------
 
+export type PhotoPreviewPayload = { id: string; agentId: typeof PHOTO_AGENT_ID; adminId: string; sessionId: string; createdAt: number; expiresAt: number; product: { id: string; name: string; model: string; category: string }; index: number; placement: "main" | "gallery"; key: string; sha256: string; width: number; height: number };
 export function sha256(bytes: Uint8Array) { return createHash("sha256").update(bytes).digest("hex"); }
-export function buildPhotoPreview(args: { product: PhotoCandidate; processed: ProcessedPhoto[]; wantsMain: boolean; adminId: string; sessionId: string }): PhotoPreviewPayload {
-  const placements = planPlacements(args.processed.length, args.product.hasMainImage, args.wantsMain);
+
+/** Stores the full PNG under a temporary key and returns a signed preview (only the key, never the image) plus a 600px JPEG for display. */
+export async function buildPhotoPreview(args: { product: PhotoCandidate; processed: ProcessedPhoto; index: number; total: number; wantsMain: boolean; adminId: string; sessionId: string }) {
+  const placement = planPlacements(args.total, args.product.hasMainImage, args.wantsMain)[args.index] ?? "gallery";
+  const key = await putPendingPhoto(args.processed.bytes);
   const now = Date.now();
-  return {
+  const payload: PhotoPreviewPayload = {
     id: randomUUID(), agentId: PHOTO_AGENT_ID, adminId: args.adminId, sessionId: args.sessionId, createdAt: now, expiresAt: now + PREVIEW_TTL,
     product: { id: args.product.id, name: args.product.name, model: args.product.model, category: args.product.category },
-    items: args.processed.map((item, index) => ({ sha256: sha256(item.bytes), placement: placements[index], width: item.width, height: item.height })),
+    index: args.index, placement, key, sha256: sha256(args.processed.bytes), width: args.processed.width, height: args.processed.height,
   };
+  const preview = await sharp(args.processed.bytes).resize(600, 600, { fit: "inside" }).flatten({ background: "#ffffff" }).jpeg({ quality: 82 }).toBuffer();
+  return { payload, previewJpeg: preview.toString("base64") };
 }
 
-// Signed like the Product agent preview: HMAC keyed by the admin session, so the token is bound to this session.
+// Signed like the Product agent preview: HMAC keyed by the admin session, so a token only works in this session.
 export function signPhotoPreview(payload: PhotoPreviewPayload, sessionTokenHash: string) {
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return `${body}.${createHmac("sha256", sessionTokenHash).update(body).digest("base64url")}`;
 }
-export function verifyPhotoPreview(token: string, adminId: string, sessionId: string, sessionTokenHash: string): PhotoPreviewPayload {
+export function verifyPhotoPreview(token: string, adminId: string, sessionId: string, sessionTokenHash: string, options: { allowExpired?: boolean } = {}): PhotoPreviewPayload {
   const [body, signature, extra] = token.split(".");
   if (!body || !signature || extra) throw new Error("PREVIEW_TOKEN_INVALID");
   const expected = createHmac("sha256", sessionTokenHash).update(body).digest(); const actual = Buffer.from(signature, "base64url");
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new Error("PREVIEW_TOKEN_INVALID");
   const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as PhotoPreviewPayload;
-  if (payload.agentId !== PHOTO_AGENT_ID || payload.adminId !== adminId || payload.sessionId !== sessionId || payload.expiresAt < Date.now()) throw new Error("PREVIEW_TOKEN_INVALID");
+  if (payload.agentId !== PHOTO_AGENT_ID || payload.adminId !== adminId || payload.sessionId !== sessionId || !isPendingPhotoKey(payload.key) || (!options.allowExpired && payload.expiresAt < Date.now())) throw new Error("PREVIEW_TOKEN_INVALID");
   return payload;
 }
 
 // ---- confirm ---------------------------------------------------------------------------------
 
-/** Called only by the confirm endpoint after "Tasdiqlash". Returns the asset id for the Foto Studio save path. */
-export async function claimPhotoPreviewItem(payload: PhotoPreviewPayload, index: number, image: Buffer, actor: Pick<AdminUser, "id" | "name">) {
-  const item = payload.items[index];
-  if (!item) throw new PhotoAgentUserError("Preview rasmi topilmadi.");
-  if (sha256(image) !== item.sha256) throw new PhotoAgentUserError("Rasm preview bilan mos emas. Qayta ishlang.");
-  if (await getDb().auditLog.findFirst({ where: { action: "AI_PHOTO_CONFIRMED", entityType: "AI_AGENT", entityId: `${payload.id}:${index}` }, select: { id: true } })) throw new PhotoAgentUserError("Bu rasm avval saqlangan.");
-  const product = await getDb().product.findUnique({ where: { id: payload.product.id }, select: { id: true, images: true } });
+export async function isPhotoPreviewConfirmed(payload: PhotoPreviewPayload) {
+  return Boolean(await getDb().auditLog.findFirst({ where: { action: "AI_PHOTO_CONFIRMED", entityType: "AI_AGENT", entityId: payload.id }, select: { id: true } }));
+}
+
+/** Loads the pending PNG, checks it is the previewed one and creates the Foto Studio asset used by the shared save path. */
+export async function claimPhotoPreview(payload: PhotoPreviewPayload, actor: Pick<AdminUser, "id" | "name">) {
+  const image = await getPendingPhoto(payload.key).catch(() => { throw new PhotoAgentUserError("Vaqtinchalik rasm topilmadi. Rasmni qayta ishlang."); });
+  if (sha256(image) !== payload.sha256) throw new PhotoAgentUserError("Rasm preview bilan mos emas. Qayta ishlang.");
+  const product = await getDb().product.findUnique({ where: { id: payload.product.id }, select: { images: true } });
   if (!product) throw new PhotoAgentUserError("Mahsulot topilmadi.");
-  const asset = await recordPhotoStudioCreation(actor, "card", item.width, item.height);
-  return { assetId: asset.id, previousMainImage: product.images[0] || null };
+  const asset = await recordPhotoStudioCreation(actor, "card", payload.width, payload.height);
+  return { image, assetId: asset.id, previousMainImage: product.images[0] || null };
 }
 
 /** Audit: who (actor), when (createdAt), which product, main/gallery, the previous main image URL. */
-export async function auditPhotoConfirmed(payload: PhotoPreviewPayload, index: number, actor: Pick<AdminUser, "id" | "name">, details: { assetId: string; previousMainImage: string | null }) {
-  const item = payload.items[index];
+export async function auditPhotoConfirmed(payload: PhotoPreviewPayload, actor: Pick<AdminUser, "id" | "name">, details: { assetId: string; previousMainImage: string | null }) {
   const product = await getDb().product.findUnique({ where: { id: payload.product.id }, select: { images: true } });
-  await writeAudit(actor, { action: "AI_PHOTO_CONFIRMED", entityType: "AI_AGENT", entityId: `${payload.id}:${index}`, entityName: payload.product.name, summary: `Foto agent rasmni ${item.placement === "main" ? "asosiy rasm" : "galereya"} sifatida saqladi`, before: { mainImage: details.previousMainImage }, after: { mainImage: product?.images[0] || null, imageCount: product?.images.length ?? null }, metadata: { agentId: PHOTO_AGENT_ID, previewId: payload.id, productId: payload.product.id, productModel: payload.product.model, placement: item.placement, previousMainImage: details.previousMainImage, assetId: details.assetId, index } });
+  await writeAudit(actor, { action: "AI_PHOTO_CONFIRMED", entityType: "AI_AGENT", entityId: payload.id, entityName: payload.product.name, summary: `Foto agent rasmni ${payload.placement === "main" ? "asosiy rasm" : "galereya"} sifatida saqladi`, before: { mainImage: details.previousMainImage }, after: { mainImage: product?.images[0] || null, imageCount: product?.images.length ?? null }, metadata: { agentId: PHOTO_AGENT_ID, previewId: payload.id, productId: payload.product.id, productModel: payload.product.model, placement: payload.placement, previousMainImage: details.previousMainImage, assetId: details.assetId, index: payload.index } });
 }
+
+export { deletePendingPhoto };

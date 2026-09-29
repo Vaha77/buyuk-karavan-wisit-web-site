@@ -14,7 +14,8 @@ export function normalizePhotoQuery(value: string) { return compactModel(value);
 const OFF_DOMAIN_PATTERNS = [
   /\bnarx\p{L}*/iu, /\bnarh\p{L}*/iu, /\bprice\b/iu, /\bcena\b|\bцен/iu, /\$\s*\d|\d\s*(?:\$|usd|dollar|so['‘’]?m)\b/iu,
   /\btavsif\p{L}*/iu, /\bdescription\b/iu, /\bseo\b/iu, /\bteg(?:lar|ini|ni)?\b/iu, /\bkategoriya\p{L}*|\bkategorya\p{L}*/iu,
-  /\bmahsulot\p{L}*\s+(?:qo['‘’]?sh|yarat|o['‘’]?chir|nomini)/iu, /\byangi\s+mahsulot/iu, /\bnom(?:i|ini)?\s+o['‘’]?zgartir/iu,
+  // "mahsulot qo‘sh" (create a product) is refused; "rasmni mahsulotiga qo‘sh" (attach a photo) is image work.
+  /\bmahsulot(?:lar)?\s+(?:qo['‘’]?sh|yarat|o['‘’]?chir)/iu, /\bmahsulot\p{L}*\s+nomini\b/iu, /\byangi\s+mahsulot/iu, /\bnom(?:i|ini)?\s+o['‘’]?zgartir/iu,
   /\bmavjud(?:lik)?\s+(?:holat|qil)/iu, /\byashir|\bko['‘’]?rinmas\s+qil/iu, /\blid\b|\bcrm\b|\bhisob-kitob\b|\breklama\s+matn/iu,
 ];
 export function isPhotoAgentOffDomain(message: string) { return OFF_DOMAIN_PATTERNS.some(pattern => pattern.test(message)); }
@@ -23,7 +24,7 @@ export function wantsMainPlacement(message: string) { return /\basosiy\s*(?:rasm
 
 /** Text the admin typed to identify the product, without placement words. */
 export function photoSearchText(message: string) {
-  return message.replace(/\basosiy\s*(?:rasm\p{L}*\s*)?(?:qil\p{L}*|qo['‘’]?y\p{L}*|bo['‘’]?lsin)|\basosiyga\b|\bgalereya\p{L}*\b|\brasm\p{L}*\b|\bfoto\p{L}*\b|\bshu\b|\bbu\b|\buchun\b|\bga\b|\bqo['‘’]?y\p{L}*/giu, " ").replace(/\s+/g, " ").trim();
+  return message.replace(/\basosiy\s*(?:rasm\p{L}*\s*)?(?:qil\p{L}*|qo['‘’]?y\p{L}*|bo['‘’]?lsin)|\basosiyga\b|\bgalereya\p{L}*\b|\brasm\p{L}*\b|\bfoto\p{L}*\b|\bshu\b|\bbu\b|\buchun\b|\bga\b|\bqo['‘’]?y\p{L}*|\bqo['‘’]?sh\p{L}*|\bmahsulot\p{L}*/giu, " ").replace(/\s+/g, " ").trim();
 }
 
 export type PhotoCandidate = { id: string; name: string; model: string; category: string; hasMainImage: boolean; mainImage: string | null };
