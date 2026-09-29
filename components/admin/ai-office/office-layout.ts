@@ -49,7 +49,7 @@ export const desktopOfficeLayout: OfficeLayout = {
   },
   tennisTable: { x: 800, y: 378, width: 330, height: 164 },
   wcRoom: { x: 958, y: 62, width: 190, height: 236 },
-  plants: [{ x: 706, y: 122 }, { x: 720, y: 600 }, { x: 788, y: 305 }, { x: 1140, y: 628 }],
+  plants: [{ x: 690, y: 140 }, { x: 720, y: 600 }, { x: 788, y: 305 }, { x: 1140, y: 628 }],
   visits: { cooler: { x: 760, y: 200 }, tennis: { x: 770, y: 460 }, wc: { x: 1050, y: 200 }, plant: { x: 850, y: 320 } },
 };
 
