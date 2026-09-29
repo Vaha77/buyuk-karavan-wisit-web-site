@@ -8,6 +8,6 @@ export function OfficeTennis({ table }: { table: OfficeLayout["tennisTable"] }) 
     <line x1={table.x + table.width / 2} y1={table.y + 10} x2={table.x + table.width / 2} y2={table.y + table.height - 10} stroke="#fff" strokeWidth="3"/>
     <line x1={table.x + table.width / 2 - 6} y1={table.y - 5} x2={table.x + table.width / 2 - 6} y2={table.y + table.height + 5} stroke="#dceafd" strokeWidth="4"/>
     <line x1={table.x + table.width / 2 + 6} y1={table.y - 5} x2={table.x + table.width / 2 + 6} y2={table.y + table.height + 5} stroke="#dceafd" strokeWidth="4"/>
-    <circle cx={table.x + table.width - 25} cy={table.y - 12} r="8" fill="#f59e0b" stroke="#fff" strokeWidth="2"/>
+    <circle cx={table.x + table.width - 32} cy={table.y + 28} r="8" fill="#f59e0b" stroke="#fff" strokeWidth="2"/>
   </g>;
 }

@@ -7,14 +7,13 @@ import { z } from "zod";
 import type { AdminUser } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { normalizeSlug } from "@/lib/products/validation";
-import { categorySimilarity, chatReplyClaimsWrite, normalizeAgentModel, normalizeMoney2, unsupportedTechnicalTokens } from "./product-agent-rules";
+import { buildAgentProductCopy, buildAgentProductName, buildAgentProductTags, categorySimilarity, chatReplyClaimsWrite, containsForbiddenClaim, detectAgentProductKind, extractCondenserCode, extractDirectPrice, extractEvaporatorCode, extractProductModels, extractSeoTerms, normalizeMoney2, resolveAgentBrand, resolveAgentModel, unsupportedTechnicalTokens } from "./product-agent-rules";
 import { getActivePriceList, normalizePriceModel, valueForKind, type PriceListKind } from "./price-list-parser";
 import { rejectUnauthorizedProductAgentTool, ProductAgentProviderError, type ProductAgentStatus } from "./product-agent";
-import { calculateFinalPrice, type PreviewPayload, type PreviewRow } from "./product-agent-preview";
+import { calculateFinalPrice, extractRequiredLocalTerms, type PreviewPayload, type PreviewRow } from "./product-agent-preview";
 
 const MAX_TOOL_STEPS = 10;
 const DEFAULT_MODEL = "gpt-4.1";
-const FORBIDDEN_CLAIMS = /yuqori sifatli|eng yaxshi|tejamkor|maishiy|uzoq xizmat qiladi|ishonchli/giu;
 export const PRODUCT_AGENT_TOOL_NAMES = ["listCategories", "findProducts", "lookupPriceList", "proposeCategory", "buildProductDraft"] as const;
 type AgentToolName = (typeof PRODUCT_AGENT_TOOL_NAMES)[number];
 
@@ -41,60 +40,61 @@ const tools: Tool[] = [
   { type: "function", name: "buildProductDraft", description: "Bitta to'liq preview qatorini qo'shadi. Ko'p mahsulot uchun bu toolni har mahsulotga chaqir. markupPercentni albatta ber; yakuniy price-list narxini server hisoblaydi.", strict: true, parameters: { type: "object", properties: draftProperties, required: Object.keys(draftProperties), additionalProperties: false } },
 ];
 
-export const PRODUCT_AGENT_TOOL_SYSTEM_PROMPT = `Sen BUYUK KARAVAN admin panelidagi Mahsulot agentisan. Barcha mahsulot maydonlarini O'ZING to'ldir. Brend/modelni findProducts bilan top. Kategoriyani listCategories bilan tekshir; o'xshashi bo'lmasa proposeCategory. Tavsif va SEO o'zbekcha va faqat faktlardan bo'lsin. Texnik raqamlarni taxmin qilma.
+export const PRODUCT_AGENT_TOOL_SYSTEM_PROMPT = `Sen BUYUK KARAVAN admin panelidagi Mahsulot agentisan. Barcha mahsulot maydonlarini O'ZING to'ldir. Brend/modelni findProducts bilan top. Kategoriyani listCategories bilan tekshir; o'xshashi bo'lmasa proposeCategory. Nom, brend, model, tavsif, SEO va teglarni server faktlardan shablon bilan yozadi: bu maydonlarga marketing gap yozma, bilmasang bo'sh qoldir. Texnik raqamlarni taxmin qilma.
 Narx xabarda aniq bo'lsa priceUsdga ber. Narx yo'q bo'lsa lookupPriceList ishlat. Foiz aytilsa markupPercentga faqat foizni ber; hisobni server qiladi. "hamma/barcha" buyruqlarida lookupPriceListga model="hamma" berib, qaytgan har qator uchun buildProductDraft chaqir. Bir nechta mahsulot bo'lsa buildProductDraftni bir necha marta chaqir.
 Savol faqat narx foydalanuvchida ham, price-listda ham umuman topilmasa beriladi. "Tavsifni o'zing yoz" sening ishing. buildProductDraft faqat preview yaratadi. "Yaratildi", ID yoki DB natijasini o'ylab topma.`;
 
 function safeJson(value: unknown) { return JSON.stringify(value); }
 function parseArguments(value: string) { try { return JSON.parse(value) as unknown; } catch { throw new Error("Tool argumentlari JSON formatida emas."); } }
-function cleanText(value: string) { return value.replace(FORBIDDEN_CLAIMS, "").replace(/\s{2,}/g, " ").trim(); }
 function similarCategory(categories: Category[], name: string): { item?: Category; score: number } { return categories.map(item => ({ item, score: categorySimilarity(item.name, name) })).sort((a, b) => b.score - a.score)[0] || { score: 0 }; }
 function selectBlock(active: Awaited<ReturnType<typeof getActivePriceList>>, requested: string | null) { if (!active) return undefined; if (!requested?.trim()) return active.parsed.blocks.find(block => block.key === active.blockKey) || active.parsed.blocks[0]; const needle = requested.toLocaleLowerCase("uz-UZ").trim(); return active.parsed.blocks.find(block => [block.key, block.label, block.sheetName].some(value => value.toLocaleLowerCase("uz-UZ").includes(needle))); }
 function sourceForEvidence(item: LookupEvidence) { return `${item.sheetName}, ${item.blockLabel}, ${item.sourceRow}-qator`; }
 
-export function repairDraftText(draft: DraftInput, categoryName: string, facts: string) {
-  const identity = `${draft.brand || "BUYUK KARAVAN"} ${normalizeAgentModel(draft.model)} ${categoryName}`.replace(/\s+/g, " ").trim();
-  let shortDescription = cleanText(draft.shortDescription); if (shortDescription.length < 20) shortDescription = `${identity} sovutish tizimlari uchun mo'ljallangan mahsulot.`;
-  let description = cleanText(draft.description); if (description.length < 80) description = `${identity} mahsuloti. Model: ${normalizeAgentModel(draft.model)}. Kategoriya: ${categoryName}.${facts ? ` Manbadagi xususiyatlar: ${facts}.` : ""} Narx va mavjudlik holati kartochkada ko'rsatilgan.`;
-  let seoTitle = cleanText(draft.seoTitle); if (seoTitle.length < 20) seoTitle = `${identity} — BUYUK KARAVAN`;
-  let seoDescription = cleanText(draft.seoDescription); if (seoDescription.length < 80) seoDescription = `${identity} haqida faktlarga asoslangan tavsif, narx va mavjudlik ma'lumotlari. BUYUK KARAVAN mahsulotlar katalogi.`;
-  return { shortDescription: shortDescription.slice(0, 300), description: description.slice(0, 5000), seoTitle: seoTitle.slice(0, 180), seoDescription: seoDescription.slice(0, 500) };
-}
+function capitalize(value: string) { return value ? `${value[0].toLocaleUpperCase("uz-UZ")}${value.slice(1)}` : value; }
+function normalizedFactText(value: string) { return value.toLocaleLowerCase("uz-UZ").replace(/\s+/g, " ").trim(); }
 
 async function makeRow(args: { draft: DraftInput; rowNumber: number; sourceText: string; evidence: LookupEvidence[]; categories: Category[] }): Promise<PreviewRow> {
-  const normalizedModel = normalizeAgentModel(args.draft.model || args.sourceText);
-  const evidence = [...args.evidence].reverse().find(item => normalizePriceModel(item.model) === normalizePriceModel(normalizedModel));
-  const directPrice = normalizeMoney2(args.draft.priceUsd);
-  if (!evidence && !directPrice) throw new Error(`Narx topilmadi: ${normalizedModel || "model"} uchun USD narxini yozing.`);
+  // Identity fields and copy are derived on the server; the LLM draft only proposes category, price and markup.
+  const message = args.sourceText;
+  const singleModelMessage = extractProductModels(message).length <= 1;
+  const guessedModel = resolveAgentModel({ draftModel: args.draft.model, draftBrand: args.draft.brand, message });
+  const evidence = [...args.evidence].reverse().find(item => normalizePriceModel(item.model) === normalizePriceModel(guessedModel));
+  const model = resolveAgentModel({ draftModel: args.draft.model, draftBrand: args.draft.brand, message, evidenceModel: evidence?.model });
+  const directPrice = normalizeMoney2(args.draft.priceUsd) || (singleModelMessage ? extractDirectPrice(message) : null);
+  if (!evidence && !directPrice) throw new Error(`Narx topilmadi: ${model || "model"} uchun USD narxini yozing.`);
   const markup = normalizeMoney2(args.draft.markupPercent || "0") || "0.00";
   const finalPrice = evidence ? calculateFinalPrice(evidence.price, markup, "none") : directPrice!;
-  if (!finalPrice) throw new Error(`Narx hisoblanmadi: ${normalizedModel}.`);
+  if (!finalPrice) throw new Error(`Narx hisoblanmadi: ${model}.`);
 
   const exactCategory = args.categories.find(item => item.id === args.draft.categoryIdOrNewName);
   const similar = similarCategory(args.categories, args.draft.categoryIdOrNewName);
   const category = exactCategory || (similar.score >= .66 ? similar.item : undefined);
-  const categoryName = category?.name || args.draft.categoryIdOrNewName.trim() || "Mahsulotlar";
-  const family = normalizedModel.split(" ")[0];
-  const products = await getDb().product.findMany({ where: { OR: [{ model: { contains: normalizedModel, mode: "insensitive" } }, { model: { startsWith: family, mode: "insensitive" } }] }, select: { id: true, name: true, brand: true, model: true, slug: true, priceUsd: true, categoryId: true }, take: 30 });
-  const exact = category ? products.find(item => normalizePriceModel(item.model) === normalizePriceModel(normalizedModel) && item.categoryId === category.id) : undefined;
-  const brand = exact?.brand || products.find(item => item.brand)?.brand || args.draft.brand.trim() || "XUEYING";
-  const fn = args.sourceText.match(/\bFN\s*(\d+)\b/iu)?.[1];
-  const categoryLabel = categoryName.toLocaleLowerCase("uz-UZ").replace(/agregatlar/giu, "agregat");
-  const normalizedName = `${brand} ${normalizedModel} ${categoryLabel}${fn ? ` FN${fn}` : ""}`.replace(/\s+/g, " ").trim();
-  const evidenceFacts = evidence ? Object.entries(evidence.facts).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join(", ") : "";
-  const repaired = repairDraftText({ ...args.draft, brand, model: normalizedModel }, categoryName, evidenceFacts);
-  const evidenceText = `${args.sourceText}\n${safeJson(evidence || {})}`;
-  const specifications = args.draft.specifications.filter(spec => spec.name.trim() && spec.value.trim() && unsupportedTechnicalTokens([spec], evidenceText).length === 0);
-  const requiredTerms = args.draft.requiredSeoTerms.map(term => term.trim()).filter(Boolean);
-  const tags = [...new Set([...args.draft.tags.map(cleanText).filter(Boolean), ...requiredTerms])];
-  let seoTitle = repaired.seoTitle, seoDescription = repaired.seoDescription;
-  for (const term of requiredTerms) { if (!seoTitle.toLocaleLowerCase("uz-UZ").includes(term.toLocaleLowerCase("uz-UZ"))) seoTitle = `${term} — ${seoTitle}`.slice(0, 180); if (!seoDescription.toLocaleLowerCase("uz-UZ").includes(term.toLocaleLowerCase("uz-UZ"))) seoDescription = `${seoDescription} ${term}.`.slice(0, 500); }
+  const categoryName = category?.name || capitalize(args.draft.categoryIdOrNewName.trim().replace(/\s+/g, " ")) || "Mahsulotlar";
+  const family = model.split(" ")[0];
+  const products = await getDb().product.findMany({ where: { OR: [{ model: { contains: model, mode: "insensitive" } }, { model: { startsWith: family, mode: "insensitive" } }] }, select: { id: true, name: true, brand: true, model: true, slug: true, priceUsd: true, categoryId: true }, take: 50 });
+  const sameModel = products.filter(item => normalizePriceModel(item.model) === normalizePriceModel(model));
+  const exact = category ? sameModel.find(item => item.categoryId === category.id) : undefined;
+  const brand = resolveAgentBrand({ model, existingBrands: sameModel.map(item => item.brand), draftBrand: args.draft.brand });
+  const kind = detectAgentProductKind({ categoryName, evidenceKind: evidence?.kind, message });
+  const facts = evidence?.facts;
+  const condenser = (singleModelMessage ? extractCondenserCode(message) : "") || (kind === "air" || kind === "air-kit" ? extractCondenserCode(facts?.airCondenser || "") : "");
+  const evaporator = (singleModelMessage ? extractEvaporatorCode(message) : "") || (kind.endsWith("kit") ? extractEvaporatorCode(facts?.evaporator || "") : "");
+  const requiredTerms = [...new Set([...args.draft.requiredSeoTerms, ...extractSeoTerms(message), ...extractRequiredLocalTerms(message)].map(term => term.trim()).filter(term => term && !containsForbiddenClaim(term)))];
+  const name = buildAgentProductName({ brand, model, kind, categoryName, condenser, evaporator, facts });
+  const copy = buildAgentProductCopy({ name, brand, model, kind, categoryName, condenser, evaporator, facts, requiredTerms });
+  const tags = buildAgentProductTags({ brand, model, kind, condenser, evaporator, requiredTerms });
+
+  const serverSpecs = ([["Kondensator", condenser], ["Isparitel", evaporator], ["Freon", facts?.freon], ["Resiver", facts?.receiverLiters], ["Komplekt tarkibi", kind.endsWith("kit") ? facts?.kitParts : ""]] as Array<[string, string | undefined]>)
+    .filter((entry): entry is [string, string] => !!entry[1]?.trim() && !containsForbiddenClaim(entry[1])).map(([specName, value]) => ({ name: specName, value: value.trim() }));
+  const evidenceText = normalizedFactText(`${message}\n${Object.values(facts || {}).join("\n")}`);
+  const specNames = new Set(serverSpecs.map(spec => spec.name.toLocaleLowerCase("uz-UZ")));
+  const draftSpecs = args.draft.specifications.filter(spec => spec.name.trim() && spec.value.trim() && !specNames.has(spec.name.trim().toLocaleLowerCase("uz-UZ")) && !containsForbiddenClaim(`${spec.name} ${spec.value}`) && evidenceText.includes(normalizedFactText(spec.value)) && unsupportedTechnicalTokens([spec], evidenceText).length === 0);
   return {
-    id: `row-${args.rowNumber}`, name: normalizedName || args.draft.name, brand, model: normalizedModel, sourcePrice: evidence?.price || directPrice!, currency: "USD", sourceLocation: evidence ? sourceForEvidence(evidence) : "Admin xabari", confidence: 1, ambiguous: false,
-    categoryId: category?.id || null, categoryName, shortDescription: repaired.shortDescription, description: repaired.description, tags, seoTitle, seoDescription, specifications,
+    id: `row-${args.rowNumber}`, name, brand, model, sourcePrice: evidence?.price || directPrice!, currency: "USD", sourceLocation: evidence ? sourceForEvidence(evidence) : "Admin xabari", confidence: 1, ambiguous: false,
+    categoryId: category?.id || null, categoryName, shortDescription: copy.shortDescription, description: copy.description, tags, seoTitle: copy.seoTitle, seoDescription: copy.seoDescription, specifications: [...serverSpecs, ...draftSpecs],
     markupPercent: evidence ? markup : "0.00", rounding: "none", finalPrice, status: exact ? "MAVJUD — narx o‘zgaradi" : "YANGI", existingProductId: exact?.id || null, oldPrice: exact?.priceUsd?.toString() || null,
-    slug: exact?.slug || normalizeSlug(args.draft.slug || normalizedName), requiredLocalTerms: requiredTerms, seoKeywords: tags, seoText: repaired.description, newCategoryName: category ? null : categoryName,
-    productKind: evidence?.kind, priceListId: evidence ? "active" : undefined, sourceBlock: evidence?.blockKey, priceSource: evidence ? "price-list" : "direct", directPrice: evidence ? null : directPrice,
+    slug: exact?.slug || normalizeSlug(name), requiredLocalTerms: requiredTerms, seoKeywords: tags, seoText: copy.description, newCategoryName: category ? null : categoryName,
+    productKind: evidence?.kind || kind, priceListId: evidence ? "active" : undefined, sourceBlock: evidence?.blockKey, priceSource: evidence ? "price-list" : "direct", directPrice: evidence ? null : directPrice,
   };
 }
 

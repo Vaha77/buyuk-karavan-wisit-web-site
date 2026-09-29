@@ -21,7 +21,7 @@ export function ProductCard({ product, exchangeRate }: { product: Product; excha
   return <Link className="catalog-card" href={`/products/${product.slug}`} aria-label={`${product.name} ${product.model} — batafsil`}>
     <div className="catalog-card-image">
       <span className="catalog-card-badge">{product.badge}</span>
-      {product.image ? <Image unoptimized={isPublicNeonProductImage(product.image)} className="catalog-card-real-image" src={product.image} alt={`${product.name} ${product.model}`} fill sizes="(max-width: 700px) 100vw, 380px" /> : <Icon className="catalog-card-icon" size={38} strokeWidth={1.7} aria-hidden="true" />}
+      {product.image ? <Image unoptimized={isPublicNeonProductImage(product.image)} className="catalog-card-real-image" src={product.image} alt={`${product.name} ${product.model}`} fill sizes="(max-width: 767px) 50vw, 380px" /> : <span className="catalog-card-placeholder"><Icon className="catalog-card-icon" size={34} strokeWidth={1.5} aria-hidden="true"/><small>Rasm tez orada</small></span>}
     </div>
     <div className="catalog-card-body">
       <div className="catalog-card-identification"><h2>{product.name}</h2><p>{product.model}</p></div>

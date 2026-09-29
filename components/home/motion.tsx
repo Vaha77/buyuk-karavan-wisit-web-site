@@ -9,7 +9,14 @@ export function HomeMotion() {
         return;
       }
       const target = document.getElementById(decodeURIComponent(hash.replace(/^#/, "")));
-      if (target) target.scrollIntoView({ behavior, block: "start" });
+      if (!target) return;
+      // Land the section's content (not its padded box) ~12px under the header, i.e. ~90–100px from the viewport top.
+      const header = document.querySelector<HTMLElement>(".site-header");
+      const headerBottom = header && getComputedStyle(header).position === "fixed" ? header.getBoundingClientRect().bottom : 0;
+      const offset = Math.max(headerBottom + 12, 16);
+      const paddingTop = parseFloat(getComputedStyle(target).paddingTop) || 0;
+      const top = target.getBoundingClientRect().top + window.scrollY + paddingTop - offset;
+      window.scrollTo({ top: Math.max(0, top), left: 0, behavior });
     };
     const onClick = (event: MouseEvent) => {
       const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>('a[href^="#"]');

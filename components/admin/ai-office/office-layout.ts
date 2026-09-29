@@ -23,7 +23,12 @@ export type OfficeLayout = {
   tennisTable: Point & { width: number; height: number };
   wcRoom: Point & { width: number; height: number };
   plants: [Point, Point, Point, Point];
+  /** Where an idle agent stands when it visits a spot (beside the object, never on top of it). */
+  visits: Record<IdleSpot, Point>;
 };
+
+export type IdleSpot = "cooler" | "tennis" | "wc" | "plant";
+export const IDLE_SPOTS: IdleSpot[] = ["cooler", "tennis", "wc", "plant"];
 
 export const desktopOfficeLayout: OfficeLayout = {
   name: "desktop",
@@ -44,7 +49,8 @@ export const desktopOfficeLayout: OfficeLayout = {
   },
   tennisTable: { x: 800, y: 378, width: 330, height: 164 },
   wcRoom: { x: 958, y: 62, width: 190, height: 236 },
-  plants: [{ x: 72, y: 95 }, { x: 720, y: 600 }, { x: 788, y: 305 }, { x: 1140, y: 628 }],
+  plants: [{ x: 706, y: 122 }, { x: 720, y: 600 }, { x: 788, y: 305 }, { x: 1140, y: 628 }],
+  visits: { cooler: { x: 760, y: 200 }, tennis: { x: 770, y: 460 }, wc: { x: 1050, y: 200 }, plant: { x: 850, y: 320 } },
 };
 
 export const mobileOfficeLayout: OfficeLayout = {
@@ -67,4 +73,5 @@ export const mobileOfficeLayout: OfficeLayout = {
   tennisTable: { x: 270, y: 610, width: 280, height: 142 },
   wcRoom: { x: 348, y: 805, width: 202, height: 210 },
   plants: [{ x: 55, y: 552 }, { x: 548, y: 560 }, { x: 72, y: 950 }, { x: 310, y: 978 }],
+  visits: { cooler: { x: 225, y: 560 }, tennis: { x: 240, y: 700 }, wc: { x: 450, y: 930 }, plant: { x: 140, y: 945 } },
 };

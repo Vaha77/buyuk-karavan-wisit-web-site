@@ -80,12 +80,14 @@ test("route returns payload under preview and loop accumulates rows", async () =
   assert.match(loop, /tool_choice: toolChoice/);
 });
 
-test("draft repair fills short copy and removes forbidden claims", async () => {
+test("draft repair replaces model copy with factual server templates", async () => {
   const loop = await readFile(new URL("../lib/ai-office/product-agent-loop.ts", import.meta.url), "utf8");
-  assert.match(loop, /shortDescription\.length < 20/);
-  assert.match(loop, /description\.length < 80/);
-  assert.match(loop, /seoDescription\.length < 80/);
-  assert.match(loop, /replace\(FORBIDDEN_CLAIMS/);
+  for (const name of ["resolveAgentModel", "resolveAgentBrand", "buildAgentProductName", "buildAgentProductCopy", "buildAgentProductTags"]) assert.match(loop, new RegExp(`${name}\\(`));
+  assert.match(loop, /shortDescription: copy\.shortDescription, description: copy\.description/);
+  assert.doesNotMatch(loop, /args\.draft\.(?:shortDescription|description|seoTitle|seoDescription|tags|name)\b/);
+  const preview = await readFile(new URL("../lib/ai-office/product-agent-preview.ts", import.meta.url), "utf8");
+  assert.match(preview, /containsForbiddenClaim\(/);
+  assert.match(preview, /findReusableCategory\(row\.newCategoryName\)/);
 });
 
 test("agent prompt owns descriptions and limits questions to missing price", async () => {
@@ -94,4 +96,65 @@ test("agent prompt owns descriptions and limits questions to missing price", asy
   assert.match(loop, /Savol faqat narx foydalanuvchida ham, price-listda ham umuman topilmasa/);
   assert.match(loop, /Tavsifni o'zing yoz/);
   assert.match(loop, /"Yaratildi", ID yoki DB natijasini o'ylab topma/);
+});
+
+test("P0 regression: server derives brand, model, name, copy and tags for the Vaha command", async () => {
+  const r = await import("../lib/ai-office/product-agent-rules.ts");
+  const message = "vazdushniy agregat kategorya och va u yerga BR +5pg Fn 43 narx 1232 qo'sh seo ga agregat deyish kerak";
+  const categoryName = "Vazdushniy Agregat XUEYING";
+  // The LLM returned brand "BR" and model "+5pg Fn 43" in the real test.
+  const model = r.resolveAgentModel({ draftModel: "+5pg Fn 43", draftBrand: "BR", message });
+  assert.equal(model, "BR +5PG");
+  const brand = r.resolveAgentBrand({ model, existingBrands: [], draftBrand: "BR" });
+  assert.equal(brand, "XUEYING");
+  assert.equal(r.resolveAgentBrand({ model, existingBrands: ["XUEING"], draftBrand: "" }), "XUEYING");
+  const kind = r.detectAgentProductKind({ categoryName, message });
+  assert.equal(kind, "air");
+  const condenser = r.extractCondenserCode(message), evaporator = r.extractEvaporatorCode(message);
+  assert.equal(condenser, "FN43"); assert.equal(evaporator, "");
+  assert.equal(r.extractDirectPrice(message), "1232.00");
+  const terms = r.extractSeoTerms(message);
+  assert.deepEqual(terms, ["agregat"]);
+  const name = r.buildAgentProductName({ brand, model, kind, categoryName, condenser, evaporator });
+  assert.equal(name, "XUEYING BR +5PG vazdushniy agregat FN43");
+  const copy = r.buildAgentProductCopy({ name, brand, model, kind, categoryName, condenser, evaporator, requiredTerms: terms });
+  assert.equal(r.containsForbiddenClaim(Object.values(copy).join(" ")), false);
+  assert.ok(copy.seoTitle.length >= 20 && copy.seoTitle.length <= 160);
+  assert.ok(copy.seoDescription.length >= 80);
+  assert.match(copy.description, /Kondensator: FN43/);
+  assert.match(copy.seoTitle.toLowerCase(), /agregat/);
+  assert.deepEqual(r.buildAgentProductTags({ brand, model, kind, condenser, evaporator, requiredTerms: terms }), ["XUEYING", "BR +5PG", "FN43", "agregat", "vazdushniy agregat", "havoli agregat", "sovutish agregati"]);
+});
+
+test("model extraction follows (BR|BF)±digits+letters and keeps FN/DD codes separate", async () => {
+  const r = await import("../lib/ai-office/product-agent-rules.ts");
+  assert.deepEqual(r.extractProductModels("br +20pg, BF-8PZ va br20pg"), ["BR +20PG", "BF -8PZ", "BR 20PG"]);
+  assert.deepEqual(r.extractProductModels("BR 5 FN43"), ["BR 5"]);
+  assert.equal(r.extractEvaporatorCode("komplekt dd 160"), "DD160");
+  assert.equal(r.extractCondenserCode("FNV-30"), "FNV30");
+  assert.equal(r.compactModel("BR +20PG"), r.compactModel("br20pg"));
+});
+
+test("name templates per product kind, without repeated words", async () => {
+  const r = await import("../lib/ai-office/product-agent-rules.ts");
+  const base = { brand: "XUEYING", model: "BR +5PG", condenser: "", evaporator: "" };
+  assert.equal(r.buildAgentProductName({ ...base, kind: "compressor", categoryName: "Kompressor XUEYING" }), "XUEYING BR +5PG yarim germetik kompressor");
+  assert.equal(r.buildAgentProductName({ ...base, kind: "water", categoryName: "Vadinoy agregatlar", facts: { waterCondenser: "5HP" } }), "XUEYING BR +5PG vadinoy agregat (5HP kondensator)");
+  assert.equal(r.buildAgentProductName({ ...base, kind: "air-kit", categoryName: "", condenser: "FN43", evaporator: "DD160" }), "XUEYING BR +5PG vazdushniy agregat komplekti FN43 DD160");
+  assert.equal(r.buildAgentProductName({ ...base, brand: "XUEYING", kind: "other", categoryName: "XUEYING qismlar" }), "XUEYING BR +5PG qismlar");
+});
+
+test("forbidden marketing words are matched as whole words only", async () => {
+  const r = await import("../lib/ai-office/product-agent-rules.ts");
+  for (const word of ["samarali", "samaradorlik", "chidamli", "zamonaviy", "yuqori", "sifatli", "ishonchli", "tejamkor", "eng", "maishiy"]) assert.equal(r.containsForbiddenClaim(`Bu ${word} mahsulot`), true, word);
+  assert.equal(r.containsForbiddenClaim("engil ramka, Brend: XUEYING"), false);
+});
+
+test("category matching: canonical equality or kind-compatible similarity, never substring", async () => {
+  const r = await import("../lib/ai-office/product-agent-rules.ts");
+  assert.equal(r.categorySimilarity("Vazdushniy Agregat XUEYING", "vazdushniy agregat"), 1);
+  assert.equal(r.categorySimilarity("Havoli agregatlar", "Vazdushniy agregat"), 1);
+  assert.equal(r.categorySimilarity("Vazdushniy agregat komplektlari", "vazdushniy agregat"), 0);
+  assert.equal(r.categorySimilarity("Vadinoy agregatlar", "vazdushniy agregat"), 0);
+  assert.equal(r.categoryMatches({ name: "Vazdushniy agregat komplektlari", slug: "x" }, "Vazdushniy agregatlar", ["havoli agregat"]), false);
 });

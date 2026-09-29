@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, FolderKanban, History, LayoutDashboard, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
+import { Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, FolderKanban, History, Home, LayoutDashboard, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 
 const navigation = [
@@ -57,7 +57,7 @@ export function AdminShell({ children, user }: { children: React.ReactNode; user
       <nav aria-label="Admin navigatsiya">{navigation.filter(item=>!("superOnly" in item)||user.role==="SUPER_ADMIN").map(item => {
         const Icon = item.icon;
         const active = item.href === "/admin" ? pathname==="/admin" : pathname.startsWith(item.href);
-        return <div key={item.label}>{item.href === "#" ? <span className="admin-nav-item is-disabled"><Icon size={17}/>{item.label}</span> : <Link className={`admin-nav-item ${active ? "is-active" : ""}`} href={item.href} onClick={() => setOpen(false)}><Icon size={17}/>{item.label}<NavigationPending/></Link>}{item.label === "Kontent" && <Link className={`admin-nav-child ${homeContentRoute ? "is-active" : ""}`} href="/admin/content/home" onClick={() => setOpen(false)}>Home Page<NavigationPending/></Link>}</div>;
+        return <div key={item.label}>{item.href === "#" ? <span className="admin-nav-item is-disabled"><Icon size={17}/>{item.label}</span> : <Link className={`admin-nav-item ${active ? "is-active" : ""}`} href={item.href} onClick={() => setOpen(false)}><Icon size={17}/>{item.label}<NavigationPending/></Link>}{item.label === "Kontent" && <Link className={`admin-nav-child ${homeContentRoute ? "is-active" : ""}`} href="/admin/content/home" onClick={() => setOpen(false)}><Home size={14}/>Home Page<NavigationPending/></Link>}</div>;
       })}</nav>
     </aside>
     <div className="admin-main">

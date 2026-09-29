@@ -163,7 +163,7 @@ export async function attachGeneratedProductImage(id: string, file: File, placem
   if (!previous) throw new ProductNotFoundError();
   options.onStage?.("storage_upload");
   const url = await uploadProductImage(id, file, options.maxSize);
-  const images = placement === "main" ? [url, ...previous.images.slice(1)] : [...previous.images, url];
+  const images = placement === "main" ? [url, ...previous.images] : [...previous.images, url];
   let updated;
   try {
     options.onStage?.("product_update");
@@ -175,7 +175,6 @@ export async function attachGeneratedProductImage(id: string, file: File, placem
   }
   revalidateProducts(updated.slug);
   if (!options.skipAudit) await writeAudit(actor,{action:"IMAGE_ATTACH",entityType:"PRODUCT",entityId:updated.id,entityName:updated.name,summary:`Photo Studio rasmini mahsulotga biriktirdi`,before:{images:previous.images},after:{images:updated.images},metadata:{placement}});
-  if (placement === "main" && previous.images[0]) await Promise.allSettled([cleanupUnreferenced(id, [previous.images[0]])]);
   return { product: updated, url };
 }
 

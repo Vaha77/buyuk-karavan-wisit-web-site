@@ -26,7 +26,7 @@ export function ProductGallery({ product }: { product: Product }) {
     </div>
     <div className="detail-thumbnails" aria-label="Mahsulot rasmlari">{slides.map((item,index)=>{
       const Thumb = item.icon;
-      return <button className={selected===index ? "is-selected" : ""} type="button" aria-label={`${index + 1}-rasmni ko‘rish`} aria-pressed={selected===index} key={item.key} onClick={()=>setSelected(index)}>{item.src ? <Image unoptimized={isPublicNeonProductImage(item.src)} src={item.src} alt="" fill sizes="160px"/> : <Thumb size={24} strokeWidth={1.4} aria-hidden="true"/>}</button>;
+      return <button className={selected===index ? "is-selected" : ""} type="button" aria-label={`${index + 1}-rasmni ko‘rish`} aria-pressed={selected===index} key={item.key} onClick={()=>setSelected(index)}>{item.src ? <Image unoptimized={isPublicNeonProductImage(item.src)} src={item.src} alt={`${product.name} ${product.model} — ${index + 1}-rasm (kichik)`} fill sizes="160px"/> : <Thumb size={24} strokeWidth={1.4} aria-hidden="true"/>}</button>;
     })}</div>
   </div>;
 }

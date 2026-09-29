@@ -9,7 +9,7 @@ import { createProduct, updateProduct } from "@/lib/products/mutations";
 import { readSpecifications } from "@/lib/products/mapper";
 import { writeAudit } from "@/lib/audit/service";
 import { createProductCategory } from "@/lib/product-categories/mutations";
-import { directPriceIsValid, moneyEquals, normalizeMoney2 } from "./product-agent-rules";
+import { categorySimilarity, containsForbiddenClaim, directPriceIsValid, moneyEquals, normalizeMoney2 } from "./product-agent-rules";
 import type { AdminUser } from "@/generated/prisma/client";
 
 const extractedRowSchema = z.object({
@@ -44,8 +44,12 @@ export function calculateFinalPrice(source: string, markup: string, rounding: Pr
   return `${result / BigInt(100)}.${String(result % BigInt(100)).padStart(2, "0")}`;
 }
 
-const FORBIDDEN_CLAIMS = /yuqori sifatli|eng yaxshi|tejamkor|maishiy|uzoq xizmat qiladi|ishonchli/iu;
-function exactTermGate(row: PreviewRow) { if (row.seoTitle.trim().length < 20 || row.seoDescription.trim().length < 80) throw new Error("SEO title yoki description yetarli emas."); if (FORBIDDEN_CLAIMS.test(`${row.shortDescription} ${row.description} ${row.seoText}`)) throw new Error("Tasdiqlanmagan marketing da’vosi aniqlandi."); for (const term of row.requiredLocalTerms) if (!row.seoKeywords.some(value => value.includes(term)) || (!row.seoTitle.includes(term) && !row.seoDescription.includes(term))) throw new Error(`Required local SEO term missing: "${term}"`); }
+function exactTermGate(row: PreviewRow) {
+  if (row.seoTitle.trim().length < 20 || row.seoDescription.trim().length < 80) throw new Error("SEO title yoki description yetarli emas.");
+  if (containsForbiddenClaim(`${row.name} ${row.shortDescription} ${row.description} ${row.seoText} ${row.seoTitle} ${row.seoDescription}`)) throw new Error("Tasdiqlanmagan marketing da’vosi aniqlandi.");
+  const lower = (value: string) => value.toLocaleLowerCase("uz-UZ");
+  for (const term of row.requiredLocalTerms) if (!row.seoKeywords.some(value => lower(value).includes(lower(term))) || (!lower(row.seoTitle).includes(lower(term)) && !lower(row.seoDescription).includes(lower(term)))) throw new Error(`Required local SEO term missing: "${term}"`);
+}
 function encode(value: unknown) { return Buffer.from(JSON.stringify(value)).toString("base64url"); }
 export function signPreview(payload: PreviewPayload, sessionTokenHash: string) { const body = encode(payload); return `${body}.${createHmac("sha256", sessionTokenHash).update(body).digest("base64url")}`; }
 export function verifyPreview(token: string, adminId: string, sessionId: string, sessionTokenHash: string): PreviewPayload {
@@ -91,6 +95,12 @@ function inputFromRow(row: PreviewRow, existing?: { specifications: unknown; tag
   return { name: row.name, brand: row.brand, model: row.model, slug: row.slug, categoryId: row.categoryId || "", priceUsd: row.finalPrice, shortDescription: row.shortDescription, description: row.seoText, specifications, tags: row.seoKeywords, availability: "available", isVisible: true, order: 1, seoTitle: row.seoTitle, seoDescription: row.seoDescription };
 }
 
+/** A "new" category is created only when no active category matches exactly or by kind-compatible similarity. */
+async function findReusableCategory(name: string) {
+  const categories = await getDb().productCategory.findMany({ where: { isActive: true }, select: { id: true, name: true } });
+  return categories.map(item => ({ item, score: categorySimilarity(item.name, name) })).filter(entry => entry.score >= .66).sort((a, b) => b.score - a.score)[0]?.item || null;
+}
+
 export async function confirmProductPreview(payload: PreviewPayload, actor: Pick<AdminUser, "id" | "name">) {
   const claimed = await getDb().auditLog.findFirst({ where: { action: "AI_PREVIEW_CONFIRMED", entityType: "AI_AGENT", entityId: payload.id } }); if (claimed) throw new Error("PREVIEW_ALREADY_CONFIRMED");
   await writeAudit(actor, { action: "AI_PREVIEW_CONFIRMED", entityType: "AI_AGENT", entityId: payload.id, entityName: "Mahsulot agenti 01", summary: "AI mahsulot preview tasdiqlandi", metadata: { agentId: payload.agentId, sourceRef: payload.sourceRef, rowCount: payload.rows.length } });
@@ -103,7 +113,7 @@ export async function confirmProductPreview(payload: PreviewPayload, actor: Pick
       const priceValid = row.priceSource === "direct" ? directPriceIsValid(row.finalPrice, row.directPrice) : moneyEquals(calculateFinalPrice(row.sourcePrice, row.markupPercent, row.rounding), row.finalPrice);
       if (row.currency !== "USD" || row.ambiguous || row.confidence < .78 || row.rounding === "clarify" || !priceValid) throw new Error("Preview narx/provenance tekshiruvidan o‘tmadi.");
       exactTermGate(row);
-      if (!row.categoryId && row.newCategoryName) { const key = row.newCategoryName.toLocaleLowerCase("uz-UZ"); const knownId = createdCategories.get(key); const found = knownId ? { id: knownId, name: row.newCategoryName } : await getDb().productCategory.findFirst({ where: { name: { equals: row.newCategoryName, mode: "insensitive" } }, select: { id: true, name: true } }); const categoryRow = found || await createProductCategory(row.newCategoryName); if (!found) createdCategories.set(key, categoryRow.id); row.categoryId = categoryRow.id; row.categoryName = categoryRow.name; }
+      if (!row.categoryId && row.newCategoryName) { const key = row.newCategoryName.toLocaleLowerCase("uz-UZ"); const knownId = createdCategories.get(key); const found = knownId ? { id: knownId, name: row.newCategoryName } : await findReusableCategory(row.newCategoryName); const categoryRow = found || await createProductCategory(row.newCategoryName); if (!found) createdCategories.set(key, categoryRow.id); row.categoryId = categoryRow.id; row.categoryName = categoryRow.name; }
       const category = await getDb().productCategory.findFirst({ where: { id: row.categoryId || "", isActive: true }, select: { id: true } }); if (!category) throw new Error("Kategoriya mavjud emas.");
       const current = row.existingProductId ? await getDb().product.findUnique({ where: { id: row.existingProductId } }) : null;
       if (row.status === "MAVJUD — narx o‘zgaradi" && !current) throw new Error("Mavjud mahsulot topilmadi.");
