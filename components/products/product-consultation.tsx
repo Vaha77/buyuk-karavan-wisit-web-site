@@ -4,8 +4,8 @@ import { useEffect,useRef,useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2,Phone,X } from "lucide-react";
 import { submitLeadAction } from "@/app/lead-actions";
+import { LocationFields } from "@/components/leads/location-fields";
 
-const regions=["Toshkent shahri","Toshkent viloyati","Andijon viloyati","Buxoro viloyati","Farg‘ona viloyati","Jizzax viloyati","Xorazm viloyati","Namangan viloyati","Navoiy viloyati","Qashqadaryo viloyati","Qoraqalpog‘iston Respublikasi","Samarqand viloyati","Sirdaryo viloyati","Surxondaryo viloyati"];
 const freshKey=()=>typeof crypto!=="undefined"&&"randomUUID" in crypto?`product-consultation-${crypto.randomUUID()}`:`product-consultation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export function ProductConsultation({productId,productName,productSlug,className,label}:{productId:string;productName:string;productSlug:string;className:string;label:string}){
@@ -18,7 +18,7 @@ export function ProductConsultation({productId,productName,productSlug,className
     event.preventDefault();if(pending)return;setPending(true);setError("");
     const form=new FormData(event.currentTarget);
     try{
-      const result=await submitLeadAction({customerName:String(form.get("customerName")||""),phone:String(form.get("phone")||""),region:String(form.get("region")||""),notes:String(form.get("notes")||""),productId,productSlug,source:"PRODUCT_CONSULTATION",requestType:"Mahsulot bo‘yicha maslahat",website:String(form.get("website")||""),idempotencyKey:submissionKey});
+      const result=await submitLeadAction({customerName:String(form.get("customerName")||""),phone:String(form.get("phone")||""),region:String(form.get("region")||""),country:String(form.get("country")||"")||undefined,regionCode:String(form.get("regionCode")||""),notes:String(form.get("notes")||""),productId,productSlug,source:"PRODUCT_CONSULTATION",requestType:"Mahsulot bo‘yicha maslahat",website:String(form.get("website")||""),idempotencyKey:submissionKey});
       if(!result.ok){setError(result.error);return;}setSent(true);
     }catch{setError("So‘rovni yuborib bo‘lmadi. Internet aloqasini tekshirib, qayta urinib ko‘ring.");}
     finally{setPending(false);}
@@ -34,7 +34,7 @@ export function ProductConsultation({productId,productName,productSlug,className
         <form onSubmit={submit} className="consultation-form">
           <label>Ismingiz <em>*</em><input ref={firstInput} name="customerName" required maxLength={120} autoComplete="name" placeholder="Ismingiz" disabled={pending}/></label>
           <label>Telefon raqamingiz <em>*</em><input name="phone" required minLength={9} maxLength={40} inputMode="tel" autoComplete="tel" placeholder="+998 90 123 45 67" disabled={pending}/></label>
-          <label>Hudud / viloyat <em>*</em><select name="region" required defaultValue="" disabled={pending}><option value="" disabled>Hududni tanlang</option>{regions.map(region=><option value={region} key={region}>{region}</option>)}</select></label>
+          <LocationFields variant="consultation" required disabled={pending}/>
           <label>Qo‘shimcha izoh <small>(ixtiyoriy)</small><textarea name="notes" maxLength={2000} rows={3} placeholder="Savolingiz yoki talablaringiz" disabled={pending}/></label>
           <input className="consultation-honeypot" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true"/>
           {error&&<p className="consultation-error" role="alert">{error}</p>}

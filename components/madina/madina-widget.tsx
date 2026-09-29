@@ -78,7 +78,7 @@ export function MadinaWidget() {
     return () => media.removeEventListener("change", update);
   }, []);
   useEffect(() => {
-    const open = () => { setHasOpened(true); setView("open"); };
+    const open = () => { setHasOpened(true); setView("open"); window.dispatchEvent(new CustomEvent("bk:track", { detail: "MADINA_OPEN" })); };
     window.addEventListener("madina:open", open);
     return () => window.removeEventListener("madina:open", open);
   }, []);
@@ -102,7 +102,7 @@ export function MadinaWidget() {
 
   if (isAdmin) return null;
   const dismiss = () => { sessionStorage.setItem(greetingKey, "1"); setView("minimized"); };
-  const open = () => { setHasOpened(true); setView("open"); };
+  const open = () => { setHasOpened(true); setView("open"); window.dispatchEvent(new CustomEvent("bk:track", { detail: "MADINA_OPEN" })); };
   return <div className={`madina-widget madina-view-${view}`} style={{ "--madina-keyboard": `${keyboardOffset}px` } as React.CSSProperties}>
     {hasOpened && <div hidden={view !== "open"}><ChatContent onMinimize={() => setView("minimized")} onClose={dismiss}/></div>}
     {view !== "open" && <>

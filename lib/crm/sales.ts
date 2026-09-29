@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { sendMessage,telegramGroupChatId } from "@/lib/telegram/client";
 import { agentName } from "@/lib/telegram/messages";
 import { marjaBalance } from "./marja";
+import { expireDashboard, markVisitSale } from "@/lib/referrals/tracking";
 const contactedKeyboard=(leadId:string)=>({inline_keyboard:[[{text:"📞 Aloqaga chiqdim",callback_data:`contact:${leadId}`}]]});
 
 export async function approveSale(saleId:string,adminId:string){
@@ -17,7 +18,11 @@ export async function approveSale(saleId:string,adminId:string){
     await tx.marjaTransaction.create({data:{agentId:sale.agentId,saleId,type:"SALE_EARNED",amount:1,description:"Tasdiqlangan sotuv uchun +1 Marja"}});
     return{approved:true,sale};
   },{isolationLevel:"Serializable"});
-  if("approved" in result){await sendSaleCelebration(saleId).catch(error=>console.error("Telegram sale celebration failed",{type:error instanceof Error?error.name:"UnknownError"}));}
+  if("approved" in result){
+    // Referral visit reaches SALE; dashboard aggregates are refreshed.
+    if(result.sale)await markVisitSale(result.sale.leadId).catch(error=>console.error("Visit sale update failed",{type:error instanceof Error?error.name:"UnknownError"}));
+    expireDashboard();
+    await sendSaleCelebration(saleId).catch(error=>console.error("Telegram sale celebration failed",{type:error instanceof Error?error.name:"UnknownError"}));}
   return result;
 }
 

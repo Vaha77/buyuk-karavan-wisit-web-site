@@ -93,3 +93,14 @@
 /* Products page: five summary cards (adds "Kategoriyalar"). */
 .admin-summary-card small{color:#6b829a;font-size:11px}
 @media(min-width:1101px){.admin-summary-grid.is-five{grid-template-columns:repeat(5,minmax(0,1fr))}}
+/* Sidebar groups and badges (BKLead). */
+.admin-nav-group{display:grid;gap:2px}.admin-nav-group+.admin-nav-group{margin-top:12px}
+.admin-nav-group-label{padding:6px 5px 4px;color:#8aa0b8;font-size:10px;font-weight:700;letter-spacing:.12em}
+.admin-nav-badge{margin-left:auto;padding:2px 7px;border-radius:999px;background:#E8EFFA;color:#1D4E9E;font-size:9px;font-weight:800;letter-spacing:.06em;line-height:1.4}
+.admin-nav-badge.is-count{background:#E07A2E;color:#2B1200;letter-spacing:0;font-size:11px}
+.admin-nav-badge.is-soon{background:#EEF1F5;color:#6b7f95;letter-spacing:0;font-weight:700}
+.admin-nav-item.is-active .admin-nav-badge{background:rgba(255,255,255,.2);color:#fff}
+.admin-nav-item.is-active .admin-nav-badge.is-count{background:#E07A2E;color:#2B1200}
+.admin-nav-item.is-disabled{color:#8ea2b7}.admin-nav-item.is-disabled svg{color:#a9b8c8}
+.admin-nav-child:hover{color:#245487;background:#f1f6fc;border-left-color:#9fbde0}
+.admin-nav-child svg{flex:none}

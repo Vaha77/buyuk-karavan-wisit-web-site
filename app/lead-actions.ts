@@ -2,9 +2,16 @@
 
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getDb } from "@/lib/db";
 import { createLead, findLeadSubmission } from "@/lib/leads/service";
+import { REF_COOKIE, VISIT_COOKIE, VISITOR_COOKIE, type TrackingCookies } from "@/lib/referrals/tracking";
+
+/** Referral attribution cookies set by the public tracker (validated against the Visit row in createLead). */
+async function trackingCookies(): Promise<TrackingCookies> {
+  const jar = await cookies();
+  return { visitId: jar.get(VISIT_COOKIE)?.value, visitorId: jar.get(VISITOR_COOKIE)?.value, linkId: jar.get(REF_COOKIE)?.value };
+}
 
 const attempts = new Map<string,{count:number;start:number;submissions:Set<string>}>();
 const WINDOW_MS = 15 * 60_000;
@@ -73,8 +80,8 @@ export async function submitLeadAction(input:unknown) {
       product:[product.name,product.model].filter(Boolean).join(" "),
       productId:product.id,
       productSlug:product.slug,
-    });
+    }, await trackingCookies());
   }
 
-  return createLead(input);
+  return createLead(input, await trackingCookies());
 }

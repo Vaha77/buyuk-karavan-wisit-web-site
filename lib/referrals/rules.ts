@@ -74,3 +74,7 @@ export function linkSegments(counts: OutcomeCounts) {
 }
 export function conversion(leads: number, clicks: number) { return clicks > 0 ? (leads / clicks) * 100 : 0; }
 export function costPerLead(costUsd: number | null, leads: number) { return costUsd && leads > 0 ? costUsd / leads : null; }
+
+/** The sidebar shows "YANGI" next to Referal linklar for 14 days after release. */
+const REFERRAL_LINKS_RELEASED = Date.parse("2026-09-30T00:00:00+05:00");
+export function referralLinksAreNew(now: number = Date.now()) { return now < REFERRAL_LINKS_RELEASED + 14 * 86_400_000; }

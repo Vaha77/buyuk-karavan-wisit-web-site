@@ -29,11 +29,16 @@ function timelineDetail(type: LeadActivityType, comment: string | null, value: u
   return type === "SALE_REPORTED" ? "Marja berilmadi — admin tasdig‘i keyingi bosqichda." : "";
 }
 
-export async function getAdminLeads() {
+/** region: a country code ("KZ"), a region code ("UZ-NG") or "none" for leads without a known region (dashboard map links). */
+export async function getAdminLeads(filter:{region?:string}={}) {
   await requireAdmin();
+  const region=filter.region?.trim().toUpperCase()||"";
+  const where=region==="NONE"?{regionCode:null}:/^[A-Z]{2}$/.test(region)?{country:region}:/^[A-Z]{2}-[A-Z0-9]{1,3}$/.test(region)?{regionCode:region}:{};
   const rows = await getDb().lead.findMany({
+    where,
     orderBy:{createdAt:"desc"},
     include:{
+      referralLink:{ select:{ name:true } },
       assignedAgent:true,
       activities:{ orderBy:{createdAt:"asc"}, include:{agent:true} },
       followUps:{ where:{status:{in:["SCHEDULED","REMINDER_RESERVED","REMINDER_SENT"]}}, orderBy:{scheduledFor:"asc"}, take:1 },
@@ -57,7 +62,7 @@ export async function getAdminLeads() {
       dateGroup:day===today?"today":day===yesterday?"yesterday":"week", status:statusMap[row.status] as LeadStatus, source:sourceMap[row.source] as LeadSource,
       isUnread:row.status==="NEW", additional:row.notes||"", summary:row.aiSummary||"", conversation:conversation(row.chatHistory), managerNote:row.managerNote||"", createdAt:row.createdAt.toISOString(),
       assignedAgentName:seller(row.assignedAgent), claimedAt:row.claimedAt?row.claimedAt.toISOString():"", privateDeliveryFailed:Boolean(row.telegramPrivateDeliveryFailedAt),
-      lastContact:contact?.createdAt.toISOString()||"", nextFollowUp:next?.scheduledFor.toISOString()||"", followUpOverdue:Boolean(next&&next.scheduledFor.getTime()<now.getTime()), timeline:activities,
+      lastContact:contact?.createdAt.toISOString()||"", nextFollowUp:next?.scheduledFor.toISOString()||"", followUpOverdue:Boolean(next&&next.scheduledFor.getTime()<now.getTime()), timeline:activities, referralSource:row.referralLink?.name||"", regionCode:row.regionCode||"",
     };
   });
 }
