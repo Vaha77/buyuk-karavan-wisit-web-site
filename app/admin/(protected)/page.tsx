@@ -2,19 +2,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, CheckCircle2, Clock3, MessageSquare, Plus, TrendingUp } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { getUsdUzsRate } from "@/lib/currency/cbu";
+import { getCustomerYear } from "@/lib/customers/queries";
 import { getDb } from "@/lib/db";
 import { getDashboardData, getPreviousConversion } from "@/lib/dashboard/queries";
 import { buildFunnel, delta } from "@/lib/dashboard/rules";
-import { dayKey, periodQuery, resolvePeriod } from "@/lib/dashboard/period";
+import { dayKey, periodQuery, resolvePeriod, tashkentYearMonth } from "@/lib/dashboard/period";
 import { formatDayMonth, formatDecimal, formatInt, formatPercent, formatRelative, formatUsd, percentOf } from "@/lib/dashboard/format";
 import { regionName } from "@/lib/dashboard/regions";
 import { getLinkSummary } from "@/lib/referrals/queries";
 import { RangeSelect, SourceIcon } from "@/components/admin/bklead/bits";
 import { WeeklyLines } from "@/components/admin/bklead/charts";
 import { RegionMap } from "@/components/admin/bklead/region-map";
+import { CustomerRanking } from "@/components/admin/bklead/customer-ranking";
 
 export const metadata: Metadata = { title: "BKLead Dashboard — Admin | BUYUK KARAVAN" };
-type Search = { range?: string; from?: string; to?: string };
+type Search = { range?: string; from?: string; to?: string; cyear?: string };
 
 const DEFAULT_TIPS = { all: "Xorijdan kelgan lidlar uchun rus tilidagi reklama va Telegram orqali javob berish tavsiya etiladi." };
 const LEVEL_CHIPS = [{ label: "Yangi", tone: "is-orange" }, { label: "Bog‘lanildi", tone: "" }, { label: "Hisob-kitob", tone: "is-navy" }, { label: "Taklif yuborildi", tone: "" }, { label: "Sotuv", tone: "is-gold" }] as const;
@@ -28,11 +31,15 @@ function Delta({ current, previous, suffix = "oldingi davrga nisbatan" }: { curr
 }
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<Search> }) {
-  await requireAdmin();
-  const period = resolvePeriod(await searchParams);
-  const [data, previousConversion, links, settings] = await Promise.all([
+  const user = await requireAdmin();
+  const search = await searchParams;
+  const period = resolvePeriod(search);
+  const today = tashkentYearMonth();
+  const rankingYear = /^20\d{2}$/.test(search.cyear ?? "") && Number(search.cyear) <= today.year ? Number(search.cyear) : today.year;
+  const [data, previousConversion, links, settings, customerYear, rate] = await Promise.all([
     getDashboardData(period), getPreviousConversion(period), getLinkSummary(period),
     getDb().siteSettings.findUnique({ where: { id: "global" }, select: { dashboardTips: true } }).catch(() => null),
+    getCustomerYear(rankingYear), getUsdUzsRate(),
   ]);
   const { kpis, weekly, funnel, regions, people } = data;
   const conversion = percentOf(kpis.sales, kpis.leads), conversionChange = conversion - previousConversion;
@@ -131,5 +138,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </Link>; })}</div> : <div className="bk-empty">Hali so‘rov yo‘q.</div>}
       </section>
     </div>
+
+    <CustomerRanking data={customerYear} now={today} canEdit={user.role === "SUPER_ADMIN" || user.role === "ADMIN"} uzsPerUsd={rate ? Number(rate.rate) : null} yearHref={year => { const next = new URLSearchParams(query.replace(/^\?/, "")); if (year !== today.year) next.set("cyear", String(year)); const text = next.toString(); return `/admin${text ? `?${text}` : ""}`; }}/>
   </div>;
 }

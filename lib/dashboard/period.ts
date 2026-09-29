@@ -40,3 +40,9 @@ export function periodQuery(period: Pick<Period, "key" | "from" | "to">) {
   if (period.key !== "custom") return `?range=${period.key}`;
   return `?range=custom&from=${dayKey(period.from)}&to=${dayKey(new Date(period.to.getTime() - DAY))}`;
 }
+
+/** Current year and month (1–12) in Tashkent. */
+export function tashkentYearMonth(now: Date = new Date()) {
+  const local = new Date(now.getTime() + TZ_OFFSET);
+  return { year: local.getUTCFullYear(), month: local.getUTCMonth() + 1 };
+}
