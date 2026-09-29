@@ -182,6 +182,7 @@ model Product {
   calculationLineItems CalculationLineItem[]
 
   @@index([isVisible, order])
+  @@index([isVisible, categoryId])
   @@index([categoryId])
 }
 
