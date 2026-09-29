@@ -28,7 +28,7 @@ export function ProductDetail({ product, related, exchangeRate }: { product: Pro
   const specs = detailSpecs(product);
   return <main className="products-page detail-page">
     <div className="container detail-container">
-      <nav className="detail-breadcrumb" aria-label="Breadcrumb"><Link href="/">Bosh sahifa</Link><span>›</span><Link href="/products">Mahsulotlar</Link><span>›</span><Link href="/products">{categoryName(product)}</Link><span>›</span><strong>{product.name} {product.model}</strong></nav>
+      <nav className="detail-breadcrumb" aria-label="Breadcrumb"><Link href="/">Bosh sahifa</Link><span>›</span><Link href="/products">Mahsulotlar</Link><span>›</span><Link href="/products">{categoryName(product)}</Link><span>›</span><strong>{product.name}</strong></nav>
       <div className="detail-hero">
         <ProductGallery product={product}/>
         <div className="detail-info">
