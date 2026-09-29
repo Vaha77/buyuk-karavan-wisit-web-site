@@ -397,8 +397,26 @@ model AdminUser {
   createdPhotoAssets  PhotoStudioAsset[]  @relation("PhotoAssetCreator")
   attachedPhotoAssets PhotoStudioAsset[]  @relation("PhotoAssetAttacher")
   calculations        Calculation[]
+  aiPriceLists        AiPriceList[]
 
   @@index([approvalStatus, isActive])
+}
+
+model AiPriceList {
+  id               String    @id @default(cuid())
+  filename         String
+  sourceHash       String
+  sheetName        String
+  blockKey         String
+  blockLabel       String
+  parsed           Json
+  isActive         Boolean   @default(true)
+  createdByAdminId String
+  createdAt        DateTime  @default(now())
+  createdBy        AdminUser @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+
+  @@index([isActive, createdAt])
+  @@index([createdByAdminId, createdAt])
 }
 
 model Calculation {

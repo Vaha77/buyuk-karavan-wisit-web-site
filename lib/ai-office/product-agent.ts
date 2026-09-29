@@ -6,10 +6,10 @@ import type { AdminUser } from "@/generated/prisma/client";
 import { writeAudit } from "@/lib/audit/service";
 
 export const PRODUCT_AGENT_ALLOWED_TOOLS = new Set([
-  "readUpload", "listCategories", "findProduct", "previewProducts", "createProduct", "updateProduct",
+  "readUpload", "getActivePriceList", "listCategories", "findProducts", "previewDraft", "createCategory", "createProduct", "updateProduct",
 ] as const);
 
-export type ProductAgentTool = "readUpload" | "listCategories" | "findProduct" | "previewProducts" | "createProduct" | "updateProduct";
+export type ProductAgentTool = "readUpload" | "getActivePriceList" | "listCategories" | "findProducts" | "previewDraft" | "createCategory" | "createProduct" | "updateProduct";
 export type ProductAgentStatus = "idle" | "reading" | "analyzing" | "awaiting_confirmation" | "writing" | "success" | "error";
 
 export const PRODUCT_AGENT_FIELD_CAPABILITIES = {
@@ -25,8 +25,9 @@ export const PRODUCT_AGENT_FIELD_CAPABILITIES = {
 const messageSchema = z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(5000) });
 export const productAgentRequestSchema = z.object({ message: z.string().trim().min(1).max(5000), history: z.array(messageSchema).max(20) });
 
-const OFF_DOMAIN = /(?:rasm\s*(?:yarat|generat)|dizayn|sayt\s*(?:ui|dizayn)|\blid\b|\bcrm\b|hisob-kitob|reklama|telegram|foto\s*agent|image\s*generation)/iu;
-export const PRODUCT_AGENT_REFUSAL = "Uzr, men faqat mahsulot qo‘shish/yangilash bilan shug‘ullanaman. Rasm uchun Foto agentga murojaat qiling.";
+const OFF_DOMAIN = /(?:rasm(?:ni|ini)?\s+.*(?:qo['‘’]?y|joyla|biriktir)|rasm\s*(?:yarat|generat|qil)|dizayn|sayt\s*(?:ui|dizayn)|\blid\b|\bcrm\b|hisob-kitob|reklama|telegram|foto\s*agent|image\s*generation)/iu;
+export const isProductAgentOffDomain = (message: string) => OFF_DOMAIN.test(message);
+export const PRODUCT_AGENT_REFUSAL = "Uzr, men faqat mahsulot qo‘shish va narx yangilash bilan ishlayman. Rasm uchun Foto agentga murojaat qiling.";
 
 export const PRODUCT_AGENT_SYSTEM_INSTRUCTION = `Sen BUYUK KARAVAN admin panelidagi “Mahsulot agenti 01”san. Faqat o‘zbek tilida javob ber. Yagona domening: katalogga mahsulot qo‘shish yoki mavjud mahsulotni yangilash uchun ma’lumotlarni o‘qish, tekshirish va tasdiqlashga tayyorlash. Rasm yaratish yoki mahsulot media maydonlarini o‘zgartirish, dizayn, sayt UI, lid, CRM, hisob-kitob, reklama, Telegram va boshqa vazifalarni rad et. Rad javobi: “${PRODUCT_AGENT_REFUSAL}”
 
@@ -82,7 +83,7 @@ export async function rejectUnauthorizedProductAgentTool(tool: string, actor: Pi
 }
 
 export async function runProductAgentChat(input: z.infer<typeof productAgentRequestSchema>, files: Awaited<ReturnType<typeof validateProductAgentUploads>>) {
-  if (OFF_DOMAIN.test(input.message)) return { reply: PRODUCT_AGENT_REFUSAL, status: "idle" as ProductAgentStatus };
+  if (isProductAgentOffDomain(input.message)) return { reply: PRODUCT_AGENT_REFUSAL, status: "idle" as ProductAgentStatus };
   if (!process.env.OPENAI_API_KEY) throw new ProductAgentProviderError("OPENAI_NOT_CONFIGURED");
   const content: ResponseInputContent[] = [{ type: "input_text", text: input.message }];
   for (const file of files) {

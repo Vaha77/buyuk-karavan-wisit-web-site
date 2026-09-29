@@ -8,6 +8,7 @@ import { normalizeSlug, type ProductInput } from "@/lib/products/validation";
 import { createProduct, updateProduct } from "@/lib/products/mutations";
 import { readSpecifications } from "@/lib/products/mapper";
 import { writeAudit } from "@/lib/audit/service";
+import { createProductCategory } from "@/lib/product-categories/mutations";
 import type { AdminUser } from "@/generated/prisma/client";
 
 const extractedRowSchema = z.object({
@@ -23,6 +24,7 @@ export type PreviewRow = z.infer<typeof extractedRowSchema> & {
   id: string; categoryName: string; markupPercent: string; rounding: "none" | "ceil" | "round" | "floor" | "clarify";
   finalPrice: string; status: PreviewStatus; existingProductId: string | null; oldPrice: string | null; slug: string;
   requiredLocalTerms: string[]; seoKeywords: string[]; seoText: string;
+  newCategoryName?: string | null; productKind?: string; priceListId?: string; sourceBlock?: string;
 };
 export type PreviewPayload = { id: string; agentId: "product-agent-01"; adminId: string; sessionId: string; createdAt: number; expiresAt: number; sourceRef: string; rows: PreviewRow[] };
 
@@ -40,7 +42,8 @@ export function calculateFinalPrice(source: string, markup: string, rounding: Pr
   return `${result / BigInt(100)}.${String(result % BigInt(100)).padStart(2, "0")}`;
 }
 
-function exactTermGate(row: PreviewRow) { for (const term of row.requiredLocalTerms) if (!row.seoKeywords.some(value => value.includes(term)) || !row.seoText.includes(term)) throw new Error(`Required local SEO term missing: "${term}"`); }
+const FORBIDDEN_CLAIMS = /yuqori sifatli|eng yaxshi|tejamkor|maishiy|uzoq xizmat qiladi|ishonchli/iu;
+function exactTermGate(row: PreviewRow) { if (row.seoTitle.trim().length < 20 || row.seoDescription.trim().length < 80) throw new Error("SEO title yoki description yetarli emas."); if (FORBIDDEN_CLAIMS.test(`${row.shortDescription} ${row.description} ${row.seoText}`)) throw new Error("Tasdiqlanmagan marketing da’vosi aniqlandi."); for (const term of row.requiredLocalTerms) if (!row.seoKeywords.some(value => value.includes(term)) || (!row.seoTitle.includes(term) && !row.seoDescription.includes(term))) throw new Error(`Required local SEO term missing: "${term}"`); }
 function encode(value: unknown) { return Buffer.from(JSON.stringify(value)).toString("base64url"); }
 export function signPreview(payload: PreviewPayload, sessionTokenHash: string) { const body = encode(payload); return `${body}.${createHmac("sha256", sessionTokenHash).update(body).digest("base64url")}`; }
 export function verifyPreview(token: string, adminId: string, sessionId: string, sessionTokenHash: string): PreviewPayload {
@@ -82,28 +85,32 @@ function inputFromRow(row: PreviewRow, existing?: { specifications: unknown; tag
   const sourcedSpecs = row.specifications.map((spec, index) => ({ id: `agent-spec-${index + 1}`, ...spec }));
   const sourcedNames = new Set(sourcedSpecs.map(spec => spec.name.trim().toLocaleLowerCase("uz-UZ")));
   const specifications = existing ? [...oldSpecs.filter(spec => !sourcedNames.has(spec.name.trim().toLocaleLowerCase("uz-UZ"))), ...sourcedSpecs] : sourcedSpecs;
-  return { name: row.name || existing?.name || "", brand: row.brand || existing?.brand || "", model: row.model || existing?.model || "", slug: row.slug, categoryId: row.categoryId || "", priceUsd: row.finalPrice, shortDescription: row.shortDescription || existing?.shortDescription || "", description: row.seoText || existing?.description || "", specifications, tags: row.seoKeywords.length ? row.seoKeywords : existing?.tags || [], availability: existing?.availability === "ORDER" ? "order" : "available", isVisible: existing?.isVisible ?? false, order: existing?.order ?? 1, seoTitle: row.seoTitle || existing?.seoTitle || "", seoDescription: row.seoDescription || existing?.seoDescription || "" };
+  if (existing) return { name: existing.name, brand: existing.brand, model: existing.model, slug: row.slug, categoryId: row.categoryId || "", priceUsd: row.finalPrice, shortDescription: existing.shortDescription || "", description: existing.description || "", specifications: oldSpecs, tags: row.requiredLocalTerms.length ? [...new Set([...existing.tags, ...row.requiredLocalTerms])] : existing.tags, availability: existing.availability === "ORDER" ? "order" : "available", isVisible: existing.isVisible, order: existing.order, seoTitle: row.requiredLocalTerms.length ? row.seoTitle : existing.seoTitle || "", seoDescription: row.requiredLocalTerms.length ? row.seoDescription : existing.seoDescription || "" };
+  return { name: row.name, brand: row.brand, model: row.model, slug: row.slug, categoryId: row.categoryId || "", priceUsd: row.finalPrice, shortDescription: row.shortDescription, description: row.seoText, specifications, tags: row.seoKeywords, availability: "available", isVisible: true, order: 1, seoTitle: row.seoTitle, seoDescription: row.seoDescription };
 }
 
 export async function confirmProductPreview(payload: PreviewPayload, actor: Pick<AdminUser, "id" | "name">) {
   const claimed = await getDb().auditLog.findFirst({ where: { action: "AI_PREVIEW_CONFIRMED", entityType: "AI_AGENT", entityId: payload.id } }); if (claimed) throw new Error("PREVIEW_ALREADY_CONFIRMED");
   await writeAudit(actor, { action: "AI_PREVIEW_CONFIRMED", entityType: "AI_AGENT", entityId: payload.id, entityName: "Mahsulot agenti 01", summary: "AI mahsulot preview tasdiqlandi", metadata: { agentId: payload.agentId, sourceRef: payload.sourceRef, rowCount: payload.rows.length } });
   const results: Array<{ name: string; model: string; action: "CREATE" | "UPDATE" | "SKIP" | "FAIL"; price: string; productId?: string; link?: string; error?: string }> = [];
+  const createdCategories = new Map<string, string>();
   for (const row of payload.rows) {
     try {
       if (row.status === "TEKSHIRING") { results.push({ name: row.name, model: row.model, action: "SKIP", price: row.finalPrice, error: "TEKSHIRING qatori yozilmadi." }); continue; }
       if (row.currency !== "USD" || row.ambiguous || row.confidence < .78 || row.rounding === "clarify" || calculateFinalPrice(row.sourcePrice, row.markupPercent, row.rounding) !== row.finalPrice) throw new Error("Preview narx/provenance tekshiruvidan o‘tmadi.");
       exactTermGate(row);
+      if (!row.categoryId && row.newCategoryName) { const key = row.newCategoryName.toLocaleLowerCase("uz-UZ"); const knownId = createdCategories.get(key); const found = knownId ? { id: knownId, name: row.newCategoryName } : await getDb().productCategory.findFirst({ where: { name: { equals: row.newCategoryName, mode: "insensitive" } }, select: { id: true, name: true } }); const categoryRow = found || await createProductCategory(row.newCategoryName); if (!found) createdCategories.set(key, categoryRow.id); row.categoryId = categoryRow.id; row.categoryName = categoryRow.name; }
       const category = await getDb().productCategory.findFirst({ where: { id: row.categoryId || "", isActive: true }, select: { id: true } }); if (!category) throw new Error("Kategoriya mavjud emas.");
       const current = row.existingProductId ? await getDb().product.findUnique({ where: { id: row.existingProductId } }) : null;
       if (row.status === "MAVJUD — narx o‘zgaradi" && !current) throw new Error("Mavjud mahsulot topilmadi.");
-      if (!current) { const catalog = await getDb().product.findMany({ select: { id: true, model: true, slug: true } }); const normalizedModel = row.model.trim().toLocaleLowerCase("uz-UZ").replace(/\s+/g, ""); if (catalog.some(item => item.slug === row.slug || item.model.trim().toLocaleLowerCase("uz-UZ").replace(/\s+/g, "") === normalizedModel)) throw new Error("Tasdiqlash vaqtida duplicate mahsulot aniqlandi."); }
+      if (!current) { const catalog = await getDb().product.findMany({ select: { id: true, model: true, slug: true, categoryId: true } }); const normalizedModel = row.model.trim().toLocaleLowerCase("uz-UZ").replace(/\s+/g, ""); if (catalog.some(item => item.slug === row.slug || (item.categoryId === category.id && item.model.trim().toLocaleLowerCase("uz-UZ").replace(/\s+/g, "") === normalizedModel))) throw new Error("Tasdiqlash vaqtida duplicate mahsulot aniqlandi."); }
       const input = inputFromRow(row, current || undefined);
+      if (!current) { const max = await getDb().product.aggregate({ where: { categoryId: category.id }, _max: { order: true } }); input.order = (max._max.order ?? 0) + 1; }
       const saved = current ? await updateProduct(current.id, input) : await createProduct(input, []);
       const action = current ? "UPDATE" as const : "CREATE" as const;
       await writeAudit(actor, { action: `AI_${action}`, entityType: "PRODUCT", entityId: saved.id, entityName: saved.name, summary: `Mahsulot agenti ${action}`, metadata: { agentId: payload.agentId, previewId: payload.id, sourceRef: payload.sourceRef, oldPrice: current?.priceUsd?.toString() || null, sourcePrice: row.sourcePrice, markupPercent: row.markupPercent, rounding: row.rounding, finalPrice: row.finalPrice, currency: row.currency, requiredLocalTerms: row.requiredLocalTerms, changedFields: Object.keys(input) } });
-      results.push({ name: row.name, model: row.model, action, price: row.finalPrice, productId: saved.id, link: `/admin/products/${saved.id}/edit` });
+      results.push({ name: row.name, model: row.model, action, price: row.finalPrice, productId: saved.id, link: `/admin/products/${saved.id}/edit`, publicLink: `/products/${saved.slug}` } as typeof results[number] & { publicLink: string });
     } catch (error) { const reason = error instanceof Error ? error.message : "Noma’lum xato"; await writeAudit(actor, { action: "AI_FAIL", entityType: "AI_AGENT", entityId: payload.id, entityName: row.name, summary: "Mahsulot agenti qatori bajarilmadi", metadata: { agentId: payload.agentId, sourceRef: payload.sourceRef, model: row.model, reason } }).catch(() => undefined); results.push({ name: row.name, model: row.model, action: "FAIL", price: row.finalPrice, error: reason }); }
   }
-  return results;
+  return { results, categoriesCreated: createdCategories.size };
 }
