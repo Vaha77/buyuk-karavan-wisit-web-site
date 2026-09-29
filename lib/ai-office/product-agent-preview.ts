@@ -9,6 +9,7 @@ import { createProduct, updateProduct } from "@/lib/products/mutations";
 import { readSpecifications } from "@/lib/products/mapper";
 import { writeAudit } from "@/lib/audit/service";
 import { createProductCategory } from "@/lib/product-categories/mutations";
+import { directPriceIsValid, moneyEquals, normalizeMoney2 } from "./product-agent-rules";
 import type { AdminUser } from "@/generated/prisma/client";
 
 const extractedRowSchema = z.object({
@@ -25,6 +26,7 @@ export type PreviewRow = z.infer<typeof extractedRowSchema> & {
   finalPrice: string; status: PreviewStatus; existingProductId: string | null; oldPrice: string | null; slug: string;
   requiredLocalTerms: string[]; seoKeywords: string[]; seoText: string;
   newCategoryName?: string | null; productKind?: string; priceListId?: string; sourceBlock?: string;
+  priceSource?: "direct" | "price-list"; directPrice?: string | null;
 };
 export type PreviewPayload = { id: string; agentId: "product-agent-01"; adminId: string; sessionId: string; createdAt: number; expiresAt: number; sourceRef: string; rows: PreviewRow[] };
 
@@ -97,7 +99,9 @@ export async function confirmProductPreview(payload: PreviewPayload, actor: Pick
   for (const row of payload.rows) {
     try {
       if (row.status === "TEKSHIRING") { results.push({ name: row.name, model: row.model, action: "SKIP", price: row.finalPrice, error: "TEKSHIRING qatori yozilmadi." }); continue; }
-      if (row.currency !== "USD" || row.ambiguous || row.confidence < .78 || row.rounding === "clarify" || calculateFinalPrice(row.sourcePrice, row.markupPercent, row.rounding) !== row.finalPrice) throw new Error("Preview narx/provenance tekshiruvidan o‘tmadi.");
+      const normalizedFinal = normalizeMoney2(row.finalPrice); if (normalizedFinal) row.finalPrice = normalizedFinal;
+      const priceValid = row.priceSource === "direct" ? directPriceIsValid(row.finalPrice, row.directPrice) : moneyEquals(calculateFinalPrice(row.sourcePrice, row.markupPercent, row.rounding), row.finalPrice);
+      if (row.currency !== "USD" || row.ambiguous || row.confidence < .78 || row.rounding === "clarify" || !priceValid) throw new Error("Preview narx/provenance tekshiruvidan o‘tmadi.");
       exactTermGate(row);
       if (!row.categoryId && row.newCategoryName) { const key = row.newCategoryName.toLocaleLowerCase("uz-UZ"); const knownId = createdCategories.get(key); const found = knownId ? { id: knownId, name: row.newCategoryName } : await getDb().productCategory.findFirst({ where: { name: { equals: row.newCategoryName, mode: "insensitive" } }, select: { id: true, name: true } }); const categoryRow = found || await createProductCategory(row.newCategoryName); if (!found) createdCategories.set(key, categoryRow.id); row.categoryId = categoryRow.id; row.categoryName = categoryRow.name; }
       const category = await getDb().productCategory.findFirst({ where: { id: row.categoryId || "", isActive: true }, select: { id: true } }); if (!category) throw new Error("Kategoriya mavjud emas.");

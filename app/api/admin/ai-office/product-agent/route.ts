@@ -3,6 +3,7 @@ import { PRODUCT_AGENT_MAX_TOTAL_BYTES, PRODUCT_AGENT_REFUSAL, ProductAgentProvi
 import { buildProductPreview, signPreview } from "@/lib/ai-office/product-agent-preview";
 import { interpretPriceListCommand } from "@/lib/ai-office/product-agent-command";
 import { getActivePriceList, saveActivePriceList } from "@/lib/ai-office/price-list-parser";
+import { hasPriceListCommandIntent } from "@/lib/ai-office/product-agent-rules";
 
 export const runtime = "nodejs";
 
@@ -29,11 +30,12 @@ export async function POST(request: Request) {
     const xlsx = uploads.find(file => file.mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     if (xlsx) await saveActivePriceList(xlsx.name, xlsx.bytes, session.user.id);
     const active = await getActivePriceList();
-    if (active) {
+    if (active && hasPriceListCommandIntent(parsed.data.message)) {
       const interpreted = await interpretPriceListCommand({ command: parsed.data.message, parsed: active.parsed, priceListId: active.id, filename: active.filename, adminId: session.user.id, sessionId: session.id });
       if (interpreted.question) return Response.json({ reply: interpreted.question.text, status: "idle", question: interpreted.question, activePriceList: interpreted.activeLabel });
       if (interpreted.payload) return Response.json({ reply: `${interpreted.payload.rows.length} ta tayyor kartochka preview qilindi. Hali bazaga yozilmadi.`, status: "awaiting_confirmation", preview: interpreted.payload, previewToken: signPreview(interpreted.payload, session.tokenHash), activePriceList: interpreted.activeLabel });
     }
+    if (xlsx) return Response.json({ reply: `Price list saqlandi va faol qilindi: ${active?.filename || xlsx.name}. Endi model yoki “hamma/barcha” bilan buyruq bering.`, status: "idle", activePriceList: active ? `${active.filename} (${active.sheetName}, ${active.blockLabel})` : null });
     if (uploads.length) {
       if (!process.env.OPENAI_API_KEY) return Response.json({ error: "OpenAI API sozlanmagan." }, { status: 503 });
       const { payload, note } = await buildProductPreview({ message: parsed.data.message, attachments: uploads, adminId: session.user.id, sessionId: session.id });

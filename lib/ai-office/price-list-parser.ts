@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import ExcelJS from "exceljs";
 import type { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
+import { findModelHeaderColumns, requestedSheetNumber } from "./product-agent-rules";
 
 export type PriceListKind = "compressor" | "receiver" | "water" | "air" | "water-kit" | "air-kit";
 export type ParsedPriceRow = { model: string; freon: string; compressorPrice: string; receiverLiters: string; receiverPrice: string; waterCondenser: string; waterPrice: string; airCondenser: string; airPrice: string; waterKitPrice: string; evaporator: string; airKitPrice: string; kitParts: string; sourceRow: number };
@@ -23,6 +24,7 @@ export function normalizePriceModel(raw: string) { const compact = raw.toUpperCa
 
 function mergedValue(sheet: ExcelJS.Worksheet, row: number, column: number) { const cell = sheet.getCell(row, column); return text(cell.isMerged ? cell.master.value : cell.value); }
 function headerRow(sheet: ExcelJS.Worksheet, start: number) { for (let row = 1; row <= Math.min(15, sheet.rowCount); row++) if (/model/i.test(text(sheet.getCell(row, start).value))) return row; return 2; }
+function modelColumns(sheet: ExcelJS.Worksheet) { const rows = Array.from({ length: Math.min(15, sheet.rowCount) }, (_, row) => Array.from({ length: sheet.columnCount }, (_, column) => text(sheet.getCell(row + 1, column + 1).value))); return findModelHeaderColumns(rows); }
 function parseBlock(sheet: ExcelJS.Worksheet, startColumn: number, suffix: string): ParsedPriceBlock {
   const header = headerRow(sheet, startColumn); const title = [1, 2, 3].map(row => text(sheet.getCell(row, startColumn).value)).filter(Boolean).join(" · "); const rows: ParsedPriceRow[] = [];
   for (let row = header + 1; row <= sheet.rowCount; row++) {
@@ -35,11 +37,11 @@ function parseBlock(sheet: ExcelJS.Worksheet, startColumn: number, suffix: strin
 
 export async function parseXlsxPriceList(bytes: Uint8Array): Promise<ParsedPriceList> {
   const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(Buffer.from(bytes) as never); const blocks: ParsedPriceBlock[] = [];
-  workbook.worksheets.forEach((sheet, index) => { blocks.push(parseBlock(sheet, 2, index === 0 ? "main" : `sheet-${index + 1}`)); if (index === 0 && sheet.columnCount >= 26) blocks.push(parseBlock(sheet, 15, "plus-3")); });
+  workbook.worksheets.forEach((sheet, index) => { const columns = modelColumns(sheet); columns.forEach((column, blockIndex) => blocks.push(parseBlock(sheet, column, index === 0 ? blockIndex === 0 ? "main" : blockIndex === 1 ? "plus-3" : `block-${blockIndex + 1}` : `sheet-${index + 1}${blockIndex ? `-block-${blockIndex + 1}` : ""}`))); });
   return { version: 1, blocks: blocks.filter(block => block.rows.length) };
 }
 
-export function choosePriceBlock(parsed: ParsedPriceList, command: string) { if (/\+\s*3\s*(?:li|lik)|3\s*%\s*(?:li|lik)/iu.test(command)) return parsed.blocks.find(block => block.key.endsWith(":plus-3")) || parsed.blocks[0]; const sheetMatch = command.match(/(?:list|лист)\s*[- ]?(\d+)/iu); if (sheetMatch) return parsed.blocks.find(block => block.key.includes(`sheet-${sheetMatch[1]}`)) || parsed.blocks[Number(sheetMatch[1]) - 1] || parsed.blocks[0]; return parsed.blocks.find(block => block.key.endsWith(":main")) || parsed.blocks[0]; }
+export function choosePriceBlock(parsed: ParsedPriceList, command: string) { if (/\+\s*3\s*(?:li|lik)|3\s*%\s*(?:li|lik)/iu.test(command)) return parsed.blocks.find(block => block.key.endsWith(":plus-3")); const wanted = requestedSheetNumber(command); if (wanted) { const sheetNames = [...new Set(parsed.blocks.map(block => block.sheetName))]; const sheetName = sheetNames[wanted - 1]; return sheetName ? parsed.blocks.find(block => block.sheetName === sheetName) : undefined; } return parsed.blocks.find(block => block.key.endsWith(":main")) || parsed.blocks[0]; }
 export function valueForKind(row: ParsedPriceRow, kind: PriceListKind) { return kind === "compressor" ? row.compressorPrice : kind === "receiver" ? row.receiverPrice : kind === "water" ? row.waterPrice : kind === "air" ? row.airPrice : kind === "water-kit" ? row.waterKitPrice : row.airKitPrice; }
 
 export async function saveActivePriceList(filename: string, bytes: Uint8Array, adminId: string) {
