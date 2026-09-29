@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { mapProduct, readSpecifications } from "./mapper";
 import { decodeCatalogCursor, normalizeCatalogSearch } from "./catalog-utils";
 import type { Product } from "./types";
+import type { ProductCategoryRecord } from "@/lib/product-categories/types";
 
 export const PUBLIC_CATALOG_PAGE_SIZE = 24;
 const orderBy = [{ order: "asc" as const }, { createdAt: "desc" as const }, { id: "asc" as const }];
@@ -46,7 +47,16 @@ function publicCatalogWhere(category: string, query: string) {
     ${query ? Prisma.sql`AND (lower(coalesce(p.name,'') || ' ' || coalesce(p.brand,'') || ' ' || coalesce(p.model,'') || ' ' || coalesce(p.slug,'')) LIKE lower(${`%${query}%`}) OR regexp_replace(lower(p.name || p.brand || p.model || p.slug), '[^a-z0-9]+', '', 'g') LIKE ${`%${normalized}%`})` : Prisma.empty}`;
 }
 
-export type PublicCatalogPage = { products: Product[]; total: number; nextCursor: string | null; seed: string };
+/**
+ * Catalog filter chips: every active category with ≥1 visible product, sorted by count.
+ * Uses the same WHERE as the catalog total and is not cached, so the chip counts always add up to the total.
+ */
+export async function getPublicCatalogCategories(): Promise<ProductCategoryRecord[]> {
+  const rows = await getDb().$queryRaw<Array<{ id: string; name: string; slug: string; order: number; count: bigint }>>(Prisma.sql`SELECT c.id, c.name, c.slug, c."order", count(p.id)::bigint AS count FROM "Product" p JOIN "ProductCategory" c ON c.id=p."categoryId" WHERE ${publicCatalogWhere("all", "")} GROUP BY c.id HAVING count(p.id) > 0 ORDER BY count(p.id) DESC, c."order" ASC, c.name ASC`);
+  return rows.map(row => ({ id: row.id, name: row.name, slug: row.slug, order: row.order, isActive: true, productCount: Number(row.count) }));
+}
+
+export type PublicCatalogPage ={ products: Product[]; total: number; nextCursor: string | null; seed: string };
 export async function getPublicCatalogPage(input: { category?: string; q?: string; cursor?: string | null; seed?: string; limit?: number }): Promise<PublicCatalogPage> {
   const category = (input.category || "all").trim().slice(0, 120), q = (input.q || "").trim().slice(0, 120), seed = sanitizeCatalogSeed(input.seed);
   const offset = decodeCatalogCursor(input.cursor), limit = Math.min(PUBLIC_CATALOG_PAGE_SIZE, Math.max(1, Math.trunc(input.limit || PUBLIC_CATALOG_PAGE_SIZE)));

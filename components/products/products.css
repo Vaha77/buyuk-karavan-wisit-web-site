@@ -60,3 +60,7 @@
 /* Product names never exceed three lines, in the catalog and in "O‘xshash mahsulotlar". */
 .catalog-card-identification{min-width:0}.catalog-card-identification h2{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;overflow-wrap:anywhere}
 @media(max-width:767px){.products-shell{overflow-x:clip}.catalog-card-identification h2{font-size:14px}.catalog-card-badge{font-size:9px}}
+/* Category chips wrap onto several lines; nothing hides in a horizontal scroller. */
+.catalog-filters,.catalog-section .catalog-filters{flex-wrap:wrap;overflow:visible;margin-right:0;padding-right:0}
+.catalog-filters button{max-width:100%;white-space:normal;line-height:1.2;text-align:left;padding-block:8px}
+.catalog-filters button.catalog-filters-toggle{border-style:dashed;color:#245487;background:#f4f9ff}

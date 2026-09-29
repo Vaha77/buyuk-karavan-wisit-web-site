@@ -30,3 +30,23 @@ test("API and client retain seed and prevent duplicate cards", async () => {
   assert.match(client, /seed: initial\.seed/);
   assert.match(client, /!current\.some\(existing => existing\.id === item\.id\)/);
 });
+
+test("filter chips: live counts share the catalog WHERE, hide empty categories, sort by count", async () => {
+  const source = await readFile(new URL("../lib/products/queries.ts", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/products/page.tsx", import.meta.url), "utf8");
+  const fn = source.slice(source.indexOf("export async function getPublicCatalogCategories"), source.indexOf("export type PublicCatalogPage"));
+  assert.match(fn, /publicCatalogWhere\("all", ""\)/);
+  assert.match(fn, /HAVING count\(p\.id\) > 0 ORDER BY count\(p\.id\) DESC/);
+  assert.doesNotMatch(fn, /unstable_cache/);
+  assert.match(page, /getPublicCatalogCategories\(\)/);
+});
+
+test("filter chips: Barchasi + 10, 'Yana N ta' / 'Yopish', wrapped layout", async () => {
+  const client = await readFile(new URL("../components/products/products-catalog.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../components/products/products.css", import.meta.url), "utf8");
+  assert.match(client, /const CATEGORY_CHIP_LIMIT = 10/);
+  assert.match(client, /Yana \{hiddenCount\} ta/);
+  assert.match(client, />Yopish</);
+  assert.match(client, /params\.set\("category", nextCategory\)/);
+  assert.match(css, /\.catalog-filters,\.catalog-section \.catalog-filters\{flex-wrap:wrap;overflow:visible/);
+});

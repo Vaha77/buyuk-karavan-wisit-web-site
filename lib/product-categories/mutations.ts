@@ -1,5 +1,5 @@
 import "server-only";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getDb } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { writeAudit } from "@/lib/audit/service";
@@ -28,7 +28,8 @@ async function ensureUniqueName(name: string, excludeId?: string) {
   const found = await getDb().productCategory.findFirst({ where: { name: { equals: name, mode: "insensitive" }, ...(excludeId ? { id: { not: excludeId } } : {}) }, select: { id: true } });
   if (found) throw new CategoryValidationError("Bu nomdagi kategoriya mavjud.");
 }
-function refresh() { revalidatePath("/admin/products"); revalidatePath("/products"); revalidatePath("/"); }
+// Also expires the cached public category list (home footer). { expire: 0 } is valid from Server Actions and Route Handlers (Product agent confirm).
+function refresh() { revalidatePath("/admin/products"); revalidatePath("/products"); revalidatePath("/"); revalidateTag("public-products", { expire: 0 }); }
 
 export async function createProductCategory(rawName: string) {
   const actor=await requireAdmin(); const name = cleanName(rawName); await ensureUniqueName(name);

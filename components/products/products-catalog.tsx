@@ -6,6 +6,7 @@ import type { Product } from "@/lib/products/types";
 import type { ProductCategoryRecord } from "@/lib/product-categories/types";
 import { ProductCard } from "./product-card";
 
+const CATEGORY_CHIP_LIMIT = 10;
 type CatalogPage = { products: Product[]; total: number; nextCursor: string | null; seed: string };
 
 export function ProductsCatalog({ initial, categories, exchangeRate, initialCategory = "all", initialQuery = "" }: { initial: CatalogPage; categories: ProductCategoryRecord[]; exchangeRate: string | null; initialCategory?: string; initialQuery?: string }) {
@@ -35,13 +36,19 @@ export function ProductsCatalog({ initial, categories, exchangeRate, initialCate
     const restore = () => { const params = new URLSearchParams(window.location.search), nextCategory = params.get("category") || "all", nextQuery = params.get("q") || ""; categoryRef.current = nextCategory; skipQueryEffect.current = nextQuery !== queryRef.current; queryRef.current = nextQuery; setCategory(nextCategory); setQuery(nextQuery); void requestPage(nextCategory, nextQuery, null, false); };
     window.addEventListener("popstate", restore); return () => { window.removeEventListener("popstate", restore); abortRef.current?.abort(); };
   }, [requestPage]);
+  // "Barchasi" + the 10 largest categories (the server sorts by count); the active one stays visible when collapsed.
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const collapsed = categories.slice(0, CATEGORY_CHIP_LIMIT);
+  const activeHidden = categories.find(item => item.slug === category && !collapsed.includes(item));
+  const visibleCategories = showAllCategories ? categories : activeHidden ? [...collapsed, activeHidden] : collapsed;
+  const hiddenCount = showAllCategories ? 0 : categories.length - visibleCategories.length;
   const chooseCategory = (value: string) => { if (value === category) return; categoryRef.current = value; setCategory(value); void requestPage(value, query, null, true); };
 
   return <section className="catalog-section" aria-labelledby="catalog-title" aria-busy={loading}>
     <div className="container catalog-container">
       <div className="catalog-intro"><div><h1 id="catalog-title">Mahsulotlar</h1><p>Profesional sovutish uskunalari va komponentlari</p></div><span className="catalog-count" aria-live="polite">{products.length} / {total} mahsulot ko‘rsatilmoqda</span></div>
       <label className="catalog-search"><Search size={20} strokeWidth={1.6} aria-hidden="true"/><span className="sr-only">Mahsulotlarni qidirish</span><input type="search" value={query} onChange={event => { queryRef.current = event.target.value; setQuery(event.target.value); }} placeholder="Mahsulot yoki modelni qidiring..." /></label>
-      <div className="catalog-filters" role="group" aria-label="Mahsulot toifalari"><button className={category === "all" ? "is-active" : ""} type="button" aria-pressed={category === "all"} onClick={() => chooseCategory("all")}>Barchasi</button>{categories.map(item => <button className={category === item.slug ? "is-active" : ""} type="button" key={item.id} aria-pressed={category === item.slug} onClick={() => chooseCategory(item.slug)}>{item.name} <small>{item.productCount ?? 0}</small></button>)}</div>
+      <div className="catalog-filters" role="group" aria-label="Mahsulot toifalari"><button className={category === "all" ? "is-active" : ""} type="button" aria-pressed={category === "all"} onClick={() => chooseCategory("all")}>Barchasi</button>{visibleCategories.map(item => <button className={category === item.slug ? "is-active" : ""} type="button" key={item.id} aria-pressed={category === item.slug} onClick={() => chooseCategory(item.slug)}>{item.name} <small>{item.productCount ?? 0}</small></button>)}{hiddenCount > 0 && <button className="catalog-filters-toggle" type="button" aria-expanded={false} onClick={() => setShowAllCategories(true)}>Yana {hiddenCount} ta</button>}{showAllCategories && categories.length > CATEGORY_CHIP_LIMIT && <button className="catalog-filters-toggle" type="button" aria-expanded onClick={() => setShowAllCategories(false)}>Yopish</button>}</div>
       {error && <p className="catalog-empty" role="alert">{error}</p>}
       {products.length ? <><div className="catalog-grid">{products.map(product => <ProductCard product={product} exchangeRate={exchangeRate} key={product.id}/>)}</div>{nextCursor && <button className="catalog-load-more" type="button" disabled={loading} onClick={() => void requestPage(category, query, nextCursor, false)}>{loading ? "Yuklanmoqda..." : "Ko‘proq ko‘rsatish"}</button>}</> : !loading && !error ? <p className="catalog-empty">Qidiruv bo‘yicha mahsulot topilmadi.</p> : null}
     </div>

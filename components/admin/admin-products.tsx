@@ -55,7 +55,7 @@ export function ProductFilters({ filters, categories }: {
   filters: { q: string; category: string; status: string }; categories: ProductCategoryRecord[];
 }) {
   return <form className="admin-filters" method="get"><label className="admin-filter-search"><Search size={17}/><span className="sr-only">Mahsulot qidirish</span><input name="q" defaultValue={filters.q} placeholder="Mahsulot, brend yoki model qidirish..."/></label>
-    <label><span className="sr-only">Kategoriya</span><select name="category" defaultValue={filters.category}><option value="all">Barchasi</option>{categories.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
+    <label><span className="sr-only">Kategoriya</span><select name="category" defaultValue={filters.category}><option value="all">Barchasi</option>{categories.map(item => <option value={item.id} key={item.id}>{item.name} ({item.productCount})</option>)}</select></label>
     <label><span className="sr-only">Holati</span><select name="status" defaultValue={filters.status}><option value="all">Barchasi</option><option value="available">Mavjud</option><option value="order">Buyurtma asosida</option><option value="hidden">Yashirilgan</option></select></label><button className="admin-primary-button" type="submit">Qidirish</button>
   </form>;
 }
@@ -79,8 +79,9 @@ export function AdminProductsPage({ products, categories, saved, total, page, pa
   const toggleSelected = (id: string) => setSelected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
   return <div className="admin-products-page" aria-busy={pending}>
     <div className="admin-page-heading"><div><h1>Mahsulotlar</h1><p>Saytdagi mahsulotlarni boshqarish</p></div><Link className="admin-primary-button" href="/admin/products/new"><Plus size={18}/>Yangi mahsulot</Link></div>
-    <div className="admin-summary-grid">
+    <div className="admin-summary-grid is-five">
       {[["Jami mahsulotlar",summary.total],["Mavjud",summary.available],["Buyurtma asosida",summary.order],["Yashirilgan",summary.hidden]].map(([label,value]) => <div className="admin-summary-card" key={label}><span>{label}</span><strong>{value}</strong></div>)}
+      <div className="admin-summary-card"><span>Kategoriyalar</span><strong>{categories.length}</strong><small>{categories.filter(item => item.productCount > 0).length} tasida mahsulot bor</small></div>
     </div>
     {feedback && <p className="admin-form-feedback" role="status">{feedback}</p>}
     <section className="admin-panel admin-management-panel"><div className="admin-panel-heading"><h2>Mahsulotlar ro‘yxati</h2><span>{rows.length} / {total} ta mahsulot</span></div>
