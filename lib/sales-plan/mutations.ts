@@ -5,6 +5,7 @@ import type { AdminUser } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { writeAudit } from "@/lib/audit/service";
 import { periodMonths } from "./rules";
+import { parseThresholds, validateThresholds, type ZoneThresholds } from "./zones";
 
 export class SalesPlanError extends Error {}
 type Actor = Pick<AdminUser, "id" | "name">;
@@ -119,4 +120,16 @@ export async function saveSalesMonthly(raw: z.input<typeof monthlySchema>, actor
     before: { rows: previous.map(row => ({ personId: row.personId, amountUsd: row.amountUsd.toString() })) }, after: { rows: entries, cleared: input.clear },
   });
   return entries.length;
+}
+
+/** Sozlamalar: zone thresholds (validated: whole percents 0–200, strictly increasing). */
+export async function saveZoneThresholds(raw: unknown, actor: Actor) {
+  const error = validateThresholds(raw);
+  if (error) throw new SalesPlanError(error);
+  const value = raw as ZoneThresholds;
+  const thresholds = { record: value.record, excellent: value.excellent, good: value.good, fair: value.fair, warning: value.warning };
+  const db = getDb();
+  const previous = await db.siteSettings.findUnique({ where: { id: "global" }, select: { salesPlanZones: true } });
+  await db.siteSettings.upsert({ where: { id: "global" }, create: { id: "global", salesPlanZones: thresholds }, update: { salesPlanZones: thresholds } });
+  await writeAudit(actor, { action: "UPDATE", entityType: "SETTINGS", entityId: "salesPlanZones", entityName: "Sotuv rejasi zonalari", summary: "Sotuv rejasi zona chegaralarini yangiladi", before: parseThresholds(previous?.salesPlanZones), after: thresholds });
 }

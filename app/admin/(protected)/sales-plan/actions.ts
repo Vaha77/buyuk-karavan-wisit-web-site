@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { requireRole } from "@/lib/auth/require-admin";
-import { copySalesPlans, createSalesPeriod, deleteSalesPerson, saveSalesMonthly, saveSalesPerson, saveSalesPlans, SalesPlanError, type PersonInput } from "@/lib/sales-plan/mutations";
+import { copySalesPlans, createSalesPeriod, deleteSalesPerson, saveSalesMonthly, saveSalesPerson, saveSalesPlans, saveZoneThresholds, SalesPlanError, type PersonInput } from "@/lib/sales-plan/mutations";
 
 export type SalesPlanActionResult = { ok: true; id?: string; count?: number } | { ok: false; error: string };
 function failure(error: unknown): SalesPlanActionResult {
@@ -38,4 +38,8 @@ export async function copySalesPlansAction(periodId: string, fromPeriodId: strin
 export async function saveSalesMonthlyAction(input: { year: number; month: number; entries: Array<{ personId: string; amount: string }>; clear: string[] }): Promise<SalesPlanActionResult> {
   const actor = await admin();
   try { const count = await saveSalesMonthly(input, actor); refresh(); return { ok: true, count }; } catch (error) { return failure(error); }
+}
+export async function saveZoneThresholdsAction(input: { record: number; excellent: number; good: number; fair: number; warning: number }): Promise<SalesPlanActionResult> {
+  const actor = await admin();
+  try { await saveZoneThresholds(input, actor); refresh(); revalidatePath("/admin/settings"); return { ok: true }; } catch (error) { return failure(error); }
 }

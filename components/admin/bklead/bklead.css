@@ -208,3 +208,16 @@
 .bk a.sl-kpi-link{color:var(--bk-text);text-decoration:none}.sl-kpi-link:hover{border-color:#B9CBE6}
 .sl-alert{color:#9F1C12}
 .sl-results{display:flex;flex-wrap:wrap;gap:8px}
+
+/* Sales plan: six zones */
+.sp-progress>b{opacity:.55}
+.sp-badges{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sp-streak{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:#FDE8E7;color:#9F1C12;border:1px solid #F3B4AE;font-size:11px;font-weight:700;white-space:nowrap}
+.sp-decision{margin-top:-4px;color:var(--bk-muted);font-size:12px;line-height:1.4}
+.sp-zone-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:10px}
+.sp-zone-cell{display:grid;gap:6px;align-content:start;padding:12px;border-radius:12px;border:1px solid var(--bk-border);border-top:4px solid var(--sp-zone)}
+.sp-zone-cell>div{display:flex;align-items:center;gap:8px}.sp-zone-cell>div small{font-size:11px}
+.sp-zone-cell strong{margin-left:auto;font-family:var(--font-space),system-ui,sans-serif;font-size:22px}
+.sp-zone-cell p{color:var(--bk-muted);font-size:12px;line-height:1.45}
+.sp-zone-cell.is-empty{opacity:.65}
+.sp-zone-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
