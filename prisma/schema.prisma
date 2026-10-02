@@ -110,6 +110,7 @@ enum AdminRole {
   SUPER_ADMIN
   ADMIN
   MANAGER
+  SELLER
 }
 
 enum AdminApprovalStatus {
@@ -413,6 +414,10 @@ model AdminUser {
   referralLinks        ReferralLink[]
   customerSalesCreated RegularCustomerMonthlySale[] @relation("CustomerSaleCreator")
   customerSalesUpdated RegularCustomerMonthlySale[] @relation("CustomerSaleUpdater")
+  salesPersonId        String?                      @unique
+  salesPerson          SalesPerson?                 @relation(fields: [salesPersonId], references: [id], onDelete: SetNull)
+  purchasesCreated     CustomerPurchase[]           @relation("PurchaseCreator")
+  purchasesReviewed    CustomerPurchase[]           @relation("PurchaseReviewer")
 
   @@index([approvalStatus, isActive])
 }
@@ -800,18 +805,84 @@ model VisitEvent {
 }
 
 model RegularCustomer {
-  id         String                       @id @default(cuid())
-  name       String
-  country    String                       @default("UZ") @db.VarChar(8)
-  regionCode String?                      @db.VarChar(16)
-  phone      String?
-  note       String?
-  isActive   Boolean                      @default(true)
-  createdAt  DateTime                     @default(now())
-  updatedAt  DateTime                     @updatedAt
-  sales      RegularCustomerMonthlySale[]
+  id               String                       @id @default(cuid())
+  name             String
+  country          String                       @default("UZ") @db.VarChar(8)
+  regionCode       String?                      @db.VarChar(16)
+  phone            String?
+  note             String?
+  isActive         Boolean                      @default(true)
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  // Seller that owns the customer; null = unassigned, visible to admins only.
+  ownerId          String?
+  callIntervalDays Int                          @default(60)
+  lastPurchaseAt   DateTime?
+  nextContactAt    DateTime?
+  phoneNormalized  String?                      @unique @db.VarChar(16)
+  owner            SalesPerson?                 @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  sales            RegularCustomerMonthlySale[]
+  contacts         CustomerContact[]
+  purchases        CustomerPurchase[]
 
   @@index([isActive])
+  @@index([ownerId, isActive])
+}
+
+enum CustomerContactResult {
+  CALLED
+  NO_ANSWER
+  LATER
+  AWAITING_PURCHASE
+}
+
+enum CustomerPurchaseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model CustomerContact {
+  id            String                @id @default(cuid())
+  customerId    String
+  sellerId      String?
+  at            DateTime              @default(now())
+  result        CustomerContactResult
+  note          String?
+  nextContactAt DateTime?
+  createdAt     DateTime              @default(now())
+  customer      RegularCustomer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  seller        SalesPerson?          @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, at])
+  @@index([sellerId, at])
+}
+
+model CustomerPurchase {
+  id              String                 @id @default(cuid())
+  customerId      String
+  sellerId        String?
+  date            DateTime               @db.Date
+  amount          Decimal                @db.Decimal(18, 2)
+  currency        MoneyCurrency
+  amountUzs       Decimal?               @db.Decimal(20, 2)
+  amountUsd       Decimal                @db.Decimal(18, 2)
+  note            String?
+  status          CustomerPurchaseStatus @default(PENDING)
+  rejectReason    String?
+  createdByUserId String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  customer        RegularCustomer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  seller          SalesPerson?           @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  createdBy       AdminUser?             @relation("PurchaseCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedBy      AdminUser?             @relation("PurchaseReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([customerId, date])
+  @@index([sellerId, status])
 }
 
 model RegularCustomerMonthlySale {
@@ -853,17 +924,23 @@ enum SalesPersonKind {
 }
 
 model SalesPerson {
-  id         String          @id @default(cuid())
-  name       String
-  kind       SalesPersonKind @default(EMPLOYEE)
-  branchHead String?
-  note       String?
-  isActive   Boolean         @default(true)
-  sortOrder  Int             @default(0)
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  plans      SalesPlan[]
-  monthly    SalesMonthly[]
+  id             String             @id @default(cuid())
+  name           String
+  kind           SalesPersonKind    @default(EMPLOYEE)
+  branchHead     String?
+  note           String?
+  isActive       Boolean            @default(true)
+  sortOrder      Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  plans          SalesPlan[]
+  monthly        SalesMonthly[]
+  // Private Telegram chat for the daily "Bugun qo'ng'iroq" reminder; null = no reminder.
+  telegramChatId String?            @db.VarChar(32)
+  user           AdminUser?
+  customers      RegularCustomer[]
+  contacts       CustomerContact[]
+  purchases      CustomerPurchase[]
 
   @@index([isActive, sortOrder])
 }

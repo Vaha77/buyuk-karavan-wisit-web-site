@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { normalizeUzPhone } from "@/lib/auth/phone";
 import { verifyPassword } from "@/lib/auth/password";
 import { createAdminSession, deleteAdminSession } from "@/lib/auth/session";
+import { homeFor } from "@/lib/auth/seller-access";
 import { clearLoginFailures, isLoginLimited, recordLoginFailure } from "@/lib/auth/login-limit";
 
 export type LoginState = { error: string | null };
@@ -27,7 +28,7 @@ export async function loginAction(_state: LoginState, formData: FormData): Promi
   }
   await clearLoginFailures(phone);
   await createAdminSession(user.id);
-  redirect("/admin");
+  redirect(homeFor(user.role));
 }
 
 export async function logoutAction(): Promise<void> {

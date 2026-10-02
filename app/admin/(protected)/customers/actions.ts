@@ -5,11 +5,13 @@ import { ZodError } from "zod";
 import { requireRole } from "@/lib/auth/require-admin";
 import { CustomerError, deleteRegularCustomer, saveDashboardTips, saveMonthlySale, saveRankingPrizes, saveRegularCustomer, type CustomerInput, type MonthlySaleInput } from "@/lib/customers/mutations";
 import { getCustomerYear } from "@/lib/customers/queries";
+import { approvePurchase, PurchaseReviewError, rejectPurchase } from "@/lib/customers/seller-service";
 
 export type CustomerActionResult = { ok: true; id?: string } | { ok: false; error: string };
 function failure(error: unknown): CustomerActionResult {
   if (error instanceof ZodError) return { ok: false, error: error.issues[0]?.message || "Ma’lumotlarni tekshiring." };
   if (error instanceof CustomerError) return { ok: false, error: error.message };
+  if (error instanceof PurchaseReviewError) return { ok: false, error: error.message };
   console.error("[CustomerAction]", { name: error instanceof Error ? error.name : "UnknownError" });
   return { ok: false, error: "Saqlab bo‘lmadi. Qayta urinib ko‘ring." };
 }
@@ -39,4 +41,13 @@ export async function saveTipsAction(tips: Record<string, string>): Promise<Cust
 export async function loadCustomerYearAction(year: number) {
   await requireRole("SUPER_ADMIN", "ADMIN");
   return getCustomerYear(Math.min(2100, Math.max(2020, Math.trunc(year))));
+}
+
+export async function approvePurchaseAction(id: string): Promise<CustomerActionResult> {
+  const actor = await requireRole("SUPER_ADMIN", "ADMIN");
+  try { await approvePurchase(actor, id); refresh(); revalidatePath("/admin/customers/purchases"); return { ok: true }; } catch (error) { return failure(error); }
+}
+export async function rejectPurchaseAction(id: string, reason: string): Promise<CustomerActionResult> {
+  const actor = await requireRole("SUPER_ADMIN", "ADMIN");
+  try { await rejectPurchase(actor, id, typeof reason === "string" ? reason : ""); revalidatePath("/admin/customers/purchases"); return { ok: true }; } catch (error) { return failure(error); }
 }

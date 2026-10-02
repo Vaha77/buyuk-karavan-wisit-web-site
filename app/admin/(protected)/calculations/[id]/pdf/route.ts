@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { getCalculation } from "@/lib/calculations/queries";
 import { renderProposalPdf } from "@/lib/calculations/proposal-pdf";
 import { calculationSchema } from "@/lib/calculations/validation";
@@ -16,6 +17,8 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  // Proxy already requires a session; this also rejects a SELLER (403) if the proxy rules ever change.
+  await requireAdmin();
   const { id } = await context.params,
     draft = await getCalculation(id);
   if (!draft) return new Response("Taklif topilmadi.", { status: 404 });

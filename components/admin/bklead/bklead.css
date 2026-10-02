@@ -196,3 +196,15 @@
 .sp-amount-input:focus{outline:2px solid #BFD1EE;border-color:var(--bk-primary)}
 .sp-entry-table tfoot td{border-top:1px solid var(--bk-border);border-bottom:0}
 @media(max-width:560px){.sp-percent{font-size:22px}.sp-months li{padding:5px 1px}.sp-months li b{font-size:12px}.sp-amount-input{width:104px}.bk-dialog-panel{padding:16px}}
+
+/* Seller section (/admin/my) */
+.sl-list>.sl-row{color:var(--bk-text);text-decoration:none}.bk a.sl-row{color:var(--bk-text)}.sl-row:hover b{color:var(--bk-primary)}
+.sl-days{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;background:#EEF1F5;color:var(--bk-muted);font-size:12px;font-weight:700;white-space:nowrap}
+.sl-days.is-red{background:#FDE8E7;color:#9F1C12}.sl-days.is-yellow{background:#FFF4D6;color:#7A5300}
+.sl-dot{width:10px;height:10px;border-radius:50%;display:inline-block}.sl-dot.is-red{background:#D2372B}.sl-dot.is-yellow{background:#E9B10A}
+.sl-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:14px}
+.sl-card{display:grid;gap:10px;border-left:5px solid #E9B10A}.sl-card.is-red{border-left-color:#D2372B}
+.sl-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.sl-card-head>div{display:grid;gap:3px;min-width:0}.sl-card-head a{color:var(--bk-text);text-decoration:none;font-size:15px}
+.bk a.sl-kpi-link{color:var(--bk-text);text-decoration:none}.sl-kpi-link:hover{border-color:#B9CBE6}
+.sl-alert{color:#9F1C12}
+.sl-results{display:flex;flex-wrap:wrap;gap:8px}

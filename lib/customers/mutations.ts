@@ -5,6 +5,7 @@ import type { AdminUser } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { writeAudit } from "@/lib/audit/service";
 import { getUsdUzsRate } from "@/lib/currency/cbu";
+import { normalizeUzPhone } from "@/lib/auth/phone";
 import { isCountryCode, isRegionOf } from "@/lib/dashboard/regions";
 import { expireDashboard } from "@/lib/referrals/tracking";
 
@@ -18,15 +19,29 @@ export const customerInputSchema = z.object({
   phone: z.string().trim().max(40).transform(value => value || null),
   note: z.string().trim().max(500).transform(value => value || null),
   isActive: z.boolean().default(true),
+  ownerId: z.string().trim().max(40).transform(value => value || null).default(""),
+  callIntervalDays: z.number().int().refine(value => [30, 60, 90].includes(value), "Qo‘ng‘iroq oralig‘ini tanlang.").default(60),
 }).refine(value => !value.regionCode || isRegionOf(value.regionCode, value.country), { message: "Viloyat tanlangan davlatga tegishli emas.", path: ["regionCode"] });
 export type CustomerInput = z.input<typeof customerInputSchema>;
 
 export async function saveRegularCustomer(id: string | null, raw: CustomerInput, actor: Actor) {
   const input = customerInputSchema.parse(raw);
-  const previous = id ? await getDb().regularCustomer.findUnique({ where: { id } }) : null;
+  const db = getDb();
+  const previous = id ? await db.regularCustomer.findUnique({ where: { id }, include: { owner: { select: { name: true } } } }) : null;
   if (id && !previous) throw new CustomerError("Mijoz topilmadi.");
-  const customer = id ? await getDb().regularCustomer.update({ where: { id }, data: input }) : await getDb().regularCustomer.create({ data: input });
-  await writeAudit(actor, { action: id ? "UPDATE" : "CREATE", entityType: "REGULAR_CUSTOMER", entityId: customer.id, entityName: customer.name, summary: id ? "Doimiy mijozni tahrirladi" : "Doimiy mijoz qo‘shdi", before: previous ? { name: previous.name, regionCode: previous.regionCode, isActive: previous.isActive } : undefined, after: { name: customer.name, country: customer.country, regionCode: customer.regionCode, isActive: customer.isActive } });
+  // Admins may keep a free-text phone; when it is a valid UZ number it must be unique across customers.
+  const phoneNormalized = input.phone ? normalizeUzPhone(input.phone) : null;
+  if (phoneNormalized) {
+    const clash = await db.regularCustomer.findFirst({ where: { phoneNormalized, NOT: id ? { id } : undefined }, select: { name: true, owner: { select: { name: true } } } });
+    if (clash) throw new CustomerError(`Bu raqam boshqa mijozda bor: ${clash.name}${clash.owner ? ` (${clash.owner.name})` : ""}.`);
+  }
+  const owner = input.ownerId ? await db.salesPerson.findUnique({ where: { id: input.ownerId }, select: { id: true, name: true } }) : null;
+  if (input.ownerId && !owner) throw new CustomerError("Sotuvchi topilmadi.");
+  const data = { ...input, phoneNormalized };
+  const customer = id ? await db.regularCustomer.update({ where: { id }, data }) : await db.regularCustomer.create({ data });
+  const ownerChanged = (previous?.ownerId ?? null) !== customer.ownerId;
+  const summary = !id ? "Doimiy mijoz qo‘shdi" : ownerChanged ? `Mijozni ${owner ? `${owner.name}ga biriktirdi` : "sotuvchidan ajratdi"}${previous?.owner ? ` (oldin: ${previous.owner.name})` : ""}` : "Doimiy mijozni tahrirladi";
+  await writeAudit(actor, { action: id ? "UPDATE" : "CREATE", entityType: "REGULAR_CUSTOMER", entityId: customer.id, entityName: customer.name, summary, before: previous ? { name: previous.name, regionCode: previous.regionCode, isActive: previous.isActive, ownerId: previous.ownerId, owner: previous.owner?.name ?? null, callIntervalDays: previous.callIntervalDays } : undefined, after: { name: customer.name, country: customer.country, regionCode: customer.regionCode, isActive: customer.isActive, ownerId: customer.ownerId, owner: owner?.name ?? null, callIntervalDays: customer.callIntervalDays } });
   expireDashboard();
   return customer;
 }
@@ -36,7 +51,7 @@ export async function deleteRegularCustomer(id: string, actor: Actor) {
   const db = getDb();
   const customer = await db.regularCustomer.findUnique({ where: { id }, include: { sales: { select: { year: true, month: true, amount: true, currency: true, amountUsd: true } } } });
   if (!customer) throw new CustomerError("Mijoz topilmadi.");
-  await db.$transaction([db.regularCustomerMonthlySale.deleteMany({ where: { customerId: id } }), db.regularCustomer.delete({ where: { id } })]);
+  await db.$transaction([db.customerContact.deleteMany({ where: { customerId: id } }), db.customerPurchase.deleteMany({ where: { customerId: id } }), db.regularCustomerMonthlySale.deleteMany({ where: { customerId: id } }), db.regularCustomer.delete({ where: { id } })]);
   await writeAudit(actor, {
     action: "DELETE", entityType: "REGULAR_CUSTOMER", entityId: id, entityName: customer.name,
     summary: `Doimiy mijoz ${customer.name} va uning ${customer.sales.length} ta oylik savdo yozuvi o‘chirildi`,

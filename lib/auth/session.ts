@@ -56,3 +56,9 @@ export async function deleteAdminSession(): Promise<void> {
   }
   cookieStore.set(ADMIN_COOKIE, "", { ...cookieOptions(), maxAge: 0 });
 }
+
+/** Session of admin-panel staff only; a SELLER session counts as none (used by /api/admin routes → 401). */
+export async function getStaffSession() {
+  const session = await getAdminSession();
+  return session && session.user.role !== "SELLER" ? session : null;
+}

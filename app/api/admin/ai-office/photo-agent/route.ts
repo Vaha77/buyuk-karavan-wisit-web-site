@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getAdminSession } from "@/lib/auth/session";
+import { getStaffSession } from "@/lib/auth/session";
 import { buildPhotoPreview, deletePendingPhoto, findProducts, PhotoAgentUserError, prepareUpload, processPhoto, recommendCandidate, signPhotoPreview, validatePhotoAgentFile, verifyPhotoPreview } from "@/lib/ai-office/photo-agent";
 import { isPhotoAgentOffDomain, narrowPhotoCandidates, orderChoices, PHOTO_AGENT_MAX_FILES, PHOTO_AGENT_NEEDS_IMAGE, PHOTO_AGENT_NOT_FOUND, PHOTO_AGENT_REFUSAL, photoSearchText, wantsMainPlacement } from "@/lib/ai-office/photo-agent-rules";
 
@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(request: Request) {
-  const session = await getAdminSession();
+  const session = await getStaffSession();
   if (!session) return Response.json({ error: "Avtorizatsiya talab qilinadi." }, { status: 401 });
   try {
     const form = await request.formData();
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
 /** "Bekor qilish" / "Qayta ishlash": drops the temporary full-size results of unconfirmed previews. */
 export async function DELETE(request: Request) {
-  const session = await getAdminSession();
+  const session = await getStaffSession();
   if (!session) return Response.json({ error: "Avtorizatsiya talab qilinadi." }, { status: 401 });
   const parsed = z.object({ previewTokens: z.array(z.string().min(40).max(20_000)).max(PHOTO_AGENT_MAX_FILES) }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "So‘rov noto‘g‘ri." }, { status: 400 });

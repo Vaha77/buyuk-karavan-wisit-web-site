@@ -5,6 +5,10 @@ import { referralLinksAreNew } from "@/lib/referrals/rules";
 
 export default async function ProtectedAdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAdmin();
-  const newLeads = await getDb().lead.count({ where: { status: "NEW" } }).catch(() => 0);
-  return <AdminShell user={{ name: user.name, role: user.role }} newLeads={newLeads} linksBadge={referralLinksAreNew()}>{children}</AdminShell>;
+  const canReview = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
+  const [newLeads, pendingPurchases] = await Promise.all([
+    getDb().lead.count({ where: { status: "NEW" } }).catch(() => 0),
+    canReview ? getDb().customerPurchase.count({ where: { status: "PENDING" } }).catch(() => 0) : 0,
+  ]);
+  return <AdminShell user={{ name: user.name, role: user.role }} newLeads={newLeads} linksBadge={referralLinksAreNew()} pendingPurchases={pendingPurchases}>{children}</AdminShell>;
 }

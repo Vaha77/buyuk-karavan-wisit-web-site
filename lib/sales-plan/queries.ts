@@ -46,7 +46,7 @@ export async function getPlanBoardData(period: SalesPeriodRow) {
 export async function getSalesPeople(periodId: string | null) {
   const rows = await getDb().salesPerson.findMany({
     orderBy: [{ isActive: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, kind: true, branchHead: true, note: true, isActive: true, sortOrder: true, plans: { where: { periodId: periodId ?? "" }, select: { planUsd: true } }, _count: { select: { monthly: true } } },
+    select: { id: true, name: true, kind: true, branchHead: true, note: true, isActive: true, sortOrder: true, telegramChatId: true, plans: { where: { periodId: periodId ?? "" }, select: { planUsd: true } }, _count: { select: { monthly: true } } },
   });
   return rows.map(({ plans, _count, ...person }) => ({ ...person, plan: plans[0] ? Number(plans[0].planUsd) : null, monthlyCount: _count.monthly }));
 }

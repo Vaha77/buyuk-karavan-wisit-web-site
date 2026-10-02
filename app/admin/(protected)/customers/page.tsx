@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, DollarSign, MapPinned, TrendingUp, Users } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getUsdUzsRate } from "@/lib/currency/cbu";
-import { getCustomerRegionRows, getCustomerYear, getRegularCustomers } from "@/lib/customers/queries";
+import { getAssignableSellers, getCustomerRegionRows, getCustomerYear, getRegularCustomers } from "@/lib/customers/queries";
 import { buildRegionStats } from "@/lib/customers/region-stats";
 import { tashkentYearMonth } from "@/lib/dashboard/period";
 import { formatInt, formatPercent, formatUsd, MONTHS_LONG } from "@/lib/dashboard/format";
@@ -18,7 +18,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   const search = await searchParams;
   const today = tashkentYearMonth();
   const year = /^20\d{2}$/.test(search.year ?? "") && Number(search.year) <= today.year ? Number(search.year) : today.year;
-  const [customers, data, regionRows, rate] = await Promise.all([getRegularCustomers(), getCustomerYear(year), getCustomerRegionRows(year), getUsdUzsRate()]);
+  const [customers, data, regionRows, rate, sellers] = await Promise.all([getRegularCustomers(), getCustomerYear(year), getCustomerRegionRows(year), getUsdUzsRate(), getAssignableSellers()]);
   const stats = buildRegionStats(regionRows, year, today);
   const { kpis } = stats;
   const canEdit = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
@@ -46,6 +46,6 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     <CustomerRegions stats={stats}/>
 
     <CustomerRanking data={data} now={today} canEdit={canEdit} uzsPerUsd={rate ? Number(rate.rate) : null} yearHref={yearHref}/>
-    <CustomersManager canEdit={canEdit} startNew={search.new === "1"} customers={customers.map(customer => ({ id: customer.id, name: customer.name, country: customer.country, regionCode: customer.regionCode, phone: customer.phone, note: customer.note, isActive: customer.isActive, salesCount: customer._count.sales }))}/>
+    <CustomersManager canEdit={canEdit} startNew={search.new === "1"} sellers={sellers} customers={customers.map(customer => ({ id: customer.id, name: customer.name, country: customer.country, regionCode: customer.regionCode, phone: customer.phone, note: customer.note, isActive: customer.isActive, salesCount: customer._count.sales, ownerId: customer.ownerId, ownerName: customer.owner?.name ?? null, callIntervalDays: customer.callIntervalDays }))}/>
   </div>;
 }

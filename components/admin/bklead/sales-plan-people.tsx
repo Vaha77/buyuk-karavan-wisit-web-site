@@ -8,7 +8,7 @@ import { formatUsd, MONTHS_LONG } from "@/lib/dashboard/format";
 import { ConfirmDialog } from "./dialog";
 
 type Kind = "EMPLOYEE" | "BRANCH";
-export type SalesPersonRow = { id: string; name: string; kind: Kind; branchHead: string | null; note: string | null; isActive: boolean; sortOrder: number; plan: number | null; monthlyCount: number };
+export type SalesPersonRow = { id: string; name: string; kind: Kind; branchHead: string | null; note: string | null; isActive: boolean; sortOrder: number; telegramChatId: string | null; plan: number | null; monthlyCount: number };
 type Period = { id: string; name: string; startYear: number; startMonth: number; monthCount: number };
 const KIND_LABEL: Record<Kind, string> = { EMPLOYEE: "Xodim", BRANCH: "Filial" };
 
@@ -50,12 +50,13 @@ function PersonForm({ person, period, nextOrder, onDone }: { person?: SalesPerso
   const [name, setName] = useState(person?.name ?? ""), [kind, setKind] = useState<Kind>(person?.kind ?? "EMPLOYEE"), [branchHead, setBranchHead] = useState(person?.branchHead ?? "");
   const [note, setNote] = useState(person?.note ?? ""), [isActive, setIsActive] = useState(person?.isActive ?? true), [sortOrder, setSortOrder] = useState(String(person?.sortOrder ?? nextOrder));
   const [plan, setPlan] = useState(person?.plan ? String(person.plan) : ""), [error, setError] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState(person?.telegramChatId ?? "");
   const [pending, startTransition] = useTransition();
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     startTransition(async () => {
       setError("");
-      const result = await saveSalesPersonAction(person?.id ?? null, { name, kind, branchHead, note, isActive, sortOrder: Math.max(0, Math.trunc(Number(sortOrder) || 0)), periodId: period?.id ?? null, plan });
+      const result = await saveSalesPersonAction(person?.id ?? null, { name, kind, branchHead, note, isActive, sortOrder: Math.max(0, Math.trunc(Number(sortOrder) || 0)), telegramChatId, periodId: period?.id ?? null, plan });
       if (!result.ok) { setError(result.error); return; }
       onDone(); router.refresh();
     });
@@ -69,6 +70,7 @@ function PersonForm({ person, period, nextOrder, onDone }: { person?: SalesPerso
     </div>
     <div className="bk-row">
       <label className="bk-field"><span>Izoh (ixtiyoriy)</span><input value={note} onChange={event => setNote(event.target.value)} maxLength={300}/></label>
+      <label className="bk-field"><span>Telegram chat ID (eslatma uchun)</span><input value={telegramChatId} onChange={event => setTelegramChatId(event.target.value)} inputMode="numeric" placeholder="123456789"/></label>
       <label className="bk-field"><span>Tartib</span><input value={sortOrder} onChange={event => setSortOrder(event.target.value)} inputMode="numeric"/></label>
       <label className="bk-field" style={{ alignContent: "end" }}><span><input type="checkbox" checked={isActive} onChange={event => setIsActive(event.target.checked)} style={{ width: "auto", minHeight: 0, marginRight: 8 }}/>Faol (dashboard’da ko‘rinadi)</span></label>
     </div>

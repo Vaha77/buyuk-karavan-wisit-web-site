@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getAdminSession } from "@/lib/auth/session";
+import { getStaffSession } from "@/lib/auth/session";
 import { confirmProductPreview, verifyPreview } from "@/lib/ai-office/product-agent-preview";
 import { rejectUnauthorizedProductAgentTool } from "@/lib/ai-office/product-agent";
 
@@ -7,7 +7,7 @@ const editSchema = z.object({ id: z.string(), name: z.string().trim().min(3).max
 const inputSchema = z.object({ previewToken: z.string().min(100).max(500_000), confirmationAction: z.literal("confirm-product-preview"), agentId: z.literal("product-agent-01"), edits: z.array(editSchema).max(50).optional() });
 
 export async function POST(request: Request) {
-  const session = await getAdminSession(); if (!session) return Response.json({ error: "Avtorizatsiya talab qilinadi." }, { status: 401 });
+  const session = await getStaffSession(); if (!session) return Response.json({ error: "Avtorizatsiya talab qilinadi." }, { status: 401 });
   const parsed = inputSchema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return Response.json({ error: "Explicit tasdiqlash ma’lumoti noto‘g‘ri." }, { status: 400 });
   try {
     await rejectUnauthorizedProductAgentTool("createProduct", session.user);

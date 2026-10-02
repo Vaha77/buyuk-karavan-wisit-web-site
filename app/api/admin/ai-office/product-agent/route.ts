@@ -1,4 +1,4 @@
-import { getAdminSession } from "@/lib/auth/session";
+import { getStaffSession } from "@/lib/auth/session";
 import { PRODUCT_AGENT_MAX_TOTAL_BYTES, PRODUCT_AGENT_REFUSAL, ProductAgentProviderError, ProductAgentUploadError, isProductAgentOffDomain, productAgentRequestSchema, validateProductAgentUploads } from "@/lib/ai-office/product-agent";
 import { runProductAgentLoop } from "@/lib/ai-office/product-agent-loop";
 import { buildProductPreview, signPreview } from "@/lib/ai-office/product-agent-preview";
@@ -7,14 +7,14 @@ import { getActivePriceList, saveActivePriceList } from "@/lib/ai-office/price-l
 export const runtime = "nodejs";
 
 export async function GET() {
-  const session = await getAdminSession();
+  const session = await getStaffSession();
   if (!session) return Response.json({ error: "Avtorizatsiya talab qilinadi." }, { status: 401 });
   const active = await getActivePriceList();
   return Response.json({ activePriceList: active ? `${active.filename} (${active.sheetName}, ${active.blockLabel})` : null });
 }
 
 export async function POST(request: Request) {
-  const session = await getAdminSession();
+  const session = await getStaffSession();
   if (!session) return Response.json({ error: "Avtorizatsiya talab qilinadi." }, { status: 401 });
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > PRODUCT_AGENT_MAX_TOTAL_BYTES + 512_000) return Response.json({ error: "So'rov hajmi 20 MB limitdan oshdi." }, { status: 413 });

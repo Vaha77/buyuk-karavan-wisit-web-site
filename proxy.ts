@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import { NextResponse, type NextRequest } from "next/server";
+import { isSellerPathAllowed } from "@/lib/auth/seller-access";
 
 const COOKIE_NAME = "bk_admin_session";
 const pool = new Pool({
@@ -31,33 +32,35 @@ async function hasValidSession(tokenHash: string) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const result = await pool.query(
-        'SELECT 1 FROM "AdminSession" s JOIN "AdminUser" u ON u.id = s."userId" WHERE s."tokenHash" = $1 AND s."expiresAt" > now() AND u."isActive" = true AND u."approvalStatus" = \'APPROVED\' LIMIT 1',
+        'SELECT u.role::text AS role FROM "AdminSession" s JOIN "AdminUser" u ON u.id = s."userId" WHERE s."tokenHash" = $1 AND s."expiresAt" > now() AND u."isActive" = true AND u."approvalStatus" = \'APPROVED\' LIMIT 1',
         [tokenHash],
       );
-      return result.rowCount === 1;
+      return result.rowCount === 1 ? (result.rows[0].role as string) : null;
     } catch (error) {
       console.error("Admin session database query failed", { attempt, ...safeDatabaseError(error) });
       if (attempt === 2) throw error;
     }
   }
-  return false;
+  return null;
 }
 
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === "/admin/login" || request.nextUrl.pathname === "/admin/register") return NextResponse.next();
 
   const token = request.cookies.get(COOKIE_NAME)?.value;
-  let valid = false;
+  let role: string | null = null;
   if (token && /^[A-Za-z0-9_-]{43}$/.test(token)) {
     const tokenHash = createHash("sha256").update(token).digest("hex");
     try {
-      valid = await hasValidSession(tokenHash);
+      role = await hasValidSession(tokenHash);
     } catch {
       // Fail closed: a session is never accepted when its database check cannot complete.
-      valid = false;
+      role = null;
     }
   }
-  if (valid) return NextResponse.next();
+  // Sellers only see their own section; everything else in /admin is 403 (pages re-check the role too).
+  if (role === "SELLER" && !isSellerPathAllowed(request.nextUrl.pathname)) return new NextResponse("403 — Ruxsat yo‘q", { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
+  if (role) return NextResponse.next();
 
   const response = NextResponse.redirect(new URL("/admin/login", request.url));
   if (token) response.cookies.set(COOKIE_NAME, "", { path: "/", maxAge: 0 });

@@ -7,11 +7,14 @@ import { deleteCustomerAction, saveCustomerAction, savePrizesAction, saveTipsAct
 import { ConfirmDialog } from "./dialog";
 import { COUNTRY_CODES, COUNTRY_NAMES, regionName, regionsOf, type CountryCode } from "@/lib/dashboard/regions";
 
-type Customer = { id: string; name: string; country: string; regionCode: string | null; phone: string | null; note: string | null; isActive: boolean; salesCount: number };
+type Customer = { id: string; name: string; country: string; regionCode: string | null; phone: string | null; note: string | null; isActive: boolean; salesCount: number; ownerId: string | null; ownerName: string | null; callIntervalDays: number };
+type Seller = { id: string; name: string };
 
 /** Regular customers list with inline add/edit (admins only). */
-export function CustomersManager({ customers, canEdit, startNew }: { customers: Customer[]; canEdit: boolean; startNew: boolean }) {
+export function CustomersManager({ customers, sellers, canEdit, startNew }: { customers: Customer[]; sellers: Seller[]; canEdit: boolean; startNew: boolean }) {
   const router = useRouter();
+  const [owner, setOwner] = useState("all");
+  const shown = owner === "all" ? customers : customers.filter(customer => (customer.ownerId ?? "none") === owner);
   const [editing, setEditing] = useState<string | "new" | null>(startNew && canEdit ? "new" : null);
   const [deleting, setDeleting] = useState<Customer | null>(null), [deleteError, setDeleteError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -22,12 +25,17 @@ export function CustomersManager({ customers, canEdit, startNew }: { customers: 
     setDeleting(null); router.refresh();
   });
   return <section className="bk-card" aria-labelledby="bk-customers-list-title">
-    <div className="bk-card-head"><div><h2 id="bk-customers-list-title">Doimiy mijozlar</h2><span className="bk-muted">{customers.filter(item => item.isActive).length} ta faol · reytingda faqat faol mijozlar</span></div>{canEdit && editing !== "new" && <button type="button" className="bk-btn is-primary" onClick={() => setEditing("new")}><Plus size={15}/>Yangi doimiy mijoz</button>}</div>
-    {editing === "new" && <CustomerForm onDone={() => setEditing(null)}/>}
-    {customers.length ? <div className="bk-table-wrap"><table className="bk-table">
-      <thead><tr><th>Mijoz</th><th className="is-left">Hudud</th><th className="is-left">Telefon</th><th>Kiritilgan oylar</th><th className="is-left">Holat</th>{canEdit && <th><span className="bk-sr-only">Amallar</span></th>}</tr></thead>
-      <tbody>{customers.map(customer => editing === customer.id ? <tr key={customer.id}><td colSpan={canEdit ? 6 : 5} className="is-left"><CustomerForm customer={customer} onDone={() => setEditing(null)}/></td></tr> : <tr key={customer.id}>
-        <td className="is-strong">{customer.name}</td><td className="is-left">{customer.regionCode ? regionName(customer.regionCode) : COUNTRY_NAMES[customer.country as CountryCode] ?? customer.country}</td>
+    <div className="bk-card-head"><div><h2 id="bk-customers-list-title">Doimiy mijozlar</h2><span className="bk-muted">{customers.filter(item => item.isActive).length} ta faol · reytingda faqat faol mijozlar</span></div>
+      <div className="bk-actions">
+        <label className="bk-sr-only" htmlFor="bk-owner-filter">Sotuvchi</label>
+        <select id="bk-owner-filter" className="bk-btn" value={owner} onChange={event => setOwner(event.target.value)}><option value="all">Barcha sotuvchilar</option><option value="none">Biriktirilmagan</option>{sellers.map(seller => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select>
+        {canEdit && editing !== "new" && <button type="button" className="bk-btn is-primary" onClick={() => setEditing("new")}><Plus size={15}/>Yangi doimiy mijoz</button>}
+      </div></div>
+    {editing === "new" && <CustomerForm sellers={sellers} onDone={() => setEditing(null)}/>}
+    {shown.length ? <div className="bk-table-wrap"><table className="bk-table">
+      <thead><tr><th>Mijoz</th><th className="is-left">Sotuvchi</th><th className="is-left">Hudud</th><th className="is-left">Telefon</th><th>Kiritilgan oylar</th><th className="is-left">Holat</th>{canEdit && <th><span className="bk-sr-only">Amallar</span></th>}</tr></thead>
+      <tbody>{shown.map(customer => editing === customer.id ? <tr key={customer.id}><td colSpan={canEdit ? 7 : 6} className="is-left"><CustomerForm customer={customer} sellers={sellers} onDone={() => setEditing(null)}/></td></tr> : <tr key={customer.id}>
+        <td className="is-strong">{customer.name}</td><td className="is-left">{customer.ownerName ?? <span className="bk-badge is-soft">Biriktirilmagan</span>}</td><td className="is-left">{customer.regionCode ? regionName(customer.regionCode) : COUNTRY_NAMES[customer.country as CountryCode] ?? customer.country}</td>
         <td className="is-left bk-muted">{customer.phone || "—"}</td><td>{customer.salesCount}</td>
         <td className="is-left"><span className={`bk-badge${customer.isActive ? "" : " is-grey"}`}>{customer.isActive ? "Faol" : "Nofaol"}</span></td>
         {canEdit && <td><div className="bk-actions" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
@@ -35,21 +43,22 @@ export function CustomersManager({ customers, canEdit, startNew }: { customers: 
           <button type="button" className="bk-btn bk-icon-btn is-danger-ghost" onClick={() => { setDeleteError(""); setDeleting(customer); }} aria-label={`${customer.name} — o‘chirish`}><Trash2 size={15}/></button>
         </div></td>}
       </tr>)}</tbody>
-    </table></div> : editing !== "new" && <div className="bk-empty">Hali doimiy mijoz yo‘q.</div>}
+    </table></div> : editing !== "new" && <div className="bk-empty">{customers.length ? "Bu sotuvchida mijoz yo‘q." : "Hali doimiy mijoz yo‘q."}</div>}
     {deleting && <ConfirmDialog title="Doimiy mijozni o‘chirish" message={`${deleting.name} va uning ${deleting.salesCount} ta oylik savdo yozuvi o‘chiriladi. Davom etasizmi?`} busy={pending} error={deleteError} onConfirm={remove} onClose={() => setDeleting(null)}/>}
   </section>;
 }
 
-function CustomerForm({ customer, onDone }: { customer?: Customer; onDone: () => void }) {
+function CustomerForm({ customer, sellers, onDone }: { customer?: Customer; sellers: Seller[]; onDone: () => void }) {
   const router = useRouter();
   const [name, setName] = useState(customer?.name ?? ""), [country, setCountry] = useState<CountryCode>((customer?.country as CountryCode) ?? "UZ"), [regionCode, setRegionCode] = useState(customer?.regionCode ?? "");
   const [phone, setPhone] = useState(customer?.phone ?? ""), [note, setNote] = useState(customer?.note ?? ""), [isActive, setIsActive] = useState(customer?.isActive ?? true), [error, setError] = useState("");
+  const [ownerId, setOwnerId] = useState(customer?.ownerId ?? ""), [callIntervalDays, setCallIntervalDays] = useState(customer?.callIntervalDays ?? 60);
   const [pending, startTransition] = useTransition();
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     startTransition(async () => {
       setError("");
-      const result = await saveCustomerAction(customer?.id ?? null, { name, country, regionCode, phone, note, isActive });
+      const result = await saveCustomerAction(customer?.id ?? null, { name, country, regionCode, phone, note, isActive, ownerId, callIntervalDays });
       if (!result.ok) { setError(result.error); return; }
       onDone(); router.refresh();
     });
@@ -63,6 +72,10 @@ function CustomerForm({ customer, onDone }: { customer?: Customer; onDone: () =>
     <div className="bk-row">
       <label className="bk-field"><span>Telefon (ixtiyoriy)</span><input value={phone} onChange={event => setPhone(event.target.value)} maxLength={40} inputMode="tel"/></label>
       <label className="bk-field"><span>Izoh (ixtiyoriy)</span><input value={note} onChange={event => setNote(event.target.value)} maxLength={500}/></label>
+    </div>
+    <div className="bk-row">
+      <label className="bk-field"><span>Sotuvchi (egasi)</span><select value={ownerId} onChange={event => setOwnerId(event.target.value)}><option value="">Biriktirilmagan (faqat admin)</option>{sellers.map(seller => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>
+      <label className="bk-field"><span>Qo‘ng‘iroq oralig‘i</span><select value={callIntervalDays} onChange={event => setCallIntervalDays(Number(event.target.value))}>{[30, 60, 90].map(days => <option key={days} value={days}>{days} kun</option>)}</select></label>
       <label className="bk-field" style={{ alignContent: "end" }}><span><input type="checkbox" checked={isActive} onChange={event => setIsActive(event.target.checked)} style={{ width: "auto", minHeight: 0, marginRight: 8 }}/>Faol (reytingda ko‘rinadi)</span></label>
     </div>
     {error && <p className="bk-note is-soft" role="alert">{error}</p>}

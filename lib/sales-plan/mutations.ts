@@ -19,6 +19,7 @@ export const personSchema = z.object({
   note: optionalText(300),
   isActive: z.boolean(),
   sortOrder: z.number().int().min(0).max(10_000),
+  telegramChatId: z.string().trim().max(32).refine(value => value === "" || /^-?\d{5,20}$/.test(value), "Telegram chat ID faqat raqam (masalan 123456789).").transform(value => value || null).default(""),
   periodId: z.string().trim().max(40).nullable(),
   plan: money("Reja summasini to‘g‘ri kiriting."),
 });
@@ -26,7 +27,7 @@ export type PersonInput = z.input<typeof personSchema>;
 
 export async function saveSalesPerson(id: string | null, raw: PersonInput, actor: Actor) {
   const input = personSchema.parse(raw);
-  const data = { name: input.name, kind: input.kind, branchHead: input.kind === "BRANCH" ? input.branchHead : null, note: input.note, isActive: input.isActive, sortOrder: input.sortOrder };
+  const data = { name: input.name, kind: input.kind, branchHead: input.kind === "BRANCH" ? input.branchHead : null, note: input.note, isActive: input.isActive, sortOrder: input.sortOrder, telegramChatId: input.telegramChatId };
   const db = getDb();
   const previous = id ? await db.salesPerson.findUnique({ where: { id } }) : null;
   if (id && !previous) throw new SalesPlanError("Sotuvchi topilmadi.");

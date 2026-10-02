@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getAdminSession } from "@/lib/auth/session";
+import { getStaffSession } from "@/lib/auth/session";
 import { auditPhotoConfirmed, claimPhotoPreview, deletePendingPhoto, isPhotoPreviewConfirmed, PhotoAgentUserError, verifyPhotoPreview } from "@/lib/ai-office/photo-agent";
 import { saveApprovedPhotoStudioImageAction } from "@/app/admin/(protected)/photo-studio/actions";
 
@@ -11,7 +11,7 @@ export const maxDuration = 60;
 const inputSchema = z.object({ previewToken: z.string().min(40).max(20_000), confirmationAction: z.literal("confirm-photo-preview") });
 
 export async function POST(request: Request) {
-  const session = await getAdminSession();
+  const session = await getStaffSession();
   if (!session) return Response.json({ error: "Avtorizatsiya talab qilinadi." }, { status: 401 });
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Tasdiqlash ma’lumoti noto‘g‘ri." }, { status: 400 });

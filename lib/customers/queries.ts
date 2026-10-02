@@ -28,7 +28,7 @@ const cachedCustomerYear = unstable_cache(loadCustomerYear, ["regular-customer-y
 export async function getCustomerYear(year: number) { return cachedCustomerYear(year); }
 
 export async function getRegularCustomers() {
-  return getDb().regularCustomer.findMany({ orderBy: [{ isActive: "desc" }, { name: "asc" }], select: { id: true, name: true, country: true, regionCode: true, phone: true, note: true, isActive: true, _count: { select: { sales: true } } } });
+  return getDb().regularCustomer.findMany({ orderBy: [{ isActive: "desc" }, { name: "asc" }], select: { id: true, name: true, country: true, regionCode: true, phone: true, note: true, isActive: true, ownerId: true, callIntervalDays: true, owner: { select: { name: true } }, _count: { select: { sales: true } } } });
 }
 
 /** Active customers joined with their monthly sales for `year` and the year before, in one query (see buildRegionStats). */
@@ -41,3 +41,8 @@ async function loadRegionRows(year: number): Promise<CustomerSaleRow[]> {
 }
 const cachedRegionRows = unstable_cache(loadRegionRows, ["regular-customer-regions-v1"], { revalidate: 300, tags: [DASHBOARD_TAG] });
 export async function getCustomerRegionRows(year: number) { return cachedRegionRows(year); }
+
+/** Sellers that customers can be assigned to (active SalesPerson rows). */
+export async function getAssignableSellers() {
+  return getDb().salesPerson.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } });
+}
