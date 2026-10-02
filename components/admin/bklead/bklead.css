@@ -155,3 +155,44 @@
 .bk-region-table tbody tr{cursor:pointer}.bk-region-table tbody tr:hover td{background:#F7F9FC}.bk-region-table tbody tr.is-selected td{background:#EEF3FB}
 .bk-region-table tbody tr.is-empty td{color:var(--bk-muted)}
 @media(max-width:560px){.bk-card{padding:14px}.bk-map{padding:4px}.bk-map-label{font-size:14px}.bk-map-name{font-size:12px}}
+
+/* Dialog panel, destructive buttons */
+.bk-dialog-panel{width:min(520px,100%);padding:22px;border-radius:16px}.bk-dialog-panel.is-wide{width:min(720px,100%)}
+.bk-btn.is-danger,.bk .bk-btn.is-danger{background:#B42318;border-color:#B42318;color:#fff}
+.bk-btn.is-danger-ghost{color:#B42318}.bk-btn.is-danger-ghost:hover{border-color:#F0B4AE;background:#FEF3F2}
+
+/* Sales plan (Sotuv rejasi) */
+.sp{scroll-behavior:smooth}
+.sp-legend .bk-chip{cursor:default;font-weight:600}.sp-legend i{width:12px;height:12px;border-radius:4px;display:inline-block}
+.sp-zone-chip{display:inline-flex;align-items:center;justify-self:start;padding:2px 9px;border-radius:999px;background:var(--sp-zone);color:var(--sp-zone-text);font-size:11px;font-weight:700;white-space:nowrap}
+.sp-progress{position:relative;height:10px;border-radius:6px;background:#EEF2F7}
+.sp-progress>i{display:block;height:100%;border-radius:inherit;background:var(--sp-zone)}
+.sp-progress>b{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;border-radius:1px;background:#0F1E33}
+.sp-small{font-size:12px;color:var(--bk-muted)}.sp-small b{font-weight:700}
+.sp-ok{color:#0F6B3A}.sp-bad{color:#B42318}
+.sp-group-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.sp-group-card{display:grid;gap:8px;border-radius:16px;border-top:4px solid var(--sp-zone);text-decoration:none;color:var(--bk-text);transition:box-shadow .15s}
+.bk a.sp-group-card{color:var(--bk-text)}
+.sp-group-card:hover,.sp-group-card:focus-visible{box-shadow:0 6px 18px rgba(15,30,51,.08);outline:none}
+.sp-group-card strong{font-family:var(--font-space),system-ui,sans-serif;font-size:30px;line-height:1.05}
+.sp-group{display:grid;gap:12px;scroll-margin-top:80px}
+.sp-group-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 14px}.sp-group-head h2{font-size:18px}
+.sp-people{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:14px}
+.sp-person{display:grid;gap:10px;border-radius:16px;border-left:5px solid var(--sp-zone)}
+.sp-person header{display:flex;align-items:flex-start;gap:10px}
+.sp-avatar{width:40px;height:40px;display:grid;place-items:center;flex:none;border-radius:50%;background:var(--bk-navy);color:#fff;font-size:13px;font-weight:700}
+.sp-person-name{flex:1;min-width:0;display:grid;gap:3px}.sp-person-name b{font-size:15px;overflow-wrap:anywhere}.sp-person-name small{font-size:12px}
+.sp-percent{font-family:var(--font-space),system-ui,sans-serif;font-size:26px;line-height:1;white-space:nowrap}
+.sp-amounts{font-size:14px}.sp-amounts b{font-family:var(--font-space),system-ui,sans-serif;font-size:16px}
+.sp-facts{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:12px}
+.sp-months{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+.sp-months li{display:grid;justify-items:center;gap:1px;padding:6px 2px;border-radius:9px;background:var(--sp-zone);color:var(--sp-zone-text);font-size:10px;text-align:center;min-width:0}
+.sp-months li b{font-family:var(--font-space),system-ui,sans-serif;font-size:13px;line-height:1.2}
+.sp-months li small{color:inherit;opacity:.85;font-size:10px}
+.sp-months li.is-empty{background:#EEF1F5;color:#8A97A8}
+.sp-insights{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:12px}
+.sp-insight{display:grid;gap:6px;align-content:start;padding:14px;border-radius:14px;border:1px solid var(--bk-border);border-top:4px solid var(--sp-zone);font-size:13px}.sp-insight p{color:var(--bk-muted);line-height:1.45}
+.sp-amount-input{width:130px;min-height:38px;padding:0 10px;border:1px solid #D3DCE8;border-radius:9px;font:inherit;font-size:14px;text-align:right}
+.sp-amount-input:focus{outline:2px solid #BFD1EE;border-color:var(--bk-primary)}
+.sp-entry-table tfoot td{border-top:1px solid var(--bk-border);border-bottom:0}
+@media(max-width:560px){.sp-percent{font-size:22px}.sp-months li{padding:5px 1px}.sp-months li b{font-size:12px}.sp-amount-input{width:104px}.bk-dialog-panel{padding:16px}}

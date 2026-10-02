@@ -2,15 +2,25 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus } from "lucide-react";
-import { saveCustomerAction, savePrizesAction, saveTipsAction } from "@/app/admin/(protected)/customers/actions";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { deleteCustomerAction, saveCustomerAction, savePrizesAction, saveTipsAction } from "@/app/admin/(protected)/customers/actions";
+import { ConfirmDialog } from "./dialog";
 import { COUNTRY_CODES, COUNTRY_NAMES, regionName, regionsOf, type CountryCode } from "@/lib/dashboard/regions";
 
 type Customer = { id: string; name: string; country: string; regionCode: string | null; phone: string | null; note: string | null; isActive: boolean; salesCount: number };
 
 /** Regular customers list with inline add/edit (admins only). */
 export function CustomersManager({ customers, canEdit, startNew }: { customers: Customer[]; canEdit: boolean; startNew: boolean }) {
+  const router = useRouter();
   const [editing, setEditing] = useState<string | "new" | null>(startNew && canEdit ? "new" : null);
+  const [deleting, setDeleting] = useState<Customer | null>(null), [deleteError, setDeleteError] = useState("");
+  const [pending, startTransition] = useTransition();
+  const remove = () => deleting && startTransition(async () => {
+    setDeleteError("");
+    const result = await deleteCustomerAction(deleting.id);
+    if (!result.ok) { setDeleteError(result.error); return; }
+    setDeleting(null); router.refresh();
+  });
   return <section className="bk-card" aria-labelledby="bk-customers-list-title">
     <div className="bk-card-head"><div><h2 id="bk-customers-list-title">Doimiy mijozlar</h2><span className="bk-muted">{customers.filter(item => item.isActive).length} ta faol · reytingda faqat faol mijozlar</span></div>{canEdit && editing !== "new" && <button type="button" className="bk-btn is-primary" onClick={() => setEditing("new")}><Plus size={15}/>Yangi doimiy mijoz</button>}</div>
     {editing === "new" && <CustomerForm onDone={() => setEditing(null)}/>}
@@ -20,9 +30,13 @@ export function CustomersManager({ customers, canEdit, startNew }: { customers: 
         <td className="is-strong">{customer.name}</td><td className="is-left">{customer.regionCode ? regionName(customer.regionCode) : COUNTRY_NAMES[customer.country as CountryCode] ?? customer.country}</td>
         <td className="is-left bk-muted">{customer.phone || "—"}</td><td>{customer.salesCount}</td>
         <td className="is-left"><span className={`bk-badge${customer.isActive ? "" : " is-grey"}`}>{customer.isActive ? "Faol" : "Nofaol"}</span></td>
-        {canEdit && <td><button type="button" className="bk-btn bk-icon-btn" onClick={() => setEditing(customer.id)} aria-label={`${customer.name} — tahrirlash`}><Pencil size={15}/></button></td>}
+        {canEdit && <td><div className="bk-actions" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
+          <button type="button" className="bk-btn bk-icon-btn" onClick={() => setEditing(customer.id)} aria-label={`${customer.name} — tahrirlash`}><Pencil size={15}/></button>
+          <button type="button" className="bk-btn bk-icon-btn is-danger-ghost" onClick={() => { setDeleteError(""); setDeleting(customer); }} aria-label={`${customer.name} — o‘chirish`}><Trash2 size={15}/></button>
+        </div></td>}
       </tr>)}</tbody>
     </table></div> : editing !== "new" && <div className="bk-empty">Hali doimiy mijoz yo‘q.</div>}
+    {deleting && <ConfirmDialog title="Doimiy mijozni o‘chirish" message={`${deleting.name} va uning ${deleting.salesCount} ta oylik savdo yozuvi o‘chiriladi. Davom etasizmi?`} busy={pending} error={deleteError} onConfirm={remove} onClose={() => setDeleting(null)}/>}
   </section>;
 }
 

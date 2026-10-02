@@ -4,10 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
+import { Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, Target, UserCheck, Users, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 
-type NavItem = { label: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; badge?: "leads" | "new"; soon?: boolean };
+type NavItem = { label: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; adminOnly?: boolean; badge?: "leads" | "new"; soon?: boolean };
 // Grouped as in the BKLead design; items without a page yet are shown disabled with "Tez orada".
 const navigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "ASOSIY", items: [
@@ -23,6 +23,7 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Referal linklar", href: "/admin/links", icon: Link2, badge: "new" },
     { label: "Buyurtmalar", href: "#", icon: ShoppingBag, soon: true },
     { label: "Sotuvchilar", href: "/admin/sales-agents", icon: UserCheck },
+    { label: "Sotuv rejasi", href: "/admin/sales-plan", icon: Target, adminOnly: true },
     { label: "Sotuvlar", href: "/admin/sales", icon: ShoppingBag },
     { label: "Hisob-kitob", href: "/admin/calculations", icon: Calculator },
     { label: "Mukofotlar", href: "/admin/rewards", icon: CalendarDays },
@@ -47,6 +48,8 @@ const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path
   { match: path => path === "/admin/sales" || path.startsWith("/admin/sales/"), title: "Sotuvlar", subtitle: "Savdolarni tasdiqlash" },
   { match: path => path.startsWith("/admin/rewards"), title: "Mukofotlar", subtitle: "Marja mukofotlarini boshqarish" },
   { match: path => path.startsWith("/admin/backups"), title: "Backup", subtitle: "CRM ma’lumotlarini himoyalash" },
+  { match: path => path === "/admin/sales-plan/people", title: "Sotuv rejasi / Sotuvchilar", subtitle: "Sotuvchilar, davrlar va rejalar" },
+  { match: path => path.startsWith("/admin/sales-plan"), title: "Sotuv rejasi", subtitle: "Xodim va filiallar sotuv rejasining bajarilishi" },
   { match: path => path.startsWith("/admin/sales-agents"), title: "Sotuvchilar", subtitle: "BKLead sotuvchilarini boshqarish" },
   { match: path => path.startsWith("/admin/projects"), title: "Loyihalar", subtitle: "Saytdagi loyihalarni boshqarish" },
   { match: path => path.startsWith("/admin/photo-studio"), title: "AI Foto Studio", subtitle: "Mahsulot vizuallarini tayyorlash" },
@@ -80,9 +83,10 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false }:
     <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
       <div className="admin-sidebar-brand"><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong><button className="admin-sidebar-close" onClick={() => setOpen(false)} aria-label="Menyuni yopish"><X size={18}/></button><span className="admin-sidebar-collapse"><ChevronLeft size={15}/></span></div>
       <span className="admin-sidebar-label">ADMIN</span>
-      <nav aria-label="Admin navigatsiya">{navigation.map(section => <div className="admin-nav-group" key={section.group}><span className="admin-nav-group-label">{section.group}</span>{section.items.filter(item => !item.superOnly || user.role === "SUPER_ADMIN").map(item => {
+      <nav aria-label="Admin navigatsiya">{navigation.map(section => <div className="admin-nav-group" key={section.group}><span className="admin-nav-group-label">{section.group}</span>{section.items.filter(item => (!item.superOnly || user.role === "SUPER_ADMIN") && (!item.adminOnly || user.role !== "MANAGER")).map(item => {
         const Icon = item.icon;
-        const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+        // Exact segment match, so /admin/sales does not light up on /admin/sales-agents or /admin/sales-plan.
+        const active = item.href === "/admin" ? pathname === "/admin" : pathname === item.href || pathname.startsWith(`${item.href}/`);
         const badge = item.badge === "leads" && newLeads > 0 ? <span className="admin-nav-badge is-count">{newLeads}</span> : item.badge === "new" && linksBadge ? <span className="admin-nav-badge">YANGI</span> : null;
         return <div key={item.label}>{item.soon ? <span className="admin-nav-item is-disabled" aria-disabled="true"><Icon size={17}/>{item.label}<span className="admin-nav-badge is-soon">Tez orada</span></span> : <Link className={`admin-nav-item ${active ? "is-active" : ""}`} href={item.href} onClick={() => setOpen(false)}><Icon size={17}/>{item.label}{badge}<NavigationPending/></Link>}{item.label === "Kontent" && <Link className={`admin-nav-child ${homeContentRoute ? "is-active" : ""}`} href="/admin/content/home" onClick={() => setOpen(false)}><Home size={14}/>Home Page<NavigationPending/></Link>}</div>;
       })}</div>)}</nav>

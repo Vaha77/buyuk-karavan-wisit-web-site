@@ -845,3 +845,66 @@ model RankingPrize {
 
   @@unique([year, place])
 }
+
+// ---- Sales plan (Sotuv rejasi): separate from SalesAgent ------------------------------------------
+enum SalesPersonKind {
+  EMPLOYEE
+  BRANCH
+}
+
+model SalesPerson {
+  id         String          @id @default(cuid())
+  name       String
+  kind       SalesPersonKind @default(EMPLOYEE)
+  branchHead String?
+  note       String?
+  isActive   Boolean         @default(true)
+  sortOrder  Int             @default(0)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  plans      SalesPlan[]
+  monthly    SalesMonthly[]
+
+  @@index([isActive, sortOrder])
+}
+
+model SalesPeriod {
+  id         String      @id @default(cuid())
+  name       String
+  startYear  Int
+  startMonth Int
+  monthCount Int         @default(6)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  plans      SalesPlan[]
+
+  @@unique([startYear, startMonth])
+}
+
+model SalesPlan {
+  id        String      @id @default(cuid())
+  periodId  String
+  personId  String
+  planUsd   Decimal     @db.Decimal(18, 2)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  period    SalesPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  person    SalesPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, personId])
+  @@index([personId])
+}
+
+model SalesMonthly {
+  id        String      @id @default(cuid())
+  personId  String
+  year      Int
+  month     Int
+  amountUsd Decimal     @db.Decimal(18, 2)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  person    SalesPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, year, month])
+  @@index([year, month])
+}

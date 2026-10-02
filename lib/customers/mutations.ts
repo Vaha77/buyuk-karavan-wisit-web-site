@@ -31,6 +31,20 @@ export async function saveRegularCustomer(id: string | null, raw: CustomerInput,
   return customer;
 }
 
+/** Deletes the customer and all monthly sales (admin action, confirmed in the UI). The audit keeps a copy of the sales. */
+export async function deleteRegularCustomer(id: string, actor: Actor) {
+  const db = getDb();
+  const customer = await db.regularCustomer.findUnique({ where: { id }, include: { sales: { select: { year: true, month: true, amount: true, currency: true, amountUsd: true } } } });
+  if (!customer) throw new CustomerError("Mijoz topilmadi.");
+  await db.$transaction([db.regularCustomerMonthlySale.deleteMany({ where: { customerId: id } }), db.regularCustomer.delete({ where: { id } })]);
+  await writeAudit(actor, {
+    action: "DELETE", entityType: "REGULAR_CUSTOMER", entityId: id, entityName: customer.name,
+    summary: `Doimiy mijoz ${customer.name} va uning ${customer.sales.length} ta oylik savdo yozuvi o‘chirildi`,
+    before: { name: customer.name, country: customer.country, regionCode: customer.regionCode, phone: customer.phone, isActive: customer.isActive, sales: customer.sales.map(sale => ({ year: sale.year, month: sale.month, amount: sale.amount.toString(), currency: sale.currency, amountUsd: sale.amountUsd.toString() })) },
+  });
+  expireDashboard();
+}
+
 export const monthlySaleSchema = z.object({
   customerId: z.string().trim().min(1, "Mijozni tanlang.").max(40),
   year: z.number().int().min(2020).max(2100),

@@ -21,7 +21,8 @@
     "backup:crm": "node scripts/backup-crm.mjs",
     "rewards:seed": "node scripts/seed-rewards.mjs",
     "telegram:weekly-summary": "node scripts/telegram-weekly-summary.mjs",
-    "db:seed-products": "node scripts/seed-products.mjs"
+    "db:seed-products": "node scripts/seed-products.mjs",
+    "db:seed-sales-plan": "node scripts/seed-sales-plan.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1135.0",
