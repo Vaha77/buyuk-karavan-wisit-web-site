@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, FolderKanban, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
+import { Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, Search, Settings, ShoppingBag, UserCheck, Users, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 
 type NavItem = { label: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; badge?: "leads" | "new"; soon?: boolean };
@@ -12,6 +12,7 @@ type NavItem = { label: string; href: string; icon: typeof LayoutDashboard; supe
 const navigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "ASOSIY", items: [
     { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+    { label: "Doimiy mijozlar", href: "/admin/customers", icon: Handshake },
     { label: "Mahsulotlar", href: "/admin/products", icon: Package },
     { label: "Loyihalar", href: "/admin/projects", icon: FolderKanban },
     { label: "Foto Studio", href: "/admin/photo-studio", icon: Camera },
@@ -20,7 +21,6 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "CRM", items: [
     { label: "Mijoz so‘rovlari", href: "/admin/leads", icon: MessageSquare, badge: "leads" },
     { label: "Referal linklar", href: "/admin/links", icon: Link2, badge: "new" },
-    { label: "Mijozlar", href: "/admin/customers", icon: Users },
     { label: "Buyurtmalar", href: "#", icon: ShoppingBag, soon: true },
     { label: "Sotuvchilar", href: "/admin/sales-agents", icon: UserCheck },
     { label: "Sotuvlar", href: "/admin/sales", icon: ShoppingBag },
@@ -36,6 +36,33 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
   ] },
 ];
 
+// Top bar title and subtitle per section; the first matching prefix wins ("/admin" itself is exact).
+const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path: string) => string); subtitle: string }> = [
+  { match: path => path === "/admin", title: "BKLead Dashboard", subtitle: "Lidlar, sotuvlar va hududlar bo‘yicha umumiy holat" },
+  { match: path => path.startsWith("/admin/customers"), title: "Doimiy mijozlar", subtitle: "Viloyatlar bo‘yicha savdo va yillik reyting" },
+  { match: path => path.startsWith("/admin/links"), title: "Referal linklar", subtitle: "Havolalar, kliklar va ulardan kelgan lidlar" },
+  { match: path => path.startsWith("/admin/calculations"), title: path => path === "/admin/calculations" ? "Hisob-kitob" : path === "/admin/calculations/new" ? "Hisob-kitob / Yangi tijorat taklifi" : "Hisob-kitob / Tijorat taklifi", subtitle: "Tijorat takliflarini tayyorlash va boshqarish" },
+  { match: path => path.startsWith("/admin/ai-office"), title: "AI Ofis", subtitle: "AI operatsiyalar uchun vizual makon" },
+  { match: path => path.startsWith("/admin/settings"), title: "Sozlamalar", subtitle: "Markaziy sayt sozlamalari" },
+  { match: path => path === "/admin/sales" || path.startsWith("/admin/sales/"), title: "Sotuvlar", subtitle: "Savdolarni tasdiqlash" },
+  { match: path => path.startsWith("/admin/rewards"), title: "Mukofotlar", subtitle: "Marja mukofotlarini boshqarish" },
+  { match: path => path.startsWith("/admin/backups"), title: "Backup", subtitle: "CRM ma’lumotlarini himoyalash" },
+  { match: path => path.startsWith("/admin/sales-agents"), title: "Sotuvchilar", subtitle: "BKLead sotuvchilarini boshqarish" },
+  { match: path => path.startsWith("/admin/projects"), title: "Loyihalar", subtitle: "Saytdagi loyihalarni boshqarish" },
+  { match: path => path.startsWith("/admin/photo-studio"), title: "AI Foto Studio", subtitle: "Mahsulot vizuallarini tayyorlash" },
+  { match: path => path.startsWith("/admin/leads"), title: "Mijoz so‘rovlari", subtitle: "Madina orqali kelgan mijoz murojaatlari" },
+  { match: path => path.startsWith("/admin/content/home"), title: "Home Page", subtitle: "Bosh sahifa kontentini boshqarish" },
+  { match: path => path.startsWith("/admin/content"), title: "Kontent", subtitle: "Sayt kontentini boshqarish" },
+  { match: path => path.startsWith("/admin/users"), title: "Foydalanuvchilar", subtitle: "Admin panel foydalanuvchilari va rollari" },
+  { match: path => path.startsWith("/admin/activity"), title: "Faoliyat tarixi", subtitle: "Admin amallari jurnali" },
+  { match: path => path.startsWith("/admin/products"), title: "Mahsulotlar", subtitle: "Saytdagi mahsulotlarni boshqarish" },
+];
+function sectionOf(path: string) {
+  const section = SECTIONS.find(item => item.match(path));
+  if (!section) return { title: "Admin", subtitle: "BUYUK KARAVAN boshqaruv paneli" };
+  return { title: typeof section.title === "function" ? section.title(path) : section.title, subtitle: section.subtitle };
+}
+
 const roleLabels = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer" };
 
 function NavigationPending() {
@@ -46,18 +73,8 @@ function NavigationPending() {
 export function AdminShell({ children, user, newLeads = 0, linksBadge = false }: { children: React.ReactNode; user: { name: string; role: keyof typeof roleLabels }; newLeads?: number; linksBadge?: boolean }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const section = sectionOf(pathname);
   const homeContentRoute = pathname.startsWith("/admin/content/home");
-  const leadsRoute = pathname.startsWith("/admin/leads");
-  const photoStudioRoute = pathname.startsWith("/admin/photo-studio");
-  const aiOfficeRoute = pathname.startsWith("/admin/ai-office");
-  const projectsRoute = pathname.startsWith("/admin/projects");
-  const salesAgentsRoute = pathname.startsWith("/admin/sales-agents");
-  const salesRoute = pathname === "/admin/sales" || pathname.startsWith("/admin/sales/");
-  const rewardsRoute = pathname.startsWith("/admin/rewards");
-  const backupsRoute = pathname.startsWith("/admin/backups");
-  const settingsRoute = pathname.startsWith("/admin/settings");
-  const calculationsRoute = pathname.startsWith("/admin/calculations");
-  const calculationTitle = pathname === "/admin/calculations" ? "Hisob-kitob" : pathname === "/admin/calculations/new" ? "Hisob-kitob / Yangi tijorat taklifi" : "Hisob-kitob / Tijorat taklifi";
   return <div className="admin-shell">
     <button className={`admin-drawer-backdrop ${open ? "is-open" : ""}`} aria-label="Menyuni yopish" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}/>
     <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
@@ -73,7 +90,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false }:
     <div className="admin-main">
       <header className="admin-topbar">
         <div className="admin-mobile-brand"><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong></div>
-        <div className="admin-topbar-title"><strong>{pathname.startsWith("/admin/links") ? "Referal linklar" : pathname.startsWith("/admin/customers") ? "Doimiy mijozlar" : calculationsRoute ? calculationTitle : aiOfficeRoute ? "AI Ofis" : settingsRoute ? "Sozlamalar" : salesRoute ? "Sotuvlar" : rewardsRoute ? "Mukofotlar" : backupsRoute ? "Backup" : salesAgentsRoute ? "Sotuvchilar" : projectsRoute ? "Loyihalar" : photoStudioRoute ? "AI Foto Studio" : leadsRoute ? "Mijoz so‘rovlari" : homeContentRoute ? "Home Page" : pathname==="/admin"?"BKLead Dashboard":"Mahsulotlar"}</strong><span>{calculationsRoute ? "Tijorat takliflarini tayyorlash va boshqarish" : aiOfficeRoute ? "AI operatsiyalar uchun vizual makon" : settingsRoute ? "Markaziy sayt sozlamalari" : salesRoute?"Savdolarni tasdiqlash":rewardsRoute?"Marja mukofotlarini boshqarish":backupsRoute?"CRM ma’lumotlarini himoyalash":salesAgentsRoute ? "BKLead sotuvchilarini boshqarish" : projectsRoute ? "Saytdagi loyihalarni boshqarish" : photoStudioRoute ? "Mahsulot vizuallarini tayyorlash" : leadsRoute ? "Madina orqali kelgan mijoz murojaatlari" : homeContentRoute ? "Bosh sahifa kontentini boshqarish" : "Saytdagi mahsulotlarni boshqarish"}</span></div>
+        <div className="admin-topbar-title"><strong>{section.title}</strong><span>{section.subtitle}</span></div>
         <div className="admin-topbar-actions"><div className="admin-topbar-search"><Search size={14}/><span>Qidirish...</span></div><Bell className="admin-bell" size={18}/><span className="admin-user"><span className="admin-avatar">{user.name.trim().charAt(0).toUpperCase()}</span><span className="admin-user-details"><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span></span><form action={logoutAction}><button className="admin-logout" type="submit" aria-label="Chiqish"><LogOut size={16}/><span>Chiqish</span></button></form><button className="admin-mobile-menu" aria-label="Menyuni ochish" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={21}/></button></div>
       </header>
       <div className="admin-workspace">{children}</div>

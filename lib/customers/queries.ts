@@ -1,9 +1,11 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
+import { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { DASHBOARD_TAG } from "@/lib/referrals/tracking";
 import type { CustomerYear } from "@/lib/dashboard/rules";
+import type { CustomerSaleRow } from "./region-stats";
 
 export type CustomerYearData = { year: number; customers: CustomerYear[]; prizes: Record<1 | 2 | 3, string>; years: number[] };
 
@@ -28,3 +30,14 @@ export async function getCustomerYear(year: number) { return cachedCustomerYear(
 export async function getRegularCustomers() {
   return getDb().regularCustomer.findMany({ orderBy: [{ isActive: "desc" }, { name: "asc" }], select: { id: true, name: true, country: true, regionCode: true, phone: true, note: true, isActive: true, _count: { select: { sales: true } } } });
 }
+
+/** Active customers joined with their monthly sales for `year` and the year before, in one query (see buildRegionStats). */
+async function loadRegionRows(year: number): Promise<CustomerSaleRow[]> {
+  return getDb().$queryRaw<CustomerSaleRow[]>(Prisma.sql`
+    SELECT c.id, c.name, c.country, c."regionCode", s.year, s.month, s."amountUsd"::float8 AS "amountUsd"
+    FROM "RegularCustomer" c
+    LEFT JOIN "RegularCustomerMonthlySale" s ON s."customerId" = c.id AND s.year IN (${year}, ${year - 1})
+    WHERE c."isActive" = true`);
+}
+const cachedRegionRows = unstable_cache(loadRegionRows, ["regular-customer-regions-v1"], { revalidate: 300, tags: [DASHBOARD_TAG] });
+export async function getCustomerRegionRows(year: number) { return cachedRegionRows(year); }

@@ -121,7 +121,7 @@ export function RegionMap({ rows, tips }: Props) {
 }
 
 /** Label with a leader line for areas too small to hold their number (city regions, point cities). */
-function Callout({ x, y, text }: { x: number; y: number; text: string }) {
+export function Callout({ x, y, text }: { x: number; y: number; text: string }) {
   const dx = 34, dy = -24, width = text.length * 6.6 + 12;
   return <g aria-hidden="true">
     <line x1={x} y1={y} x2={x + dx} y2={y + dy} stroke="#0F1E33" strokeWidth="1"/>
