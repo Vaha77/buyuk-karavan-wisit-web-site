@@ -215,6 +215,16 @@ test("seller ranking carries only rank, name, percent and zone of other sellers"
   assert.equal(ranking.sellerRanking(board, "unknown").me, null);
 });
 
+test("rank card: equal % with the place above is a tie, not \"yana $0 kerak\"", () => {
+  const people = ["aa", "bb"].map(id => ({ id, name: id.toUpperCase(), kind: "EMPLOYEE", branchHead: null, note: null }));
+  const board = planRules.buildPlanBoard({ startYear: 2026, startMonth: 3, monthCount: 1 }, people, new Map([["aa", 10000], ["bb", 20000]]), new Map([["aa", new Map([["2026-03", 5000]])], ["bb", new Map([["2026-03", 10000]])]]));
+  const me = ranking.sellerRanking(board, "bb").me; // both at 50%, BB second by name
+  assert.equal(me.rank, 2); assert.equal(me.toNext, 0);
+  assert.deepEqual(ranking.nextPlaceHint(me), { kind: "tied", rank: 1 });
+  assert.deepEqual(ranking.nextPlaceHint({ rank: 3, toNext: 1200 }), { kind: "behind", rank: 2, usd: 1200 });
+  assert.deepEqual(ranking.nextPlaceHint({ rank: 1, toNext: null }), { kind: "first" });
+});
+
 test("seller routes: only /admin/my is reachable", () => {
   for (const path of ["/admin/my", "/admin/my/today", "/admin/my/purchase", "/admin/my/customers/abc"]) assert.ok(access.isSellerPathAllowed(path), path);
   for (const path of ["/admin", "/admin/customers", "/admin/customers/purchases", "/admin/sales-plan", "/admin/users", "/admin/mystery", "/admin/my-other"]) assert.ok(!access.isSellerPathAllowed(path), path);

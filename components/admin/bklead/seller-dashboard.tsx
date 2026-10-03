@@ -1,7 +1,7 @@
 // Seller dashboard blocks rendered on the server: only the props below reach the page, and RankingRow carries
 // nothing but rank, name, percent and zone of other sellers.
 import { formatPercent, formatUsd } from "@/lib/dashboard/format";
-import type { MyPlace, RankingRow } from "@/lib/sales-plan/seller-ranking";
+import { nextPlaceHint, type MyPlace, type RankingRow } from "@/lib/sales-plan/seller-ranking";
 import { zoneStyle } from "@/lib/sales-plan/zones";
 
 /** "Siz N-o‘rindasiz" card on top of /admin/my. */
@@ -15,6 +15,7 @@ export function RankHero({ me }: { me: MyPlace | null }) {
   const zone = zoneStyle(me.zone);
   const fill = Math.min(100, Math.max(0, me.percent));
   const mark = Math.min(100, me.excellentPercent);
+  const next = nextPlaceHint(me);
   return <section className="sl-hero" aria-label="Sotuvchilar reytingidagi o‘rningiz">
     <div className="sl-hero-place">
       <span className="sl-hero-circle" style={{ background: zone.color, color: zone.text }}><b>{me.rank}</b><small>o‘rin</small></span>
@@ -31,7 +32,7 @@ export function RankHero({ me }: { me: MyPlace | null }) {
         <span className="sl-hero-mark" style={{ left: `${mark}%` }} title={`${me.excellentPercent}% (${me.excellentLabel})`}/>
       </div>
       <p>
-        {me.toNext === null ? <b>Siz birinchisiz!</b> : <>{me.rank - 1}-o‘ringa chiqish uchun yana <b>{formatUsd(me.toNext)}</b> kerak</>}
+        {next.kind === "first" ? <b>Siz birinchisiz!</b> : next.kind === "tied" ? <>{next.rank}-o‘rin bilan tengsiz — <b>{formatUsd(1)}</b> ko‘proq sotsangiz o‘tib ketasiz</> : <>{next.rank}-o‘ringa chiqish uchun yana <b>{formatUsd(next.usd)}</b> kerak</>}
         {me.toExcellent > 0 && <> · {me.excellentPercent}% ({me.excellentLabel}) gacha <b>{formatUsd(me.toExcellent)}</b></>}
       </p>
     </div>

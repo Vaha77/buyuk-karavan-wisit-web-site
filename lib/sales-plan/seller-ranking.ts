@@ -13,7 +13,8 @@ export type MyPlace = {
 };
 export type SellerRanking = { rows: RankingRow[]; me: MyPlace | null };
 
-const ceilUsd = (value: number) => Math.max(0, Math.ceil(value));
+// Rounded to cents first, so float noise on equal percents (e.g. 1e-12) does not turn a tie into "$1".
+const ceilUsd = (value: number) => Math.max(0, Math.ceil(Math.round(value * 100) / 100));
 
 /** Everyone with a plan in the period, by completion % (then name); `me` = the viewer's SalesPerson id. */
 export function sellerRanking(board: PlanBoard, me: string | null): SellerRanking {
@@ -31,4 +32,12 @@ export function sellerRanking(board: PlanBoard, me: string | null): SellerRankin
       toExcellent: ceilUsd((excellentPercent / 100) * mine.plan - mine.total), excellentPercent, excellentLabel: zoneStyle("excellent").label,
     },
   };
+}
+
+export type NextPlaceHint = { kind: "first" } | { kind: "tied"; rank: number } | { kind: "behind"; rank: number; usd: number };
+/** What the rank card says about the place above: first, tied with it (same %), or how much is still missing. */
+export function nextPlaceHint(me: Pick<MyPlace, "rank" | "toNext">): NextPlaceHint {
+  if (me.toNext === null) return { kind: "first" };
+  if (me.toNext === 0) return { kind: "tied", rank: me.rank - 1 };
+  return { kind: "behind", rank: me.rank - 1, usd: me.toNext };
 }
