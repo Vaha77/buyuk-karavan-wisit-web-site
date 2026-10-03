@@ -146,6 +146,20 @@ test("a user approved as SELLER only sees their own SalesPerson's customers", as
   assert.ok(!access.isSellerPathAllowed("/admin/customers"));
 });
 
+test("seller outside /admin/my: page visits redirect to /admin/my, POST and server actions get 403", () => {
+  const request = (method, headers = {}) => ({ method, headers: { has: name => name in headers } });
+  for (const path of ["/admin", "/admin/products", "/admin/customers", "/admin/users"]) {
+    assert.equal(access.sellerAccess(path, request("GET")), "redirect", path);
+    assert.equal(access.sellerAccess(path, request("HEAD")), "redirect", path);
+    assert.equal(access.sellerAccess(path, request("POST")), "forbid", path);
+    assert.equal(access.sellerAccess(path, request("POST", { "next-action": "x" })), "forbid", path);
+  }
+  for (const path of ["/admin/my", "/admin/my/today", "/admin/my/purchase", "/admin/my/customers/abc"]) {
+    assert.equal(access.sellerAccess(path, request("GET")), "allow", path);
+    assert.equal(access.sellerAccess(path, request("POST", { "next-action": "x" })), "allow", path);
+  }
+});
+
 test("seller routes: only /admin/my is reachable", () => {
   for (const path of ["/admin/my", "/admin/my/today", "/admin/my/purchase", "/admin/my/customers/abc"]) assert.ok(access.isSellerPathAllowed(path), path);
   for (const path of ["/admin", "/admin/customers", "/admin/customers/purchases", "/admin/sales-plan", "/admin/users", "/admin/mystery", "/admin/my-other"]) assert.ok(!access.isSellerPathAllowed(path), path);
@@ -155,9 +169,12 @@ test("seller routes: only /admin/my is reachable", () => {
 
 test("every seller page and action is guarded, and staff guards reject SELLER", async () => {
   const guard = await readFile(new URL("../lib/auth/require-admin.ts", import.meta.url), "utf8");
-  assert.match(guard, /if \(user\.role === "SELLER"\) forbidden\(\)/);
+  assert.match(guard, /if \(user\.role === "SELLER"\) await rejectSeller\(\)/);
+  assert.match(guard, /has\("next-action"\)\) forbidden\(\);\s*redirect\(SELLER_HOME\)/, "pages redirect, server actions get 403");
   const proxy = await readFile(new URL("../proxy.ts", import.meta.url), "utf8");
-  assert.match(proxy, /role === "SELLER" && !isSellerPathAllowed/);
+  assert.match(proxy, /role === "SELLER" \? sellerAccess\(/);
+  const detail = await readFile(new URL("../app/admin/(seller)/my/customers/[id]/page.tsx", import.meta.url), "utf8");
+  assert.match(detail, /if \(!customer\) notFound\(\)/, "another seller's customer id → 404");
   const actions = await readFile(new URL("../app/admin/(seller)/my/actions.ts", import.meta.url), "utf8");
   const exported = [...actions.matchAll(/export async function (\w+)\([^)]*\)[^{]*\{\s*\n?\s*const [^=]+= await (\w+)\(/g)];
   const all = [...actions.matchAll(/export async function (\w+)/g)].map(match => match[1]);

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import { NextResponse, type NextRequest } from "next/server";
-import { isSellerPathAllowed } from "@/lib/auth/seller-access";
+import { SELLER_HOME, sellerAccess } from "@/lib/auth/seller-access";
 
 const COOKIE_NAME = "bk_admin_session";
 const pool = new Pool({
@@ -58,8 +58,13 @@ export async function proxy(request: NextRequest) {
       role = null;
     }
   }
-  // Sellers only see their own section; everything else in /admin is 403 (pages re-check the role too).
-  if (role === "SELLER" && !isSellerPathAllowed(request.nextUrl.pathname)) return new NextResponse("403 — Ruxsat yo‘q", { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
+  // Sellers only see their own section (pages re-check the role too): a page visit outside it is sent to /admin/my,
+  // anything else (POST / server action) is a plain 403.
+  const sellerDecision = role === "SELLER" ? sellerAccess(request.nextUrl.pathname, request) : "allow";
+  if (sellerDecision === "redirect") return NextResponse.redirect(new URL(SELLER_HOME, request.url), 307);
+  if (sellerDecision === "forbid") {
+    return new NextResponse("403 — Ruxsat yo‘q", { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
+  }
   if (role) return NextResponse.next();
 
   const response = NextResponse.redirect(new URL("/admin/login", request.url));

@@ -77,7 +77,7 @@ function sectionOf(path: string) {
 // A SELLER only has their own section (proxy.ts and requireAdmin enforce it on the server).
 const sellerNavigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "MIJOZLAR", items: [
-    { label: "Mening mijozlarim", href: "/admin/my", icon: Users },
+    { label: "Dashboard", href: "/admin/my", icon: LayoutDashboard },
     { label: "Bugun qo‘ng‘iroq", href: "/admin/my/today", icon: PhoneCall, badge: "due" },
     { label: "Xarid kiritish", href: "/admin/my/purchase", icon: ShoppingBag },
   ] },
@@ -96,6 +96,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
   const section = sectionOf(pathname);
   const homeContentRoute = pathname.startsWith("/admin/content/home");
   const groups = user.role === "SELLER" ? sellerNavigation : navigation;
+  const home = user.role === "SELLER" ? "/admin/my" : "/admin";
   const isAdmin = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
   const visible = (item: NavItem) => (!item.superOnly || user.role === "SUPER_ADMIN") && (!item.adminOnly || isAdmin);
   // The most specific matching item is active, so /admin/customers/purchases does not also light up "Doimiy mijozlar".
@@ -103,8 +104,8 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
   return <div className="admin-shell">
     <button className={`admin-drawer-backdrop ${open ? "is-open" : ""}`} aria-label="Menyuni yopish" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}/>
     <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
-      <div className="admin-sidebar-brand"><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong><button className="admin-sidebar-close" onClick={() => setOpen(false)} aria-label="Menyuni yopish"><X size={18}/></button><span className="admin-sidebar-collapse"><ChevronLeft size={15}/></span></div>
-      <span className="admin-sidebar-label">ADMIN</span>
+      <div className="admin-sidebar-brand"><Link href={home} className="admin-brand-link" onClick={() => setOpen(false)}><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong></Link><button className="admin-sidebar-close" onClick={() => setOpen(false)} aria-label="Menyuni yopish"><X size={18}/></button><span className="admin-sidebar-collapse"><ChevronLeft size={15}/></span></div>
+      <span className="admin-sidebar-label">{user.role === "SELLER" ? "SOTUVCHI" : "ADMIN"}</span>
       <nav aria-label="Admin navigatsiya">{groups.map(section => <div className="admin-nav-group" key={section.group}><span className="admin-nav-group-label">{section.group}</span>{section.items.filter(visible).map(item => {
         const Icon = item.icon;
         const active = item.href === activeHref;
@@ -115,7 +116,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
     </aside>
     <div className="admin-main">
       <header className="admin-topbar">
-        <div className="admin-mobile-brand"><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong></div>
+        <Link href={home} className="admin-mobile-brand"><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong></Link>
         <div className="admin-topbar-title"><strong>{section.title}</strong><span>{section.subtitle}</span></div>
         <div className="admin-topbar-actions"><div className="admin-topbar-search"><Search size={14}/><span>Qidirish...</span></div><Bell className="admin-bell" size={18}/><span className="admin-user"><span className="admin-avatar">{user.name.trim().charAt(0).toUpperCase()}</span><span className="admin-user-details"><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span></span><form action={logoutAction}><button className="admin-logout" type="submit" aria-label="Chiqish"><LogOut size={16}/><span>Chiqish</span></button></form><button className="admin-mobile-menu" aria-label="Menyuni ochish" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={21}/></button></div>
       </header>
