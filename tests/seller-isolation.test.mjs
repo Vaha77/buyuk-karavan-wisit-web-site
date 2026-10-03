@@ -7,6 +7,7 @@ register("./ts-resolve.mjs", import.meta.url);
 const repo = await import("../lib/customers/seller-repo.ts");
 const rules = await import("../lib/customers/seller-rules.ts");
 const access = await import("../lib/auth/seller-access.ts");
+const approval = await import("../lib/auth/approval-rules.ts");
 
 // ---- In-memory stand-in for the Prisma delegates the repository uses ---------------------------------------------
 function matches(row, where, db) {
@@ -123,6 +124,26 @@ test("PENDING purchases stay out of statistics until approved", async () => {
   const merged = rules.mergeMonthlySale(null, { amount: 12_800_000, currency: "UZS", amountUsd: 1000 });
   db.tables.regularCustomerMonthlySale.push({ id: "s3", customerId: a, year: 2026, month: 10, ...merged });
   assert.equal((await repo.sellerStats(db, sellerA, 2026)).approvedUsd, 2000);
+});
+
+test("approval: SELLER must get a free SalesPerson, SUPER_ADMIN is never granted", () => {
+  assert.equal(approval.DEFAULT_APPROVAL_ROLE, "SELLER");
+  assert.ok(!approval.APPROVAL_ROLES.includes("SUPER_ADMIN"));
+  assert.deepEqual(approval.checkApproval("SUPER_ADMIN", "", null, "u1"), { error: "Bu rolni tasdiqlashda berib bo‘lmaydi." });
+  assert.deepEqual(approval.checkApproval("SELLER", "", null, "u1"), { error: "Sotuvchini tanlang." });
+  assert.deepEqual(approval.checkApproval("SELLER", "sp-x", null, "u1"), { error: "Tanlangan sotuvchi topilmadi." });
+  assert.deepEqual(approval.checkApproval("SELLER", "sp-a", { id: "sp-a", userId: "someone-else" }, "u1"), { error: approval.SELLER_TAKEN });
+  assert.deepEqual(approval.checkApproval("MANAGER", "sp-a", { id: "sp-a", userId: null }, "u1"), { role: "MANAGER", salesPersonId: null });
+  assert.deepEqual(approval.checkApproval("SELLER", "sp-a", { id: "sp-a", userId: null }, "u1"), { role: "SELLER", salesPersonId: "sp-a" });
+});
+
+test("a user approved as SELLER only sees their own SalesPerson's customers", async () => {
+  const { db, a } = await setup();
+  const approved = approval.checkApproval("SELLER", "sp-a", { id: "sp-a", userId: null }, "new-user");
+  const viewer = { role: approved.role, salesPersonId: approved.salesPersonId };
+  assert.deepEqual((await repo.listCustomers(db, viewer)).map(row => row.id), [a]);
+  assert.equal((await repo.sellerStats(db, viewer, 2026, new Date("2026-10-03T06:00:00Z"))).approvedUsd, 1000);
+  assert.ok(!access.isSellerPathAllowed("/admin/customers"));
 });
 
 test("seller routes: only /admin/my is reachable", () => {
