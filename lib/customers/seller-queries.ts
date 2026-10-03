@@ -3,7 +3,8 @@ import "server-only";
 import type { AdminUser } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { COUNTRY_NAMES, regionName, type CountryCode } from "@/lib/dashboard/regions";
-import { customerHistory, dueCustomers, getCustomer, listCustomers, sellerPurchases, sellerStats } from "./seller-repo";
+import { customerHistory, dueCustomers, getCustomer, listCustomers, sellerMapCustomers, sellerPurchases, sellerStats } from "./seller-repo";
+import { buildSellerMap } from "./seller-map";
 import { daysWithoutPurchase, dueTone, isDue } from "./seller-rules";
 import { viewerOf } from "./seller-service";
 
@@ -26,3 +27,5 @@ export const myCustomerHistory = (user: User, id: string) => customerHistory(get
 export const myStats = (user: User, year: number) => sellerStats(getDb(), viewerOf(user), year);
 export const myDueCustomers = (user: User) => dueCustomers(getDb(), viewerOf(user));
 export const myPurchases = (user: User) => sellerPurchases(getDb(), viewerOf(user));
+/** "Mening hududlarim": built from the seller's own customers only (scoped query). */
+export const myRegionMap = async (user: User, year: number) => buildSellerMap(await sellerMapCustomers(getDb(), viewerOf(user), year));

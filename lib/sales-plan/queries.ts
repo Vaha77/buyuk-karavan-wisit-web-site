@@ -3,6 +3,8 @@ import "server-only";
 import { getDb } from "@/lib/db";
 import { buildPlanBoard, monthKey, periodMonths, type PersonInput } from "./rules";
 import { parseThresholds } from "./zones";
+import { sellerRanking, type SellerRanking } from "./seller-ranking";
+import { tashkentYearMonth } from "@/lib/dashboard/period";
 
 export type SalesPeriodRow = { id: string; name: string; startYear: number; startMonth: number; monthCount: number };
 
@@ -79,4 +81,13 @@ export async function getSalesPeople(periodId: string | null) {
     select: { id: true, name: true, kind: true, branchHead: true, note: true, isActive: true, sortOrder: true, telegramChatId: true, plans: { where: { periodId: periodId ?? "" }, select: { planUsd: true } }, _count: { select: { monthly: true } } },
   });
   return rows.map(({ plans, _count, ...person }) => ({ ...person, plan: plans[0] ? Number(plans[0].planUsd) : null, monthlyCount: _count.monthly }));
+}
+
+/** Ranking of the current period for a seller's dashboard; only names, ranks, % and zones of other people. */
+export async function getSellerRanking(salesPersonId: string | null) {
+  const periods = await getSalesPeriods();
+  const period = pickPeriod(periods, undefined, tashkentYearMonth());
+  if (!period) return { periodName: null, ranking: { rows: [], me: null } satisfies SellerRanking };
+  const { board } = await getPlanBoardData(period, periods);
+  return { periodName: period.name, ranking: sellerRanking(board, salesPersonId) };
 }

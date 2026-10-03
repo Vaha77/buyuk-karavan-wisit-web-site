@@ -36,9 +36,9 @@ export function DaysBadge({ days, tone }: { days: number; tone: "red" | "yellow"
 
 type CustomerFields = { name: string; phone: string; country: string; regionCode: string; note: string; callIntervalDays: number };
 /** Add (phone required) or edit (phone fixed) the seller's own customer. */
-export function SellerCustomerForm({ customer, onDone }: { customer?: { id: string } & Omit<CustomerFields, "phone"> & { phone: string | null }; onDone?: () => void }) {
+export function SellerCustomerForm({ customer, onDone, regionCode }: { customer?: { id: string } & Omit<CustomerFields, "phone"> & { phone: string | null }; onDone?: () => void; regionCode?: string }) {
   const router = useRouter();
-  const [values, setValues] = useState<CustomerFields>({ name: customer?.name ?? "", phone: customer?.phone ?? "", country: customer?.country ?? "UZ", regionCode: customer?.regionCode ?? "", note: customer?.note ?? "", callIntervalDays: customer?.callIntervalDays ?? 60 });
+  const [values, setValues] = useState<CustomerFields>({ name: customer?.name ?? "", phone: customer?.phone ?? "", country: customer?.country ?? "UZ", regionCode: customer?.regionCode ?? regionCode ?? "", note: customer?.note ?? "", callIntervalDays: customer?.callIntervalDays ?? 60 });
   const [error, setError] = useState(""), [pending, startTransition] = useTransition();
   const set = <K extends keyof CustomerFields>(key: K, value: CustomerFields[K]) => setValues(current => ({ ...current, [key]: value }));
   const submit = (event: React.FormEvent) => {
@@ -66,11 +66,12 @@ export function SellerCustomerForm({ customer, onDone }: { customer?: { id: stri
   </form>;
 }
 
-export function NewCustomerButton() {
+/** `regionCode` pre-selects the region (the "Imkoniyat" region on the map). */
+export function NewCustomerButton({ regionCode }: { regionCode?: string } = {}) {
   const [open, setOpen] = useState(false);
   return <>
     <button type="button" className="bk-btn is-primary" onClick={() => setOpen(true)}><Plus size={15}/>Yangi mijoz</button>
-    {open && <Dialog title="Yangi mijoz" onClose={() => setOpen(false)} wide><SellerCustomerForm onDone={() => setOpen(false)}/></Dialog>}
+    {open && <Dialog title="Yangi mijoz" onClose={() => setOpen(false)} wide><SellerCustomerForm regionCode={regionCode} onDone={() => setOpen(false)}/></Dialog>}
   </>;
 }
 

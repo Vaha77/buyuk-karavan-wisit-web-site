@@ -8,6 +8,9 @@ const repo = await import("../lib/customers/seller-repo.ts");
 const rules = await import("../lib/customers/seller-rules.ts");
 const access = await import("../lib/auth/seller-access.ts");
 const approval = await import("../lib/auth/approval-rules.ts");
+const sellerMap = await import("../lib/customers/seller-map.ts");
+const planRules = await import("../lib/sales-plan/rules.ts");
+const ranking = await import("../lib/sales-plan/seller-ranking.ts");
 
 // ---- In-memory stand-in for the Prisma delegates the repository uses ---------------------------------------------
 function matches(row, where, db) {
@@ -158,6 +161,58 @@ test("seller outside /admin/my: page visits redirect to /admin/my, POST and serv
     assert.equal(access.sellerAccess(path, request("GET")), "allow", path);
     assert.equal(access.sellerAccess(path, request("POST", { "next-action": "x" })), "allow", path);
   }
+});
+
+test("region status: no customers → Imkoniyat, all 90+ days → stale, the rest in four levels by total", () => {
+  const statuses = sellerMap.regionStatuses([
+    { code: "E", customers: 0, total: 0, stale: 0 },
+    { code: "S", customers: 2, total: 9000, stale: 2 }, // big total, but nobody bought for 90+ days
+    { code: "A", customers: 3, total: 4000, stale: 1 }, { code: "B", customers: 1, total: 3000, stale: 0 },
+    { code: "C", customers: 1, total: 2000, stale: 0 }, { code: "D", customers: 1, total: 1000, stale: 0 },
+  ]);
+  assert.deepEqual(statuses, { E: "empty", S: "stale", A: "strongest", B: "strong", C: "medium", D: "low" });
+  assert.deepEqual(sellerMap.regionStatuses([{ code: "X", customers: 1, total: 0, stale: 0 }]), { X: "strongest" });
+  const tie = sellerMap.regionStatuses([{ code: "P", customers: 1, total: 500, stale: 0 }, { code: "Q", customers: 1, total: 500, stale: 0 }, { code: "R", customers: 1, total: 100, stale: 0 }, { code: "T", customers: 1, total: 50, stale: 0 }]);
+  assert.equal(tie.P, tie.Q, "equal totals share a status");
+  assert.ok(!Object.values(sellerMap.REGION_STATUS).some(style => /^#(?:([0-9a-f]){2}|([0-9a-f]{2}){2})$/i.test(style.color)), "no grey fills");
+  assert.equal(sellerMap.daysTone(59), null); assert.equal(sellerMap.daysTone(60), "yellow"); assert.equal(sellerMap.daysTone(90), "red");
+});
+
+test("the seller map is built from the seller's own customers only", async () => {
+  const { db, a, b } = await setup(); // A and B both have a customer in UZ-SA
+  const a2 = await repo.addSellerCustomer(db, sellerA, { ...input("A Namangan", "+998 91 000 11 22"), regionCode: "UZ-NG" });
+  await repo.addSellerCustomer(db, sellerB, { ...input("B Buxoro", "+998 91 000 33 44"), regionCode: "UZ-BU" });
+  db.tables.regularCustomerMonthlySale.push({ id: "s3", customerId: a2.id, year: 2026, month: 4, amountUsd: 500 });
+  const today = new Date("2026-03-10T06:00:00Z");
+  const mapA = sellerMap.buildSellerMap(await repo.sellerMapCustomers(db, sellerA, 2026, today));
+  const region = code => mapA.regions.find(row => row.code === code);
+  assert.deepEqual(region("UZ-SA").list.map(row => row.id), [a]);
+  assert.equal(region("UZ-SA").total, 1000); // B's 7000 in the same region is not counted
+  assert.equal(region("UZ-NG").total, 500);
+  assert.equal(region("UZ-BU").status, "empty"); // B's region is an opportunity for A
+  assert.equal(mapA.opened, 2); assert.equal(mapA.regionCount, 14);
+  assert.ok(!mapA.regions.flatMap(row => row.list).some(row => row.id === b));
+  const mapB = sellerMap.buildSellerMap(await repo.sellerMapCustomers(db, sellerB, 2026, today));
+  assert.equal(mapB.regions.find(row => row.code === "UZ-SA").total, 7000);
+  assert.equal(mapB.regions.find(row => row.code === "UZ-NG").status, "empty");
+});
+
+test("seller ranking carries only rank, name, percent and zone of other sellers", () => {
+  const people = ["me", "top", "low"].map(id => ({ id, name: id.toUpperCase(), kind: "EMPLOYEE", branchHead: null, note: null }));
+  const plans = new Map([["me", 10000], ["top", 20000], ["low", 5000]]);
+  const amounts = new Map([["me", new Map([["2026-03", 5000]])], ["top", new Map([["2026-03", 18000]])], ["low", new Map([["2026-03", 1000]])]]);
+  const board = planRules.buildPlanBoard({ startYear: 2026, startMonth: 3, monthCount: 1 }, people, plans, amounts);
+  const result = ranking.sellerRanking(board, "me");
+  for (const row of result.rows) assert.deepEqual(Object.keys(row).sort(), ["isMe", "name", "percent", "rank", "zone"]);
+  const json = JSON.stringify(result.rows);
+  for (const secret of ["18000", "20000", "1000", "5000", "plan", "total", "months", "customers"]) assert.ok(!json.includes(secret), secret);
+  assert.deepEqual(result.rows.map(row => [row.rank, row.name, row.isMe]), [[1, "TOP", false], [2, "ME", true], [3, "LOW", false]]);
+  assert.equal(result.me.rank, 2); assert.equal(result.me.total, 5000); assert.equal(result.me.plan, 10000);
+  assert.equal(result.me.toNext, 4000); // 90% × my 10 000 plan − my 5 000
+  assert.equal(result.me.toExcellent, 3000); // 80% × 10 000 − 5 000
+  assert.equal(ranking.sellerRanking(board, "top").me.toNext, null);
+  assert.equal(ranking.sellerRanking(board, null).me, null);
+  assert.equal(ranking.sellerRanking(board, "unknown").me, null);
 });
 
 test("seller routes: only /admin/my is reachable", () => {

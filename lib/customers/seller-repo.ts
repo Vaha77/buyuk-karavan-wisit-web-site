@@ -3,7 +3,8 @@
 // (SUPER_ADMIN / ADMIN / MANAGER) get an empty scope. `db` is passed in so tests can run it on an in-memory store.
 import type { PrismaClient } from "../../generated/prisma/client";
 import { normalizeUzPhone } from "../auth/phone";
-import { CALL_INTERVALS, CONTACT_RESULTS, defaultNextContact, isDue, purchaseUsd, type ContactResult } from "./seller-rules";
+import { CALL_INTERVALS, CONTACT_RESULTS, daysWithoutPurchase, defaultNextContact, isDue, purchaseUsd, type ContactResult } from "./seller-rules";
+import type { MapCustomer } from "./seller-map";
 
 export type Viewer = { role: string; salesPersonId: string | null };
 type Db = Pick<PrismaClient, "regularCustomer" | "customerContact" | "customerPurchase" | "regularCustomerMonthlySale">;
@@ -126,4 +127,22 @@ export async function dueCustomers(db: Db, viewer: Viewer, today = new Date()) {
 
 export async function sellerPurchases(db: Db, viewer: Viewer) {
   return db.customerPurchase.findMany({ where: { customer: customerScope(viewer) }, orderBy: { createdAt: "desc" }, take: 30, select: { id: true, date: true, amount: true, currency: true, amountUsd: true, status: true, rejectReason: true, customer: { select: { id: true, name: true } } } });
+}
+
+/**
+ * "Mening hududlarim": the viewer's active customers with this year's approved total (monthly sales) each.
+ * Both queries are AND-ed with customerScope, so a seller's map is built from their own customers only.
+ */
+export async function sellerMapCustomers(db: Db, viewer: Viewer, year: number, today = new Date()): Promise<MapCustomer[]> {
+  const scope = customerScope(viewer);
+  const [customers, sales] = await Promise.all([
+    db.regularCustomer.findMany({ where: { AND: [scope, { isActive: true }] }, select: { id: true, name: true, country: true, regionCode: true, callIntervalDays: true, lastPurchaseAt: true, nextContactAt: true, createdAt: true } }),
+    db.regularCustomerMonthlySale.findMany({ where: { year, customer: scope }, select: { customerId: true, amountUsd: true } }),
+  ]);
+  const totals = new Map<string, number>();
+  for (const sale of sales) totals.set(sale.customerId, (totals.get(sale.customerId) ?? 0) + Number(sale.amountUsd));
+  return customers.map(customer => ({
+    id: customer.id, name: customer.name, country: customer.country, regionCode: customer.regionCode,
+    days: daysWithoutPurchase(customer, today), due: isDue(customer, today), total: totals.get(customer.id) ?? 0,
+  }));
 }

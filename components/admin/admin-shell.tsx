@@ -76,8 +76,8 @@ function sectionOf(path: string) {
 
 // A SELLER only has their own section (proxy.ts and requireAdmin enforce it on the server).
 const sellerNavigation: Array<{ group: string; items: NavItem[] }> = [
-  { group: "MIJOZLAR", items: [
-    { label: "Dashboard", href: "/admin/my", icon: LayoutDashboard },
+  { group: "MENING BO‘LIMIM", items: [
+    { label: "Mening mijozlarim", href: "/admin/my", icon: Users },
     { label: "Bugun qo‘ng‘iroq", href: "/admin/my/today", icon: PhoneCall, badge: "due" },
     { label: "Xarid kiritish", href: "/admin/my/purchase", icon: ShoppingBag },
   ] },
