@@ -225,8 +225,8 @@ test("rank card: equal % with the place above is a tie, not \"yana $0 kerak\"", 
   assert.deepEqual(ranking.nextPlaceHint({ rank: 1, toNext: null }), { kind: "first" });
 });
 
-test("seller routes: only /admin/my and /admin/sex are reachable", () => {
-  for (const path of ["/admin/my", "/admin/my/today", "/admin/my/purchase", "/admin/my/customers/abc", "/admin/sex", "/admin/sex/new"]) assert.ok(access.isSellerPathAllowed(path), path);
+test("seller routes: only /admin/my and /admin/seh are reachable", () => {
+  for (const path of ["/admin/my", "/admin/my/today", "/admin/my/purchase", "/admin/my/customers/abc", "/admin/seh", "/admin/seh/new"]) assert.ok(access.isSellerPathAllowed(path), path);
   for (const path of ["/admin", "/admin/customers", "/admin/customers/purchases", "/admin/sales-plan", "/admin/users", "/admin/mystery", "/admin/my-other", "/admin/sexy", "/admin/prays"]) assert.ok(!access.isSellerPathAllowed(path), path);
   assert.equal(access.homeFor("SELLER"), "/admin/my");
   assert.equal(access.homeFor("ADMIN"), "/admin");
@@ -234,8 +234,8 @@ test("seller routes: only /admin/my and /admin/sex are reachable", () => {
 
 test("WORKSHOP routes: only /admin/sex; elsewhere pages redirect there, actions get 403", () => {
   const request = (method, headers = {}) => ({ method, headers: { has: name => name in headers } });
-  assert.equal(access.homeFor("WORKSHOP"), "/admin/sex");
-  for (const path of ["/admin/sex", "/admin/sex/new", "/admin/sex/export"]) {
+  assert.equal(access.homeFor("WORKSHOP"), "/admin/seh");
+  for (const path of ["/admin/seh", "/admin/seh/new", "/admin/seh/export"]) {
     assert.equal(access.roleAccess("WORKSHOP", path, request("GET")), "allow", path);
     assert.equal(access.roleAccess("WORKSHOP", path, request("POST", { "next-action": "x" })), "allow", path);
   }

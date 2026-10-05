@@ -32,5 +32,5 @@ export async function GET(request: Request) {
   sheet.getRow(1).font = { bold: true };
   sheet.views = [{ state: "frozen", ySplit: 1 }];
   const buffer = await workbook.xlsx.writeBuffer();
-  return new Response(new Uint8Array(buffer as ArrayBuffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename="sex-zakazlari-${range.key}.xlsx"`, "cache-control": "private, no-store" } });
+  return new Response(new Uint8Array(buffer as ArrayBuffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename="seh-zakazlari-${range.key}.xlsx"`, "cache-control": "private, no-store" } });
 }

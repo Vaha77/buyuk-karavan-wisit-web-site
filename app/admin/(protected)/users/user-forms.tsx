@@ -6,7 +6,7 @@ import {createAdminUserAction,reviewAdminRegistrationAction,updateAdminUserActio
 export type SalesPersonOption={id:string;name:string;userId:string|null};
 export type ManagedUser={id:string;name:string;phone:string;role:string;isActive:boolean;approvalStatus:string;salesPersonId:string|null;telegramChatId:string|null};
 const initial:UserFormState={status:"idle",message:null,at:0};
-const roleLabels:Record<string,string>={SUPER_ADMIN:"Super Admin",ADMIN:"Administrator",MANAGER:"Menejer",SELLER:"Sotuvchi",WORKSHOP:"Sex mas‘uli"};
+const roleLabels:Record<string,string>={SUPER_ADMIN:"Super Admin",ADMIN:"Administrator",MANAGER:"Menejer",SELLER:"Sotuvchi",WORKSHOP:"Seh mas‘uli"};
 const roleOptions=Object.entries(roleLabels);
 function SubmitButton({label,pendingLabel="Saqlanmoqda…",className="admin-primary-button admin-user-button",name,value,disabled=false}:{label:string;pendingLabel?:string;className?:string;name?:string;value?:string;disabled?:boolean}){const{pending,data}=useFormStatus();const mine=pending&&(!name||data?.get(name)===value);return <button className={className} disabled={pending||disabled} name={name} value={value} aria-busy={mine}>{mine?pendingLabel:label}</button>;}
 // Shows "Saqlandi ✓" for 3 seconds after each successful save; errors stay until the next submit.

@@ -107,7 +107,7 @@ test("prices: workshop orders carry only the price-list price (no selling price 
 });
 
 test("workshop order sources never compute a selling price or markup", async () => {
-  for (const file of ["../lib/sex/service.ts", "../app/admin/(sex)/sex/new/page.tsx", "../components/admin/sex/new-order.tsx", "../components/admin/sex/orders-board.tsx", "../app/admin/(sex)/sex/export/route.ts"]) {
+  for (const file of ["../lib/sex/service.ts", "../app/admin/(sex)/seh/new/page.tsx", "../components/admin/sex/new-order.tsx", "../components/admin/sex/orders-board.tsx", "../app/admin/(sex)/seh/export/route.ts"]) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");
     assert.doesNotMatch(source, /sellPrice|getMarkupPercent|Sotuv narxi|SaleUsd/, file);
   }
@@ -140,8 +140,8 @@ test("process steps and the 24 h overdue mark", () => {
   assert.equal(rules.orderNumber(7), "#0007");
 });
 
-test("every Sex action starts with a role guard; WORKSHOP-only and SELLER-only actions check the role", async () => {
-  const source = await readFile(new URL("../app/admin/(sex)/sex/actions.ts", import.meta.url), "utf8");
+test("every Seh action starts with a role guard; WORKSHOP-only and SELLER-only actions check the role", async () => {
+  const source = await readFile(new URL("../app/admin/(sex)/seh/actions.ts", import.meta.url), "utf8");
   const all = [...source.matchAll(/export async function (\w+)/g)].map(match => match[1]);
   const guarded = [...source.matchAll(/export async function (\w+)\([^)]*\)[^{]*\{\s*const user = await requireSexUser\(\);/g)].map(match => match[1]);
   assert.deepEqual(guarded.sort(), all.sort());
@@ -181,7 +181,7 @@ test("configurator: BR +20PG + FNV200 + DD160 = $4 954 at price-list prices, +10
   assert.equal(configurator.kitTotal(template, standard, [100, -5, NaN]).base, 4554, "extras add at price-list prices");
 });
 
-test("“Sexda ishlanmoqda” timer text and the overdue mark", async () => {
+test("“Sehda ishlanmoqda” timer text and the overdue mark", async () => {
   const now = new Date("2026-10-05T12:00:00Z");
   const ago = minutes => new Date(now.getTime() - minutes * 60_000);
   assert.equal(rules.workingSince(ago(35), now), "35 daqiqadan beri");
@@ -202,9 +202,22 @@ test("“Sexda ishlanmoqda” timer text and the overdue mark", async () => {
 });
 
 test("loading screens: each section has its own skeleton; shimmer, bar and spinner respect reduced motion", async () => {
-  const expected = { "app/admin/(sex)/sex/loading.tsx": "SexListSkeleton", "app/admin/(sex)/sex/new/loading.tsx": "SexNewSkeleton", "app/admin/(protected)/loading.tsx": "GenericSkeleton", "app/admin/(protected)/prays/loading.tsx": "PraysSkeleton", "app/admin/(protected)/customers/loading.tsx": "CustomersSkeleton", "app/admin/(protected)/sales-plan/loading.tsx": "SalesPlanSkeleton", "app/admin/(seller)/my/loading.tsx": "MySkeleton", "app/admin/loading.tsx": "ShellSkeleton" };
+  const expected = { "app/admin/(sex)/seh/loading.tsx": "SexListSkeleton", "app/admin/(sex)/seh/new/loading.tsx": "SexNewSkeleton", "app/admin/(protected)/loading.tsx": "GenericSkeleton", "app/admin/(protected)/prays/loading.tsx": "PraysSkeleton", "app/admin/(protected)/customers/loading.tsx": "CustomersSkeleton", "app/admin/(protected)/sales-plan/loading.tsx": "SalesPlanSkeleton", "app/admin/(seller)/my/loading.tsx": "MySkeleton", "app/admin/loading.tsx": "ShellSkeleton" };
   for (const [file, component] of Object.entries(expected)) assert.match(await readFile(new URL(`../${file}`, import.meta.url), "utf8"), new RegExp(`<${component}/>`), file);
   const css = await readFile(new URL("../components/admin/feedback.css", import.meta.url), "utf8");
   assert.match(css, /\.admin-nav-progress\{position:fixed;top:0;left:0;z-index:1000;height:3px;width:0;background:#1E4E8C/);
   assert.match(css, /prefers-reduced-motion:reduce\)\{\.sk::after,\.admin-nav-progress\{animation:none/);
+});
+
+test("“Sex” → “Seh”: pages live under /admin/seh and old /admin/sex links redirect with 308", async () => {
+  const access = await import("../lib/auth/seller-access.ts");
+  assert.equal(access.homeFor("WORKSHOP"), "/admin/seh");
+  assert.ok(access.isSellerPathAllowed("/admin/seh/new"));
+  const config = (await import("../next.config.ts")).default;
+  const redirects = await config.redirects();
+  assert.deepEqual(redirects, [
+    { source: "/admin/sex", destination: "/admin/seh", permanent: true },
+    { source: "/admin/sex/:path*", destination: "/admin/seh/:path*", permanent: true },
+  ]);
+  for (const file of ["../app/admin/(sex)/seh/page.tsx", "../app/admin/(sex)/seh/new/page.tsx", "../app/admin/(sex)/seh/export/route.ts"]) await readFile(new URL(file, import.meta.url));
 });

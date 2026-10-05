@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/admin/bklead/dialog";
-import { confirmNoRequestAction, createNoRequestAction, transitionOrderAction } from "@/app/admin/(sex)/sex/actions";
+import { confirmNoRequestAction, createNoRequestAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
 import type { OrderRow } from "@/lib/sex/queries";
 import { ACTION_LABEL, STATUS_LABEL, STATUS_TONE, actionFor, type OrderAction } from "@/lib/sex/rules";
 import { formatUsd } from "@/lib/prays/rules";
@@ -17,7 +17,7 @@ type Props = {
   parts: PartOption[]; sellers: Option[]; customers: Option[];
 };
 
-const WAIT_TEXT = { NEW: "Sex qabul qilishi kutilmoqda", ACCEPTED: "Sexda ishlanmoqda", ISSUED: "Krimga olish kutilmoqda", RECEIVED: "✓ Yopildi" } as const;
+const WAIT_TEXT = { NEW: "Seh qabul qilishi kutilmoqda", ACCEPTED: "Sehda ishlanmoqda", ISSUED: "Krimga olish kutilmoqda", RECEIVED: "✓ Yopildi" } as const;
 
 export function OrdersBoard({ role, userName, rows, month, months, parts, sellers, customers }: Props) {
   const router = useRouter();
@@ -47,18 +47,18 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
   const count = (status: OrderRow["status"]) => rows.filter(row => row.status === status).length;
   const stats = workshop
     ? [{ k: "Qabul qilishim kerak", v: count("NEW"), tone: "is-blue" }, { k: "Ishlanmoqda · chiqarishim kerak", v: count("ACCEPTED"), tone: "is-yellow" }]
-    : [{ k: "Yangi · qabul kutmoqda", v: count("NEW"), tone: "is-blue" }, { k: "Sexda ishlanmoqda", v: count("ACCEPTED"), tone: "is-yellow" }, { k: "Chiqib ketdi · krim kutmoqda", v: count("ISSUED"), tone: "is-red" }, { k: "Krimga olindi", v: count("RECEIVED"), tone: "is-green" }];
-  const title = workshop ? `Mening vazifalarim · ${userName}` : seller ? "Mening zakazlarim" : `Sex zakazlari · ${month.label}`;
-  const subtitle = workshop ? "Zapchast va agregat zakazlari · qabul qiling, chiqqach “Chiqib ketdi” bosing" : seller ? "Bergan zakazlaringiz va ularning holati" : boss ? "Hammasini ko‘rasiz · sizning tugmangiz faqat “Krimga oldim”" : "Hammasini ko‘rasiz · holatni sex va Super Admin o‘zgartiradi";
+    : [{ k: "Yangi · qabul kutmoqda", v: count("NEW"), tone: "is-blue" }, { k: "Sehda ishlanmoqda", v: count("ACCEPTED"), tone: "is-yellow" }, { k: "Chiqib ketdi · krim kutmoqda", v: count("ISSUED"), tone: "is-red" }, { k: "Krimga olindi", v: count("RECEIVED"), tone: "is-green" }];
+  const title = workshop ? `Mening vazifalarim · ${userName}` : seller ? "Mening zakazlarim" : `Seh zakazlari · ${month.label}`;
+  const subtitle = workshop ? "Zapchast va agregat zakazlari · qabul qiling, chiqqach “Chiqib ketdi” bosing" : seller ? "Bergan zakazlaringiz va ularning holati" : boss ? "Hammasini ko‘rasiz · sizning tugmangiz faqat “Krimga oldim”" : "Hammasini ko‘rasiz · holatni seh va Super Admin o‘zgartiradi";
 
   return <div className="sx">
     <div className="sx-head">
-      <div><span className="sx-crumb">Sex / {workshop ? "Vazifalar" : "Zakazlar"}</span><h1>{title}</h1><p className="sx-lead">{subtitle}</p></div>
+      <div><span className="sx-crumb">Seh / {workshop ? "Vazifalar" : "Zakazlar"}</span><h1>{title}</h1><p className="sx-lead">{subtitle}</p></div>
       <div className="sx-actions">
-        {!workshop && <><LinkButton className="sx-btn is-outline" href="/admin/sex/new?type=agregat">+ Zborka buyurtmasi</LinkButton><LinkButton className="sx-btn is-outline" href="/admin/sex/new?type=zapchast">+ Zapchast zayavkasi</LinkButton></>}
+        {!workshop && <><LinkButton className="sx-btn is-outline" href="/admin/seh/new?type=agregat">+ Zborka buyurtmasi</LinkButton><LinkButton className="sx-btn is-outline" href="/admin/seh/new?type=zapchast">+ Zapchast zayavkasi</LinkButton></>}
         {workshop && <button type="button" className="sx-btn is-warn" onClick={() => setNoRequestOpen(true)} disabled={!parts.length}>+ Zayavkasiz chiqim</button>}
-        {staff && <select className="sx-input" style={{ width: "auto", fontWeight: 700 }} value={month.key} disabled={monthPending} onChange={event => { const next = event.target.value; startNavigationProgress(); startMonth(() => router.push(`/admin/sex?month=${next}`)); }} aria-label="Oy">{months.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select>}
-        {boss && <DownloadButton className="sx-btn is-primary" href={`/admin/sex/export?month=${month.key}`} fallbackName={`sex-zakazlari-${month.key}.xlsx`}/>}
+        {staff && <select className="sx-input" style={{ width: "auto", fontWeight: 700 }} value={month.key} disabled={monthPending} onChange={event => { const next = event.target.value; startNavigationProgress(); startMonth(() => router.push(`/admin/seh?month=${next}`)); }} aria-label="Oy">{months.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select>}
+        {boss && <DownloadButton className="sx-btn is-primary" href={`/admin/seh/export?month=${month.key}`} fallbackName={`seh-zakazlari-${month.key}.xlsx`}/>}
       </div>
     </div>
 
@@ -137,10 +137,10 @@ function NoRequestForm({ parts, sellers, customers, busy, onSubmit }: { parts: P
 
 export function PartRows({ parts, items, setItems, priceOf }: { parts: PartOption[]; items: Array<{ partId: string; qty: string }>; setItems: (items: Array<{ partId: string; qty: string }>) => void; priceOf?: (partId: string) => string | null }) {
   return <div style={{ display: "grid", gap: 8 }}>
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 44px", gap: 10, fontSize: 12, fontWeight: 700, color: "#4F5A70" }}><span>Sex mahsuloti</span><span>Soni</span><span/></div>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 44px", gap: 10, fontSize: 12, fontWeight: 700, color: "#4F5A70" }}><span>Seh mahsuloti</span><span>Soni</span><span/></div>
     {items.map((item, index) => <div key={index} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 44px", gap: 10, alignItems: "center" }}>
       <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-        <select className="sx-input" style={{ fontSize: 14, fontWeight: 600 }} value={item.partId} onChange={event => setItems(items.map((row, i) => i === index ? { ...row, partId: event.target.value } : row))} aria-label="Sex mahsuloti"><option value="">Tanlang</option>{parts.map(part => <option key={part.id} value={part.id}>{part.label}</option>)}</select>
+        <select className="sx-input" style={{ fontSize: 14, fontWeight: 600 }} value={item.partId} onChange={event => setItems(items.map((row, i) => i === index ? { ...row, partId: event.target.value } : row))} aria-label="Seh mahsuloti"><option value="">Tanlang</option>{parts.map(part => <option key={part.id} value={part.id}>{part.label}</option>)}</select>
         {priceOf && item.partId && <span className="sx-muted">{priceOf(item.partId) ?? "narxi kiritilmagan"}</span>}
       </div>
       <input className="sx-input" style={{ fontSize: 14 }} value={item.qty} onChange={event => setItems(items.map((row, i) => i === index ? { ...row, qty: event.target.value.replace(/\D+/g, "") } : row))} inputMode="numeric" aria-label="Soni"/>

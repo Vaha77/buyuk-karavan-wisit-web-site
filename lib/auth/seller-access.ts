@@ -1,8 +1,8 @@
 // What a SELLER or WORKSHOP user may open in /admin. Shared by proxy.ts (403 before rendering) and the tests; every
 // page and server action still checks the role itself (requireAdmin rejects both, requireSeller / requireSexUser accept them).
 export const SELLER_HOME = "/admin/my";
-/** Sex zakazlari: sellers order here, the workshop (WORKSHOP) works only here. */
-export const SEX_HOME = "/admin/sex";
+/** Seh zakazlari: sellers order here, the workshop (WORKSHOP) works only here. */
+export const SEX_HOME = "/admin/seh";
 
 const within = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 

@@ -58,7 +58,7 @@ export async function proxy(request: NextRequest) {
       role = null;
     }
   }
-  // Sellers (/admin/my, /admin/sex) and the workshop (/admin/sex) only see their own section (pages re-check the role too):
+  // Sellers (/admin/my, /admin/seh) and the workshop (/admin/seh) only see their own section (pages re-check the role too):
   // a page visit outside it is sent to their home, anything else (POST / server action) is a plain 403.
   const decision = role ? roleAccess(role, request.nextUrl.pathname, request) : "allow";
   if (decision === "redirect") return NextResponse.redirect(new URL(homeFor(role!), request.url), 307);

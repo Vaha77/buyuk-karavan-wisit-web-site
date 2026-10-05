@@ -1,4 +1,4 @@
-// Sex zakazlari rules: who sees which order, who may move it to the next status, what the workshop is shown.
+// Seh zakazlari rules: who sees which order, who may move it to the next status, what the workshop is shown.
 // Pure (no database, no "server-only"), so the tests run them directly.
 
 export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "SELLER" | "WORKSHOP";
@@ -23,7 +23,7 @@ export const TRANSITIONS: Record<OrderAction, { from: OrderStatus; to: OrderStat
 export function checkTransition(role: string, status: OrderStatus, action: OrderAction): { ok: true; to: OrderStatus } | { ok: false; error: string } {
   const rule = TRANSITIONS[action];
   if (!rule) return { ok: false, error: "Noma’lum amal." };
-  if (role !== rule.role) return { ok: false, error: action === "receive" ? "Krimga olishni faqat Super Admin tasdiqlaydi." : "Bu tugma faqat sex mas’uli uchun." };
+  if (role !== rule.role) return { ok: false, error: action === "receive" ? "Krimga olishni faqat Super Admin tasdiqlaydi." : "Bu tugma faqat seh mas’uli uchun." };
   if (status !== rule.from) return { ok: false, error: `Zakaz holati “${STATUS_LABEL[status]}” — bu amal bajarilmaydi.` };
   return { ok: true, to: rule.to };
 }
@@ -67,7 +67,7 @@ export function stripPrices<T extends WithPrices>(order: T, role: string) {
 }
 
 export type FormPart = { id: string; name: string; size: string | null; basePriceUsd: number | null };
-/** Spare parts offered on /admin/sex/new with their price-list price. Never built for WORKSHOP (it cannot order). */
+/** Spare parts offered on /admin/seh/new with their price-list price. Never built for WORKSHOP (it cannot order). */
 export function orderFormParts(role: string, parts: FormPart[]) {
   if (priceAccess(role) === "none") return parts.map(part => ({ id: part.id, label: [part.name, part.size].filter(Boolean).join(" ") }));
   return parts.map(part => ({ id: part.id, label: [part.name, part.size].filter(Boolean).join(" "), basePriceUsd: part.basePriceUsd }));

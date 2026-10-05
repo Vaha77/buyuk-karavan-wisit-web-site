@@ -63,7 +63,7 @@ async function call<T>(method:string,payload:Record<string,unknown>):Promise<T>{
 }
 export function sendMessage(chatId:string,text:string,replyMarkup?:InlineKeyboard){return call<SentMessage>("sendMessage",{chat_id:chatId,text,...(replyMarkup?{reply_markup:replyMarkup}:{})});}
 export function editMessageText(chatId:string,messageId:number,text:string,replyMarkup:InlineKeyboard={inline_keyboard:[]}){return call<SentMessage>("editMessageText",{chat_id:chatId,message_id:messageId,text,reply_markup:replyMarkup});}
-/** "BK Zborka sexi" group for workshop orders; null when TELEGRAM_WORKSHOP_CHAT_ID is not set (orders still work, nothing is posted). */
+/** "BK Zborka sehi" group for workshop orders; null when TELEGRAM_WORKSHOP_CHAT_ID is not set (orders still work, nothing is posted). */
 export function telegramWorkshopChatId(){return process.env.TELEGRAM_WORKSHOP_CHAT_ID?.trim()||null;}
 export function answerCallbackQuery(id:string,text:string,showAlert=false){
   const now=Date.now(),existing=callbackAcks.get(id);

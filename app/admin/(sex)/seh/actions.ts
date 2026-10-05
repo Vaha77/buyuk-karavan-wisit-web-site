@@ -38,7 +38,7 @@ export async function createZapchastOrderAction(raw: unknown): Promise<SexAction
 /** "+ Zayavkasiz chiqim": only the workshop writes it, for a chosen seller. */
 export async function createNoRequestAction(raw: unknown): Promise<SexActionResult> {
   const user = await requireSexUser();
-  if (user.role !== "WORKSHOP") return { ok: false, error: "Zayavkasiz chiqimni faqat sex mas’uli yozadi." };
+  if (user.role !== "WORKSHOP") return { ok: false, error: "Zayavkasiz chiqimni faqat seh mas’uli yozadi." };
   const parsed = zapchastSchema.extend({ sellerId: z.string().min(1, "Sotuvchini tanlang.").max(40) }).safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
   const result = await createZapchastOrder(user, parsed.data, parsed.data.sellerId);

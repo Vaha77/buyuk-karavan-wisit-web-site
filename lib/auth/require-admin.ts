@@ -42,7 +42,7 @@ export async function requireSeller() {
   return { user, salesPersonId: user.salesPersonId };
 }
 
-/** Sex zakazlari pages and actions: staff, SELLER and WORKSHOP. What each may see or press is decided per order (lib/sex/rules.ts). */
+/** Seh zakazlari pages and actions: staff, SELLER and WORKSHOP. What each may see or press is decided per order (lib/sex/rules.ts). */
 export async function requireSexUser() {
   return requireSession();
 }

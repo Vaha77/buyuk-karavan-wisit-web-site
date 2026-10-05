@@ -85,7 +85,7 @@ test("Excel import: our own export reads back by ID; workshop parts by name + si
   ready.addRow(["ID", "Nomi", "Brend", "Model", "Prays narxi", "Sotuv narxi (+10%)"]);
   ready.addRow(["x", "XUEYING BR +20PG kompressor", "XUEYING", "BR +20PG", 920, 1012]);
   ready.addRow(["gone", "Old", "X", "Y", 10, 11]);
-  const sex = workbook.addWorksheet("Sex zapchastlari");
+  const sex = workbook.addWorksheet("Seh zapchastlari");
   sex.addRow(["ID", "Nomi", "O‘lcham", "Guruh", "Birlik", "Prays narxi"]);
   sex.addRow(["", "Glazok", "3/8", "Glazok", "dona", 9]);
   sex.addRow(["", "Resiver bachok", "20 L", "Resiver", "dona", 300]);

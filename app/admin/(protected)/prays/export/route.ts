@@ -15,7 +15,7 @@ export async function GET() {
   const ready = workbook.addWorksheet("Tayyor mahsulotlar");
   ready.columns = [{ header: "ID", key: "id", width: 28 }, { header: "Nomi", key: "name", width: 60 }, { header: "Brend", key: "brand", width: 14 }, { header: "Model", key: "model", width: 16 }, { header: "Prays narxi", key: "base", width: 14 }, { header: `Sotuv narxi (+${markup}%)`, key: "sale", width: 18 }, { header: "Prays sanasi", key: "date", width: 14 }];
   for (const product of products) ready.addRow({ id: product.id, name: product.name, brand: product.brand, model: product.model, base: product.basePriceUsd, sale: product.basePriceUsd === null ? product.priceUsd : sellPrice(product.basePriceUsd, markup), date: date(product.priceListDate) });
-  const sex = workbook.addWorksheet("Sex zapchastlari");
+  const sex = workbook.addWorksheet("Seh zapchastlari");
   sex.columns = [{ header: "ID", key: "id", width: 28 }, { header: "Nomi", key: "name", width: 34 }, { header: "O‘lcham", key: "size", width: 12 }, { header: "Guruh", key: "group", width: 16 }, { header: "Birlik", key: "unit", width: 10 }, { header: "Prays narxi", key: "base", width: 14 }, { header: "Prays sanasi", key: "date", width: 14 }];
   for (const part of parts) sex.addRow({ id: part.id, name: part.name, size: part.size, group: part.group, unit: part.unit, base: part.basePriceUsd, date: date(part.priceListDate) });
   for (const sheet of [ready, sex]) { sheet.getRow(1).font = { bold: true }; sheet.views = [{ state: "frozen", ySplit: 1 }]; sheet.getColumn("date").numFmt = "dd.mm.yy"; sheet.getColumn("base").numFmt = "#,##0.##"; }

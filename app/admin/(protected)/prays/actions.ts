@@ -69,7 +69,7 @@ export async function previewPercentAction(raw: unknown): Promise<PreviewResult>
   const rows = percentPreview(items, parsed.data.percent);
   if (!rows.length) return { ok: false, error: "Tanlangan guruhda prays narxi kiritilgan mahsulot yo‘q." };
   const sign = parsed.data.percent > 0 ? "+" : "";
-  return { ok: true, source: "PERCENT", fileName: `${filter === "all" ? (kind === "product" ? "Tayyor mahsulotlar" : "Sex zapchastlari") : filter} · ${sign}${parsed.data.percent}%`, priceListName: null, listDate: null, rows };
+  return { ok: true, source: "PERCENT", fileName: `${filter === "all" ? (kind === "product" ? "Tayyor mahsulotlar" : "Seh zapchastlari") : filter} · ${sign}${parsed.data.percent}%`, priceListName: null, listDate: null, rows };
 }
 
 const money = z.number().positive("Narx 0 dan katta bo‘lsin.").max(10_000_000).transform(value => Math.round(value * 100) / 100);

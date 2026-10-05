@@ -88,7 +88,7 @@ export async function deactivatePart(actor: Actor, id: string) {
   const row = await getDb().sexPart.findFirst({ where: { id, active: true } });
   if (!row) return false;
   await getDb().sexPart.update({ where: { id }, data: { active: false } });
-  await writeAudit(actor, { action: "ARCHIVE", entityType: "SEX_PART", entityId: row.id, entityName: [row.name, row.size].filter(Boolean).join(" "), summary: "Sex zapchastini o‘chirdi (nofaol)", before: { active: true }, after: { active: false } });
+  await writeAudit(actor, { action: "ARCHIVE", entityType: "SEX_PART", entityId: row.id, entityName: [row.name, row.size].filter(Boolean).join(" "), summary: "Seh zapchastini o‘chirdi (nofaol)", before: { active: true }, after: { active: false } });
   revalidatePrices();
   return true;
 }
@@ -97,7 +97,7 @@ export async function createPart(actor: Actor, draft: PartDraft & { base: number
   const row = await getDb().sexPart.create({ data: { name: draft.name, size: draft.size, group: draft.group, unit: draft.unit, basePriceUsd: draft.base === null ? null : money(draft.base), priceListDate: draft.base === null ? null : new Date() } });
   const label = [row.name, row.size].filter(Boolean).join(" ");
   if (draft.base !== null) await getDb().priceChange.create({ data: { entityType: "SEX_PART", entityId: row.id, entityName: label, oldBase: null, newBase: money(draft.base), source: "MANUAL", userId: actor.id } });
-  await writeAudit(actor, { action: "CREATE", entityType: "SEX_PART", entityId: row.id, entityName: label, summary: "Sex zapchastini qo‘shdi", after: { name: row.name, size: row.size, group: row.group, unit: row.unit, basePriceUsd: draft.base === null ? null : formatUsd(draft.base) } });
+  await writeAudit(actor, { action: "CREATE", entityType: "SEX_PART", entityId: row.id, entityName: label, summary: "Seh zapchastini qo‘shdi", after: { name: row.name, size: row.size, group: row.group, unit: row.unit, basePriceUsd: draft.base === null ? null : formatUsd(draft.base) } });
   revalidatePrices();
   return row.id;
 }

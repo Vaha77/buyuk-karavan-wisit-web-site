@@ -63,7 +63,7 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
   const ids = [...new Set(input.items.map(item => item.partId))];
   const parts = await getDb().sexPart.findMany({ where: { id: { in: ids }, active: true } });
   const byId = new Map(parts.map(part => [part.id, part]));
-  if (!input.items.length || input.items.some(item => !byId.has(item.partId))) return { ok: false, error: "Sex mahsulotini tanlang." };
+  if (!input.items.length || input.items.some(item => !byId.has(item.partId))) return { ok: false, error: "Seh mahsulotini tanlang." };
   const customer = await resolveCustomer(actor, input);
   if (!customer.ok) return customer;
   let sellerId = actor.id;
@@ -91,7 +91,7 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
 async function afterCreate(actor: Actor, id: string, summary: string, after: Record<string, unknown>) {
   await writeAudit(actor, { action: "CREATE", entityType: "WORKSHOP_ORDER", entityId: id, summary, after });
   await postToWorkshop(id);
-  revalidatePath("/admin/sex");
+  revalidatePath("/admin/seh");
 }
 
 async function loadMessageOrder(id: string) {
@@ -145,7 +145,7 @@ export async function transitionOrder(actor: Actor, id: string, action: OrderAct
   if (!moved) return { ok: false, error: "Zakaz holati allaqachon o‘zgargan — sahifani yangilang." };
   await writeAudit(actor, { action: "STATUS_CHANGE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order.number), summary: `${orderNumber(order.number)}: ${STATUS_LABEL[order.status]} → ${STATUS_LABEL[check.to]}`, before: { status: order.status }, after: { status: check.to, ...(corrections.length ? { issuedQty: Object.fromEntries(corrections.map(item => [item.id, issuedQty![item.id]])) } : {}) } });
   await syncWorkshopMessage(id);
-  revalidatePath("/admin/sex");
+  revalidatePath("/admin/seh");
   return { ok: true, status: check.to };
 }
 
@@ -154,7 +154,7 @@ export async function confirmNoRequest(actor: Actor, id: string): Promise<Result
   const result = await getDb().workshopOrder.updateMany({ where: { id, sellerId: actor.id, noRequest: true, sellerConfirmedAt: null }, data: { sellerConfirmedAt: new Date() } });
   if (result.count !== 1) return { ok: false, error: "Zakaz topilmadi yoki allaqachon tasdiqlangan." };
   await writeAudit(actor, { action: "CONFIRM", entityType: "WORKSHOP_ORDER", entityId: id, summary: "Zayavkasiz chiqimni tasdiqladi", before: { sellerConfirmed: false }, after: { sellerConfirmed: true } });
-  revalidatePath("/admin/sex");
+  revalidatePath("/admin/seh");
   return { ok: true };
 }
 
@@ -166,7 +166,7 @@ export async function handleWorkshopCallback(callback: TelegramCallbackQuery) {
   const chatId = telegramWorkshopChatId();
   if (!chatId || !callback.message || String(callback.message.chat.id) !== chatId) return true;
   const user = await getDb().adminUser.findUnique({ where: { telegramChatId: String(callback.from.id) } });
-  if (!user || user.role !== "WORKSHOP" || !user.isActive || user.approvalStatus !== "APPROVED") { await reply("Bu tugmani faqat admin panelda Telegram ID si kiritilgan sex mas’uli bosa oladi."); return true; }
+  if (!user || user.role !== "WORKSHOP" || !user.isActive || user.approvalStatus !== "APPROVED") { await reply("Bu tugmani faqat admin panelda Telegram ID si kiritilgan seh mas’uli bosa oladi."); return true; }
   const result = await transitionOrder(user, parsed.orderId, parsed.action);
   if (!result.ok) await reply(result.error);
   return true;

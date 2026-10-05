@@ -27,7 +27,7 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Mijoz so‘rovlari", href: "/admin/leads", icon: MessageSquare, badge: "leads" },
     { label: "Referal linklar", href: "/admin/links", icon: Link2, badge: "new" },
     { label: "Buyurtmalar", href: "#", icon: ShoppingBag, soon: true },
-    { label: "Sex zakazlari", href: "/admin/sex", icon: Wrench, badge: "sex" },
+    { label: "Seh zakazlari", href: "/admin/seh", icon: Wrench, badge: "sex" },
     { label: "Sotuvchilar", href: "/admin/sales-agents", icon: UserCheck },
     { label: "Sotuv rejasi", href: "/admin/sales-plan", icon: Target, adminOnly: true },
     { label: "Sotuvlar", href: "/admin/sales", icon: ShoppingBag },
@@ -49,8 +49,8 @@ const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path
   { match: path => path.startsWith("/admin/customers/purchases"), title: "Tasdiqlash kerak", subtitle: "Sotuvchilar kiritgan xaridlarni tasdiqlash yoki rad etish" },
   { match: path => path.startsWith("/admin/customers/control"), title: "Nazorat", subtitle: "Sotuvchilar bo‘yicha muddati o‘tgan qo‘ng‘iroqlar" },
   { match: path => path === "/admin/my", title: "Mening mijozlarim", subtitle: "Sizga biriktirilgan doimiy mijozlar" },
-  { match: path => path.startsWith("/admin/sex/new"), title: "Sex / Yangi zakaz", subtitle: "Zborka buyurtmasi yoki zapchast zayavkasi" },
-  { match: path => path.startsWith("/admin/sex"), title: "Sex zakazlari", subtitle: "Zayavka → Qabul → Chiqib ketdi → Krimga olindi" },
+  { match: path => path.startsWith("/admin/seh/new"), title: "Seh / Yangi zakaz", subtitle: "Zborka buyurtmasi yoki zapchast zayavkasi" },
+  { match: path => path.startsWith("/admin/seh"), title: "Seh zakazlari", subtitle: "Zayavka → Qabul → Chiqib ketdi → Krimga olindi" },
   { match: path => path.startsWith("/admin/my/today"), title: "Bugun qo‘ng‘iroq", subtitle: "Qo‘ng‘iroq qilish vaqti kelgan mijozlar" },
   { match: path => path.startsWith("/admin/my/purchase"), title: "Xarid kiritish", subtitle: "Xarid admin tasdiqlagach hisobga olinadi" },
   { match: path => path.startsWith("/admin/my/"), title: "Mijoz", subtitle: "Qo‘ng‘iroqlar va xaridlar" },
@@ -73,7 +73,7 @@ const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path
   { match: path => path.startsWith("/admin/users"), title: "Foydalanuvchilar", subtitle: "Admin panel foydalanuvchilari va rollari" },
   { match: path => path.startsWith("/admin/activity"), title: "Faoliyat tarixi", subtitle: "Admin amallari jurnali" },
   { match: path => path.startsWith("/admin/products"), title: "Mahsulotlar", subtitle: "Saytdagi mahsulotlarni boshqarish" },
-  { match: path => path.startsWith("/admin/prays"), title: "Prays", subtitle: "Prays narxlari, sotuv ustamasi va sex zapchastlari" },
+  { match: path => path.startsWith("/admin/prays"), title: "Prays", subtitle: "Prays narxlari, sotuv ustamasi va seh zapchastlari" },
 ];
 function sectionOf(path: string) {
   const section = SECTIONS.find(item => item.match(path));
@@ -89,19 +89,19 @@ const sellerNavigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Xarid kiritish", href: "/admin/my/purchase", icon: ShoppingBag },
   ] },
   { group: "SEX", items: [
-    { label: "Mening zakazlarim", href: "/admin/sex", icon: Wrench },
-    { label: "Yangi zakaz", href: "/admin/sex/new", icon: PlusCircle },
+    { label: "Mening zakazlarim", href: "/admin/seh", icon: Wrench },
+    { label: "Yangi zakaz", href: "/admin/seh/new", icon: PlusCircle },
   ] },
 ];
 
 // WORKSHOP (Sex mas'uli) only works with workshop orders.
 const workshopNavigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "SEX", items: [
-    { label: "Mening vazifalarim", href: "/admin/sex", icon: Wrench, badge: "sex" },
+    { label: "Mening vazifalarim", href: "/admin/seh", icon: Wrench, badge: "sex" },
   ] },
 ];
 
-const roleLabels = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer", SELLER: "Sotuvchi", WORKSHOP: "Sex mas‘uli" };
+const roleLabels = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer", SELLER: "Sotuvchi", WORKSHOP: "Seh mas‘uli" };
 
 function NavigationPending() {
   const { pending } = useLinkStatus();

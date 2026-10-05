@@ -5,7 +5,7 @@ import { getSexParts } from "@/lib/prays/queries";
 import { customerOptions, listOrders, sellerOptions } from "@/lib/sex/queries";
 import { monthRange } from "@/lib/sex/rules";
 
-export const metadata: Metadata = { title: "Sex zakazlari — Admin | BUYUK KARAVAN" };
+export const metadata: Metadata = { title: "Seh zakazlari — Admin | BUYUK KARAVAN" };
 
 /** One page, three views: SUPER_ADMIN/staff — all orders of a month; SELLER — their own; WORKSHOP — open tasks. */
 export default async function SexOrdersPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {

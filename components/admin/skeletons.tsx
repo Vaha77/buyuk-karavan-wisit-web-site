@@ -38,7 +38,7 @@ export function GenericSkeleton() {
 
 /** /admin/sex: heading, four counters, orders table. */
 export function SexListSkeleton() {
-  return <Page label="Sex zakazlari yuklanmoqda"><Heading actions={3}/><Stats count={4} height={78}/>
+  return <Page label="Seh zakazlari yuklanmoqda"><Heading actions={3}/><Stats count={4} height={78}/>
     <Card><div className="sk-table">{times(5).map(row => <div key={row} className="sk-table-row">
       <Sk w={46} h={14}/><Sk w={50} h={13}/><Sk w={64} h={20}/><div style={{ display: "grid", gap: 6 }}><Sk w="90%" h={14}/><Sk w="55%" h={11}/></div>
       <div style={{ display: "grid", gap: 6 }}><Sk w="80%" h={13}/><Sk w="50%" h={11}/></div><Sk w="75%" h={13}/>
@@ -47,7 +47,7 @@ export function SexListSkeleton() {
   </Page>;
 }
 
-/** /admin/sex/new: three form cards and the order card on the right. */
+/** /admin/seh/new: three form cards and the order card on the right. */
 export function SexNewSkeleton() {
   return <Page label="Buyurtma formasi yuklanmoqda"><Heading actions={2}/>
     <div className="sk-split">

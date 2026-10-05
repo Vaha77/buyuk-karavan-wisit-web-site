@@ -48,7 +48,7 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
   const visible = rows.filter(row => (chip === "all" || row.tag === chip) && (!needle || row.name.toLowerCase().includes(needle) || (compact && row.name.toLowerCase().replace(/[^a-z0-9]+/g, "").includes(compact))));
 
   const oldest = useMemo(() => {
-    const dated = [...products.map(product => ({ label: product.brand, date: product.priceListDate })), ...parts.map(part => ({ label: `Sex · ${part.group}`, date: part.priceListDate }))].filter(item => item.date) as Array<{ label: string; date: string }>;
+    const dated = [...products.map(product => ({ label: product.brand, date: product.priceListDate })), ...parts.map(part => ({ label: `Seh · ${part.group}`, date: part.priceListDate }))].filter(item => item.date) as Array<{ label: string; date: string }>;
     dated.sort((a, b) => a.date.localeCompare(b.date));
     return dated[0] ?? null;
   }, [products, parts]);
@@ -96,7 +96,7 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
 
   return <div className="sx">
     <div className="sx-head">
-      <div><span className="sx-crumb">Admin / Prays · faqat Super Admin</span><h1>Prays</h1><p className="sx-lead">Barcha narxlarning yagona manbai · katalog, konfigurator, zborka va sex shu yerdan oladi</p></div>
+      <div><span className="sx-crumb">Admin / Prays · faqat Super Admin</span><h1>Prays</h1><p className="sx-lead">Barcha narxlarning yagona manbai · katalog, konfigurator, zborka va seh shu yerdan oladi</p></div>
       <div className="sx-actions">
         <DownloadButton className="sx-btn" href="/admin/prays/export" fallbackName="prays.xlsx"/>
         <button type="button" className="sx-btn is-outline" disabled={pending} onClick={() => excelInput.current?.click()}>Excel yuklash</button>
@@ -109,7 +109,7 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
 
     <div className="sx-stats">
       <div className="sx-stat"><span>Tayyor mahsulotlar</span><strong>{products.length}</strong><small>{brands.map(([brand, n]) => `${brand} ${n}`).join(" · ") || "—"}</small></div>
-      <div className="sx-stat"><span>Sex zapchastlari</span><strong>{parts.length}</strong><small>{groups.length} tur · o‘lchamlari bilan</small></div>
+      <div className="sx-stat"><span>Seh zapchastlari</span><strong>{parts.length}</strong><small>{groups.length} tur · o‘lchamlari bilan</small></div>
       <div className="sx-stat is-blue"><label htmlFor="prays-markup">Sotuv ustamasi</label>
         <select id="prays-markup" value={markupDraft ?? markup} disabled={pending} onChange={event => { const value = Number(event.target.value); setMarkupDraft(value === markup ? null : value); }}>
           {Array.from({ length: MARKUP_MAX - MARKUP_MIN + 1 }, (_, index) => MARKUP_MIN + index).map(value => <option key={value} value={value}>+{value}%</option>)}
@@ -133,8 +133,8 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
         <select value={percentScope} onChange={event => setPercentScope(event.target.value)} style={{ minWidth: 220 }}>
           <option value="product:all">Tayyor mahsulotlar — hammasi ({products.length})</option>
           {brands.map(([brand, n]) => <option key={brand} value={`product:${brand}`}>{brand} — hammasi ({n})</option>)}
-          {parts.length > 0 && <option value="part:all">Sex — hammasi ({parts.length})</option>}
-          {groups.map(group => <option key={group} value={`part:${group}`}>Sex — {group}</option>)}
+          {parts.length > 0 && <option value="part:all">Seh — hammasi ({parts.length})</option>}
+          {groups.map(group => <option key={group} value={`part:${group}`}>Seh — {group}</option>)}
         </select></label>
       <label className="sx-field">Foiz<input value={percentValue} onChange={event => setPercentValue(event.target.value)} inputMode="decimal" style={{ width: 100, fontWeight: 700 }}/></label>
       <div className="sx-actions" style={{ marginLeft: "auto" }}><button type="button" className="sx-btn" onClick={() => setPercentOpen(false)}>Bekor qilish</button><button type="button" className="sx-btn is-primary" disabled={pending || !Number.isFinite(pctNumber) || pctNumber === 0} onClick={() => runPreview(() => previewPercentAction({ scope: percentScope, percent: pctNumber }))}><BusyLabel busy={pending} busyText="Tahlil qilinmoqda…">Ko‘rib chiqish</BusyLabel></button></div>
@@ -157,7 +157,7 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
         <div className="sx-card-head">
           <div className="sx-tabs" role="tablist" aria-label="Prays turi">
             <button type="button" role="tab" className="sx-tab" aria-selected={tab === "ready"} onClick={() => startFilter(() => { setTab("ready"); setChip("all"); setEditing(null); setDeleting(null); })}>Tayyor mahsulotlar · {products.length}</button>
-            <button type="button" role="tab" className="sx-tab" aria-selected={tab === "sex"} onClick={() => startFilter(() => { setTab("sex"); setChip("all"); setEditing(null); setDeleting(null); })}>Sex zapchastlari · {parts.length}</button>
+            <button type="button" role="tab" className="sx-tab" aria-selected={tab === "sex"} onClick={() => startFilter(() => { setTab("sex"); setChip("all"); setEditing(null); setDeleting(null); })}>Seh zapchastlari · {parts.length}</button>
           </div>
           <label className="sx-search"><Search size={15} color="#4F5A70"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Nomi yoki model bo‘yicha qidirish" aria-label="Qidirish"/></label>
         </div>
@@ -186,7 +186,7 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
             </tr>;
           })}</tbody>
         </table>
-        {!visible.length && <p className="sx-muted" style={{ padding: 16, textAlign: "center" }}>{rows.length ? "Hech narsa topilmadi." : tab === "sex" ? "Sex zapchastlari hali kiritilmagan — “+ Zapchast qo‘shish” yoki Excel yuklash orqali qo‘shing." : "Mahsulotlar yo‘q."}</p>}
+        {!visible.length && <p className="sx-muted" style={{ padding: 16, textAlign: "center" }}>{rows.length ? "Hech narsa topilmadi." : tab === "sex" ? "Seh zapchastlari hali kiritilmagan — “+ Zapchast qo‘shish” yoki Excel yuklash orqali qo‘shing." : "Mahsulotlar yo‘q."}</p>}
         </div></PendingArea>
         <span className="sx-muted">“O‘zgartirish” — prays narxini tahrirlash · o‘chirishdan oldin tasdiq so‘raladi (mahsulot saytdan yashiriladi, o‘chib ketmaydi) · sotuv narxi ustama bo‘yicha o‘zi hisoblanadi</span>
       </div>

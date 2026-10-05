@@ -1,4 +1,4 @@
-/* Prays, Sex zakazlari and Komplekt konfiguratori (docs/design/sex/*.dc.html). Scoped under .sx. */
+/* Prays, Seh zakazlari and Komplekt konfiguratori (docs/design/sex/*.dc.html). Scoped under .sx. */
 .sx{--sx-text:#14213D;--sx-muted:#4F5A70;--sx-sub:#3E4A60;--sx-border:#E3E7EF;--sx-line:#EEF1F6;--sx-input:#C9D3E6;--sx-chip:#D9DEE8;--sx-bg:#F4F6FA;--sx-primary:#1E4E8C;--sx-primary-soft:#EAF1FB;--sx-green:#1B6B43;--sx-green-soft:#E2F3E8;--sx-red:#A41F15;--sx-red-soft:#FDE1DE;--sx-yellow:#6E5200;--sx-yellow-soft:#FFF1C2;--sx-orange:#8A3F00;--sx-orange-soft:#FDE6D2;
   color:var(--sx-text);display:flex;flex-direction:column;gap:18px;min-width:0;font-size:14px}
 .sx h1{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
@@ -148,7 +148,7 @@
   .sx-total strong{font-size:24px}
 }
 
-/* "Sexda ishlanmoqda" (design animatsiya.dc.html, E+F): wave inside the "Qabul qilindi" badge, wrench + time in Amal */
+/* "Sehda ishlanmoqda" (design animatsiya.dc.html, E+F): wave inside the "Qabul qilindi" badge, wrench + time in Amal */
 .sx-wave{position:relative;overflow:hidden}
 .sx-wave-fill{position:absolute;top:0;left:0;height:100%;width:8%;background:rgba(242,194,48,.45);animation:sx-wave-fill 2.2s ease-in-out infinite}
 .sx-wave-text{position:relative}

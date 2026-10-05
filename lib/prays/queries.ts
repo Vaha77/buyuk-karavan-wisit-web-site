@@ -43,7 +43,7 @@ export async function getPriceHistory(limit = 20): Promise<HistoryEntry[]> {
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   return [...groups.entries()].map(([key, items]) => {
-    const first = items[0], kind = first.entityType === "SEX_PART" ? "Sex zapchastlari" : "Tayyor mahsulotlar";
+    const first = items[0], kind = first.entityType === "SEX_PART" ? "Seh zapchastlari" : "Tayyor mahsulotlar";
     let detail: string;
     if (items.length === 1) detail = `${first.entityName}: ${first.oldBase === null ? "—" : `$${toNumber(first.oldBase)}`} → $${toNumber(first.newBase)}`;
     else {
