@@ -196,6 +196,15 @@ test("“Sexda ishlanmoqda” timer text and the overdue mark", async () => {
   assert.equal(rules.daysPastDue("2026-10-09", now), 0);
   assert.equal(rules.daysPastDue("2026-10-04", new Date("2026-10-04T20:00:00Z")), 1, "Tashkent day (UTC+5)");
   const css = await readFile(new URL("../components/admin/sex/sex.css", import.meta.url), "utf8");
-  assert.match(css, /@keyframes sx-working-slide\{from\{left:-40%\}to\{left:100%\}\}/);
-  assert.match(css, /prefers-reduced-motion:reduce\)\{\.sx-working-bar>span\{animation:none/);
+  assert.match(css, /@keyframes sx-wave-fill\{0%\{width:8%\}50%\{width:72%\}100%\{width:8%\}\}/);
+  assert.match(css, /@keyframes sx-wrench\{0%,100%\{transform:rotate\(-18deg\)\}50%\{transform:rotate\(18deg\)\}\}/);
+  assert.match(css, /prefers-reduced-motion:reduce\)\{\.sx-wave-fill,\.sx-wrench\{animation:none\}/);
+});
+
+test("loading screens: each section has its own skeleton; shimmer, bar and spinner respect reduced motion", async () => {
+  const expected = { "app/admin/(sex)/sex/loading.tsx": "SexListSkeleton", "app/admin/(sex)/sex/new/loading.tsx": "SexNewSkeleton", "app/admin/(protected)/loading.tsx": "GenericSkeleton", "app/admin/(protected)/prays/loading.tsx": "PraysSkeleton", "app/admin/(protected)/customers/loading.tsx": "CustomersSkeleton", "app/admin/(protected)/sales-plan/loading.tsx": "SalesPlanSkeleton", "app/admin/(seller)/my/loading.tsx": "MySkeleton", "app/admin/loading.tsx": "ShellSkeleton" };
+  for (const [file, component] of Object.entries(expected)) assert.match(await readFile(new URL(`../${file}`, import.meta.url), "utf8"), new RegExp(`<${component}/>`), file);
+  const css = await readFile(new URL("../components/admin/feedback.css", import.meta.url), "utf8");
+  assert.match(css, /\.admin-nav-progress\{position:fixed;top:0;left:0;z-index:1000;height:3px;width:0;background:#1E4E8C/);
+  assert.match(css, /prefers-reduced-motion:reduce\)\{\.sk::after,\.admin-nav-progress\{animation:none/);
 });

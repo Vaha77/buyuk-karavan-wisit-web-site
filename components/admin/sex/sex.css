@@ -148,15 +148,19 @@
   .sx-total strong{font-size:24px}
 }
 
-/* "Sexda ishlanmoqda": moving bar under the status text (orders table, ACCEPTED rows) */
-.sx-working{display:flex;flex-direction:column;gap:5px;margin-top:2px}
-.sx-working-label{font-size:12px;font-weight:700;color:var(--sx-yellow)}
-.sx-working-bar{position:relative;display:block;width:180px;max-width:100%;height:6px;border-radius:99px;background:#FFF1C2;overflow:hidden}
-.sx-working-bar>span{position:absolute;top:0;left:-40%;width:40%;height:100%;border-radius:99px;background:#F2C230;animation:sx-working-slide 1.4s ease-in-out infinite}
+/* "Sexda ishlanmoqda" (design animatsiya.dc.html, E+F): wave inside the "Qabul qilindi" badge, wrench + time in Amal */
+.sx-wave{position:relative;overflow:hidden}
+.sx-wave-fill{position:absolute;top:0;left:0;height:100%;width:8%;background:rgba(242,194,48,.45);animation:sx-wave-fill 2.2s ease-in-out infinite}
+.sx-wave-text{position:relative}
+.sx-wave.is-late{background:var(--sx-red-soft);color:var(--sx-red)}
+.sx-wave.is-late .sx-wave-fill{background:rgba(210,55,43,.25)}
+.sx-working{display:flex;align-items:center;gap:10px;color:#B8860B}
+.sx-wrench{flex-shrink:0;transform-origin:30% 70%;animation:sx-wrench .9s ease-in-out infinite}
+.sx-working-text{display:flex;flex-direction:column;gap:2px;font-size:14px;font-weight:600;color:var(--sx-sub)}
 .sx-working-time{font-size:12px;font-weight:700;color:#6E5200}
-.sx-working.is-late .sx-working-label,.sx-working.is-late .sx-working-time{color:#A41F15}
-.sx-working.is-late .sx-working-bar{background:#FDE1DE}
-.sx-working.is-late .sx-working-bar>span{background:#D2372B}
-@keyframes sx-working-slide{from{left:-40%}to{left:100%}}
-@media (prefers-reduced-motion:reduce){.sx-working-bar>span{animation:none;left:0}}
-.sx-btn+.sx-working{margin-top:8px}
+.sx-working.is-late{color:#D2372B}
+.sx-working.is-late .sx-working-text,.sx-working.is-late .sx-working-time{color:#A41F15;font-weight:700}
+.sx-btn+.sx-working{margin-top:10px}
+@keyframes sx-wave-fill{0%{width:8%}50%{width:72%}100%{width:8%}}
+@keyframes sx-wrench{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(18deg)}}
+@media (prefers-reduced-motion:reduce){.sx-wave-fill,.sx-wrench{animation:none}}

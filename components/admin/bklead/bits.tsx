@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { startNavigationProgress } from "@/components/admin/feedback";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Copy, Film, Link2, Mic, Music2, Play, QrCode, Search, Send } from "lucide-react";
 import { RANGE_OPTIONS } from "@/lib/dashboard/period";
@@ -30,6 +31,7 @@ export function RangeSelect({ value, from, to }: { value: string; from: string; 
     next.delete("from"); next.delete("to");
     if (range === "30d") next.delete("range"); else next.set("range", range);
     for (const [key, item] of Object.entries(extra)) next.set(key, item);
+    startNavigationProgress();
     router.push(`?${next}`);
   };
   return <div className="bk-actions">

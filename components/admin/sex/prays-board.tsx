@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Trash2 } from "lucide-react";
 import { applyMarkupAction, confirmPreviewAction, createPartAction, previewExcelAction, previewImageAction, previewPercentAction, removeEntryAction, updateBaseAction, type PreviewResult } from "@/app/admin/(protected)/prays/actions";
 import type { HistoryEntry, PraysPart, PraysProduct } from "@/lib/prays/queries";
+import { BusyLabel, DownloadButton, PendingArea } from "@/components/admin/feedback";
 import { CHANGE_LABEL, MARKUP_MAX, MARKUP_MIN, STALE_PRICE_LIST_DAYS, daysSince, formatShortDate, formatUsd, sellPrice, type ChangeStatus } from "@/lib/prays/rules";
 
 type Row = { id: string; entityType: "PRODUCT" | "SEX_PART"; name: string; tag: string; base: number | null; sale: number | null; date: string | null };
@@ -15,6 +16,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function PraysBoard({ products, parts, markup, history }: { products: PraysProduct[]; parts: PraysPart[]; markup: number; history: HistoryEntry[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // Tab / chip switch re-renders hundreds of rows: keep the old table visible, dimmed, meanwhile.
+  const [filtering, startFilter] = useTransition();
   const [tab, setTab] = useState<"ready" | "sex">("ready");
   const [chip, setChip] = useState("all");
   const [query, setQuery] = useState("");
@@ -95,7 +98,7 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
     <div className="sx-head">
       <div><span className="sx-crumb">Admin / Prays · faqat Super Admin</span><h1>Prays</h1><p className="sx-lead">Barcha narxlarning yagona manbai · katalog, konfigurator, zborka va sex shu yerdan oladi</p></div>
       <div className="sx-actions">
-        <a className="sx-btn" href="/admin/prays/export" download>Excel yuklab olish</a>
+        <DownloadButton className="sx-btn" href="/admin/prays/export" fallbackName="prays.xlsx"/>
         <button type="button" className="sx-btn is-outline" disabled={pending} onClick={() => excelInput.current?.click()}>Excel yuklash</button>
         <button type="button" className="sx-btn is-outline" disabled={pending} onClick={() => imageInput.current?.click()}>Rasm orqali (AI)</button>
         <button type="button" className="sx-btn is-primary" disabled={pending} onClick={() => { setPercentOpen(open => !open); setPreview(null); setPercentScope(tab === "ready" ? "product:all" : "part:all"); }}>Foiz bilan o‘zgartirish</button>
@@ -122,7 +125,7 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
 
     {markupPreview && <div className="sx-card is-focus">
       <div className="sx-card-head"><div><h2>Ustama: +{markup}% → +{markupDraft}%</h2><span className="sx-muted">{markupPreview.count} ta sotuv narxi o‘zgaradi{markupPreview.example ? `, masalan ${markupPreview.example}` : ""} · prays narxi kiritilmagan mahsulotlarga tegilmaydi</span></div>
-        <div className="sx-actions"><button type="button" className="sx-btn" onClick={() => setMarkupDraft(null)} disabled={pending}>Bekor qilish</button><button type="button" className="sx-btn is-green" disabled={pending} onClick={() => run(() => applyMarkupAction(markupDraft), () => setMarkupDraft(null))}>Tasdiqlash</button></div></div>
+        <div className="sx-actions"><button type="button" className="sx-btn" onClick={() => setMarkupDraft(null)} disabled={pending}>Bekor qilish</button><button type="button" className="sx-btn is-green" disabled={pending} onClick={() => run(() => applyMarkupAction(markupDraft), () => setMarkupDraft(null))}><BusyLabel busy={pending}>Tasdiqlash</BusyLabel></button></div></div>
     </div>}
 
     {percentOpen && <div className="sx-card is-focus" style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
@@ -134,13 +137,13 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
           {groups.map(group => <option key={group} value={`part:${group}`}>Sex — {group}</option>)}
         </select></label>
       <label className="sx-field">Foiz<input value={percentValue} onChange={event => setPercentValue(event.target.value)} inputMode="decimal" style={{ width: 100, fontWeight: 700 }}/></label>
-      <div className="sx-actions" style={{ marginLeft: "auto" }}><button type="button" className="sx-btn" onClick={() => setPercentOpen(false)}>Bekor qilish</button><button type="button" className="sx-btn is-primary" disabled={pending || !Number.isFinite(pctNumber) || pctNumber === 0} onClick={() => runPreview(() => previewPercentAction({ scope: percentScope, percent: pctNumber }))}>Ko‘rib chiqish</button></div>
+      <div className="sx-actions" style={{ marginLeft: "auto" }}><button type="button" className="sx-btn" onClick={() => setPercentOpen(false)}>Bekor qilish</button><button type="button" className="sx-btn is-primary" disabled={pending || !Number.isFinite(pctNumber) || pctNumber === 0} onClick={() => runPreview(() => previewPercentAction({ scope: percentScope, percent: pctNumber }))}><BusyLabel busy={pending} busyText="Tahlil qilinmoqda…">Ko‘rib chiqish</BusyLabel></button></div>
     </div>}
 
     {preview && <div className="sx-card is-focus">
       <div className="sx-card-head">
         <div><h2>Yangi prays: tekshirib tasdiqlang</h2><span className="sx-muted">{preview.source === "PERCENT" ? "Foiz bilan" : "Fayl"}: {preview.fileName}{preview.priceListName ? ` · ${preview.priceListName}` : ""} · {count("UP") + count("DOWN")} ta narx o‘zgaradi · {count("NEW")} ta yangi · {count("SAME")} ta o‘zgarmaydi{missing.length ? ` · ${missing.length} ta topilmadi` : ""}</span></div>
-        <div className="sx-actions"><button type="button" className="sx-btn" onClick={() => setPreview(null)} disabled={pending}>Bekor qilish</button><button type="button" className="sx-btn is-green" disabled={pending || !found.length} onClick={confirmPreview}>{pending ? "Saqlanmoqda…" : "Tasdiqlash"}</button></div>
+        <div className="sx-actions"><button type="button" className="sx-btn" onClick={() => setPreview(null)} disabled={pending}>Bekor qilish</button><button type="button" className="sx-btn is-green" disabled={pending || !found.length} onClick={confirmPreview}><BusyLabel busy={pending}>Tasdiqlash</BusyLabel></button></div>
       </div>
       {found.length > 0 ? <PreviewTable rows={found}/> : <p className="sx-note">Praysdagi qatorlarga mos mahsulot topilmadi — hech narsa o‘zgarmaydi.</p>}
       {missing.length > 0 && <div style={{ display: "grid", gap: 8 }}>
@@ -153,17 +156,17 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
       <div className="sx-card" style={{ flex: "999 1 720px" }}>
         <div className="sx-card-head">
           <div className="sx-tabs" role="tablist" aria-label="Prays turi">
-            <button type="button" role="tab" className="sx-tab" aria-selected={tab === "ready"} onClick={() => { setTab("ready"); setChip("all"); setEditing(null); setDeleting(null); }}>Tayyor mahsulotlar · {products.length}</button>
-            <button type="button" role="tab" className="sx-tab" aria-selected={tab === "sex"} onClick={() => { setTab("sex"); setChip("all"); setEditing(null); setDeleting(null); }}>Sex zapchastlari · {parts.length}</button>
+            <button type="button" role="tab" className="sx-tab" aria-selected={tab === "ready"} onClick={() => startFilter(() => { setTab("ready"); setChip("all"); setEditing(null); setDeleting(null); })}>Tayyor mahsulotlar · {products.length}</button>
+            <button type="button" role="tab" className="sx-tab" aria-selected={tab === "sex"} onClick={() => startFilter(() => { setTab("sex"); setChip("all"); setEditing(null); setDeleting(null); })}>Sex zapchastlari · {parts.length}</button>
           </div>
           <label className="sx-search"><Search size={15} color="#4F5A70"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Nomi yoki model bo‘yicha qidirish" aria-label="Qidirish"/></label>
         </div>
         <div className="sx-chips">
-          {["all", ...(tab === "ready" ? brands.map(([brand]) => brand) : groups)].map(value => <button key={value} type="button" className="sx-chip" aria-pressed={chip === value} onClick={() => setChip(value)}>{value === "all" ? "Hammasi" : value}</button>)}
+          {["all", ...(tab === "ready" ? brands.map(([brand]) => brand) : groups)].map(value => <button key={value} type="button" className="sx-chip" aria-pressed={chip === value} onClick={() => startFilter(() => setChip(value))}>{value === "all" ? "Hammasi" : value}</button>)}
           {tab === "sex" && <button type="button" className="sx-btn is-dashed" onClick={() => setAddOpen(open => !open)}>+ Zapchast qo‘shish</button>}
         </div>
         {tab === "sex" && addOpen && <AddPartForm groups={groups} busy={pending} onSubmit={draft => run(() => createPartAction(draft), () => setAddOpen(false))}/>}
-        <div className="sx-table-wrap"><table className="sx-table" style={{ minWidth: 760 }}>
+        <PendingArea pending={filtering}><div className="sx-table-wrap"><table className="sx-table" style={{ minWidth: 760 }}>
           <thead><tr><th>Nomi</th><th>{tab === "ready" ? "Brend" : "Guruh"}</th><th className="is-num">Prays narxi</th><th className="is-num">Sotuv (+{markup}%)</th><th>O‘zgargan</th><th className="is-num">Amal</th></tr></thead>
           <tbody>{visible.map(row => {
             const isEditing = editing?.id === row.id, isDeleting = deleting === row.id, changedToday = row.date?.slice(0, 10) === today();
@@ -176,7 +179,7 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
               <td className="is-num" style={{ fontWeight: 700, color: "#1E4E8C" }}>{formatUsd(row.sale)}</td>
               <td><span className="sx-muted" style={changedToday ? { color: "#1B6B43", fontWeight: 800 } : undefined}>{changedToday ? "bugun" : row.date ? formatShortDate(new Date(row.date)) : "—"}</span></td>
               <td><div className="sx-row-actions">
-                {isEditing && <><button type="button" className="sx-btn is-sm is-green" disabled={pending} onClick={() => saveEdit(row)}>Saqlash</button><button type="button" className="sx-btn is-sm is-icon" onClick={() => setEditing(null)} aria-label="Bekor qilish">×</button></>}
+                {isEditing && <><button type="button" className="sx-btn is-sm is-green" disabled={pending} onClick={() => saveEdit(row)}><BusyLabel busy={pending}>Saqlash</BusyLabel></button><button type="button" className="sx-btn is-sm is-icon" onClick={() => setEditing(null)} aria-label="Bekor qilish">×</button></>}
                 {isDeleting && <><button type="button" className="sx-btn is-sm is-red" disabled={pending} onClick={() => run(() => removeEntryAction({ entityType: row.entityType, id: row.id }), () => setDeleting(null))}>Ha, o‘chirish</button><button type="button" className="sx-btn is-sm is-icon" onClick={() => setDeleting(null)} aria-label="Bekor qilish">×</button></>}
                 {!isEditing && !isDeleting && <><button type="button" className="sx-btn is-sm is-outline" onClick={() => { setEditing({ id: row.id, draft: row.base === null ? "" : String(row.base) }); setDeleting(null); }}>O‘zgartirish</button><button type="button" className="sx-btn is-sm is-icon is-danger-ghost" onClick={() => { setDeleting(row.id); setEditing(null); }} aria-label={`${row.name} — o‘chirish`}><Trash2 size={15}/></button></>}
               </div></td>
@@ -184,7 +187,7 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
           })}</tbody>
         </table>
         {!visible.length && <p className="sx-muted" style={{ padding: 16, textAlign: "center" }}>{rows.length ? "Hech narsa topilmadi." : tab === "sex" ? "Sex zapchastlari hali kiritilmagan — “+ Zapchast qo‘shish” yoki Excel yuklash orqali qo‘shing." : "Mahsulotlar yo‘q."}</p>}
-        </div>
+        </div></PendingArea>
         <span className="sx-muted">“O‘zgartirish” — prays narxini tahrirlash · o‘chirishdan oldin tasdiq so‘raladi (mahsulot saytdan yashiriladi, o‘chib ketmaydi) · sotuv narxi ustama bo‘yicha o‘zi hisoblanadi</span>
       </div>
 

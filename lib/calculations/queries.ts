@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import type {
@@ -79,7 +80,8 @@ export async function getCalculations(search = ""): Promise<CalculationListItem[
     };
   });
 }
-export async function getCalculation(
+// cache(): generateMetadata and the page read the same calculation once per request.
+export const getCalculation = cache(async function getCalculation(
   id: string,
 ): Promise<CalculationDraft | null> {
   await requireAdmin();
@@ -185,7 +187,7 @@ export async function getCalculation(
     discountPercent: n(row.discountPercent),
     sellerName: row.createdBy.name,
   };
-}
+});
 export async function getProposalProductOptions(): Promise<
   ProductProposalOption[]
 > {

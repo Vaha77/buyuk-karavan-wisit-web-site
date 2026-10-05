@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createAgregatOrderAction, createZapchastOrderAction } from "@/app/admin/(sex)/sex/actions";
 import { formatSignedUsd, formatUsd } from "@/lib/prays/rules";
 import { ASSEMBLIES, quoteZborka, type Assembly, type ZborkaCatalog } from "@/lib/sex/zborka";
 import { orderNumber } from "@/lib/sex/rules";
 import { PartRows, PurposePicker } from "./orders-board";
+import { BusyLabel, LinkButton, PendingArea, startNavigationProgress } from "@/components/admin/feedback";
 
 type Option = { id: string; name: string };
 export type PartChoice = { id: string; label: string; basePriceUsd?: number | null };
@@ -40,15 +40,18 @@ function DateField({ label, value, onChange }: { label: React.ReactNode; value: 
 }
 
 export function NewOrder(props: Props) {
+  const router = useRouter();
+  // Switching Zborka ↔ Zapchast keeps the current form visible (dimmed) until the other one is ready.
+  const [switching, startSwitch] = useTransition();
   return <div className="sx">
     <div className="sx-head">
       <div><span className="sx-crumb">Sex / {props.type === "agregat" ? "Zborka buyurtmasi" : "Zapchast zayavkasi"}</span><h1>{props.type === "agregat" ? "Zborka buyurtmasi" : "Sexdan olish"}</h1><p className="sx-lead">{props.type === "agregat" ? "Prays bo‘yicha tanlang — buyurtma sex Telegram guruhiga avtomatik ketadi" : "Zayavka → Sex beradi → Krim qilinadi. Har qadamni bitta odam tasdiqlaydi."}</p></div>
       <div className="sx-actions">
-        <div className="sx-tabs" role="tablist" aria-label="Zakaz turi"><Link role="tab" className="sx-tab" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-selected={props.type === "agregat"} href="/admin/sex/new?type=agregat">Zborka (agregat)</Link><Link role="tab" className="sx-tab" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} aria-selected={props.type === "zapchast"} href="/admin/sex/new?type=zapchast">Zapchast</Link></div>
-        <Link className="sx-btn is-outline" href="/admin/sex">Zakazlar ro‘yxati →</Link>
+        <div className="sx-tabs" role="tablist" aria-label="Zakaz turi">{(["agregat", "zapchast"] as const).map(type => <button key={type} type="button" role="tab" className="sx-tab" aria-selected={props.type === type} disabled={switching} onClick={() => { if (type === props.type) return; startNavigationProgress(); startSwitch(() => router.push(`/admin/sex/new?type=${type}`)); }}>{type === "agregat" ? "Zborka (agregat)" : "Zapchast"}</button>)}</div>
+        <LinkButton className="sx-btn is-outline" href="/admin/sex">Zakazlar ro‘yxati →</LinkButton>
       </div>
     </div>
-    {props.type === "agregat" ? <AgregatForm {...props}/> : <ZapchastForm {...props}/>}
+    <PendingArea pending={switching}>{props.type === "agregat" ? <AgregatForm {...props}/> : <ZapchastForm {...props}/>}</PendingArea>
   </div>;
 }
 
@@ -134,7 +137,7 @@ function AgregatForm({ userName, catalog, customers }: Props) {
         {price !== null && quote?.ok && <PriceBlock base={Math.round(price * Math.max(qtyNumber, 1) * 100) / 100} delta={quote.changes.length ? (quote.base - quote.standard) * Math.max(qtyNumber, 1) : null}/>}
         {quote && !quote.ok && <p className="sx-note is-error">{quote.error}</p>}
         {result && <p className={`sx-note ${result.ok ? "is-ok" : "is-error"}`} role={result.ok ? "status" : "alert"}>{result.text}</p>}
-        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} disabled={pending || !ready} onClick={submit}>{pending ? "Yuborilmoqda…" : result?.ok ? "✓ Sex guruhiga yuborildi" : "Buyurtma berish"}</button>
+        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} disabled={pending || !ready} onClick={submit}><BusyLabel busy={pending}>{result?.ok ? "✓ Sex guruhiga yuborildi" : "Buyurtma berish"}</BusyLabel></button>
         {result?.ok && <button type="button" className="sx-btn" onClick={() => { setResult(null); setNote(""); }}>Yana buyurtma berish</button>}
       </div>
       <TelegramPreview head={`🔧 Yangi zakaz — ${userName}`} lines={[quote?.ok ? quote.title : `${group.brand} ${model.model}`, ...(quote?.ok ? quote.telegram.map(line => `• ${line}`) : []), `Soni: ${qtyNumber || 1}${dueDate ? ` · Muddat: ${dueDate.split("-").reverse().join(".")}` : ""}`, `Kimga: ${purpose === "CLIENT" ? `Mijoz — ${customer || "…"}` : "Magazinga (vitrina)"}`, ...(note ? [`Izoh: ${note}`] : [])]}/>
@@ -172,7 +175,7 @@ function ZapchastForm({ userName, parts, customers }: Props) {
         </div>
         {total > 0 && <PriceBlock base={total} delta={null}/>}
         {result && <p className={`sx-note ${result.ok ? "is-ok" : "is-error"}`} role={result.ok ? "status" : "alert"}>{result.text}</p>}
-        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} style={{ height: 50, fontSize: 15 }} disabled={pending || !ready} onClick={submit}>{pending ? "Yuborilmoqda…" : "Zayavka yuborish"}</button>
+        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} style={{ height: 50, fontSize: 15 }} disabled={pending || !ready} onClick={submit}><BusyLabel busy={pending}>Zayavka yuborish</BusyLabel></button>
       </div>
     </div>
     <div className="sx-side">

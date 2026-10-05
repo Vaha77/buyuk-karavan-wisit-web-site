@@ -1,2 +1,5 @@
-import { AdminLoadingShell } from "@/components/loading-shell";
-export default function Loading() { return <AdminLoadingShell/>; }
+import { ShellSkeleton } from "@/components/admin/skeletons";
+
+export default function Loading() {
+  return <ShellSkeleton/>;
+}

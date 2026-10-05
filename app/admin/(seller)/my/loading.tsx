@@ -1,5 +1,5 @@
-import { AdminLoadingShell } from "@/components/loading-shell";
+import { MySkeleton } from "@/components/admin/skeletons";
 
 export default function Loading() {
-  return <AdminLoadingShell />;
+  return <MySkeleton/>;
 }

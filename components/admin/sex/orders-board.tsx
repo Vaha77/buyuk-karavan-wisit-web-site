@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/admin/bklead/dialog";
 import { confirmNoRequestAction, createNoRequestAction, transitionOrderAction } from "@/app/admin/(sex)/sex/actions";
 import type { OrderRow } from "@/lib/sex/queries";
 import { ACTION_LABEL, STATUS_LABEL, STATUS_TONE, actionFor, type OrderAction } from "@/lib/sex/rules";
 import { formatUsd } from "@/lib/prays/rules";
-import { WorkingProgress } from "./working-progress";
+import { AcceptedBadge, WorkingStatus } from "./working-progress";
+import { BusyLabel, DownloadButton, LinkButton, PendingArea, startNavigationProgress } from "@/components/admin/feedback";
 
 type Option = { id: string; name: string };
 type PartOption = { id: string; label: string };
@@ -22,19 +22,27 @@ const WAIT_TEXT = { NEW: "Sex qabul qilishi kutilmoqda", ACCEPTED: "Sexda ishlan
 export function OrdersBoard({ role, userName, rows, month, months, parts, sellers, customers }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // Month change: the old table stays visible, dimmed, until the new month is rendered.
+  const [monthPending, startMonth] = useTransition();
+  // Which button was pressed ("<orderId>:<action>"), so only that one shows the spinner.
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [issuing, setIssuing] = useState<OrderRow | null>(null);
   const [noRequestOpen, setNoRequestOpen] = useState(false);
   const boss = role === "SUPER_ADMIN", workshop = role === "WORKSHOP", seller = role === "SELLER", staff = !workshop && !seller;
-  const run = (task: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) => startTransition(async () => {
-    setError("");
-    const result = await task();
-    if (!result.ok) { setError(result.error ?? "Xatolik."); return; }
-    after?.(); router.refresh();
-  });
+  const run = (task: () => Promise<{ ok: boolean; error?: string }>, after?: () => void, key: string | null = null) => {
+    setBusyKey(key);
+    startTransition(async () => {
+      setError("");
+      const result = await task();
+      if (!result.ok) { setError(result.error ?? "Xatolik."); return; }
+      after?.(); router.refresh();
+    });
+  };
+  const isBusy = (key: string) => pending && busyKey === key;
   const act = (row: OrderRow, action: OrderAction) => {
     if (action === "issue" && row.type === "ZAPCHAST") { setIssuing(row); return; }
-    run(() => transitionOrderAction({ id: row.id, action }));
+    run(() => transitionOrderAction({ id: row.id, action }), undefined, `${row.id}:${action}`);
   };
   const count = (status: OrderRow["status"]) => rows.filter(row => row.status === status).length;
   const stats = workshop
@@ -47,17 +55,17 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
     <div className="sx-head">
       <div><span className="sx-crumb">Sex / {workshop ? "Vazifalar" : "Zakazlar"}</span><h1>{title}</h1><p className="sx-lead">{subtitle}</p></div>
       <div className="sx-actions">
-        {!workshop && <><Link className="sx-btn is-outline" href="/admin/sex/new?type=agregat">+ Zborka buyurtmasi</Link><Link className="sx-btn is-outline" href="/admin/sex/new?type=zapchast">+ Zapchast zayavkasi</Link></>}
+        {!workshop && <><LinkButton className="sx-btn is-outline" href="/admin/sex/new?type=agregat">+ Zborka buyurtmasi</LinkButton><LinkButton className="sx-btn is-outline" href="/admin/sex/new?type=zapchast">+ Zapchast zayavkasi</LinkButton></>}
         {workshop && <button type="button" className="sx-btn is-warn" onClick={() => setNoRequestOpen(true)} disabled={!parts.length}>+ Zayavkasiz chiqim</button>}
-        {staff && <select className="sx-input" style={{ width: "auto", fontWeight: 700 }} value={month.key} onChange={event => router.push(`/admin/sex?month=${event.target.value}`)} aria-label="Oy">{months.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select>}
-        {boss && <a className="sx-btn is-primary" href={`/admin/sex/export?month=${month.key}`} download>Excel yuklab olish</a>}
+        {staff && <select className="sx-input" style={{ width: "auto", fontWeight: 700 }} value={month.key} disabled={monthPending} onChange={event => { const next = event.target.value; startNavigationProgress(); startMonth(() => router.push(`/admin/sex?month=${next}`)); }} aria-label="Oy">{months.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select>}
+        {boss && <DownloadButton className="sx-btn is-primary" href={`/admin/sex/export?month=${month.key}`} fallbackName={`sex-zakazlari-${month.key}.xlsx`}/>}
       </div>
     </div>
 
     {!seller && <div className="sx-stats">{stats.map(stat => <div key={stat.k} className={`sx-stat is-flat ${stat.tone}`}><span>{stat.k}</span><strong>{stat.v}</strong></div>)}</div>}
     {error && <p className="sx-note is-error" role="alert">{error}</p>}
 
-    <div className="sx-card">
+    <PendingArea pending={monthPending}><div className="sx-card">
       <div className="sx-table-wrap"><table className="sx-table" style={{ minWidth: 1180 }}>
         <thead><tr><th>№</th><th>Sana</th><th>Turi</th><th>Mahsulot</th><th>Zayavka beruvchi</th><th>Kimga</th><th>Jarayon</th><th>Holat</th><th>Amal</th></tr></thead>
         <tbody>{rows.map(row => {
@@ -70,19 +78,19 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
             <td><div style={{ display: "grid", gap: 2 }}><b style={{ fontWeight: 600 }}>{row.sellerName}</b><span className="sx-muted">{row.sellerAt}</span></div></td>
             <td style={{ fontWeight: 700, color: row.purpose === "SHOP" ? "#3E4A60" : "#1E4E8C" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</td>
             <td style={{ minWidth: 230 }}><div className="sx-steps">{row.steps.map(step => <span key={step.label} className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>)}</div></td>
-            <td><span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{STATUS_LABEL[row.status]}</span>{row.overdue && <div className="sx-muted" style={{ color: "#A41F15", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</td>
-            <td style={{ minWidth: 190 }}>
-              {action ? <button type="button" className={`sx-btn is-md ${action === "receive" ? "is-red" : "is-primary"}`} disabled={pending} onClick={() => act(row, action)}>{ACTION_LABEL[action]}</button>
-                : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id))}>Tasdiqlayman</button>
+            <td>{row.status === "ACCEPTED" ? <AcceptedBadge label={STATUS_LABEL.ACCEPTED} dueDate={row.dueDate}/> : <span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{STATUS_LABEL[row.status]}</span>}{row.overdue && <div className="sx-muted" style={{ color: "#A41F15", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</td>
+            <td style={{ minWidth: 210 }}>
+              {action ? <button type="button" className={`sx-btn is-md ${action === "receive" ? "is-red" : "is-primary"}`} disabled={pending} aria-busy={isBusy(`${row.id}:${action}`)} onClick={() => act(row, action)}><BusyLabel busy={isBusy(`${row.id}:${action}`)}>{ACTION_LABEL[action]}</BusyLabel></button>
+                : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id), undefined, `${row.id}:confirm`)}><BusyLabel busy={isBusy(`${row.id}:confirm`)}>Tasdiqlayman</BusyLabel></button>
                 : row.status !== "ACCEPTED" && <span className="sx-muted">{WAIT_TEXT[row.status]}</span>}
-              {row.status === "ACCEPTED" && row.acceptedAt && <WorkingProgress acceptedAt={row.acceptedAt} dueDate={row.dueDate}/>}
+              {row.status === "ACCEPTED" && row.acceptedAt && <WorkingStatus acceptedAt={row.acceptedAt} dueDate={row.dueDate}/>}
             </td>
           </tr>;
         })}</tbody>
       </table>
       {!rows.length && <p className="sx-muted" style={{ padding: 16, textAlign: "center" }}>{workshop ? "Hozircha vazifa yo‘q." : "Zakazlar yo‘q."}</p>}
       </div>
-    </div>
+    </div></PendingArea>
 
     {issuing && <Dialog title={`${issuing.number} · Chiqib ketdi`} onClose={() => setIssuing(null)} busy={pending}>
       <IssueForm row={issuing} busy={pending} onSubmit={issuedQty => run(() => transitionOrderAction({ id: issuing.id, action: "issue", issuedQty }), () => setIssuing(null))}/>
@@ -109,7 +117,7 @@ function IssueForm({ row, busy, onSubmit }: { row: OrderRow; busy: boolean; onSu
       <span style={{ fontWeight: 600 }}>{item.title}</span><span className="sx-muted">so‘raldi: {item.qty}</span>
       <label className="sx-muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>berildi<input className="sx-input" style={{ width: 56, height: 34 }} value={values[item.id]} onChange={event => setValues({ ...values, [item.id]: event.target.value })} inputMode="numeric" aria-label={`${item.title} — berilgan soni`}/></label>
     </div>)}
-    <button type="submit" className="sx-btn is-primary" disabled={busy || !valid} style={{ height: 48, borderRadius: 12 }}>Berib yubordim</button>
+    <button type="submit" className="sx-btn is-primary" disabled={busy || !valid} style={{ height: 48, borderRadius: 12 }}><BusyLabel busy={busy}>Berib yubordim</BusyLabel></button>
   </form>;
 }
 
@@ -123,7 +131,7 @@ function NoRequestForm({ parts, sellers, customers, busy, onSubmit }: { parts: P
     <PartRows parts={parts} items={items} setItems={setItems}/>
     <PurposePicker purpose={purpose} setPurpose={setPurpose} customer={customer} setCustomer={setCustomer} customers={customers}/>
     <label className="sx-field">Izoh<input value={note} onChange={event => setNote(event.target.value)} maxLength={500}/></label>
-    <button type="submit" className="sx-btn is-primary" disabled={busy || !ready} style={{ height: 48, borderRadius: 12 }}>Chiqimni yozish</button>
+    <button type="submit" className="sx-btn is-primary" disabled={busy || !ready} style={{ height: 48, borderRadius: 12 }}><BusyLabel busy={busy}>Chiqimni yozish</BusyLabel></button>
   </form>;
 }
 

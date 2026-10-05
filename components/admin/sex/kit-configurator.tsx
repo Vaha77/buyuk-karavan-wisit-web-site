@@ -6,6 +6,7 @@ import { saveKitAction } from "@/app/admin/(protected)/calculations/configurator
 import { formatSignedUsd, formatUsd, sellPrice } from "@/lib/prays/rules";
 import { KIT_MARKUP_MAX, kitClientPrice, type KitSelection, type KitSlot } from "@/lib/sex/configurator";
 import type { KitView } from "@/lib/sex/kit-service";
+import { BusyLabel } from "@/components/admin/feedback";
 
 type Option = { id: string; name: string };
 const SLOTS: Array<{ key: KitSlot; short: string; title: string }> = [
@@ -29,6 +30,7 @@ export function KitConfigurator({ templates, showMargin, usdToUzs, customers, le
   const [saved, setSaved] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
+  const [action, setAction] = useState<"save" | "pdf">("save");
 
   const chosen = useMemo(() => template && selection ? SLOTS.map(slot => ({ slot, option: template.options[slot.key].find(option => option.key === selection[slot.key]) ?? template.options[slot.key][0], standard: template.options[slot.key][0] })) : [], [template, selection]);
   const extrasTotal = extras.reduce((sum, extra) => sum + amount(extra.price), 0);
@@ -68,8 +70,8 @@ export function KitConfigurator({ templates, showMargin, usdToUzs, customers, le
             {customers.length > 0 && <optgroup label="Doimiy mijozlar">{customers.map(item => <option key={item.id} value={`customer:${item.id}`}>{item.name}</option>)}</optgroup>}
             {leads.length > 0 && <optgroup label="Lidlar">{leads.map(item => <option key={item.id} value={`lead:${item.id}`}>{item.name}</option>)}</optgroup>}
           </select></label>
-        <button type="button" className="sx-btn is-outline" disabled={pending} onClick={() => save(false)}>{saved ? "✓ Saqlangan" : "Saqlash"}</button>
-        <button type="button" className="sx-btn is-primary" disabled={pending} onClick={() => save(true)}>Tijorat taklifi PDF</button>
+        <button type="button" className="sx-btn is-outline" disabled={pending} onClick={() => { setAction("save"); save(false); }}><BusyLabel busy={pending && action === "save"}>{saved ? "✓ Saqlangan" : "Saqlash"}</BusyLabel></button>
+        <button type="button" className="sx-btn is-primary" disabled={pending} onClick={() => { setAction("pdf"); save(true); }}><BusyLabel busy={pending && action === "pdf"} busyText="Tayyorlanmoqda…">Tijorat taklifi PDF</BusyLabel></button>
       </div>
     </div>
     {customer === "new" && <div className="sx-card" style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, padding: 14 }}>

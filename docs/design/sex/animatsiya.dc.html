@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<title>Sexda ishlanmoqda — animatsiya variantlari</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F6FA}
+@keyframes bkPulse{0%{box-shadow:0 0 0 0 rgba(242,194,48,.75)}70%{box-shadow:0 0 0 9px rgba(242,194,48,0)}100%{box-shadow:0 0 0 0 rgba(242,194,48,0)}}
+@keyframes bkSpin{to{transform:rotate(360deg)}}
+@keyframes bkDot{0%,80%,100%{opacity:.2;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+@keyframes bkSlide{0%{left:-40%}100%{left:100%}}
+@keyframes bkWrench{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(18deg)}}
+@keyframes bkFill{0%{width:8%}50%{width:72%}100%{width:8%}}
+.bk-pulse{animation:bkPulse 1.6s ease-out infinite}
+.bk-spin{animation:bkSpin 2.4s linear infinite;transform-origin:50% 50%}
+.bk-d1{animation:bkDot 1.2s infinite}.bk-d2{animation:bkDot 1.2s .2s infinite}.bk-d3{animation:bkDot 1.2s .4s infinite}
+.bk-slide{animation:bkSlide 1.4s ease-in-out infinite}
+.bk-wrench{animation:bkWrench .9s ease-in-out infinite;transform-origin:30% 70%}
+.bk-fill{animation:bkFill 2.2s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.bk-pulse,.bk-spin,.bk-d1,.bk-d2,.bk-d3,.bk-slide,.bk-wrench,.bk-fill{animation:none}}
+</style>
+</helmet>
+<div style="width: 1120px; box-sizing: border-box; padding: 32px; font-family: Manrope, system-ui, sans-serif; color: #14213D; background: #F4F6FA; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 800">“Sexda ishlanmoqda” — animatsiya variantlari</h1>
+<p style="margin: 0; font-size: 14px; color: #4F5A70">Amal ustunida, holat “Qabul qilindi” bo‘lganda. Telefon “harakatni kamaytirish” rejimida animatsiya o‘chadi.</p>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; overflow: hidden">
+<div style="display: grid; grid-template-columns: 60px minmax(0, 1fr) 160px 260px; gap: 16px; padding: 12px 20px; font-size: 12px; font-weight: 800; color: #4F5A70; letter-spacing: 0.05em; border-bottom: 1px solid #E3E7EF">
+<span>VARIANT</span><span>QANDAY</span><span>HOLAT</span><span>AMAL</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 60px minmax(0, 1fr) 160px 260px; gap: 16px; align-items: center; padding: 18px 20px; border-bottom: 1px solid #EEF1F6">
+<b style="font-size: 20px; color: #1E4E8C">A</b>
+<div style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 15px">Pulsatsiya nuqta</b><span style="font-size: 13px; color: #4F5A70">Eng sokin, ko‘zni charchatmaydi · “jonli” holat belgisi</span></div>
+<span style="justify-self: start; padding: 4px 12px; border-radius: 99px; background: #FFF1C2; color: #6E5200; font-size: 12px; font-weight: 800">Qabul qilindi</span>
+<span style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #3E4A60; font-weight: 600"><span class="bk-pulse" style="width: 10px; height: 10px; border-radius: 99px; background: #F2C230; flex-shrink: 0"></span>Sexda ishlanmoqda</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 60px minmax(0, 1fr) 160px 260px; gap: 16px; align-items: center; padding: 18px 20px; border-bottom: 1px solid #EEF1F6">
+<b style="font-size: 20px; color: #1E4E8C">B</b>
+<div style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 15px">Aylanuvchi shesterna</b><span style="font-size: 13px; color: #4F5A70">“Mexanizm ishlayapti” ma’nosi · sex/zborka mavzusiga mos</span></div>
+<span style="justify-self: start; padding: 4px 12px; border-radius: 99px; background: #FFF1C2; color: #6E5200; font-size: 12px; font-weight: 800">Qabul qilindi</span>
+<span style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #3E4A60; font-weight: 600">
+<svg class="bk-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B8860B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg>
+Sexda ishlanmoqda</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 60px minmax(0, 1fr) 160px 260px; gap: 16px; align-items: center; padding: 18px 20px; border-bottom: 1px solid #EEF1F6">
+<b style="font-size: 20px; color: #1E4E8C">C</b>
+<div style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 15px">Yuguruvchi uch nuqta</b><span style="font-size: 13px; color: #4F5A70">“Davom etmoqda…” · Telegram “yozmoqda” uslubi</span></div>
+<span style="justify-self: start; padding: 4px 12px; border-radius: 99px; background: #FFF1C2; color: #6E5200; font-size: 12px; font-weight: 800">Qabul qilindi</span>
+<span style="display: flex; align-items: center; gap: 4px; font-size: 14px; color: #3E4A60; font-weight: 600">Sexda ishlanmoqda<span class="bk-d1" style="width: 5px; height: 5px; border-radius: 99px; background: #6E5200; margin-left: 4px"></span><span class="bk-d2" style="width: 5px; height: 5px; border-radius: 99px; background: #6E5200"></span><span class="bk-d3" style="width: 5px; height: 5px; border-radius: 99px; background: #6E5200"></span></span>
+</div>
+
+<div style="display: grid; grid-template-columns: 60px minmax(0, 1fr) 160px 260px; gap: 16px; align-items: center; padding: 18px 20px; border-bottom: 1px solid #EEF1F6">
+<b style="font-size: 20px; color: #1E4E8C">D</b>
+<div style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 15px">Progress chiziq</b><span style="font-size: 13px; color: #4F5A70">Ish ketayotgani aniq ko‘rinadi · yuklanish chizig‘i</span></div>
+<span style="justify-self: start; padding: 4px 12px; border-radius: 99px; background: #FFF1C2; color: #6E5200; font-size: 12px; font-weight: 800">Qabul qilindi</span>
+<span style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: #3E4A60; font-weight: 600">Sexda ishlanmoqda
+<span style="position: relative; display: block; width: 180px; height: 6px; border-radius: 99px; background: #FFF1C2; overflow: hidden"><span class="bk-slide" style="position: absolute; top: 0; left: 0; width: 40%; height: 100%; border-radius: 99px; background: #F2C230"></span></span>
+</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 60px minmax(0, 1fr) 160px 260px; gap: 16px; align-items: center; padding: 18px 20px; border-bottom: 1px solid #EEF1F6">
+<b style="font-size: 20px; color: #1E4E8C">E</b>
+<div style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 15px">Ishlayotgan kalit</b><span style="font-size: 13px; color: #4F5A70">Gayka kaliti qimirlaydi · “usta ishlayapti” · eng o‘ynoqi</span></div>
+<span style="justify-self: start; padding: 4px 12px; border-radius: 99px; background: #FFF1C2; color: #6E5200; font-size: 12px; font-weight: 800">Qabul qilindi</span>
+<span style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #3E4A60; font-weight: 600">
+<svg class="bk-wrench" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B8860B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"></path></svg>
+Sexda ishlanmoqda</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 60px minmax(0, 1fr) 160px 260px; gap: 16px; align-items: center; padding: 18px 20px">
+<b style="font-size: 20px; color: #1E4E8C">F</b>
+<div style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 15px">Badge ichida to‘lish + vaqt</b><span style="font-size: 13px; color: #4F5A70">Holat badge’i ichida to‘lqin · qancha vaqtdan beri ishlanayotgani</span></div>
+<span style="justify-self: start; position: relative; overflow: hidden; padding: 4px 12px; border-radius: 99px; background: #FFF1C2; color: #6E5200; font-size: 12px; font-weight: 800"><span class="bk-fill" style="position: absolute; top: 0; left: 0; height: 100%; background: rgba(242,194,48,0.45)"></span><span style="position: relative">Qabul qilindi</span></span>
+<span style="display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: #3E4A60; font-weight: 600">Sexda ishlanmoqda<span style="font-size: 12px; color: #6E5200; font-weight: 700">2 soat 15 daqiqadan beri</span></span>
+</div>
+</div>
+
+<div style="background: #FFFFFF; border: 2px solid #1E4E8C; border-radius: 16px; overflow: hidden">
+<div style="padding: 12px 20px; background: #EAF1FB; font-size: 13px; font-weight: 800; color: #1E4E8C; letter-spacing: 0.04em">TANLANGAN: E + F</div>
+<div style="display: grid; grid-template-columns: 60px minmax(0, 1fr) 160px 260px; gap: 16px; align-items: center; padding: 18px 20px; border-bottom: 1px solid #EEF1F6">
+<b style="font-size: 20px; color: #1E4E8C">E+F</b>
+<div style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 15px">Badge to‘lqini + kalit + vaqt</b><span style="font-size: 13px; color: #4F5A70">Oddiy holat</span></div>
+<span style="justify-self: start; position: relative; overflow: hidden; padding: 4px 12px; border-radius: 99px; background: #FFF1C2; color: #6E5200; font-size: 12px; font-weight: 800"><span class="bk-fill" style="position: absolute; top: 0; left: 0; height: 100%; background: rgba(242,194,48,0.45)"></span><span style="position: relative">Qabul qilindi</span></span>
+<span style="display: flex; align-items: center; gap: 10px">
+<svg class="bk-wrench" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B8860B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"></path></svg>
+<span style="display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: #3E4A60; font-weight: 600">Sexda ishlanmoqda<span style="font-size: 12px; color: #6E5200; font-weight: 700">2 soat 15 daqiqadan beri</span></span>
+</span>
+</div>
+<div style="display: grid; grid-template-columns: 60px minmax(0, 1fr) 160px 260px; gap: 16px; align-items: center; padding: 18px 20px">
+<b style="font-size: 20px; color: #A41F15">E+F</b>
+<div style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 15px">Muddat o‘tganda</b><span style="font-size: 13px; color: #4F5A70">Hammasi qizilga o‘tadi</span></div>
+<span style="justify-self: start; position: relative; overflow: hidden; padding: 4px 12px; border-radius: 99px; background: #FDE1DE; color: #A41F15; font-size: 12px; font-weight: 800"><span class="bk-fill" style="position: absolute; top: 0; left: 0; height: 100%; background: rgba(210,55,43,0.25)"></span><span style="position: relative">Qabul qilindi</span></span>
+<span style="display: flex; align-items: center; gap: 10px">
+<svg class="bk-wrench" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D2372B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"></path></svg>
+<span style="display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: #A41F15; font-weight: 700">Sexda ishlanmoqda<span style="font-size: 12px; font-weight: 700">1 kun 3 soatdan beri · muddat o‘tdi</span></span>
+</span>
+</div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px">
+<b style="font-size: 15px">Qo‘shimcha: kechikayotganini bildirish</b>
+<span style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #A41F15; font-weight: 700"><span class="bk-pulse" style="width: 10px; height: 10px; border-radius: 99px; background: #D2372B; flex-shrink: 0"></span>Sexda ishlanmoqda · muddatdan 1 kun o‘tdi</span>
+<span style="font-size: 13px; color: #4F5A70">Muddat o‘tsa, istalgan variant sariqdan qizilga o‘tadi.</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1120,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

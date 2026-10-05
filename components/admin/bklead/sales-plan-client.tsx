@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { saveSalesMonthlyAction } from "@/app/admin/(protected)/sales-plan/actions";
 import { formatUsd, MONTHS_LONG } from "@/lib/dashboard/format";
 import { Dialog } from "./dialog";
+import { startNavigationProgress } from "@/components/admin/feedback";
 
 type Period = { id: string; name: string };
 type Month = { year: number; month: number };
@@ -15,7 +16,7 @@ const key = ({ year, month }: Month) => `${year}-${String(month).padStart(2, "0"
 export function PeriodSelect({ periods, value, basePath }: { periods: Period[]; value: string; basePath: string }) {
   const router = useRouter();
   return <><label className="bk-sr-only" htmlFor="sp-period">Davr</label>
-    <select id="sp-period" className="bk-btn" value={value} onChange={event => router.push(`${basePath}?period=${encodeURIComponent(event.target.value)}`)}>
+    <select id="sp-period" className="bk-btn" value={value} onChange={event => { startNavigationProgress(); router.push(`${basePath}?period=${encodeURIComponent(event.target.value)}`); }}>
       {periods.map(period => <option key={period.id} value={period.id}>{period.name}</option>)}
     </select></>;
 }
