@@ -188,6 +188,7 @@ model Product {
   updatedAt            DateTime              @updatedAt
   asset360             Product360Asset?
   calculationLineItems CalculationLineItem[]
+  workshopItems        WorkshopOrderItem[]
 
   @@index([isVisible, order])
   @@index([isVisible, categoryId])
@@ -432,6 +433,11 @@ model AdminUser {
   purchasesCreated     CustomerPurchase[]           @relation("PurchaseCreator")
   purchasesReviewed    CustomerPurchase[]           @relation("PurchaseReviewer")
   priceChanges         PriceChange[]
+  workshopOrdersSold     WorkshopOrder[]            @relation("WorkshopOrderSeller")
+  workshopOrdersCreated  WorkshopOrder[]            @relation("WorkshopOrderCreator")
+  workshopOrdersAccepted WorkshopOrder[]            @relation("WorkshopOrderAcceptor")
+  workshopOrdersIssued   WorkshopOrder[]            @relation("WorkshopOrderIssuer")
+  workshopOrdersReceived WorkshopOrder[]            @relation("WorkshopOrderReceiver")
 
   @@index([approvalStatus, isActive])
 }
@@ -838,6 +844,7 @@ model RegularCustomer {
   sales            RegularCustomerMonthlySale[]
   contacts         CustomerContact[]
   purchases        CustomerPurchase[]
+  workshopOrders   WorkshopOrder[]
 
   @@index([isActive])
   @@index([ownerId, isActive])
@@ -1026,6 +1033,7 @@ model SexPart {
   priceListDate DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  workshopItems WorkshopOrderItem[]
 
   @@index([active, group])
 }
@@ -1048,4 +1056,96 @@ model PriceChange {
   @@index([createdAt])
   @@index([entityType, entityId])
   @@index([batchId])
+}
+
+// ---- Sex zakazlari: zborka (AGREGAT) and spare-part (ZAPCHAST) orders to the workshop -----------------
+enum WorkshopOrderType {
+  AGREGAT
+  ZAPCHAST
+}
+
+enum WorkshopOrderPurpose {
+  // "Magazinga (vitrina)"
+  SHOP
+  // "Mijozga"
+  CLIENT
+}
+
+enum WorkshopOrderStatus {
+  NEW
+  ACCEPTED
+  ISSUED
+  RECEIVED
+}
+
+enum WorkshopItemKind {
+  PRODUCT
+  PART
+}
+
+model WorkshopOrder {
+  id                String               @id @default(cuid())
+  // Shown as #0001.
+  number            Int                  @unique @default(autoincrement())
+  type              WorkshopOrderType
+  purpose           WorkshopOrderPurpose
+  customerName      String?
+  customerId        String?
+  qty               Int                  @default(1)
+  dueDate           DateTime?            @db.Date
+  note              String?
+  sellerId          String
+  createdById       String
+  // "Zayavkasiz chiqim": written by the workshop after handing goods out; the seller confirms it.
+  noRequest         Boolean              @default(false)
+  sellerConfirmedAt DateTime?
+  status            WorkshopOrderStatus  @default(NEW)
+  acceptedById      String?
+  acceptedAt        DateTime?
+  issuedById        String?
+  issuedAt          DateTime?
+  receivedById      String?
+  receivedAt        DateTime?
+  // Prices at order time (base, markup, sale); later price-list changes never touch it.
+  priceSnapshot     Json?
+  telegramChatId    String?              @db.VarChar(32)
+  telegramMessageId Int?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  customer          RegularCustomer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  seller            AdminUser            @relation("WorkshopOrderSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  createdBy         AdminUser            @relation("WorkshopOrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  acceptedBy        AdminUser?           @relation("WorkshopOrderAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
+  issuedBy          AdminUser?           @relation("WorkshopOrderIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+  receivedBy        AdminUser?           @relation("WorkshopOrderReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
+  items             WorkshopOrderItem[]
+
+  @@index([status, createdAt])
+  @@index([sellerId, createdAt])
+  @@index([createdAt])
+}
+
+model WorkshopOrderItem {
+  id                  String           @id @default(cuid())
+  orderId             String
+  kind                WorkshopItemKind
+  productId           String?
+  partId              String?
+  title               String
+  // Chosen receiver L, water condenser HP, FN block and their standards.
+  options             Json?
+  qty                 Int
+  // Corrected by the workshop on "Chiqib ketdi"; null = as requested.
+  issuedQty           Int?
+  // Price-list (base) price per unit at order time.
+  baseUsd             Decimal?         @db.Decimal(18, 2)
+  changedFromStandard Boolean          @default(false)
+  order               Int              @default(0)
+  workshopOrder       WorkshopOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product             Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  part                SexPart?         @relation(fields: [partId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([partId])
 }
