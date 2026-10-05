@@ -1,5 +1,5 @@
 // Rules for approving a PENDING self-registration on /admin/users. Pure, so the tests can run them without a database.
-export const APPROVAL_ROLES = ["SELLER", "MANAGER", "ADMIN"] as const;
+export const APPROVAL_ROLES = ["SELLER", "WORKSHOP", "MANAGER", "ADMIN"] as const;
 export type ApprovalRole = (typeof APPROVAL_ROLES)[number];
 /** Most registrations come from sellers. SUPER_ADMIN is never granted from the approval list. */
 export const DEFAULT_APPROVAL_ROLE: ApprovalRole = "SELLER";

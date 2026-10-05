@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { forbidden, redirect } from "next/navigation";
 import type { AdminRole } from "@/generated/prisma/client";
 import { getAdminSession } from "./session";
-import { SELLER_HOME } from "./seller-access";
+import { homeFor, isLimitedRole } from "./seller-access";
 
 async function requireSession() {
   const session = await getAdminSession();
@@ -11,16 +11,16 @@ async function requireSession() {
   return session.user;
 }
 
-/** A SELLER outside their section: a page render goes to /admin/my, a server action (Next-Action header) gets 403. */
-async function rejectSeller(): Promise<never> {
+/** A SELLER / WORKSHOP user outside their section: a page render goes to their home, a server action (Next-Action header) gets 403. */
+async function rejectLimited(role: AdminRole): Promise<never> {
   if ((await headers()).has("next-action")) forbidden();
-  redirect(SELLER_HOME);
+  redirect(homeFor(role));
 }
 
-/** Staff of the admin panel (SUPER_ADMIN, ADMIN, MANAGER). A SELLER is sent to /admin/my (pages) or gets 403 (actions). */
+/** Staff of the admin panel (SUPER_ADMIN, ADMIN, MANAGER). SELLER / WORKSHOP are sent to their home (pages) or get 403 (actions). */
 export async function requireAdmin() {
   const user = await requireSession();
-  if (user.role === "SELLER") await rejectSeller();
+  if (isLimitedRole(user.role)) await rejectLimited(user.role);
   return user;
 }
 
@@ -30,7 +30,7 @@ export function hasRole(role: AdminRole, allowed: readonly AdminRole[]): boolean
 
 export async function requireRole(...roles: AdminRole[]) {
   const user = await requireSession();
-  if (user.role === "SELLER" && !roles.includes("SELLER")) await rejectSeller();
+  if (isLimitedRole(user.role) && !roles.includes(user.role)) await rejectLimited(user.role);
   if (!hasRole(user.role, roles)) redirect("/admin");
   return user;
 }
@@ -38,6 +38,11 @@ export async function requireRole(...roles: AdminRole[]) {
 /** Seller pages and actions: only a SELLER; `salesPersonId` is the only scope their queries may use. */
 export async function requireSeller() {
   const user = await requireSession();
-  if (user.role !== "SELLER") redirect("/admin");
+  if (user.role !== "SELLER") redirect(homeFor(user.role));
   return { user, salesPersonId: user.salesPersonId };
+}
+
+/** Sex zakazlari pages and actions: staff, SELLER and WORKSHOP. What each may see or press is decided per order (lib/sex/rules.ts). */
+export async function requireSexUser() {
+  return requireSession();
 }

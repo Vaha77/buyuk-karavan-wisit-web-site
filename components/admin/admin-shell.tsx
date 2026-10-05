@@ -4,10 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeCheck, Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PhoneCall, Search, Settings, ShoppingBag, Tags, Target, UserCheck, Users, X } from "lucide-react";
+import { BadgeCheck, Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PhoneCall, PlusCircle, Search, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wrench, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
+import { homeFor } from "@/lib/auth/seller-access";
 
-type NavItem = { label: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; adminOnly?: boolean; badge?: "leads" | "new" | "purchases" | "due"; soon?: boolean };
+type NavItem = { label: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; adminOnly?: boolean; badge?: "leads" | "new" | "purchases" | "due" | "sex"; soon?: boolean };
 // Grouped as in the BKLead design; items without a page yet are shown disabled with "Tez orada".
 const navigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "ASOSIY", items: [
@@ -25,6 +26,7 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Mijoz so‘rovlari", href: "/admin/leads", icon: MessageSquare, badge: "leads" },
     { label: "Referal linklar", href: "/admin/links", icon: Link2, badge: "new" },
     { label: "Buyurtmalar", href: "#", icon: ShoppingBag, soon: true },
+    { label: "Sex zakazlari", href: "/admin/sex", icon: Wrench, badge: "sex" },
     { label: "Sotuvchilar", href: "/admin/sales-agents", icon: UserCheck },
     { label: "Sotuv rejasi", href: "/admin/sales-plan", icon: Target, adminOnly: true },
     { label: "Sotuvlar", href: "/admin/sales", icon: ShoppingBag },
@@ -46,6 +48,8 @@ const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path
   { match: path => path.startsWith("/admin/customers/purchases"), title: "Tasdiqlash kerak", subtitle: "Sotuvchilar kiritgan xaridlarni tasdiqlash yoki rad etish" },
   { match: path => path.startsWith("/admin/customers/control"), title: "Nazorat", subtitle: "Sotuvchilar bo‘yicha muddati o‘tgan qo‘ng‘iroqlar" },
   { match: path => path === "/admin/my", title: "Mening mijozlarim", subtitle: "Sizga biriktirilgan doimiy mijozlar" },
+  { match: path => path.startsWith("/admin/sex/new"), title: "Sex / Yangi zakaz", subtitle: "Zborka buyurtmasi yoki zapchast zayavkasi" },
+  { match: path => path.startsWith("/admin/sex"), title: "Sex zakazlari", subtitle: "Zayavka → Qabul → Chiqib ketdi → Krimga olindi" },
   { match: path => path.startsWith("/admin/my/today"), title: "Bugun qo‘ng‘iroq", subtitle: "Qo‘ng‘iroq qilish vaqti kelgan mijozlar" },
   { match: path => path.startsWith("/admin/my/purchase"), title: "Xarid kiritish", subtitle: "Xarid admin tasdiqlagach hisobga olinadi" },
   { match: path => path.startsWith("/admin/my/"), title: "Mijoz", subtitle: "Qo‘ng‘iroqlar va xaridlar" },
@@ -83,22 +87,33 @@ const sellerNavigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Bugun qo‘ng‘iroq", href: "/admin/my/today", icon: PhoneCall, badge: "due" },
     { label: "Xarid kiritish", href: "/admin/my/purchase", icon: ShoppingBag },
   ] },
+  { group: "SEX", items: [
+    { label: "Mening zakazlarim", href: "/admin/sex", icon: Wrench },
+    { label: "Yangi zakaz", href: "/admin/sex/new", icon: PlusCircle },
+  ] },
 ];
 
-const roleLabels = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer", SELLER: "Sotuvchi" };
+// WORKSHOP (Sex mas'uli) only works with workshop orders.
+const workshopNavigation: Array<{ group: string; items: NavItem[] }> = [
+  { group: "SEX", items: [
+    { label: "Mening vazifalarim", href: "/admin/sex", icon: Wrench, badge: "sex" },
+  ] },
+];
+
+const roleLabels = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer", SELLER: "Sotuvchi", WORKSHOP: "Sex mas‘uli" };
 
 function NavigationPending() {
   const { pending } = useLinkStatus();
   return <span className={`admin-nav-pending ${pending ? "is-pending" : ""}`} aria-hidden />;
 }
 
-export function AdminShell({ children, user, newLeads = 0, linksBadge = false, pendingPurchases = 0, dueToday = 0 }: { children: React.ReactNode; user: { name: string; role: keyof typeof roleLabels }; newLeads?: number; linksBadge?: boolean; pendingPurchases?: number; dueToday?: number }) {
+export function AdminShell({ children, user, newLeads = 0, linksBadge = false, pendingPurchases = 0, dueToday = 0, sexBadge = 0 }: { children: React.ReactNode; user: { name: string; role: keyof typeof roleLabels }; newLeads?: number; linksBadge?: boolean; pendingPurchases?: number; dueToday?: number; sexBadge?: number }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const section = sectionOf(pathname);
   const homeContentRoute = pathname.startsWith("/admin/content/home");
-  const groups = user.role === "SELLER" ? sellerNavigation : navigation;
-  const home = user.role === "SELLER" ? "/admin/my" : "/admin";
+  const groups = user.role === "SELLER" ? sellerNavigation : user.role === "WORKSHOP" ? workshopNavigation : navigation;
+  const home = homeFor(user.role);
   const isAdmin = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
   const visible = (item: NavItem) => (!item.superOnly || user.role === "SUPER_ADMIN") && (!item.adminOnly || isAdmin);
   // The most specific matching item is active, so /admin/customers/purchases does not also light up "Doimiy mijozlar".
@@ -107,11 +122,11 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
     <button className={`admin-drawer-backdrop ${open ? "is-open" : ""}`} aria-label="Menyuni yopish" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}/>
     <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
       <div className="admin-sidebar-brand"><Link href={home} className="admin-brand-link" onClick={() => setOpen(false)}><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong></Link><button className="admin-sidebar-close" onClick={() => setOpen(false)} aria-label="Menyuni yopish"><X size={18}/></button><span className="admin-sidebar-collapse"><ChevronLeft size={15}/></span></div>
-      <span className="admin-sidebar-label">{user.role === "SELLER" ? "SOTUVCHI" : "ADMIN"}</span>
+      <span className="admin-sidebar-label">{user.role === "SELLER" ? "SOTUVCHI" : user.role === "WORKSHOP" ? "SEX" : "ADMIN"}</span>
       <nav aria-label="Admin navigatsiya">{groups.map(section => <div className="admin-nav-group" key={section.group}><span className="admin-nav-group-label">{section.group}</span>{section.items.filter(visible).map(item => {
         const Icon = item.icon;
         const active = item.href === activeHref;
-        const count = item.badge === "leads" ? newLeads : item.badge === "purchases" ? pendingPurchases : item.badge === "due" ? dueToday : 0;
+        const count = item.badge === "leads" ? newLeads : item.badge === "purchases" ? pendingPurchases : item.badge === "due" ? dueToday : item.badge === "sex" ? sexBadge : 0;
         const badge = count > 0 ? <span className="admin-nav-badge is-count">{count}</span> : item.badge === "new" && linksBadge ? <span className="admin-nav-badge">YANGI</span> : null;
         return <div key={item.label}>{item.soon ? <span className="admin-nav-item is-disabled" aria-disabled="true"><Icon size={17}/>{item.label}<span className="admin-nav-badge is-soon">Tez orada</span></span> : <Link className={`admin-nav-item ${active ? "is-active" : ""}`} href={item.href} onClick={() => setOpen(false)}><Icon size={17}/>{item.label}{badge}<NavigationPending/></Link>}{item.label === "Kontent" && <Link className={`admin-nav-child ${homeContentRoute ? "is-active" : ""}`} href="/admin/content/home" onClick={() => setOpen(false)}><Home size={14}/>Home Page<NavigationPending/></Link>}</div>;
       })}</div>)}</nav>

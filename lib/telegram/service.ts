@@ -35,6 +35,13 @@ export async function publishLeadToTelegram(leadId:string){
   }catch(error){await getDb().lead.updateMany({where:{id:leadId,telegramNotificationStatus:"PUBLISHING"},data:{telegramNotificationStatus:"FAILED",telegramPublishFailedAt:new Date()}}).catch(()=>undefined);safeError("Telegram lead publish failed",error);return false;}
 }
 
+/** /myid in a private chat: the Telegram id a WORKSHOP user enters on the users page. */
+async function reportUserId(message:TelegramMessage){
+  const command=message.text?.trim().split(/\s+/,1)[0]?.toLowerCase();
+  if(!command?.match(/^\/myid(?:@[a-z0-9_]+)?$/)||message.chat.type!=="private"||!message.from)return false;
+  await sendMessage(String(message.chat.id),`Sizning Telegram ID: ${message.from.id}\nUni admin panelda “Foydalanuvchilar” sahifasiga kiriting.`);
+  return true;
+}
 async function registerAgent(message:TelegramMessage){
   if(message.chat.type!=="private"||!message.from||message.from.is_bot||!message.text?.trim().startsWith("/start"))return false;
   const user=message.from,agent=await getDb().salesAgent.upsert({where:{telegramUserId:BigInt(user.id)},create:{telegramUserId:BigInt(user.id),telegramUsername:user.username||null,firstName:user.first_name,lastName:user.last_name||null},update:{telegramUsername:user.username||null,firstName:user.first_name,lastName:user.last_name||null}});
@@ -70,4 +77,4 @@ async function claimLead(callback:TelegramCallbackQuery,metrics?:WebhookPerforma
   await Promise.all([groupUpdate,privateMessage]);
   return true;
 }
-export async function handleTelegramUpdate(update:TelegramUpdate,metrics?:WebhookPerformance){if(update.message){if(await reportChatIdentity(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await claimLead(update.callback_query,metrics))return;await handleCrmCallback(update.callback_query);}}
+export async function handleTelegramUpdate(update:TelegramUpdate,metrics?:WebhookPerformance){if(update.message){if(await reportChatIdentity(update.message))return;if(await reportUserId(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await claimLead(update.callback_query,metrics))return;await handleCrmCallback(update.callback_query);}}

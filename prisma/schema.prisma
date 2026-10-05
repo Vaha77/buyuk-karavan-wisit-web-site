@@ -111,6 +111,8 @@ enum AdminRole {
   ADMIN
   MANAGER
   SELLER
+  // Sex mas'uli: only /admin/sex (accepts and issues workshop orders).
+  WORKSHOP
 }
 
 enum AdminApprovalStatus {
@@ -408,6 +410,8 @@ model AdminUser {
   role                 AdminRole                    @default(MANAGER)
   isActive             Boolean                      @default(true)
   approvalStatus       AdminApprovalStatus          @default(APPROVED)
+  // Telegram user id (= private chat id); WORKSHOP users press the workshop group buttons with it.
+  telegramChatId       String?                      @unique @db.VarChar(32)
   createdAt            DateTime                     @default(now())
   updatedAt            DateTime                     @updatedAt
   sessions             AdminSession[]

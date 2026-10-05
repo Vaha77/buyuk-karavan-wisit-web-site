@@ -225,19 +225,36 @@ test("rank card: equal % with the place above is a tie, not \"yana $0 kerak\"", 
   assert.deepEqual(ranking.nextPlaceHint({ rank: 1, toNext: null }), { kind: "first" });
 });
 
-test("seller routes: only /admin/my is reachable", () => {
-  for (const path of ["/admin/my", "/admin/my/today", "/admin/my/purchase", "/admin/my/customers/abc"]) assert.ok(access.isSellerPathAllowed(path), path);
-  for (const path of ["/admin", "/admin/customers", "/admin/customers/purchases", "/admin/sales-plan", "/admin/users", "/admin/mystery", "/admin/my-other"]) assert.ok(!access.isSellerPathAllowed(path), path);
+test("seller routes: only /admin/my and /admin/sex are reachable", () => {
+  for (const path of ["/admin/my", "/admin/my/today", "/admin/my/purchase", "/admin/my/customers/abc", "/admin/sex", "/admin/sex/new"]) assert.ok(access.isSellerPathAllowed(path), path);
+  for (const path of ["/admin", "/admin/customers", "/admin/customers/purchases", "/admin/sales-plan", "/admin/users", "/admin/mystery", "/admin/my-other", "/admin/sexy", "/admin/prays"]) assert.ok(!access.isSellerPathAllowed(path), path);
   assert.equal(access.homeFor("SELLER"), "/admin/my");
   assert.equal(access.homeFor("ADMIN"), "/admin");
 });
 
+test("WORKSHOP routes: only /admin/sex; elsewhere pages redirect there, actions get 403", () => {
+  const request = (method, headers = {}) => ({ method, headers: { has: name => name in headers } });
+  assert.equal(access.homeFor("WORKSHOP"), "/admin/sex");
+  for (const path of ["/admin/sex", "/admin/sex/new", "/admin/sex/export"]) {
+    assert.equal(access.roleAccess("WORKSHOP", path, request("GET")), "allow", path);
+    assert.equal(access.roleAccess("WORKSHOP", path, request("POST", { "next-action": "x" })), "allow", path);
+  }
+  for (const path of ["/admin", "/admin/my", "/admin/prays", "/admin/products", "/admin/users", "/admin/calculations"]) {
+    assert.equal(access.roleAccess("WORKSHOP", path, request("GET")), "redirect", path);
+    assert.equal(access.roleAccess("WORKSHOP", path, request("POST", { "next-action": "x" })), "forbid", path);
+  }
+  for (const role of ["SUPER_ADMIN", "ADMIN", "MANAGER"]) assert.equal(access.roleAccess(role, "/admin/prays", request("GET")), "allow");
+  assert.ok(access.isLimitedRole("WORKSHOP") && access.isLimitedRole("SELLER") && !access.isLimitedRole("ADMIN"));
+  assert.ok(approval.APPROVAL_ROLES.includes("WORKSHOP"), "WORKSHOP can be chosen on the users page");
+  assert.equal("role" in approval.checkApproval("WORKSHOP", "", null, "u1") && approval.checkApproval("WORKSHOP", "", null, "u1").role, "WORKSHOP");
+});
+
 test("every seller page and action is guarded, and staff guards reject SELLER", async () => {
   const guard = await readFile(new URL("../lib/auth/require-admin.ts", import.meta.url), "utf8");
-  assert.match(guard, /if \(user\.role === "SELLER"\) await rejectSeller\(\)/);
-  assert.match(guard, /has\("next-action"\)\) forbidden\(\);\s*redirect\(SELLER_HOME\)/, "pages redirect, server actions get 403");
+  assert.match(guard, /if \(isLimitedRole\(user\.role\)\) await rejectLimited\(user\.role\)/);
+  assert.match(guard, /has\("next-action"\)\) forbidden\(\);\s*redirect\(homeFor\(role\)\)/, "pages redirect, server actions get 403");
   const proxy = await readFile(new URL("../proxy.ts", import.meta.url), "utf8");
-  assert.match(proxy, /role === "SELLER" \? sellerAccess\(/);
+  assert.match(proxy, /role \? roleAccess\(role, request\.nextUrl\.pathname, request\)/);
   const detail = await readFile(new URL("../app/admin/(seller)/my/customers/[id]/page.tsx", import.meta.url), "utf8");
   assert.match(detail, /if \(!customer\) notFound\(\)/, "another seller's customer id → 404");
   const actions = await readFile(new URL("../app/admin/(seller)/my/actions.ts", import.meta.url), "utf8");
