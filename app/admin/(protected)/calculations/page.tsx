@@ -26,10 +26,15 @@ export default async function CalculationsPage({ searchParams }: { searchParams:
           <h1>Hisob-kitob</h1>
           <p>Mijoz uchun loyiha va tijorat hisob-kitoblarini tayyorlash</p>
         </div>
-        <Link className="admin-primary-button" href="/admin/calculations/new">
-          <Plus size={18} />
-          Yangi hisob-kitob
-        </Link>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <Link className="admin-primary-button" style={{ background: "#fff", color: "#245487" }} href="/admin/calculations/configurator">
+            Komplekt konfiguratori
+          </Link>
+          <Link className="admin-primary-button" href="/admin/calculations/new">
+            <Plus size={18} />
+            Yangi hisob-kitob
+          </Link>
+        </div>
       </div>
       <section className="admin-panel admin-management-panel">
         <form className="calculation-search" role="search">

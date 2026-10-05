@@ -316,6 +316,7 @@ model Lead {
   sale                            Sale?
   referralLink                    ReferralLink?               @relation(fields: [referralLinkId], references: [id], onDelete: SetNull)
   visit                           Visit?                      @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  calculations                    Calculation[]
 
   @@index([status, createdAt])
   @@index([createdAt])
@@ -490,16 +491,24 @@ model Calculation {
   manualUzsTotalWithVat Decimal?                   @db.Decimal(18, 2)
   proposalNote          String?
   discountPercent       Decimal?                   @db.Decimal(8, 4)
+  // Komplekt konfiguratori: who the offer is for, and the chosen parts with price-list prices (SUPER_ADMIN only).
+  customerId            String?
+  leadId                String?
+  configurator          Json?
   createdByAdminId      String
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @updatedAt
   createdBy             AdminUser                  @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  customer              RegularCustomer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead                  Lead?                      @relation(fields: [leadId], references: [id], onDelete: SetNull)
   rooms                 CalculationRoom[]
   configurations        CalculationConfiguration[]
   lineItems             CalculationLineItem[]
 
   @@index([status, updatedAt])
   @@index([createdByAdminId, updatedAt])
+  @@index([customerId])
+  @@index([leadId])
 }
 
 model CalculationConfiguration {
@@ -845,6 +854,7 @@ model RegularCustomer {
   contacts         CustomerContact[]
   purchases        CustomerPurchase[]
   workshopOrders   WorkshopOrder[]
+  calculations     Calculation[]
 
   @@index([isActive])
   @@index([ownerId, isActive])

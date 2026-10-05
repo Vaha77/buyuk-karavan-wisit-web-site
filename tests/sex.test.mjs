@@ -136,3 +136,32 @@ test("every Sex action starts with a role guard; WORKSHOP-only and SELLER-only a
   const praysAll = [...prays.matchAll(/export async function (\w+)/g)].length;
   assert.equal([...prays.matchAll(/export async function \w+\([^)]*\)[^{]*\{\s*(?:const actor = )?await requireRole\("SUPER_ADMIN"\);/g)].length, praysAll, "every Prays action is SUPER_ADMIN only");
 });
+
+test("configurator: BR +20PG + FNV200 + DD160 = $4 954 at price-list prices, +10 % = $5 450", async () => {
+  const configurator = await import("../lib/sex/configurator.ts");
+  const p = (id, name, model, base) => ({ id, name, brand: "XUEYING", model, categoryName: null, basePriceUsd: base });
+  const products = [
+    p("k20", "XUEYING BR +20PG kompressor", "BR +20PG", 880), p("k25", "XUEYING BR +25PG kompressor", "BR +25PG", 1220), p("kz", "XUEYING BR −25PZ kompressor", "BR −25PZ", 1260),
+    p("a20", "XUEYING BR +20PG vazdushniy agregat FN160", "BR +20PG", 2413), p("a25", "XUEYING BR +25PG vazdushniy agregat FN160", "BR +25PG", 3253), p("az", "XUEYING BR −25PZ vazdushniy agregat FNV200", "BR −25PZ", 3293),
+    p("t20", "XUEYING BR +20PG vazdushniy agregat komplekti FN160 DD160", "BR +20PG", 4454), p("t25", "XUEYING BR +25PG vazdushniy agregat komplekti FN160 DD200", "BR +25PG", 5600), p("tz", "XUEYING BR −25PZ vazdushniy agregat komplekti FNV200 DJ170", "BR −25PZ", 6316),
+  ];
+  const templates = configurator.buildKitTemplates(products);
+  const template = templates.find(item => item.id === "t20");
+  assert.ok(template);
+  const standard = configurator.standardSelection(template);
+  assert.equal(configurator.kitTotal(template, standard).base, 4454, "standard parts add up to the kit price");
+  const option = (slot, key) => template.options[slot].find(item => item.key === key);
+  assert.equal(option("cond", "FN160").price, 1533);
+  assert.equal(option("cond", "FN160").source, "XUEYING BR +20PG agregat FN160 $2 413 − XUEYING BR +20PG kompressor $880 = $1 533");
+  assert.equal(option("cond", "FNV200").price, 2033);
+  assert.equal(option("evap", "DD160").price, 2041);
+  assert.equal(option("evap", "DD200").price, 2347);
+  assert.equal(option("evap", "DJ170").price, 3023);
+  assert.deepEqual(template.options.cond.map(item => item.key), ["FN160", "FNV200"], "standard first");
+  const custom = configurator.kitTotal(template, { comp: "BR+20PG", cond: "FNV200", evap: "DD160" });
+  assert.equal(custom.base, 4954);
+  assert.equal(configurator.kitClientPrice(custom.base, 10), 5450);
+  assert.equal(configurator.kitClientPrice(custom.base, 0), 4954);
+  assert.equal(configurator.kitClientPrice(custom.base, 99), configurator.kitClientPrice(custom.base, 15), "markup is capped at 15 %");
+  assert.equal(configurator.kitTotal(template, standard, [100, -5, NaN]).base, 4554, "extras add at price-list prices");
+});

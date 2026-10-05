@@ -55,7 +55,7 @@ const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path
   { match: path => path.startsWith("/admin/my/"), title: "Mijoz", subtitle: "Qo‘ng‘iroqlar va xaridlar" },
   { match: path => path.startsWith("/admin/customers"), title: "Doimiy mijozlar", subtitle: "Viloyatlar bo‘yicha savdo va yillik reyting" },
   { match: path => path.startsWith("/admin/links"), title: "Referal linklar", subtitle: "Havolalar, kliklar va ulardan kelgan lidlar" },
-  { match: path => path.startsWith("/admin/calculations"), title: path => path === "/admin/calculations" ? "Hisob-kitob" : path === "/admin/calculations/new" ? "Hisob-kitob / Yangi tijorat taklifi" : "Hisob-kitob / Tijorat taklifi", subtitle: "Tijorat takliflarini tayyorlash va boshqarish" },
+  { match: path => path.startsWith("/admin/calculations"), title: path => path === "/admin/calculations" ? "Hisob-kitob" : path === "/admin/calculations/new" ? "Hisob-kitob / Yangi tijorat taklifi" : path === "/admin/calculations/configurator" ? "Hisob-kitob / Komplekt konfiguratori" : "Hisob-kitob / Tijorat taklifi", subtitle: "Tijorat takliflarini tayyorlash va boshqarish" },
   { match: path => path.startsWith("/admin/ai-office"), title: "AI Ofis", subtitle: "AI operatsiyalar uchun vizual makon" },
   { match: path => path.startsWith("/admin/settings"), title: "Sozlamalar", subtitle: "Markaziy sayt sozlamalari" },
   { match: path => path === "/admin/sales" || path.startsWith("/admin/sales/"), title: "Sotuvlar", subtitle: "Savdolarni tasdiqlash" },

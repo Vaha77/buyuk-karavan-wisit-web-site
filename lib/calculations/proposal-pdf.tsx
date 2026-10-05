@@ -45,7 +45,7 @@ function Plan({draft}:{draft:CalculationDraft}){const W=550,H=220,p=22,s=Math.mi
   </Svg>}
 function Proposal({draft}:{draft:CalculationDraft}){const totals=quotationTotals(draft.lineItems,draft.discountPercent),cameras=draft.rooms.filter(room=>room.type==="ROOM"),tons=cameras.reduce((sum,room)=>sum+(room.capacityTons>0?room.capacityTons:0),0);return <Document title={`${draft.proposalNumber} — ${draft.projectName}`} author="BUYUK KARAVAN"><Page size="A4" style={styles.page} wrap>
   <View style={styles.header}><Text style={styles.proposalTitle}>ПРЕДВАРИТЕЛЬНОЕ КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ {draft.proposalNumber||""} от {date(draft.proposalDate)} г.</Text>{tons>0&&<Text style={styles.tonnage}>{fmt(tons)} тонн</Text>}</View>
-  {draft.renderImageUrl&&<Image src={draft.renderImageUrl} style={styles.render}/>}<Text style={styles.mainTitle}>ПРОЕКТ-СМЕТА ХОЛОДИЛЬНЫХ КАМЕР</Text><Plan draft={draft}/>
+  {draft.renderImageUrl&&<Image src={draft.renderImageUrl} style={styles.render}/>}<Text style={styles.mainTitle}>{draft.rooms.length?"ПРОЕКТ-СМЕТА ХОЛОДИЛЬНЫХ КАМЕР":"КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ"}</Text>{draft.rooms.length>0&&<Plan draft={draft}/>}
   <View style={styles.tableHeader} wrap={false}>{[
     {label:"№",style:styles.no},{label:"Наименование товаров и услуг",style:styles.name},{label:"Един. измер",style:styles.unit},{label:"Количество",style:styles.qty},{label:"Цена за единицу",style:styles.price},{label:"Общая сумма",style:styles.total},
   ].map(column=><Text key={column.label} style={[styles.cell,column.style]}>{column.label}</Text>)}</View>
