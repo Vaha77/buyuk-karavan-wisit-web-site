@@ -177,6 +177,11 @@ model Product {
   order                Int                   @default(0)
   seoTitle             String?
   seoDescription       String?
+  // Prays: purchase/list price (USD); priceUsd is the selling price = ceil(basePriceUsd × (100 + markup) / 100).
+  basePriceUsd         Decimal?              @db.Decimal(18, 2)
+  priceListDate        DateTime?
+  // Removed from Prays: hidden from the site and price lists, the row itself is kept.
+  archivedAt           DateTime?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   asset360             Product360Asset?
@@ -197,6 +202,8 @@ model SiteSettings {
   dashboardTips    Json?
   // Sotuv rejasi zone thresholds (percent lower bounds); null = defaults in lib/sales-plan/zones.ts.
   salesPlanZones   Json?
+  // Prays: selling markup over basePriceUsd, 1–20 %.
+  priceMarkupPercent Int     @default(10)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -420,6 +427,7 @@ model AdminUser {
   salesPerson          SalesPerson?                 @relation(fields: [salesPersonId], references: [id], onDelete: SetNull)
   purchasesCreated     CustomerPurchase[]           @relation("PurchaseCreator")
   purchasesReviewed    CustomerPurchase[]           @relation("PurchaseReviewer")
+  priceChanges         PriceChange[]
 
   @@index([approvalStatus, isActive])
 }
@@ -986,4 +994,54 @@ model SalesMonthly {
 
   @@unique([personId, year, month])
   @@index([year, month])
+}
+
+// ---- Prays: price-list prices, workshop parts and their change history ------------------------------
+enum PriceChangeSource {
+  MANUAL
+  EXCEL
+  AI_IMAGE
+  PERCENT
+}
+
+enum PriceEntityType {
+  PRODUCT
+  SEX_PART
+}
+
+model SexPart {
+  id            String    @id @default(cuid())
+  name          String
+  // "F22", "3/8", "20 L"…
+  size          String?
+  // Glazok, Klapan, Shlang, Filtr, Resiver, Kompressor, Kondensator…
+  group         String
+  basePriceUsd  Decimal?  @db.Decimal(18, 2)
+  unit          String    @default("dona")
+  active        Boolean   @default(true)
+  priceListDate DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([active, group])
+}
+
+model PriceChange {
+  id            String            @id @default(cuid())
+  entityType    PriceEntityType
+  entityId      String
+  entityName    String
+  oldBase       Decimal?          @db.Decimal(18, 2)
+  newBase       Decimal?          @db.Decimal(18, 2)
+  source        PriceChangeSource
+  priceListName String?
+  // Changes confirmed together (one import / one percent change) share a batch.
+  batchId       String?
+  userId        String?
+  createdAt     DateTime          @default(now())
+  user          AdminUser?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([batchId])
 }

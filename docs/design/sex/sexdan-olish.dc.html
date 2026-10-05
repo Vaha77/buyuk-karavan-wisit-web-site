@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<title>Sexdan olish</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F6FA}
+a{color:#1E4E8C}a:hover{color:#163A69}
+</style>
+</helmet>
+<div style="font-family: Manrope, system-ui, sans-serif; color: #14213D; background: #F4F6FA; min-height: 100vh; box-sizing: border-box; padding: 28px 24px 64px">
+<div style="max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4F5A70">Sex / Do‘konga o‘tkazish</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.02em">Sexdan olish</h1>
+<p style="margin: 0; font-size: 14px; color: #4F5A70">Zayavka → Sex beradi → Krim qilinadi. Har qadamni bitta odam tasdiqlaydi.</p>
+</div>
+<div style="display: flex; gap: 6px; flex-wrap: wrap; background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 12px; padding: 4px">
+<sc-for list="{{roles}}" as="r" hint-placeholder-count="3">
+<button onClick="{{r.pick}}" style="height: 40px; padding: 0 16px; border-radius: 9px; border: 0; background: {{r.bg}}; color: {{r.fg}}; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">{{r.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+<sc-if value="{{isSeller}}" hint-placeholder-val="{{ true }}">
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap">
+<h2 style="margin: 0; font-size: 18px; font-weight: 800">Yangi zayavka</h2>
+<span style="font-size: 13px; color: #4F5A70">Sotuvchi: Abduraxmon</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 110px 44px; gap: 10px; font-size: 12px; font-weight: 700; color: #4F5A70"><span>Sex mahsuloti</span><span>Soni</span><span></span></div>
+<sc-for list="{{items}}" as="it" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 110px 44px; gap: 10px; align-items: center">
+<select aria-label="Sex mahsuloti" style="height: 44px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 14px; font-weight: 600; color: #14213D; background: #FFFFFF">
+<option>{{it.name}}</option>
+</select>
+<input value="{{it.qty}}" aria-label="Soni" style="height: 44px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 14px">
+<button aria-label="Qatorni o‘chirish" style="height: 44px; border-radius: 10px; border: 1px solid #F3C7C2; background: #FFFFFF; color: #A41F15; font: inherit; font-size: 18px; cursor: pointer">×</button>
+</div>
+</sc-for>
+<button style="align-self: flex-start; height: 38px; padding: 0 14px; border-radius: 8px; border: 1px dashed #1E4E8C; background: #FFFFFF; color: #1E4E8C; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">+ Mahsulot qo‘shish</button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; font-weight: 700">Kimga · ikkalasi ham magazinga kirim bo‘ladi</span>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{purposes}}" as="pp" hint-placeholder-count="2">
+<button onClick="{{pp.pick}}" style="min-height: 64px; border-radius: 12px; border: {{pp.border}}; background: {{pp.bg}}; color: {{pp.fg}}; font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; padding: 10px 14px; text-align: left">
+<b style="font-size: 15px">{{pp.name}}</b><span style="font-size: 12px; opacity: 0.85">{{pp.sub}}</span>
+</button>
+</sc-for>
+</div>
+<sc-if value="{{forClient}}" hint-placeholder-val="{{ true }}">
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">Mijoz <span style="font-weight: 500; color: #4F5A70">· kimga terilayotgani ko‘rinib turadi</span>
+<input value="Rustam aka · Namangan" style="height: 44px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 14px">
+</label>
+</sc-if>
+</div>
+<button onClick="{{submit}}" style="height: 50px; border-radius: 12px; border: 0; background: {{submitBg}}; color: #FFFFFF; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer">{{submitLabel}}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isSex}}" hint-placeholder-val="{{ false }}">
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap">
+<h2 style="margin: 0; font-size: 18px; font-weight: 800">Kelgan zayavkalar</h2>
+<button style="height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid #C2410C; background: #FFFFFF; color: #9A3B0A; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer">+ Zayavkasiz chiqim</button>
+</div>
+<div style="border: {{sexBorder}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap"><b style="font-size: 16px">#0127 · Abduraxmon</b><span style="padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 800; background: {{stBg}}; color: {{stFg}}">{{stLabel}}</span></div>
+<span style="font-size: 13px; color: #4F5A70">{{purposeLine}} · bugun 10:05</span>
+<sc-for list="{{items}}" as="it" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid #EEF1F6; font-size: 14px">
+<span style="font-weight: 600">{{it.name}}</span><span style="color: #4F5A70">so‘raldi: {{it.qty}}</span>
+<label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4F5A70">berildi<input value="{{it.qty}}" aria-label="Berilgan soni" style="width: 44px; height: 34px; border: 1px solid #C9D3E6; border-radius: 8px; padding: 0 8px; font: inherit; font-size: 14px; color: #14213D"></label>
+</div>
+</sc-for>
+<button onClick="{{give}}" style="height: 48px; border-radius: 12px; border: 0; background: {{giveBg}}; color: #FFFFFF; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer">{{giveLabel}}</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isAdmin}}" hint-placeholder-val="{{ false }}">
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap">
+<h2 style="margin: 0; font-size: 18px; font-weight: 800">Krimga olish kerak</h2>
+<span style="padding: 4px 12px; border-radius: 99px; background: #FDE1DE; color: #A41F15; font-size: 13px; font-weight: 800">{{pendingCount}} ta kutmoqda</span>
+</div>
+<div style="border: {{adminBorder}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap"><b style="font-size: 16px">#0127 · Abduraxmon → {{toWho}}</b><span style="padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 800; background: {{stBg}}; color: {{stFg}}">{{stLabel}}</span></div>
+<span style="font-size: 13px; color: #4F5A70">{{adminNote}}</span>
+<sc-for list="{{items}}" as="it" hint-placeholder-count="3">
+<div style="display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid #EEF1F6; font-size: 14px"><span style="font-weight: 600">{{it.name}}</span><b>{{it.qty}} ta</b></div>
+</sc-for>
+<button onClick="{{krim}}" style="height: 48px; border-radius: 12px; border: 0; background: {{krimBg}}; color: #FFFFFF; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer">{{krimLabel}}</button>
+</div>
+</div>
+</sc-if>
+
+</div>
+
+<div style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0 0 10px; font-size: 16px; font-weight: 800">Zayavka #0127 yo‘li</h2>
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="3">
+<div style="display: flex; gap: 12px">
+<div style="display: flex; flex-direction: column; align-items: center">
+<span style="width: 30px; height: 30px; border-radius: 99px; background: {{s.dot}}; color: {{s.dotFg}}; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0">{{s.n}}</span>
+<span style="width: 2px; flex-grow: 1; min-height: 26px; background: {{s.line}}"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px; padding-bottom: 16px">
+<b style="font-size: 14px; color: {{s.tc}}">{{s.t}}</b>
+<span style="font-size: 12px; color: #4F5A70">{{s.who}}</span>
+<span style="font-size: 12px; font-weight: 700; color: {{s.tc}}">{{s.when}}</span>
+</div>
+</div>
+</sc-for>
+<button onClick="{{restart}}" style="align-self: flex-start; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #D9DEE8; background: #FFFFFF; font: inherit; font-size: 12px; font-weight: 700; color: #3E4A60; cursor: pointer">Namunani qaytadan boshlash</button>
+</div>
+<div style="background: #E7EEF5; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 12px; font-weight: 800; color: #3E4A60; letter-spacing: 0.05em">TELEGRAM · SEX GURUHI</span>
+<div style="background: #FFFFFF; border-radius: 14px 14px 14px 4px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; font-size: 14px; line-height: 1.45">
+<b style="color: #1E4E8C">BK Sex bot</b>
+<b>📦 Zayavka #0127 — Abduraxmon</b>
+<span>• BITZER 4NES+20 kompressor — 1</span>
+<span>• Vibro shlang F28 — 10</span>
+<span>• Glazok 3/8 — 2</span>
+<span style="color: #4F5A70; font-size: 12px; margin-top: 4px">Saytda "Berib yubordim" bosilgach shu xabar yangilanadi</span>
+</div>
+</div>
+</div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 800">Nazorat · Oktabr 2026</h2>
+<p style="margin: 0; font-size: 13px; color: #4F5A70">Faqat Super Admin ko‘radi · oy oxiridagi solishtirish shu yerda</p>
+</div>
+<button style="height: 44px; padding: 0 18px; border-radius: 10px; border: 0; background: #1E4E8C; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Excel yuklab olish</button>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px">
+<div style="border-radius: 12px; background: #EAF1FB; padding: 14px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; font-weight: 700; color: #1E4E8C">Zayavka kutmoqda</span><span style="font-size: 24px; font-weight: 800; color: #1E4E8C">2</span></div>
+<div style="border-radius: 12px; background: #FDE1DE; padding: 14px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; font-weight: 700; color: #A41F15">Berilgan, krim qilinmagan</span><span style="font-size: 24px; font-weight: 800; color: #A41F15">3</span></div>
+<div style="border-radius: 12px; background: #FDE6D2; padding: 14px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; font-weight: 700; color: #8A3F00">Zayavkasiz chiqim</span><span style="font-size: 24px; font-weight: 800; color: #8A3F00">1</span></div>
+<div style="border-radius: 12px; background: #E2F3E8; padding: 14px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; font-weight: 700; color: #1B6B43">Krim qilindi</span><span style="font-size: 24px; font-weight: 800; color: #1B6B43">58</span></div>
+</div>
+<div style="overflow-x: auto">
+<div style="min-width: 880px; display: flex; flex-direction: column">
+<div style="display: grid; grid-template-columns: 70px 80px 120px minmax(240px, 2fr) 150px 150px; gap: 12px; padding: 10px 8px; font-size: 12px; font-weight: 700; color: #4F5A70; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #E3E7EF">
+<span>№</span><span>Sana</span><span>Sotuvchi</span><span>Mahsulotlar</span><span>Kimga</span><span>Holat</span>
+</div>
+<sc-for list="{{log}}" as="o" hint-placeholder-count="5">
+<div style="display: grid; grid-template-columns: 70px 80px 120px minmax(240px, 2fr) 150px 150px; gap: 12px; align-items: center; padding: 12px 8px; border-bottom: 1px solid #EEF1F6; font-size: 14px">
+<b>#{{o.n}}</b><span style="color: #3E4A60">{{o.d}}</span><span>{{o.s}}</span><span style="font-weight: 600">{{o.p}}</span><span style="color: {{o.kc}}; font-weight: 700">{{o.k}}</span>
+<span style="justify-self: start; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 800; background: {{o.bg}}; color: {{o.fg}}">{{o.st}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<p style="margin: 0; font-size: 12px; color: #4F5A70">Mahsulotlar, ismlar va sonlar — namuna.</p>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1900}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { role: 'seller', stage: 0, purpose: 'client' }; }
+  renderVals() {
+    var self = this, st = this.state, sg = st.stage;
+    var go = function (role, stage) { self.setState({ role: role, stage: stage }); };
+    var kimga = st.purpose === 'client' ? 'Mijoz: Rustam aka' : 'Vitrina';
+    var roles = [['seller', 'Sotuvchi'], ['sex', 'Sex mas‘uli'], ['admin', 'Vaha · krim']].map(function (r) {
+      var on = st.role === r[0];
+      return { label: r[1], bg: on ? '#1E4E8C' : 'transparent', fg: on ? '#FFFFFF' : '#14213D', pick: function () { self.setState({ role: r[0] }); } };
+    });
+    var items = [{ name: 'BITZER 4NES+20 kompressor', qty: 1 }, { name: 'Vibro shlang F28', qty: 10 }, { name: 'Glazok 3/8', qty: 2 }];
+    var ST = [
+      { label: 'Yangi', bg: '#EEF1F6', fg: '#3E4A60' },
+      { label: 'Sex kutmoqda', bg: '#EAF1FB', fg: '#1E4E8C' },
+      { label: 'Berildi · krim kutmoqda', bg: '#FDE1DE', fg: '#A41F15' },
+      { label: 'Krim qilindi', bg: '#E2F3E8', fg: '#1B6B43' }
+    ][sg];
+    var stepDef = [
+      { t: 'Zayavka yuborildi', who: 'Sotuvchi: Abduraxmon', when: 'bugun 10:05', at: 1 },
+      { t: 'Sex berib yubordi', who: 'Sex mas‘uli', when: 'bugun 10:40', at: 2 },
+      { t: 'Krim qilindi (GBS)', who: 'Vaha', when: 'bugun 18:20', at: 3 }
+    ];
+    var steps = stepDef.map(function (s, i) {
+      var done = sg >= s.at, next = sg === s.at - 1;
+      return { n: done ? '✓' : String(i + 1), t: s.t, who: s.who, when: done ? s.when : (next ? 'kutilmoqda' : '—'),
+        dot: done ? '#1B6B43' : (next ? '#F2C230' : '#E3E7EF'), dotFg: done ? '#FFFFFF' : '#14213D',
+        line: i === 2 ? 'transparent' : (sg > s.at ? '#1B6B43' : '#E3E7EF'), tc: done ? '#14213D' : (next ? '#6E5200' : '#4F5A70') };
+    });
+    var LOG = [
+      ['0127', '05-okt', 'Abduraxmon', 'BITZER 4NES+20 kompr., vibro shlang F28 ×10, glazok ×2', null, null],
+      ['0126', '05-okt', 'Atxamaka', 'Solenoid klapan 1/2 ×4, filtr osushitel ×4', 'Vitrina', 'Berildi · krim kutmoqda'],
+      ['0125', '04-okt', 'Sirojiddin', 'XUEYING BR +20PG vazdushniy agregat · FNV200', 'Mijoz: Qo‘qon meva', 'Krim qilindi'],
+      ['0124', '04-okt', 'Bositxon aka', 'Resiver bachok 20 L ×1', 'Mijoz: Ilhom fermer', 'Zayavkasiz chiqim'],
+      ['0123', '03-okt', 'Anasxon aka', 'Vibro shlang F22 ×6', 'Vitrina', 'Sex kutmoqda']
+    ];
+    var C = { 'Yangi': ['#EEF1F6', '#3E4A60'], 'Sex kutmoqda': ['#EAF1FB', '#1E4E8C'], 'Berildi · krim kutmoqda': ['#FDE1DE', '#A41F15'], 'Krim qilindi': ['#E2F3E8', '#1B6B43'], 'Zayavkasiz chiqim': ['#FDE6D2', '#8A3F00'] };
+    var log = LOG.map(function (o) { var s = o[5] || ST.label; var c = C[s] || [ST.bg, ST.fg]; return { n: o[0], d: o[1], s: o[2], p: o[3], k: o[4] || kimga, kc: (o[4] || kimga) === 'Vitrina' ? '#3E4A60' : '#1E4E8C', st: s, bg: c[0], fg: c[1] }; });
+    var purposes = [['shop', 'Magazinga (vitrina)', 'Mijozsiz — sotuvga turadi'], ['client', 'Mijozga', 'Zborka yoki zapchast — mijoz nomi bilan']].map(function (x) {
+      var on = st.purpose === x[0];
+      return { name: x[1], sub: x[2], border: on ? '2px solid #1E4E8C' : '1px solid #D9DEE8', bg: on ? '#1E4E8C' : '#FFFFFF', fg: on ? '#FFFFFF' : '#14213D', pick: function () { self.setState({ purpose: x[0] }); } };
+    });
+    return {
+      purposes: purposes, forClient: st.purpose === 'client', purposeLine: st.purpose === 'client' ? 'Mijozga — Rustam aka' : 'Magazinga — vitrina uchun', toWho: st.purpose === 'client' ? 'Rustam aka' : 'Vitrina',
+      roles: roles, items: items, steps: steps, log: log,
+      isSeller: st.role === 'seller', isSex: st.role === 'sex', isAdmin: st.role === 'admin',
+      stLabel: ST.label, stBg: ST.bg, stFg: ST.fg,
+      submit: function () { go('sex', 1); }, submitLabel: sg >= 1 ? '✓ Zayavka yuborildi — sexga ketdi' : 'Zayavka yuborish', submitBg: sg >= 1 ? '#1B6B43' : '#1E4E8C',
+      sexBorder: sg === 1 ? '2px solid #1E4E8C' : '1px solid #E3E7EF',
+      give: function () { if (sg >= 1) go('admin', 2); }, giveLabel: sg >= 2 ? '✓ Berib yuborildi' : (sg === 1 ? 'Berib yubordim' : 'Zayavka hali kelmagan'), giveBg: sg >= 2 ? '#1B6B43' : (sg === 1 ? '#1E4E8C' : '#9AA5B6'),
+      adminBorder: sg === 2 ? '2px solid #A41F15' : '1px solid #E3E7EF',
+      adminNote: sg >= 2 ? 'Sex berib yubordi · bugun 10:40 · GBS ga kirim qiling' : 'Sex hali bermagan',
+      pendingCount: sg === 2 ? 4 : 3,
+      krim: function () { if (sg === 2) go('admin', 3); }, krimLabel: sg >= 3 ? '✓ Krim qilindi' : (sg === 2 ? 'Krim qildim' : 'Sex berishini kuting'), krimBg: sg >= 3 ? '#1B6B43' : (sg === 2 ? '#1E4E8C' : '#9AA5B6'),
+      restart: function () { go('seller', 0); }
+    };
+  }
+}
+</script>
+</body>
+</html>

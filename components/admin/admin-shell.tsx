@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeCheck, Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PhoneCall, Search, Settings, ShoppingBag, Target, UserCheck, Users, X } from "lucide-react";
+import { BadgeCheck, Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PhoneCall, Search, Settings, ShoppingBag, Tags, Target, UserCheck, Users, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 
 type NavItem = { label: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; adminOnly?: boolean; badge?: "leads" | "new" | "purchases" | "due"; soon?: boolean };
@@ -16,6 +16,7 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Tasdiqlash kerak", href: "/admin/customers/purchases", icon: BadgeCheck, adminOnly: true, badge: "purchases" },
     { label: "Nazorat", href: "/admin/customers/control", icon: ClipboardList, adminOnly: true },
     { label: "Mahsulotlar", href: "/admin/products", icon: Package },
+    { label: "Prays", href: "/admin/prays", icon: Tags, superOnly: true },
     { label: "Loyihalar", href: "/admin/projects", icon: FolderKanban },
     { label: "Foto Studio", href: "/admin/photo-studio", icon: Camera },
     { label: "AI Ofis", href: "/admin/ai-office", icon: Bot },
@@ -67,6 +68,7 @@ const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path
   { match: path => path.startsWith("/admin/users"), title: "Foydalanuvchilar", subtitle: "Admin panel foydalanuvchilari va rollari" },
   { match: path => path.startsWith("/admin/activity"), title: "Faoliyat tarixi", subtitle: "Admin amallari jurnali" },
   { match: path => path.startsWith("/admin/products"), title: "Mahsulotlar", subtitle: "Saytdagi mahsulotlarni boshqarish" },
+  { match: path => path.startsWith("/admin/prays"), title: "Prays", subtitle: "Prays narxlari, sotuv ustamasi va sex zapchastlari" },
 ];
 function sectionOf(path: string) {
   const section = SECTIONS.find(item => item.match(path));

@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<title>Zborka buyurtmasi</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F6FA}
+a{color:#1E4E8C}a:hover{color:#163A69}
+</style>
+</helmet>
+<div style="font-family: Manrope, system-ui, sans-serif; color: #14213D; background: #F4F6FA; min-height: 100vh; box-sizing: border-box; padding: 28px 24px 64px">
+<div style="max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4F5A70">Sex / Zborka buyurtmasi</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.02em">Zborka buyurtmasi</h1>
+<p style="margin: 0; font-size: 14px; color: #4F5A70">Prays bo‘yicha tanlang — buyurtma sex Telegram guruhiga avtomatik ketadi</p>
+</div>
+<a href="#oylik" style="height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #1E4E8C; background: #FFFFFF; color: #1E4E8C; font-size: 14px; font-weight: 700; text-decoration: none; display: flex; align-items: center">Oylik buyurtmalar ↓</a>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+<span style="font-size: 12px; font-weight: 800; color: #4F5A70; letter-spacing: 0.05em">1 · PRAYS VA KOMPRESSOR</span>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px">
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">Prays
+<select onChange="{{setBrand}}" style="height: 48px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 700; color: #14213D; background: #FFFFFF">
+<option value="bitzer">Bitzer R22 (original, Xitoy)</option>
+<option value="xueying">XUEYING</option>
+<option value="briliant">Briliant R22</option>
+<option value="briliant404">Briliant R404</option>
+</select>
+</label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">Kompressor
+<select onChange="{{setModel}}" style="height: 48px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 700; color: #14213D; background: #FFFFFF">
+<sc-for list="{{models}}" as="m" hint-placeholder-count="10">
+<option value="{{m.i}}" selected="{{m.sel}}">{{m.label}}</option>
+</sc-for>
+</select>
+</label>
+</div>
+<sc-if value="{{otherBrand}}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 12px; color: #6E5200; background: #FFF4CC; padding: 8px 12px; border-radius: 8px">Namunada faqat Bitzer prays ulangan — XUEYING va Briliant xuddi shu tartibda ishlaydi.</span>
+</sc-if>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+<span style="font-size: 12px; font-weight: 800; color: #4F5A70; letter-spacing: 0.05em">2 · NIMA YIG‘ILADI</span>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px">
+<sc-for list="{{types}}" as="t" hint-placeholder-count="4">
+<button onClick="{{t.pick}}" style="min-height: 76px; border-radius: 12px; border: {{t.border}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 12px 14px; text-align: left">
+<b style="font-size: 15px">{{t.name}}</b>
+<span style="font-size: 12px; opacity: 0.85">{{t.sub}}</span>
+</button>
+</sc-for>
+</div>
+
+<sc-if value="{{hasParts}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #EEF1F6; padding-top: 16px">
+<sc-for list="{{parts}}" as="p" hint-placeholder-count="2">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px">
+<label style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">{{p.label}}
+<select onChange="{{p.set}}" style="height: 46px; border: {{p.selBorder}}; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 700; color: #14213D; background: #FFFFFF">
+<sc-for list="{{p.opts}}" as="o" hint-placeholder-count="6">
+<option value="{{o.v}}" selected="{{o.sel}}">{{o.label}}</option>
+</sc-for>
+</select>
+</label>
+<sc-if value="{{p.changed}}" hint-placeholder-val="{{ false }}">
+<span style="height: 46px; display: flex; align-items: center; padding: 0 12px; border-radius: 10px; background: #FFF1C2; color: #6E5200; font-size: 13px; font-weight: 800">standart {{p.std}} · {{p.delta}}</span>
+</sc-if>
+<sc-if value="{{p.same}}" hint-placeholder-val="{{ true }}">
+<span style="height: 46px; display: flex; align-items: center; padding: 0 12px; border-radius: 10px; background: #E2F3E8; color: #1B6B43; font-size: 13px; font-weight: 800">standart</span>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<span style="font-size: 12px; font-weight: 800; color: #4F5A70; letter-spacing: 0.05em">3 · BUYURTMA MA‘LUMOTI</span>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px">
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">Soni
+<input value="1" inputmode="numeric" style="height: 44px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 15px">
+</label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">Tayyor bo‘lishi kerak
+<input value="8-oktabr, 2026" style="height: 44px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 15px">
+</label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">Mijoz
+<input value="Rustam aka · Namangan" style="height: 44px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 15px">
+</label>
+</div>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">Izoh sex uchun
+<input placeholder="Masalan: ramani ko‘k rangga bo‘yash" style="height: 44px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 15px">
+</label>
+</div>
+
+</div>
+
+<div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+<div style="background: #FFFFFF; border: 2px solid #1E4E8C; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<span style="font-size: 12px; font-weight: 800; color: #4F5A70; letter-spacing: 0.05em">BUYURTMA</span>
+<span style="font-size: 20px; font-weight: 800; line-height: 1.3">{{title}}</span>
+<sc-for list="{{summary}}" as="l" hint-placeholder-count="3">
+<div style="display: flex; justify-content: space-between; gap: 10px; font-size: 14px; padding: 6px 0; border-top: 1px solid #EEF1F6"><span style="color: #3E4A60">{{l.k}}</span><b>{{l.v}}</b></div>
+</sc-for>
+<div style="display: flex; justify-content: space-between; align-items: baseline; padding-top: 10px; border-top: 2px solid #14213D"><span style="font-size: 14px; font-weight: 800">Prays narxi</span><span style="font-size: 28px; font-weight: 800">{{priceL}}</span></div>
+<span style="font-size: 12px; color: {{priceNoteC}}; font-weight: 700">{{priceNote}}</span>
+<button onClick="{{send}}" style="height: 52px; border-radius: 12px; border: 0; background: {{sendBg}}; color: #FFFFFF; font: inherit; font-size: 16px; font-weight: 800; cursor: pointer">{{sendLabel}}</button>
+</div>
+
+<div style="background: #E7EEF5; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 12px; font-weight: 800; color: #3E4A60; letter-spacing: 0.05em">TELEGRAM · “BK Zborka sexi” guruhi</span>
+<div style="background: #FFFFFF; border-radius: 14px 14px 14px 4px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.45; box-shadow: 0 1px 2px rgba(20,33,61,0.08)">
+<b style="color: #1E4E8C">BK Zborka bot</b>
+<b>🔧 Yangi zborka #{{orderNo}}</b>
+<span>{{title}}</span>
+<sc-for list="{{tgLines}}" as="l" hint-placeholder-count="3">
+<span>• {{l}}</span>
+</sc-for>
+<span>Soni: 1 · Muddat: 8-oktabr</span>
+<span>Sotuvchi: Abduraxmon · Mijoz: Rustam aka</span>
+<div style="display: flex; gap: 6px; margin-top: 8px">
+<span style="flex-grow: 1; text-align: center; padding: 8px; border-radius: 8px; background: #EAF1FB; color: #1E4E8C; font-size: 13px; font-weight: 700">▶ Boshladim</span>
+<span style="flex-grow: 1; text-align: center; padding: 8px; border-radius: 8px; background: #E2F3E8; color: #1B6B43; font-size: 13px; font-weight: 700">✓ Tayyor</span>
+</div>
+</div>
+<span style="font-size: 12px; color: #3E4A60">Sex narxni ko‘rmaydi — faqat nima yig‘ish kerakligini.</span>
+</div>
+
+</div>
+</div>
+
+<div id="oylik" style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 800">{{tblTitle}}</h2>
+<p style="margin: 0; font-size: 13px; color: #4F5A70">{{tblSub}}</p>
+</div>
+<div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
+<div style="display: flex; gap: 4px; background: #F4F6FA; border: 1px solid #E3E7EF; border-radius: 12px; padding: 4px">
+<sc-for list="{{roles}}" as="r" hint-placeholder-count="2">
+<button onClick="{{r.pick}}" style="height: 38px; padding: 0 14px; border-radius: 9px; border: 0; background: {{r.bg}}; color: {{r.fg}}; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">{{r.label}}</button>
+</sc-for>
+</div>
+<sc-if value="{{isBoss}}" hint-placeholder-val="{{ true }}">
+<select style="height: 44px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-weight: 700"><option>Oktabr 2026</option><option>Sentabr 2026</option></select>
+<button style="height: 44px; padding: 0 18px; border-radius: 10px; border: 0; background: #1E4E8C; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Excel yuklab olish</button>
+</sc-if>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px">
+<sc-for list="{{stats}}" as="s" hint-placeholder-count="4">
+<div style="border-radius: 12px; background: {{s.bg}}; padding: 14px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; font-weight: 700; color: {{s.fg}}">{{s.k}}</span><span style="font-size: 24px; font-weight: 800; color: {{s.fg}}">{{s.v}}</span></div>
+</sc-for>
+</div>
+<div style="overflow-x: auto">
+<div style="min-width: 1320px; display: flex; flex-direction: column">
+<div style="display: grid; grid-template-columns: 64px 70px 84px minmax(220px, 2fr) 120px 140px 240px 130px 140px; gap: 12px; padding: 10px 8px; font-size: 12px; font-weight: 700; color: #4F5A70; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #E3E7EF">
+<span>№</span><span>Sana</span><span>Turi</span><span>Mahsulot</span><span>Zayavka beruvchi</span><span>Kimga</span><span>Jarayon</span><span>Holat</span><span>Amal</span>
+</div>
+<sc-for list="{{rows}}" as="o" hint-placeholder-count="6">
+<div style="display: grid; grid-template-columns: 64px 70px 84px minmax(220px, 2fr) 120px 140px 240px 130px 140px; gap: 12px; align-items: center; padding: 12px 8px; border-bottom: 1px solid #EEF1F6; font-size: 14px; background: {{o.rowBg}}">
+<b>#{{o.n}}</b><span style="color: #3E4A60">{{o.d}}</span>
+<span style="justify-self: start; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; background: #EEF1F6; color: #3E4A60">{{o.t}}</span>
+<span style="font-weight: 600; line-height: 1.35">{{o.p}}</span><span style="display: flex; flex-direction: column; gap: 2px"><b style="font-weight: 600">{{o.s}}</b><span style="font-size: 12px; color: #4F5A70">{{o.sT}}</span></span>
+<span style="color: {{o.kc}}; font-weight: 700">{{o.k}}</span>
+<div style="display: flex; flex-direction: column; gap: 3px">
+<sc-for list="{{o.steps}}" as="x" hint-placeholder-count="3">
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{x.c}}"><span style="width: 8px; height: 8px; border-radius: 99px; background: {{x.dot}}; flex-shrink: 0"></span><b style="font-weight: 700">{{x.k}}:</b>{{x.v}}</span>
+</sc-for>
+</div>
+<span style="justify-self: start; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 800; background: {{o.bg}}; color: {{o.fg}}">{{o.st}}</span>
+<sc-if value="{{o.hasBtn}}" hint-placeholder-val="{{ false }}">
+<button onClick="{{o.act}}" style="height: 38px; padding: 0 12px; border-radius: 9px; border: 0; background: {{o.btnBg}}; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer">{{o.btn}}</button>
+</sc-if>
+<sc-if value="{{o.noBtn}}" hint-placeholder-val="{{ true }}">
+<span style="font-size: 12px; color: #4F5A70">{{o.wait}}</span>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<p style="margin: 0; font-size: 12px; color: #4F5A70">Bitzer narxlari — haqiqiy prays. Resiver almashtirish narxlari — namuna (prays ichidan taxminiy ajratilgan), aniq resiver praysi kerak. Oylik ro‘yxat — namuna.</p>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2500}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { brand: 'bitzer', model: 10, type: 'vz', res: null, vk: null, fn: null, sent: false, stage: 0, role: 'boss', st: { '0412': 0, '0411': 1, '0410': 2, '0409': 2, '0408': 3, '0407': 3 } }; }
+  renderVals() {
+    var self = this, st = this.state;
+    var BZ = [{"m": "2FES+3", "k": 915, "L": "8", "rb": 1091, "hp": "3", "vd": 1269, "fn": "FN22", "vz": 1341}, {"m": "2CES-3", "k": 1290, "L": "8", "rb": 1466, "hp": "3", "vd": 1644, "fn": "FN22", "vz": 1716}, {"m": "4FES+5", "k": 1480, "L": "10", "rb": 1682, "hp": "5", "vd": 1927, "fn": "FN43", "vz": 2085}, {"m": "4DES-5", "k": 1470, "L": "10", "rb": 1682, "hp": "5", "vd": 1927, "fn": "FN43", "vz": 2085}, {"m": "4DES+7", "k": 1535, "L": "12", "rb": 1771, "hp": "8", "vd": 2061, "fn": "FN70", "vz": 2397}, {"m": "4TES-9", "k": 1965, "L": "15", "rb": 2219, "hp": "10", "vd": 2540, "fn": "FN80", "vz": 2908}, {"m": "4VES+10", "k": 2120, "L": "15", "rb": 2379, "hp": "10", "vd": 2700, "fn": "FN80", "vz": 3068}, {"m": "4PES+15", "k": 2280, "L": "20", "rb": 2585, "hp": "15", "vd": 3016, "fn": "FN120", "vz": 3601}, {"m": "4PES-12", "k": 2050, "L": "20", "rb": 2355, "hp": "15", "vd": 2786, "fn": "FN105", "vz": 3188}, {"m": "4NES-14", "k": 2250, "L": "20", "rb": 2597, "hp": "15", "vd": 3028, "fn": "FN120", "vz": 3614}, {"m": "4NES+20", "k": 2590, "L": "20", "rb": 2895, "hp": "20", "vd": 3434, "fn": "FN160", "vz": 4123}, {"m": "4HE-18", "k": 3190, "L": "20", "rb": 3544, "hp": "20", "vd": 4083, "fn": "FN160", "vz": 4773}, {"m": "4GE-23", "k": 3850, "L": "30", "rb": 4237, "hp": "30", "vd": 5000, "fn": "FN180", "vz": 5618}, {"m": "4HE+25", "k": 4030, "L": "30", "rb": 4317, "hp": "30", "vd": 5080, "fn": "FNV200", "vz": 5963}, {"m": "4GE+30", "k": 4340, "L": "38", "rb": 4642, "hp": "30", "vd": 5397, "fn": "FNV240", "vz": 6542}, {"m": "6GE-34", "k": 4620, "L": "38", "rb": 5051, "hp": "40", "vd": 5993, "fn": "FNV280", "vz": 7305}, {"m": "6GE+40", "k": 4920, "L": "38", "rb": 5366, "hp": "40", "vd": 6308, "fn": "FNV300", "vz": 7777}, {"m": "6FE-44", "k": 5940, "L": "45", "rb": 6445, "hp": "50", "vd": 7570, "fn": "FNV350", "vz": 9120}, {"m": "6FE+50", "k": 5500, "L": "45", "rb": 6005, "hp": "50", "vd": 7130, "fn": "FNV350", "vz": 8680}];
+    var RES = { '8': 176, '10': 202, '12': 236, '15': 254, '20': 305, '30': 387, '38': 431, '45': 505 };
+    var VK = { '3': 178, '5': 245, '8': 290, '10': 321, '15': 431, '20': 539, '30': 763, '40': 942, '50': 1125 };
+    var FN = { FN22: 250, FN43: 403, FN70: 626, FN80: 689, FN105: 833, FN120: 1016, FN160: 1228, FN180: 1381, FNV200: 1646, FNV240: 1900, FNV280: 2254, FNV300: 2411, FNV350: 2675 };
+    var usd = function (n) { return '$' + String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
+    var sgn = function (n) { return n === 0 ? '±$0' : (n > 0 ? '+' : '−') + usd(Math.abs(n)); };
+    var m = BZ[st.model];
+    var res = st.res || m.L, vk = st.vk || m.hp, fn = st.fn || m.fn;
+    var TYPES = [
+      { k: 'k', name: 'Kompressor o‘zi', sub: 'faqat kompressor' },
+      { k: 'rb', name: 'Resiver bachok ustida', sub: 'kompressor + resiver' },
+      { k: 'vd', name: 'Vadinoy agregat', sub: '+ suvli kondensator' },
+      { k: 'vz', name: 'Vazdushniy agregat', sub: '+ FN kondensator, rama' }
+    ];
+    var types = TYPES.map(function (t) {
+      var on = st.type === t.k;
+      return { name: t.name, sub: t.sub, border: on ? '2px solid #1E4E8C' : '1px solid #D9DEE8', bg: on ? '#1E4E8C' : '#FFFFFF', fg: on ? '#FFFFFF' : '#14213D',
+        pick: function () { self.setState({ type: t.k, sent: false }); } };
+    });
+    var mkPart = function (label, table, cur, std, key, fmt) {
+      return { label: label, selBorder: cur !== std ? '2px solid #F2C230' : '1px solid #C9D3E6', changed: cur !== std, same: cur === std, std: fmt(std), delta: sgn(table[cur] - table[std]),
+        set: function (ev) { var o = {}; o[key] = ev.target.value; o.sent = false; self.setState(o); },
+        opts: Object.keys(table).map(function (v) { return { v: v, label: fmt(v) + (v === std ? '  · standart' : ''), sel: v === cur }; }) };
+    };
+    var fL = function (v) { return v + ' L'; }, fHP = function (v) { return v + ' HP'; }, fFN = function (v) { return v; };
+    var parts = [], price = m.k, summary = [{ k: 'Kompressor', v: 'BITZER ' + m.m }], tg = [], title = 'BITZER ' + m.m + ' kompressor';
+    var changedAny = false;
+    if (st.type !== 'k') {
+      parts.push(mkPart('Resiver bachok', RES, res, m.L, 'res', fL));
+      summary.push({ k: 'Resiver', v: res + ' L' }); tg.push('Resiver: ' + res + ' L' + (res !== m.L ? ' (standart ' + m.L + ' L o‘rniga)' : ''));
+      if (res !== m.L) changedAny = true;
+    }
+    if (st.type === 'rb') { price = m.rb + RES[res] - RES[m.L]; title = 'BITZER ' + m.m + ' resiver ustida ' + res + 'L'; }
+    if (st.type === 'vd') {
+      parts.push(mkPart('Vadinoy kondensator', VK, vk, m.hp, 'vk', fHP));
+      price = m.vd + RES[res] - RES[m.L] + VK[vk] - VK[m.hp];
+      summary.push({ k: 'Vadinoy kondensator', v: vk + ' HP' }); tg.push('Vadinoy kondensator: ' + vk + ' HP' + (vk !== m.hp ? ' (standart ' + m.hp + ' HP o‘rniga)' : ''));
+      title = 'BITZER ' + m.m + ' vadinoy agregat · ' + vk + 'HP'; if (vk !== m.hp) changedAny = true;
+    }
+    if (st.type === 'vz') {
+      parts.push(mkPart('Vazdushniy kondensator (rama bilan)', FN, fn, m.fn, 'fn', fFN));
+      price = m.vz + RES[res] - RES[m.L] + FN[fn] - FN[m.fn];
+      summary.push({ k: 'Kondensator', v: fn + ' + rama' }); tg.push('Kondensator: ' + fn + (fn !== m.fn ? ' (standart ' + m.fn + ' o‘rniga)' : '') + ', rama bilan');
+      title = 'BITZER ' + m.m + ' vazdushniy agregat · ' + fn; if (fn !== m.fn) changedAny = true;
+    }
+    var std = st.type === 'k' ? m.k : (st.type === 'rb' ? m.rb : (st.type === 'vd' ? m.vd : m.vz));
+    var models = BZ.map(function (x, i) { return { i: String(i), label: 'BITZER ' + x.m + ' · ' + x.hp + ' HP', sel: i === st.model }; });
+    var STS = [
+      { label: 'Yangi', bg: '#EAF1FB', fg: '#1E4E8C', btn: 'Qabul qildim', wait: 'Ikromjon qabul qilishi kutilmoqda' },
+      { label: 'Qabul qilindi', bg: '#FFF1C2', fg: '#6E5200', btn: 'Chiqib ketdi', wait: 'Sexda ishlanmoqda' },
+      { label: 'Chiqib ketdi', bg: '#FDE1DE', fg: '#A41F15', btn: 'Krimga oldim', wait: 'Vaha krimga olishi kutilmoqda' },
+      { label: 'Krimga olindi', bg: '#E2F3E8', fg: '#1B6B43', btn: null, wait: '✓ Yopildi' }
+    ];
+    var TIMES = { '0413': ['hozir', 'hozir', 'hozir'], '0412': ['09:12', '09:40', '13:05'], '0411': ['10:20', '10:31', '11:02'], '0410': ['08:05', '08:30', '15:45'], '0409': ['11:00', '11:10', '11:25'], '0408': ['09:00', '09:15', '14:20'], '0407': ['10:00', '10:05', '10:30'] };
+    var KRIMT = { '0408': '17:40', '0407': '18:05', '0413': 'hozir' };
+    var DATA = [
+      ['0412', '05-okt', 'Agregat', 'BITZER 4NES+20 vazdushniy agregat · FNV200', 'Abduraxmon', 'Mijoz: Rustam aka'],
+      ['0411', '05-okt', 'Zapchast', 'Vibro shlang F28 ×10, glazok 3/8 ×2', 'Atxamaka', 'Vitrina'],
+      ['0410', '04-okt', 'Agregat', 'Briliant YBF4FC+5G vadinoy agregat · 5HP', 'Sirojiddin', 'Mijoz: Qo‘qon meva'],
+      ['0409', '04-okt', 'Zapchast', 'Solenoid klapan 1/2 ×4', 'Lola filiali', 'Vitrina'],
+      ['0408', '03-okt', 'Agregat', 'XUEYING BR +20PG resiver ustida 30L', 'Bositxon aka', 'Mijoz: Ilhom fermer'],
+      ['0407', '02-okt', 'Zapchast', 'Resiver bachok 20 L ×1', 'Anasxon aka', 'Vitrina']
+    ];
+    if (st.sent) DATA.unshift(['0413', 'hozir', 'Agregat', title, 'Abduraxmon', 'Mijoz: Rustam aka']);
+    var stOf = function (n) { return n === '0413' ? (st.st['0413'] || 0) : st.st[n]; };
+    var boss = st.role === 'boss';
+    var rows = DATA.map(function (r) {
+      var i = stOf(r[0]), S = STS[i];
+      var mine = boss ? i === 2 : (i === 0 || i === 1);
+      var T = TIMES[r[0]] || ['', '', ''];
+      var step = function (k, done, who, t, pend, warn) { return { k: k, v: done ? ' ' + who + ' · ' + t : ' ' + pend, dot: done ? '#1B6B43' : (warn ? '#D2372B' : '#C9D3E6'), c: done ? '#14213D' : (warn ? '#A41F15' : '#4F5A70') }; };
+      var steps = [
+        step('Qabul qildi', i >= 1, 'Ikromjon', T[1], 'kutilmoqda', i === 0),
+        step('Chiqarib yubordi', i >= 2, 'Ikromjon', T[2], i >= 1 ? 'kutilmoqda' : '—', i === 1),
+        step('Krimga oldi', i >= 3, 'Vaha', KRIMT[r[0]] || '17:00', i >= 2 ? 'tasdiqlash kutilmoqda' : '—', i === 2)
+      ];
+      return { steps: steps, sT: T[0], n: r[0], d: r[1], t: r[2], p: r[3], s: r[4], k: r[5], kc: r[5] === 'Vitrina' ? '#3E4A60' : '#1E4E8C',
+        st: S.label, bg: S.bg, fg: S.fg, hasBtn: mine, noBtn: !mine, btn: S.btn, wait: S.wait,
+        btnBg: i === 2 ? '#A41F15' : '#1E4E8C', rowBg: r[0] === '0413' ? '#F5F9FF' : '#FFFFFF',
+        act: function () { var n = Object.assign({}, st.st); n[r[0]] = i + 1; self.setState({ st: n }); } };
+    });
+    if (!boss) rows = rows.filter(function (r) { return stOf(r.n) < 2; });
+    var cnt = [0, 0, 0, 0]; DATA.forEach(function (r) { cnt[stOf(r[0])]++; });
+    var roles = [['boss', 'Vaha · hammasi'], ['sex', 'Ikromjon · sex']].map(function (x) {
+      var on = st.role === x[0];
+      return { label: x[1], bg: on ? '#1E4E8C' : 'transparent', fg: on ? '#FFFFFF' : '#14213D', pick: function () { self.setState({ role: x[0] }); } };
+    });
+    var stats = boss ? [
+      { k: 'Yangi · qabul kutmoqda', v: String(cnt[0]), bg: '#EAF1FB', fg: '#1E4E8C' },
+      { k: 'Sexda ishlanmoqda', v: String(cnt[1]), bg: '#FFF1C2', fg: '#6E5200' },
+      { k: 'Chiqib ketdi · krim kutmoqda', v: String(cnt[2]), bg: '#FDE1DE', fg: '#A41F15' },
+      { k: 'Krimga olindi', v: String(cnt[3]), bg: '#E2F3E8', fg: '#1B6B43' }
+    ] : [
+      { k: 'Qabul qilishim kerak', v: String(cnt[0]), bg: '#EAF1FB', fg: '#1E4E8C' },
+      { k: 'Ishlanmoqda · chiqarishim kerak', v: String(cnt[1]), bg: '#FFF1C2', fg: '#6E5200' }
+    ];
+    return {
+      models: models, types: types, parts: parts, hasParts: parts.length > 0, otherBrand: st.brand !== 'bitzer',
+      setBrand: function (ev) { self.setState({ brand: ev.target.value }); },
+      setModel: function (ev) { self.setState({ model: parseInt(ev.target.value, 10), res: null, vk: null, fn: null, sent: false }); },
+      title: title, summary: summary, tgLines: tg, priceL: usd(price),
+      priceNote: price === std ? 'Praysdagi standart narx' : 'Standartdan ' + sgn(price - std) + ' (almashtirilgan qismlar)',
+      priceNoteC: price === std ? '#1B6B43' : '#6E5200',
+      send: function () { if (!st.sent) self.setState({ sent: true }); },
+      sendLabel: st.sent ? '✓ Sex guruhiga yuborildi' : 'Buyurtma berish', sendBg: st.sent ? '#1B6B43' : '#1E4E8C',
+      orderNo: '0413',
+      monthStats: [
+        { k: 'Jami buyurtma', v: '64', bg: '#EAF1FB', fg: '#1E4E8C' },
+        { k: 'Yig‘ilmoqda', v: '5', bg: '#FFF1C2', fg: '#6E5200' },
+        { k: 'Tayyor / topshirildi', v: '57', bg: '#E2F3E8', fg: '#1B6B43' },
+        { k: 'Kechikkan', v: '2', bg: '#FDE1DE', fg: '#A41F15' }
+      ],
+      rows: rows, roles: roles, stats: stats, isBoss: boss,
+      tblTitle: boss ? 'Sex zakazlari · Oktabr 2026' : 'Mening vazifalarim · Ikromjon',
+      tblSub: boss ? 'Hammasini ko‘rasiz · sizning tugmangiz faqat “Krimga oldim”' : 'Zapchast va agregat zakazlari · qabul qiling, chiqqach “Chiqib ketdi” bosing'
+    };
+  }
+}
+</script>
+</body>
+</html>

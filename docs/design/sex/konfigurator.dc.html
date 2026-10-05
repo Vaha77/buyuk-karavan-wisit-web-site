@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<title>Komplekt konfiguratori</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F6FA}
+a{color:#1E4E8C}a:hover{color:#163A69}
+</style>
+</helmet>
+<div style="font-family: Manrope, system-ui, sans-serif; color: #14213D; background: #F4F6FA; min-height: 100vh; box-sizing: border-box; padding: 28px 24px 64px">
+<div style="max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4F5A70">Hisob-kitob / Yangi konfiguratsiya</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.02em">Komplekt konfiguratori</h1>
+<p style="margin: 0; font-size: 14px; color: #4F5A70">Hisob prays narxida · ustama faqat oxirida qo‘yiladi</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<label style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D9DEE8; font-size: 14px; font-weight: 600">Mijoz
+<select style="border: 0; background: transparent; font: inherit; color: #1E4E8C; font-weight: 700">
+<option>Rustam aka · Namangan</option>
+<option>+ Yangi mijoz</option>
+</select>
+</label>
+<button style="height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #1E4E8C; background: #FFFFFF; color: #1E4E8C; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Saqlash</button>
+<button style="height: 44px; padding: 0 18px; border-radius: 10px; border: 0; background: #1E4E8C; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Tijorat taklifi PDF</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 18px 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 12px; font-weight: 700; color: #4F5A70; letter-spacing: 0.05em">STANDART SHABLON · PRAYS</span>
+<span style="font-size: 18px; font-weight: 800">XUEYING BR +20PG vazdushniy agregat komplekti FN160 + DD160</span>
+<span style="font-size: 13px; color: #4F5A70">Prays narxi <b style="color: #14213D">$4 454</b> · saytda $4 900 (+10%)</span>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+<span style="padding: 6px 12px; border-radius: 99px; background: {{changedBg}}; color: {{changedFg}}; font-size: 12px; font-weight: 800">{{changedLabel}}</span>
+<button onClick="{{reset}}" style="height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid #D9DEE8; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; color: #14213D; cursor: pointer">Standartga qaytarish</button>
+</div>
+</div>
+
+<sc-for list="{{slots}}" as="s" hint-placeholder-count="3">
+<div style="background: #FFFFFF; border: {{s.border}}; border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px">
+<span style="width: 44px; height: 44px; border-radius: 12px; background: #EAF1FB; color: #1E4E8C; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0">{{s.short}}</span>
+<div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 12px; font-weight: 700; color: #4F5A70; letter-spacing: 0.04em">{{s.title}}</span>
+<span style="font-size: 17px; font-weight: 800">{{s.cur.name}}</span>
+<span style="font-size: 13px; color: #4F5A70">{{s.cur.spec}}</span>
+</div>
+<sc-if value="{{s.changed}}" hint-placeholder-val="{{ false }}">
+<span style="padding: 4px 10px; border-radius: 99px; background: #FFF1C2; color: #6E5200; font-size: 12px; font-weight: 800">O‘zgartirildi · standart: {{s.stdName}}</span>
+</sc-if>
+<span style="font-size: 17px; font-weight: 800; min-width: 80px; text-align: right">{{s.cur.priceL}}</span>
+<button onClick="{{s.toggle}}" style="height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #1E4E8C; background: {{s.btnBg}}; color: {{s.btnFg}}; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">{{s.btnLabel}}</button>
+</div>
+<div style="font-size: 12px; color: #3E4A60; background: #F6F8FB; border-radius: 8px; padding: 8px 12px">Manba: {{s.cur.src}}</div>
+<sc-if value="{{s.open}}" hint-placeholder-val="{{ false }}">
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; border-top: 1px solid #EEF1F6; padding-top: 14px">
+<sc-for list="{{s.opts}}" as="o" hint-placeholder-count="3">
+<button onClick="{{o.pick}}" style="text-align: left; border-radius: 12px; border: {{o.border}}; background: {{o.bg}}; padding: 12px 14px; font: inherit; color: #14213D; cursor: pointer; display: flex; flex-direction: column; gap: 6px">
+<span style="display: flex; justify-content: space-between; gap: 8px; align-items: baseline"><b style="font-size: 15px">{{o.name}}</b><span style="font-size: 13px; font-weight: 800; color: {{o.deltaC}}">{{o.delta}}</span></span>
+<span style="font-size: 12px; color: #4F5A70">{{o.spec}}</span>
+<span style="font-size: 13px; font-weight: 700">{{o.priceL}}</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-for>
+
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Qo‘shimchalar <span style="font-size: 13px; color: #4F5A70; font-weight: 600">· prays narxida</span></h2>
+<button onClick="{{addExtra}}" style="height: 36px; padding: 0 14px; border-radius: 8px; border: 1px dashed #1E4E8C; background: #FFFFFF; color: #1E4E8C; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">+ Qator qo‘shish</button>
+</div>
+<sc-for list="{{extras}}" as="e" hint-placeholder-count="2">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid #EEF1F6">
+<label style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: #4F5A70">Nomi<input value="{{e.name}}" onInput="{{e.setName}}" style="height: 40px; border: 1px solid #D9DEE8; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 14px; color: #14213D"></label>
+<label style="width: 140px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: #4F5A70">Narx, $<input value="{{e.price}}" onInput="{{e.setPrice}}" inputmode="decimal" placeholder="0" style="height: 40px; border: 1px solid #D9DEE8; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 14px; color: #14213D"></label>
+<button onClick="{{e.remove}}" aria-label="Qatorni o‘chirish" style="align-self: flex-end; height: 40px; width: 40px; border-radius: 8px; border: 1px solid #F3C7C2; background: #FFFFFF; color: #A41F15; font: inherit; font-size: 18px; cursor: pointer">×</button>
+</div>
+</sc-for>
+</div>
+
+</div>
+
+<div style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0 0 4px; font-size: 16px; font-weight: 800">Hisob · prays narxida</h2>
+<sc-for list="{{lines}}" as="l" hint-placeholder-count="3">
+<div style="display: flex; justify-content: space-between; gap: 10px; font-size: 14px"><span style="color: #3E4A60">{{l.label}}</span><b>{{l.v}}</b></div>
+</sc-for>
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="color: #3E4A60">Qo‘shimchalar</span><b>{{extrasL}}</b></div>
+<div style="display: flex; justify-content: space-between; align-items: baseline; padding-top: 10px; border-top: 1px solid #EEF1F6"><span style="font-size: 14px; font-weight: 800">Prays jami</span><span style="font-size: 20px; font-weight: 800">{{baseL}}</span></div>
+<span style="font-size: 12px; color: {{vsStdC}}; font-weight: 700">{{vsStd}}</span>
+
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px; margin-top: 6px; border-radius: 12px; background: #EAF1FB">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 14px; font-weight: 800">Ustama</span><span style="font-size: 22px; font-weight: 800; color: #1E4E8C">{{markupL}}</span></div>
+<input type="range" min="0" max="15" step="1" value="{{markup}}" onInput="{{setMarkup}}" aria-label="Ustama foizi" style="width: 100%; accent-color: #1E4E8C">
+<div style="display: flex; gap: 6px; flex-wrap: wrap">
+<sc-for list="{{presets}}" as="x" hint-placeholder-count="4">
+<button onClick="{{x.pick}}" style="height: 34px; min-width: 52px; padding: 0 10px; border-radius: 8px; border: {{x.border}}; background: {{x.bg}}; color: {{x.fg}}; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer">{{x.label}}</button>
+</sc-for>
+</div>
+<span style="font-size: 12px; color: #3E4A60">0% dan 15% gacha · ustama: <b>{{markupAmtL}}</b></span>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: baseline; padding-top: 12px; border-top: 2px solid #14213D"><span style="font-size: 15px; font-weight: 800">Mijoz uchun narx</span><span style="font-size: 30px; font-weight: 800; letter-spacing: -0.02em">{{totalL}}</span></div>
+<span style="font-size: 12px; color: #4F5A70">Butun dollarga yuqoriga yaxlitlangan · ≈ {{totalUzs}} so‘m (CBU)</span>
+</div>
+
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { sel: { comp: 0, cond: 0, evap: 0 }, open: 'cond', markup: 10, extras: [{ name: 'Montaj', price: '' }] };
+  }
+  renderVals() {
+    var self = this, st = this.state;
+    var usd = function (n) { return '$' + String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
+    var sgn = function (n) { return n === 0 ? '±$0' : (n > 0 ? '+' : '−') + usd(Math.abs(n)); };
+    var SLOTS = [
+      { key: 'comp', short: 'KM', title: 'KOMPRESSOR', opts: [
+        { name: 'XUEYING BR +20PG', spec: 'Yarim germetik · 20 HP', price: 880, src: 'Prays: BR +20PG kompressor = $880' },
+        { name: 'XUEYING BR +25PG', spec: 'Yarim germetik · 25 HP', price: 1220, src: 'Prays: BR +25PG kompressor = $1 220' },
+        { name: 'XUEYING BR −25PZ', spec: 'Yarim germetik · 25 HP', price: 1260, src: 'Prays: BR −25PZ kompressor = $1 260' } ] },
+      { key: 'cond', short: 'FN', title: 'KONDENSATOR BLOKI · resiver + rama bilan', opts: [
+        { name: 'FN160', spec: '4 m rama · 20 L resiver', price: 1533, src: 'BR +20PG agregat FN160 $2 413 − BR +20PG kompressor $880 = $1 533' },
+        { name: 'FNV200', spec: '7 m rama · 30 L resiver', price: 2033, src: 'BR −25PZ agregat FNV200 $3 293 − BR −25PZ kompressor $1 260 = $2 033' } ] },
+      { key: 'evap', short: 'DD', title: 'ISPARITEL QISMI', opts: [
+        { name: 'DD160', spec: 'Alumin', price: 2041, src: 'BR +20PG komplekt $4 454 − BR +20PG agregat $2 413 = $2 041' },
+        { name: 'DD200', spec: 'Alumin', price: 2347, src: 'BR +25PG komplekt $5 600 − BR +25PG agregat $3 253 = $2 347' },
+        { name: 'DJ170', spec: 'Nerj', price: 3023, src: 'BR −25PZ komplekt $6 316 − BR −25PZ agregat $3 293 = $3 023' } ] }
+    ];
+    var STD = 4454, base = 0, changed = 0, lines = [];
+    var slots = SLOTS.map(function (s) {
+      var curI = st.sel[s.key], cur = s.opts[curI], std = s.opts[0];
+      base += cur.price; if (curI !== 0) changed++;
+      lines.push({ label: cur.name, v: usd(cur.price) });
+      var open = st.open === s.key;
+      return {
+        short: s.short, title: s.title, cur: { name: cur.name, spec: cur.spec, priceL: usd(cur.price), src: cur.src },
+        changed: curI !== 0, stdName: std.name,
+        border: open ? '2px solid #1E4E8C' : '1px solid #E3E7EF',
+        btnBg: open ? '#1E4E8C' : '#FFFFFF', btnFg: open ? '#FFFFFF' : '#1E4E8C', btnLabel: open ? 'Yopish' : 'Almashtirish', open: open,
+        toggle: function () { self.setState({ open: open ? null : s.key }); },
+        opts: s.opts.map(function (o, i) {
+          var on = i === curI, d = o.price - cur.price;
+          return { name: o.name + (i === 0 ? ' · standart' : ''), spec: o.spec, priceL: 'Prays: ' + usd(o.price),
+            delta: on ? 'tanlangan' : sgn(d), deltaC: on ? '#1E4E8C' : (d > 0 ? '#14213D' : '#1B6B43'),
+            border: on ? '2px solid #1E4E8C' : '1px solid #D9DEE8', bg: on ? '#EAF1FB' : '#FFFFFF',
+            pick: function () { var n = Object.assign({}, st.sel); n[s.key] = i; self.setState({ sel: n }); } };
+        })
+      };
+    });
+    var exTotal = 0;
+    var extras = st.extras.map(function (e, i) {
+      var v = parseFloat(String(e.price).replace(',', '.')); if (!isNaN(v)) exTotal += v;
+      var upd = function (patch) { var n = st.extras.slice(); n[i] = Object.assign({}, n[i], patch); self.setState({ extras: n }); };
+      return { name: e.name, price: e.price,
+        setName: function (ev) { upd({ name: ev.target.value }); }, setPrice: function (ev) { upd({ price: ev.target.value }); },
+        remove: function () { var n = st.extras.slice(); n.splice(i, 1); self.setState({ extras: n }); } };
+    });
+    var baseAll = base + exTotal;
+    var total = Math.ceil(baseAll * (100 + st.markup) / 100 - 1e-9);
+    var diff = base - STD;
+    var presets = [0, 5, 10, 15].map(function (p) {
+      var on = st.markup === p;
+      return { label: p + '%', pick: function () { self.setState({ markup: p }); }, border: on ? '2px solid #1E4E8C' : '1px solid #C9D3E6', bg: on ? '#1E4E8C' : '#FFFFFF', fg: on ? '#FFFFFF' : '#14213D' };
+    });
+    return {
+      slots: slots, extras: extras, lines: lines, presets: presets,
+      changedLabel: changed ? changed + ' ta qism o‘zgartirilgan' : 'Standart holatda',
+      changedBg: changed ? '#FFF1C2' : '#E2F3E8', changedFg: changed ? '#6E5200' : '#1B6B43',
+      reset: function () { self.setState({ sel: { comp: 0, cond: 0, evap: 0 }, markup: 10 }); },
+      addExtra: function () { self.setState({ extras: st.extras.concat([{ name: '', price: '' }]) }); },
+      extrasL: usd(exTotal), baseL: usd(baseAll),
+      vsStd: diff === 0 ? 'Standart komplekt bilan bir xil' : 'Standart komplektdan ' + sgn(diff) + ' (qismlar bo‘yicha)',
+      vsStdC: diff === 0 ? '#1B6B43' : '#6E5200',
+      markup: st.markup, markupL: st.markup + '%', markupAmtL: usd(total - baseAll),
+      setMarkup: function (ev) { self.setState({ markup: parseInt(ev.target.value, 10) || 0 }); },
+      totalL: usd(total), totalUzs: String(Math.round(total * 11807)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+    };
+  }
+}
+</script>
+</body>
+</html>

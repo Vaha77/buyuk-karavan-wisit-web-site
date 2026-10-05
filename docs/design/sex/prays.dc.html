@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<title>Prays bo‘limi</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F6FA}
+a{color:#1E4E8C}a:hover{color:#163A69}
+</style>
+</helmet>
+<div style="font-family: Manrope, system-ui, sans-serif; color: #14213D; background: #F4F6FA; min-height: 100vh; box-sizing: border-box; padding: 28px 24px 64px">
+<div style="max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px">
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4F5A70">Admin / Prays · faqat Super Admin</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.02em">Prays</h1>
+<p style="margin: 0; font-size: 14px; color: #4F5A70">Barcha narxlarning yagona manbai · katalog, konfigurator, zborka va sex shu yerdan oladi</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button style="height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #C9D3E6; background: #FFFFFF; color: #14213D; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Excel yuklab olish</button>
+<button onClick="{{openImport}}" style="height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #1E4E8C; background: #FFFFFF; color: #1E4E8C; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Excel yuklash</button>
+<button onClick="{{openImport}}" style="height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #1E4E8C; background: #FFFFFF; color: #1E4E8C; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Rasm orqali (AI)</button>
+<button onClick="{{openPct}}" style="height: 44px; padding: 0 16px; border-radius: 10px; border: 0; background: #1E4E8C; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Foiz bilan o‘zgartirish</button>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px">
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; font-weight: 700; color: #4F5A70">Tayyor mahsulotlar</span><span style="font-size: 26px; font-weight: 800">412</span><span style="font-size: 12px; color: #4F5A70">Bitzer 76 · XUEYING 166 · Briliant 170</span></div>
+<div style="background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; font-weight: 700; color: #4F5A70">Sex zapchastlari</span><span style="font-size: 26px; font-weight: 800">48</span><span style="font-size: 12px; color: #4F5A70">20 tur · o‘lchamlari bilan</span></div>
+<div style="background: #EAF1FB; border: 1px solid #C9D3E6; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 6px"><label for="ustama" style="font-size: 12px; font-weight: 700; color: #1E4E8C">Sotuv ustamasi</label>
+<select id="ustama" onChange="{{setMarkup}}" style="height: 40px; border: 1px solid #1E4E8C; border-radius: 10px; padding: 0 10px; font: inherit; font-size: 18px; font-weight: 800; color: #1E4E8C; background: #FFFFFF">
+<sc-for list="{{markups}}" as="m" hint-placeholder-count="20">
+<option value="{{m.v}}" selected="{{m.sel}}">{{m.label}}</option>
+</sc-for>
+</select>
+<span style="font-size: 12px; color: #1E4E8C">sotuv narxlari darhol qayta hisoblanadi</span></div>
+<div style="background: #FFF4CC; border: 1px solid #F3DFA8; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; font-weight: 700; color: #6E5200">Eng eski prays</span><span style="font-size: 26px; font-weight: 800; color: #6E5200">80 kun</span><span style="font-size: 12px; color: #6E5200">Bitzer R22 · 15.07.26 — yangilashni tekshiring</span></div>
+</div>
+
+<sc-if value="{{showImport}}" hint-placeholder-val="{{ false }}">
+<div style="background: #FFFFFF; border: 2px solid #1E4E8C; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 3px"><h2 style="margin: 0; font-size: 18px; font-weight: 800">Yangi prays: tekshirib tasdiqlang</h2><span style="font-size: 13px; color: #4F5A70">Fayl: XUEYING_prays_05.10.26.xlsx · 3 ta narx o‘zgaradi · 1 ta yangi · 1 ta o‘zgarmaydi</span></div>
+<div style="display: flex; gap: 8px"><button onClick="{{closeImport}}" style="height: 42px; padding: 0 16px; border-radius: 10px; border: 1px solid #C9D3E6; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Bekor qilish</button><button onClick="{{applyImport}}" style="height: 42px; padding: 0 18px; border-radius: 10px; border: 0; background: #1B6B43; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 800; cursor: pointer">Tasdiqlash</button></div>
+</div>
+<div style="overflow-x: auto"><div style="min-width: 680px; display: flex; flex-direction: column">
+<div style="display: grid; grid-template-columns: minmax(240px, 2fr) 110px 110px 110px 120px; gap: 12px; padding: 8px; font-size: 12px; font-weight: 700; color: #4F5A70; text-transform: uppercase; border-bottom: 1px solid #E3E7EF"><span>Mahsulot</span><span style="text-align: right">Eski</span><span style="text-align: right">Yangi</span><span style="text-align: right">Farq</span><span>Holat</span></div>
+<sc-for list="{{importRows}}" as="r" hint-placeholder-count="5">
+<div style="display: grid; grid-template-columns: minmax(240px, 2fr) 110px 110px 110px 120px; gap: 12px; padding: 10px 8px; border-bottom: 1px solid #EEF1F6; font-size: 14px; align-items: center"><span style="font-weight: 600">{{r.n}}</span><span style="text-align: right; color: #4F5A70">{{r.o}}</span><span style="text-align: right; font-weight: 800">{{r.nw}}</span><span style="text-align: right; font-weight: 700; color: {{r.c}}">{{r.d}}</span><span style="justify-self: start; padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 800; background: {{r.bg}}; color: {{r.c}}">{{r.st}}</span></div>
+</sc-for>
+</div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{showPct}}" hint-placeholder-val="{{ false }}">
+<div style="background: #FFFFFF; border: 2px solid #1E4E8C; border-radius: 16px; padding: 20px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px">
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">Qaysi narxlar
+<select style="height: 44px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 14px; background: #FFFFFF; min-width: 220px"><option>Bitzer — hammasi (76)</option><option>XUEYING — kompressorlar</option><option>Sex — vibro shlanglar</option></select>
+</label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">Foiz
+<input value="+5" style="height: 44px; width: 100px; border: 1px solid #C9D3E6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 700">
+</label>
+<span style="height: 44px; display: flex; align-items: center; font-size: 13px; color: #4F5A70">76 ta narx o‘zgaradi · masalan 2FES+3: $915 → $961</span>
+<div style="margin-left: auto; display: flex; gap: 8px"><button onClick="{{closePct}}" style="height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #C9D3E6; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Bekor qilish</button><button onClick="{{closePct}}" style="height: 44px; padding: 0 18px; border-radius: 10px; border: 0; background: #1E4E8C; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 800; cursor: pointer">Ko‘rib chiqish</button></div>
+</div>
+</sc-if>
+
+<div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start">
+<div style="flex: 999 1 720px; min-width: 0; background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: center">
+<div style="display: flex; gap: 4px; background: #F4F6FA; border: 1px solid #E3E7EF; border-radius: 12px; padding: 4px">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="2">
+<button onClick="{{t.pick}}" style="height: 38px; padding: 0 14px; border-radius: 9px; border: 0; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">{{t.label}}</button>
+</sc-for>
+</div>
+<label style="display: flex; align-items: center; gap: 8px; height: 42px; border: 1px solid #D9DEE8; border-radius: 10px; padding: 0 12px; min-width: 240px"><span style="color: #4F5A70">⌕</span><input placeholder="Nomi yoki model bo‘yicha qidirish" style="border: 0; outline: 0; font: inherit; font-size: 14px; flex-grow: 1"></label>
+</div>
+<div style="display: flex; gap: 6px; flex-wrap: wrap">
+<sc-for list="{{chips}}" as="c" hint-placeholder-count="4">
+<button onClick="{{c.pick}}" style="height: 34px; padding: 0 12px; border-radius: 99px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+<div style="overflow-x: auto"><div style="min-width: 760px; display: flex; flex-direction: column">
+<div style="display: grid; grid-template-columns: minmax(240px, 2fr) 100px 140px 110px 110px 150px; gap: 12px; padding: 8px; font-size: 12px; font-weight: 700; color: #4F5A70; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #E3E7EF"><span>Nomi</span><span>Brend / tur</span><span style="text-align: right">Prays narxi</span><span style="text-align: right">Sotuv ({{markupL}})</span><span>O‘zgargan</span><span style="text-align: right">Amal</span></div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+<div style="display: grid; grid-template-columns: minmax(240px, 2fr) 100px 140px 110px 110px 150px; gap: 12px; padding: 11px 8px; border-bottom: 1px solid #EEF1F6; font-size: 14px; align-items: center; background: {{r.bg}}">
+<span style="font-weight: 600">{{r.n}}</span>
+<span style="font-size: 12px; color: #4F5A70; font-weight: 700">{{r.b}}</span>
+<sc-if value="{{r.editing}}" hint-placeholder-val="{{ false }}">
+<input value="{{r.draft}}" onInput="{{r.setDraft}}" inputmode="decimal" aria-label="Yangi prays narxi" style="justify-self: end; width: 100px; height: 36px; border: 2px solid #1E4E8C; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; font-weight: 800; text-align: right">
+</sc-if>
+<sc-if value="{{r.view}}" hint-placeholder-val="{{ true }}">
+<span style="justify-self: end; padding: 6px 10px; border-radius: 8px; border: 1px solid #D9DEE8; font-weight: 800; min-width: 70px; text-align: right">{{r.p}}</span>
+</sc-if>
+<span style="text-align: right; font-weight: 700; color: #1E4E8C">{{r.s}}</span>
+<span style="font-size: 12px; color: {{r.dc}}; font-weight: {{r.dw}}">{{r.d}}</span>
+<div style="display: flex; gap: 6px; justify-content: flex-end">
+<sc-if value="{{r.editing}}" hint-placeholder-val="{{ false }}">
+<button onClick="{{r.save}}" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 0; background: #1B6B43; color: #FFFFFF; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer">Saqlash</button>
+<button onClick="{{r.cancel}}" aria-label="Bekor qilish" style="height: 34px; width: 34px; border-radius: 8px; border: 1px solid #D9DEE8; background: #FFFFFF; font: inherit; font-size: 16px; cursor: pointer">×</button>
+</sc-if>
+<sc-if value="{{r.confirmDel}}" hint-placeholder-val="{{ false }}">
+<button onClick="{{r.doDelete}}" style="height: 34px; padding: 0 10px; border-radius: 8px; border: 0; background: #A41F15; color: #FFFFFF; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer">Ha, o‘chirish</button>
+<button onClick="{{r.cancel}}" aria-label="Bekor qilish" style="height: 34px; width: 34px; border-radius: 8px; border: 1px solid #D9DEE8; background: #FFFFFF; font: inherit; font-size: 16px; cursor: pointer">×</button>
+</sc-if>
+<sc-if value="{{r.idle}}" hint-placeholder-val="{{ true }}">
+<button onClick="{{r.edit}}" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #1E4E8C; background: #FFFFFF; color: #1E4E8C; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer">O‘zgartirish</button>
+<button onClick="{{r.askDel}}" aria-label="O‘chirish" style="height: 34px; width: 34px; border-radius: 8px; border: 1px solid #F3C7C2; background: #FFFFFF; color: #A41F15; font: inherit; font-size: 15px; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display: block; margin: 0 auto"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path></svg></button>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</div></div>
+<span style="font-size: 12px; color: #4F5A70">“O‘zgartirish” — tannarxni tahrirlash · o‘chirishdan oldin tasdiq so‘raladi · sotuv narxi ustama bo‘yicha o‘zi hisoblanadi</span>
+</div>
+
+<div style="flex: 1 1 300px; min-width: 0; background: #FFFFFF; border: 1px solid #E3E7EF; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Narx tarixi</h2>
+<sc-for list="{{history}}" as="h" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 3px; padding: 10px 0; border-top: 1px solid #EEF1F6">
+<span style="font-size: 13px; font-weight: 800">{{h.t}}</span>
+<span style="font-size: 12px; color: #3E4A60">{{h.d}}</span>
+<span style="font-size: 12px; color: #4F5A70">{{h.w}}</span>
+</div>
+</sc-for>
+<span style="font-size: 12px; color: #4F5A70; padding-top: 6px; border-top: 1px solid #EEF1F6">Zakaz berilgan paytdagi narx zakaz ichida saqlanadi — keyingi o‘zgarishlar eski zakazlarga ta’sir qilmaydi.</span>
+</div>
+</div>
+
+<p style="margin: 0; font-size: 12px; color: #4F5A70">Bitzer, XUEYING, Briliant narxlari — haqiqiy prays. Sex zapchastlari narxlari, import va tarix — namuna.</p>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1600}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { tab: 'ready', brand: 'all', imp: false, pct: false, applied: false, markup: 10, prices: {}, deleted: {}, editing: null, draft: '', del: null, edited: {} }; }
+  renderVals() {
+    var self = this, st = this.state;
+    var usd = function (n) { return '$' + String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
+    var sell = function (p) { return Math.ceil(p * (100 + st.markup) / 100 - 1e-9); };
+    var A = st.applied;
+    var READY = [
+      ['BITZER 2FES+3 kompressor', 'Bitzer', 915, '15.07.26'],
+      ['BITZER 4NES+20 vazdushniy agregat · FN160', 'Bitzer', 4123, '15.07.26'],
+      ['BITZER 4GE-23 vadinoy agregat · 30HP', 'Bitzer', 5000, '15.07.26'],
+      ['XUEYING BR +20PG kompressor', 'XUEYING', A ? 920 : 880, A ? 'bugun' : '28.09.26', A],
+      ['XUEYING BR +25PG kompressor', 'XUEYING', A ? 1270 : 1220, A ? 'bugun' : '28.09.26', A],
+      ['XUEYING BR +20PG vazdushniy agregat · FN160', 'XUEYING', 2413, '28.09.26'],
+      ['XUEYING BR −25PZ vazdushniy agregat · FNV200', 'XUEYING', 3293, '28.09.26'],
+      ['BRILIANT YBF4FC+5G kompressor', 'Briliant', 480, '29.09.26'],
+      ['BRILIANT YBF4FC+5G resiver ustida 10L', 'Briliant', 682, '29.09.26'],
+      ['BRILIANT YBF4FC+5G vazdushniy agregat · FN43', 'Briliant', 1085, '29.09.26']
+    ];
+    var SEX = [
+      ['Glazok 3/8', 'Glazok', 9, '01.10.26'], ['Glazok 1/2', 'Glazok', 11, '01.10.26'],
+      ['Solenoid klapan 1/2', 'Klapan', 38, '01.10.26'], ['Solenoid klapan 5/8', 'Klapan', 46, '01.10.26'],
+      ['Vibro shlang F22', 'Shlang', 14, '01.10.26'], ['Vibro shlang F28', 'Shlang', 19, '01.10.26'],
+      ['Filtr osushitel 3/8', 'Filtr', 12, '01.10.26'], ['Resiver bachok 20 L', 'Resiver', 300, '01.10.26']
+    ];
+    var src = st.tab === 'ready' ? READY : SEX;
+    var brands = st.tab === 'ready' ? ['all', 'Bitzer', 'XUEYING', 'Briliant'] : ['all', 'Glazok', 'Klapan', 'Shlang', 'Filtr', 'Resiver'];
+    var chips = brands.map(function (b) {
+      var on = st.brand === b;
+      return { label: b === 'all' ? 'Hammasi' : b, border: on ? '1px solid #1E4E8C' : '1px solid #D9DEE8', bg: on ? '#1E4E8C' : '#FFFFFF', fg: on ? '#FFFFFF' : '#14213D', pick: function () { self.setState({ brand: b }); } };
+    });
+    var rows = src.filter(function (r) { return (st.brand === 'all' || r[1] === st.brand) && !st.deleted[r[0]]; }).map(function (r) {
+      var price = st.prices[r[0]] != null ? st.prices[r[0]] : r[2];
+      var ch = r[4] || st.edited[r[0]], ed = st.editing === r[0], dl = st.del === r[0];
+      return { n: r[0], b: r[1], p: usd(price), s: usd(sell(price)), d: ch ? 'bugun · Vaha' : r[3], dc: ch ? '#1B6B43' : '#4F5A70', dw: ch ? 800 : 500,
+        bg: dl ? '#FDF1EF' : (ch ? '#F1FAF4' : '#FFFFFF'),
+        editing: ed, view: !ed, confirmDel: dl, idle: !ed && !dl, draft: st.draft,
+        edit: function () { self.setState({ editing: r[0], draft: String(price), del: null }); },
+        setDraft: function (ev) { self.setState({ draft: ev.target.value }); },
+        save: function () { var v = parseFloat(String(st.draft).replace(',', '.').replace(/\s/g, '')); if (!isNaN(v) && v > 0) { var np = Object.assign({}, st.prices); np[r[0]] = v; var ne = Object.assign({}, st.edited); ne[r[0]] = true; self.setState({ prices: np, edited: ne, editing: null }); } },
+        cancel: function () { self.setState({ editing: null, del: null }); },
+        askDel: function () { self.setState({ del: r[0], editing: null }); },
+        doDelete: function () { var nd = Object.assign({}, st.deleted); nd[r[0]] = true; self.setState({ deleted: nd, del: null }); } };
+    });
+    var markups = []; for (var m = 1; m <= 20; m++) markups.push({ v: String(m), label: '+' + m + '%', sel: m === st.markup });
+    var tabs = [['ready', 'Tayyor mahsulotlar · 412'], ['sex', 'Sex zapchastlari · 48']].map(function (t) {
+      var on = st.tab === t[0];
+      return { label: t[1], bg: on ? '#1E4E8C' : 'transparent', fg: on ? '#FFFFFF' : '#14213D', pick: function () { self.setState({ tab: t[0], brand: 'all' }); } };
+    });
+    var importRows = [
+      ['XUEYING BR +20PG kompressor', 880, 920, 'up'], ['XUEYING BR +25PG kompressor', 1220, 1270, 'up'],
+      ['XUEYING BR −25PZ kompressor', 1260, 1240, 'down'], ['XUEYING BR +30PG kompressor', null, 1510, 'new'],
+      ['XUEYING BR +10G kompressor', 640, 640, 'same']
+    ].map(function (r) {
+      var d = r[1] === null ? null : (r[2] - r[1]) / r[1] * 100;
+      var M = { up: ['O‘zgaradi', '#8A3F00', '#FDE6D2'], down: ['Arzonlashadi', '#1B6B43', '#E2F3E8'], new: ['Yangi', '#1E4E8C', '#EAF1FB'], same: ['O‘zgarmaydi', '#4F5A70', '#EEF1F6'] }[r[3]];
+      return { n: r[0], o: r[1] === null ? '—' : usd(r[1]), nw: usd(r[2]), d: d === null ? 'yangi' : (d === 0 ? '0%' : (d > 0 ? '+' : '') + d.toFixed(1).replace('.', ',') + '%'), st: M[0], c: M[1], bg: M[2] };
+    });
+    var history = (A ? [{ t: 'XUEYING · Excel import', d: '2 ta narx oshdi, 1 ta arzonladi, 1 ta yangi', w: 'bugun · Vaha' }] : []).concat([
+      { t: 'Sex zapchastlari · qo‘lda', d: 'Vibro shlang F28: $17 → $19', w: '01.10.26 · Vaha' },
+      { t: 'Briliant R22 / R404 · rasm (AI)', d: '170 ta mahsulot qo‘shildi', w: '29.09.26 · Vaha' },
+      { t: 'XUEYING · rasm (AI)', d: '84 ta narx kiritildi', w: '28.09.26 · Vaha' },
+      { t: 'Bitzer R22 · rasm (AI)', d: '76 ta mahsulot · prays 15.07.26', w: '02.10.26 · Vaha' }
+    ]);
+    return {
+      markups: markups, markupL: '+' + st.markup + '%', setMarkup: function (ev) { self.setState({ markup: parseInt(ev.target.value, 10) || 10 }); },
+      tabs: tabs, chips: chips, rows: rows, importRows: importRows, history: history,
+      showImport: st.imp, showPct: st.pct,
+      openImport: function () { self.setState({ imp: true, pct: false }); },
+      closeImport: function () { self.setState({ imp: false }); },
+      applyImport: function () { self.setState({ imp: false, applied: true, tab: 'ready', brand: 'XUEYING' }); },
+      openPct: function () { self.setState({ pct: true, imp: false }); },
+      closePct: function () { self.setState({ pct: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
