@@ -49,23 +49,28 @@ export function canViewOrder(viewer: Viewer, order: { sellerId: string; status: 
   return isStaff(viewer.role);
 }
 
-/** Price visibility: SUPER_ADMIN sees the price-list (base) price, other staff and sellers only the selling price, the workshop nothing. */
-export function priceAccess(role: string): "base" | "sale" | "none" {
-  if (role === "SUPER_ADMIN") return "base";
-  if (role === "WORKSHOP") return "none";
-  return "sale";
+/** Price visibility: everyone who orders sees the price-list price; the workshop sees no price at all. */
+export function priceAccess(role: string): "base" | "none" {
+  return role === "WORKSHOP" ? "none" : "base";
 }
 
-export type PriceSnapshot = { markupPercent: number; unitBaseUsd: number; unitSaleUsd: number; totalBaseUsd: number; totalSaleUsd: number; standardBaseUsd: number | null };
+/** Workshop orders carry only price-list prices: the workshop hands goods to the seller at prays price, the seller adds their own markup. */
+export type PriceSnapshot = { unitBaseUsd: number; totalBaseUsd: number; standardBaseUsd: number | null };
+const baseOnly = (snapshot: PriceSnapshot): PriceSnapshot => ({ unitBaseUsd: snapshot.unitBaseUsd, totalBaseUsd: snapshot.totalBaseUsd, standardBaseUsd: snapshot.standardBaseUsd ?? null });
 type WithPrices = { priceSnapshot?: unknown; items?: Array<{ baseUsd?: unknown } & Record<string, unknown>> } & Record<string, unknown>;
-/** What is sent to the browser: base prices only to SUPER_ADMIN, sale only to staff/sellers, no price fields at all to WORKSHOP. */
+/** What is sent to the browser: price-list prices only (no selling price / markup), and no price fields at all for WORKSHOP. */
 export function stripPrices<T extends WithPrices>(order: T, role: string) {
-  const access = priceAccess(role);
   const { priceSnapshot, items, ...rest } = order;
   const snapshot = priceSnapshot as PriceSnapshot | null | undefined;
-  const cleanItems = items?.map(item => { const { baseUsd, ...itemRest } = item; return access === "base" ? { ...itemRest, baseUsd } : itemRest; });
-  const prices = access === "none" || !snapshot ? {} : access === "base" ? { prices: snapshot } : { prices: { unitSaleUsd: snapshot.unitSaleUsd, totalSaleUsd: snapshot.totalSaleUsd } };
-  return { ...rest, ...(cleanItems ? { items: cleanItems } : {}), ...prices };
+  if (priceAccess(role) === "none") return { ...rest, ...(items ? { items: items.map(item => { const { baseUsd, ...itemRest } = item; void baseUsd; return itemRest; }) } : {}) };
+  return { ...rest, ...(items ? { items } : {}), ...(snapshot ? { prices: baseOnly(snapshot) } : {}) };
+}
+
+export type FormPart = { id: string; name: string; size: string | null; basePriceUsd: number | null };
+/** Spare parts offered on /admin/sex/new with their price-list price. Never built for WORKSHOP (it cannot order). */
+export function orderFormParts(role: string, parts: FormPart[]) {
+  if (priceAccess(role) === "none") return parts.map(part => ({ id: part.id, label: [part.name, part.size].filter(Boolean).join(" ") }));
+  return parts.map(part => ({ id: part.id, label: [part.name, part.size].filter(Boolean).join(" "), basePriceUsd: part.basePriceUsd }));
 }
 
 export const orderNumber = (number: number) => `#${String(number).padStart(4, "0")}`;

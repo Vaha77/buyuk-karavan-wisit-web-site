@@ -3,8 +3,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma, type AdminUser } from "@/generated/prisma/client";
 import { writeAudit } from "@/lib/audit/service";
 import { getDb } from "@/lib/db";
-import { getMarkupPercent, getPraysProducts, getSexParts } from "@/lib/prays/queries";
-import { sellPrice } from "@/lib/prays/rules";
+import { getPraysProducts, getSexParts } from "@/lib/prays/queries";
 import { editMessageText, sendMessage, telegramErrorDetails, telegramWorkshopChatId } from "@/lib/telegram/client";
 import type { TelegramCallbackQuery } from "@/lib/telegram/types";
 import { STATUS_LABEL, checkTransition, orderNumber, parseWorkshopCallback, workshopKeyboard, workshopMessage, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
@@ -46,8 +45,7 @@ export async function createAgregatOrder(actor: Actor, input: AgregatInput): Pro
   if (!quote.ok) return quote;
   const customer = await resolveCustomer(actor, input);
   if (!customer.ok) return customer;
-  const markup = await getMarkupPercent(), unitSale = sellPrice(quote.base, markup);
-  const snapshot: PriceSnapshot = { markupPercent: markup, unitBaseUsd: quote.base, unitSaleUsd: unitSale, totalBaseUsd: Math.round(quote.base * input.qty * 100) / 100, totalSaleUsd: unitSale * input.qty, standardBaseUsd: quote.standard };
+  const snapshot: PriceSnapshot = { unitBaseUsd: quote.base, totalBaseUsd: Math.round(quote.base * input.qty * 100) / 100, standardBaseUsd: quote.standard };
   const order = await getDb().workshopOrder.create({
     data: {
       type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, dueDate: dueDateOf(input.dueDate), note: input.note,
@@ -74,10 +72,9 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
     if (!seller) return { ok: false, error: "Sotuvchini tanlang." };
     sellerId = seller.id;
   }
-  const markup = await getMarkupPercent();
   const known = input.items.filter(item => byId.get(item.partId)!.basePriceUsd !== null);
   const totalBase = Math.round(known.reduce((sum, item) => sum + Number(byId.get(item.partId)!.basePriceUsd) * item.qty, 0) * 100) / 100;
-  const snapshot = { markupPercent: markup, unitBaseUsd: totalBase, unitSaleUsd: sellPrice(totalBase, markup), totalBaseUsd: totalBase, totalSaleUsd: sellPrice(totalBase, markup), standardBaseUsd: null, missingPrices: input.items.length - known.length };
+  const snapshot = { unitBaseUsd: totalBase, totalBaseUsd: totalBase, standardBaseUsd: null, missingPrices: input.items.length - known.length };
   const now = new Date();
   const order = await getDb().workshopOrder.create({
     data: {

@@ -7,27 +7,20 @@ import { defaultRecommended } from "@/lib/calculations/queries";
 import { getDb } from "@/lib/db";
 import { getMarkupPercent, getPraysProducts } from "@/lib/prays/queries";
 import { sellPrice } from "@/lib/prays/rules";
-import { buildKitTemplates, kitClientPrice, kitTotal, type KitOption, type KitSelection, type KitSlot, type KitTemplate } from "./configurator";
+import { buildKitTemplates, kitClientPrice, kitTotal, type KitSelection, type KitTemplate } from "./configurator";
 
 type Actor = Pick<AdminUser, "id" | "name" | "role">;
 
-/** What the browser gets. Only SUPER_ADMIN sees price-list prices (tannarx); others see differences between options. */
-export type KitView = Omit<KitTemplate, "base" | "options"> & { base: number | null; sitePrice: number; options: Record<KitSlot, Array<Omit<KitOption, "price" | "sourceNoPrice"> & { price: number | null; delta: number }>> };
+/** What the browser gets: price-list prices for every part, plus the site (selling) price of the standard kit. */
+export type KitView = KitTemplate & { sitePrice: number };
 
 export async function loadKitTemplates() {
   return buildKitTemplates(await getPraysProducts());
 }
 
-export async function kitTemplatesFor(role: string): Promise<KitView[]> {
+export async function kitTemplatesForView(): Promise<KitView[]> {
   const [templates, markup] = await Promise.all([loadKitTemplates(), getMarkupPercent()]);
-  const full = role === "SUPER_ADMIN";
-  return templates.map(template => ({
-    ...template, base: full ? template.base : null, sitePrice: sellPrice(template.base, markup),
-    options: Object.fromEntries((["comp", "cond", "evap"] as KitSlot[]).map(slot => {
-      const standard = template.options[slot][0]?.price ?? 0;
-      return [slot, template.options[slot].map(option => ({ key: option.key, name: option.name, spec: option.spec, price: full ? option.price : null, source: full ? option.source : option.sourceNoPrice, delta: Math.round((option.price - standard) * 100) / 100 }))];
-    })) as KitView["options"],
-  }));
+  return templates.map(template => ({ ...template, sitePrice: sellPrice(template.base, markup) }));
 }
 
 export type KitQuoteInput = { templateId: string; selection: KitSelection; markup: number; extras: Array<{ name: string; price: number }> };

@@ -10,14 +10,34 @@ import { orderNumber } from "@/lib/sex/rules";
 import { PartRows, PurposePicker } from "./orders-board";
 
 type Option = { id: string; name: string };
-export type PartChoice = { id: string; label: string; price: number | null };
-type Props = {
-  type: "agregat" | "zapchast"; userName: string;
-  /** Prices are already the ones this user may see: price-list (SUPER_ADMIN) or selling (everyone else). */
-  priceMode: "base" | "sale"; markup: number; catalog: ZborkaCatalog; parts: PartChoice[]; customers: Option[];
-};
-const saleOf = (value: number, mode: "base" | "sale", markup: number) => Math.ceil((mode === "base" ? value * (100 + markup) / 100 : value) - 1e-6);
+export type PartChoice = { id: string; label: string; basePriceUsd?: number | null };
+type Props = { type: "agregat" | "zapchast"; userName: string; catalog: ZborkaCatalog; parts: PartChoice[]; customers: Option[] };
 const today = () => new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);
+
+/** Price block of the order card: price-list price only (the workshop sells to the seller at prays price) and the change from the standard. */
+function PriceBlock({ base, delta }: { base: number; delta: number | null }) {
+  return <>
+    <div className="sx-total"><span>Prays narxi</span><strong>{formatUsd(base)}</strong></div>
+    {delta !== null && delta !== 0 && <span className="sx-muted" style={{ fontWeight: 700, color: "#6E5200" }}>Standartdan {formatSignedUsd(Math.round(delta * 100) / 100)} (prays narxida)</span>}
+  </>;
+}
+
+/** Date as kk.oo.yyyy text (the native date input shows the browser locale, e.g. Russian "дд.мм.гггг"); `onChange` gets YYYY-MM-DD or "". */
+function DateField({ label, value, onChange }: { label: React.ReactNode; value: string; onChange: (iso: string) => void }) {
+  const [text, setText] = useState(value ? value.split("-").reverse().join(".") : "");
+  const parse = (raw: string) => {
+    const match = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!match) return "";
+    const iso = `${match[3]}-${match[2]}-${match[1]}`, date = new Date(`${iso}T00:00:00Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === iso && iso >= today() ? iso : "";
+  };
+  const invalid = text.length === 10 && !parse(text);
+  return <label className="sx-field">{label}
+    <input value={text} inputMode="numeric" placeholder="kk.oo.yyyy" maxLength={10} aria-invalid={invalid} style={invalid ? { borderColor: "#A41F15" } : undefined}
+      onChange={event => { const digits = event.target.value.replace(/\D+/g, "").slice(0, 8); const next = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join("."); setText(next); onChange(parse(next)); }}/>
+    {invalid && <small style={{ color: "#A41F15" }}>Sanani kk.oo.yyyy ko‘rinishida kiriting (bugundan oldin emas)</small>}
+  </label>;
+}
 
 export function NewOrder(props: Props) {
   return <div className="sx">
@@ -32,7 +52,7 @@ export function NewOrder(props: Props) {
   </div>;
 }
 
-function AgregatForm({ userName, priceMode, markup, catalog, customers }: Props) {
+function AgregatForm({ userName, catalog, customers }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [groupKey, setGroupKey] = useState(catalog.groups[0]?.key ?? "");
@@ -98,7 +118,7 @@ function AgregatForm({ userName, priceMode, markup, catalog, customers }: Props)
         <span className="sx-section-label">3 · Buyurtma ma’lumoti</span>
         <div className="sx-fields">
           <label className="sx-field">Soni<input value={qty} onChange={event => setQty(event.target.value.replace(/\D+/g, ""))} inputMode="numeric"/></label>
-          <label className="sx-field">Tayyor bo‘lishi kerak<input type="date" value={dueDate} min={today()} onChange={event => setDueDate(event.target.value)}/></label>
+          <DateField label="Tayyor bo‘lishi kerak" value={dueDate} onChange={setDueDate}/>
         </div>
         <PurposePicker purpose={purpose} setPurpose={setPurpose} customer={customer} setCustomer={setCustomer} customers={customers}/>
         <label className="sx-field">Izoh sex uchun<input value={note} onChange={event => setNote(event.target.value)} maxLength={500} placeholder="Masalan: ramani ko‘k rangga bo‘yash"/></label>
@@ -111,11 +131,7 @@ function AgregatForm({ userName, priceMode, markup, catalog, customers }: Props)
         <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.3 }}>{quote?.ok ? quote.title : `${group.brand} ${model.model}`}</span>
         {quote?.ok && quote.lines.map(line => <div key={line.k} className="sx-summary-line"><span>{line.k}</span><b>{line.v}</b></div>)}
         <div className="sx-summary-line"><span>Soni</span><b>{qtyNumber || "—"}</b></div>
-        {price !== null && <>
-          <div className="sx-total"><span>{priceMode === "base" ? "Prays narxi" : "Sotuv narxi"}</span><strong>{formatUsd(priceMode === "base" ? price * Math.max(qtyNumber, 1) : saleOf(price, priceMode, markup) * Math.max(qtyNumber, 1))}</strong></div>
-          {priceMode === "base" && <span className="sx-muted">Sotuv (+{markup}%): {formatUsd(saleOf(price, priceMode, markup) * Math.max(qtyNumber, 1))}</span>}
-          <span className="sx-muted" style={{ fontWeight: 700, color: quote?.ok && quote.changes.length ? "#6E5200" : "#1B6B43" }}>{quote?.ok && quote.changes.length ? `Standartdan ${formatSignedUsd(Math.round(priceMode === "base" ? quote.base - quote.standard : saleOf(quote.base, priceMode, markup) - saleOf(quote.standard, priceMode, markup)))} (almashtirilgan qismlar)` : "Praysdagi standart narx"}</span>
-        </>}
+        {price !== null && quote?.ok && <PriceBlock base={Math.round(price * Math.max(qtyNumber, 1) * 100) / 100} delta={quote.changes.length ? (quote.base - quote.standard) * Math.max(qtyNumber, 1) : null}/>}
         {quote && !quote.ok && <p className="sx-note is-error">{quote.error}</p>}
         {result && <p className={`sx-note ${result.ok ? "is-ok" : "is-error"}`} role={result.ok ? "status" : "alert"}>{result.text}</p>}
         <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} disabled={pending || !ready} onClick={submit}>{pending ? "Yuborilmoqda…" : result?.ok ? "✓ Sex guruhiga yuborildi" : "Buyurtma berish"}</button>
@@ -126,14 +142,14 @@ function AgregatForm({ userName, priceMode, markup, catalog, customers }: Props)
   </div>;
 }
 
-function ZapchastForm({ userName, priceMode, markup, parts, customers }: Props) {
+function ZapchastForm({ userName, parts, customers }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [items, setItems] = useState([{ partId: "", qty: "1" }]), [purpose, setPurpose] = useState<"SHOP" | "CLIENT">("SHOP"), [customer, setCustomer] = useState(""), [dueDate, setDueDate] = useState(""), [note, setNote] = useState("");
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const byId = new Map(parts.map(part => [part.id, part]));
   const ready = items.every(item => item.partId && Number(item.qty) >= 1) && (purpose === "SHOP" || customer.trim());
-  const total = items.reduce((sum, item) => sum + (byId.get(item.partId)?.price ?? 0) * (Number(item.qty) || 0), 0);
+  const total = Math.round(items.reduce((sum, item) => sum + (byId.get(item.partId)?.basePriceUsd ?? 0) * (Number(item.qty) || 0), 0) * 100) / 100;
   const known = customers.find(item => item.name === customer.trim());
   const submit = () => startTransition(async () => {
     setResult(null);
@@ -148,13 +164,13 @@ function ZapchastForm({ userName, priceMode, markup, parts, customers }: Props) 
     <div className="sx-main">
       <div className="sx-card">
         <div className="sx-card-head"><h2>Yangi zayavka</h2><span className="sx-muted">Sotuvchi: {userName}</span></div>
-        <PartRows parts={parts.map(part => ({ id: part.id, label: part.label }))} items={items} setItems={next => { setItems(next); setResult(null); }} priceOf={id => { const price = byId.get(id)?.price; return price === null || price === undefined ? null : `${priceMode === "base" ? "Prays" : "Sotuv"}: ${formatUsd(priceMode === "base" ? price : saleOf(price, priceMode, markup))}`; }}/>
+        <PartRows parts={parts.map(part => ({ id: part.id, label: part.label }))} items={items} setItems={next => { setItems(next); setResult(null); }} priceOf={id => { const part = byId.get(id); return part?.basePriceUsd === null || part?.basePriceUsd === undefined ? null : `Prays: ${formatUsd(part.basePriceUsd)}`; }}/>
         <PurposePicker purpose={purpose} setPurpose={setPurpose} customer={customer} setCustomer={setCustomer} customers={customers}/>
         <div className="sx-fields">
-          <label className="sx-field">Kerak bo‘ladigan sana <small>(ixtiyoriy)</small><input type="date" value={dueDate} min={today()} onChange={event => setDueDate(event.target.value)}/></label>
+          <DateField label={<>Kerak bo‘ladigan sana <small>(ixtiyoriy)</small></>} value={dueDate} onChange={setDueDate}/>
           <label className="sx-field">Izoh<input value={note} onChange={event => setNote(event.target.value)} maxLength={500}/></label>
         </div>
-        {total > 0 && <div className="sx-total"><span>{priceMode === "base" ? "Prays narxi" : "Sotuv narxi"}</span><strong>{formatUsd(priceMode === "base" ? Math.round(total * 100) / 100 : saleOf(total, priceMode, markup))}</strong></div>}
+        {total > 0 && <PriceBlock base={total} delta={null}/>}
         {result && <p className={`sx-note ${result.ok ? "is-ok" : "is-error"}`} role={result.ok ? "status" : "alert"}>{result.text}</p>}
         <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} style={{ height: 50, fontSize: 15 }} disabled={pending || !ready} onClick={submit}>{pending ? "Yuborilmoqda…" : "Zayavka yuborish"}</button>
       </div>

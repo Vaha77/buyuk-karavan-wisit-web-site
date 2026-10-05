@@ -86,16 +86,31 @@ test("visibility: a seller sees only their own orders, the workshop only open ta
   assert.equal(rules.canCreateOrders("SELLER"), true);
 });
 
-test("prices: WORKSHOP payload has no price at all, sellers only the selling price, SUPER_ADMIN the base", () => {
+test("prices: workshop orders carry only the price-list price (no selling price / markup); WORKSHOP gets no price fields", () => {
+  // An older snapshot shape with sale/markup must not leak either.
   const order = { id: "o", number: 413, product: "BITZER 4NES+20 vazdushniy agregat · FNV200", priceSnapshot: { markupPercent: 10, unitBaseUsd: 4541, unitSaleUsd: 4996, totalBaseUsd: 4541, totalSaleUsd: 4996, standardBaseUsd: 4123 }, items: [{ id: "i", title: "x", qty: 1, baseUsd: 4541 }] };
   const workshop = rules.stripPrices(order, "WORKSHOP");
   assert.doesNotMatch(JSON.stringify(workshop), /4541|4996|4123|price|baseUsd|Usd/i);
-  const seller = rules.stripPrices(order, "SELLER");
-  assert.deepEqual(seller.prices, { unitSaleUsd: 4996, totalSaleUsd: 4996 });
-  assert.doesNotMatch(JSON.stringify(seller), /4541|4123|baseUsd/);
-  assert.equal(rules.stripPrices(order, "ADMIN").items[0].baseUsd, undefined, "tannarx only for SUPER_ADMIN");
-  assert.equal(rules.stripPrices(order, "SUPER_ADMIN").prices.totalBaseUsd, 4541);
-  assert.equal(rules.stripPrices(order, "SUPER_ADMIN").items[0].baseUsd, 4541);
+  for (const role of ["SELLER", "SUPER_ADMIN", "ADMIN"]) {
+    const view = rules.stripPrices(order, role);
+    assert.deepEqual(view.prices, { unitBaseUsd: 4541, totalBaseUsd: 4541, standardBaseUsd: 4123 }, role);
+    assert.equal(view.items[0].baseUsd, 4541, role);
+    assert.doesNotMatch(JSON.stringify(view), /sale|markup|ustama|4996/i, `${role}: no selling price or markup`);
+  }
+  const parts = [{ id: "g", name: "Glazok", size: "3/8", basePriceUsd: 9 }, { id: "r", name: "Resiver bachok", size: "20 L", basePriceUsd: null }];
+  const sellerForm = rules.orderFormParts("SELLER", parts);
+  assert.deepEqual(sellerForm, [{ id: "g", label: "Glazok 3/8", basePriceUsd: 9 }, { id: "r", label: "Resiver bachok 20 L", basePriceUsd: null }]);
+  assert.doesNotMatch(JSON.stringify(sellerForm), /sale|markup/i);
+  assert.doesNotMatch(JSON.stringify(rules.orderFormParts("WORKSHOP", parts)), /price|Usd/i);
+  assert.equal(rules.priceAccess("WORKSHOP"), "none");
+  assert.equal(rules.priceAccess("SELLER"), "base");
+});
+
+test("workshop order sources never compute a selling price or markup", async () => {
+  for (const file of ["../lib/sex/service.ts", "../app/admin/(sex)/sex/new/page.tsx", "../components/admin/sex/new-order.tsx", "../components/admin/sex/orders-board.tsx", "../app/admin/(sex)/sex/export/route.ts"]) {
+    const source = await readFile(new URL(file, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /sellPrice|getMarkupPercent|Sotuv narxi|SaleUsd/, file);
+  }
 });
 
 test("workshop Telegram message: changes from standard, quantity, due date, recipient — never a price", () => {

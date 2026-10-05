@@ -65,7 +65,7 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
             <td><b>{row.number}</b></td>
             <td style={{ color: "#3E4A60", whiteSpace: "nowrap" }}>{row.day}</td>
             <td><span className="sx-tag">{row.type === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.noRequest && <><br/><span className="sx-pill is-sm is-orange" style={{ marginTop: 4 }}>Zayavkasiz</span></>}</td>
-            <td style={{ minWidth: 220, fontWeight: 600, lineHeight: 1.35 }}>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices} boss={boss}/>}</td>
+            <td style={{ minWidth: 220, fontWeight: 600, lineHeight: 1.35 }}>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices}/>}</td>
             <td><div style={{ display: "grid", gap: 2 }}><b style={{ fontWeight: 600 }}>{row.sellerName}</b><span className="sx-muted">{row.sellerAt}</span></div></td>
             <td style={{ fontWeight: 700, color: row.purpose === "SHOP" ? "#3E4A60" : "#1E4E8C" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</td>
             <td style={{ minWidth: 230 }}><div className="sx-steps">{row.steps.map(step => <span key={step.label} className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>)}</div></td>
@@ -93,8 +93,8 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
   </div>;
 }
 
-function PriceLine({ prices, boss }: { prices: NonNullable<OrderRow["prices"]>; boss: boolean }) {
-  return <div className="sx-muted" style={{ fontWeight: 500 }}>{boss && prices.totalBaseUsd !== undefined ? `Prays ${formatUsd(prices.totalBaseUsd)} · ` : ""}Sotuv {formatUsd(prices.totalSaleUsd ?? null)}</div>;
+function PriceLine({ prices }: { prices: NonNullable<OrderRow["prices"]> }) {
+  return <div className="sx-muted" style={{ fontWeight: 600 }}>Prays narxi {formatUsd(prices.totalBaseUsd ?? null)}</div>;
 }
 
 /** "berildi" per item: defaults to the requested quantity, the workshop corrects it. */
