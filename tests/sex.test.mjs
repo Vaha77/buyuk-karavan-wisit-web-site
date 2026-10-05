@@ -180,3 +180,22 @@ test("configurator: BR +20PG + FNV200 + DD160 = $4 954 at price-list prices, +10
   assert.equal(configurator.kitClientPrice(custom.base, 99), configurator.kitClientPrice(custom.base, 15), "markup is capped at 15 %");
   assert.equal(configurator.kitTotal(template, standard, [100, -5, NaN]).base, 4554, "extras add at price-list prices");
 });
+
+test("“Sexda ishlanmoqda” timer text and the overdue mark", async () => {
+  const now = new Date("2026-10-05T12:00:00Z");
+  const ago = minutes => new Date(now.getTime() - minutes * 60_000);
+  assert.equal(rules.workingSince(ago(35), now), "35 daqiqadan beri");
+  assert.equal(rules.workingSince(ago(0), now), "1 daqiqadan beri");
+  assert.equal(rules.workingSince(ago(135), now), "2 soat 15 daqiqadan beri");
+  assert.equal(rules.workingSince(ago(120), now), "2 soatdan beri");
+  assert.equal(rules.workingSince(ago(27 * 60), now), "1 kun 3 soatdan beri");
+  assert.equal(rules.workingSince(ago(48 * 60 + 10), now), "2 kundan beri");
+  assert.equal(rules.daysPastDue(null, now), 0);
+  assert.equal(rules.daysPastDue("2026-10-05", now), 0, "due today is not late");
+  assert.equal(rules.daysPastDue("2026-10-04", now), 1);
+  assert.equal(rules.daysPastDue("2026-10-09", now), 0);
+  assert.equal(rules.daysPastDue("2026-10-04", new Date("2026-10-04T20:00:00Z")), 1, "Tashkent day (UTC+5)");
+  const css = await readFile(new URL("../components/admin/sex/sex.css", import.meta.url), "utf8");
+  assert.match(css, /@keyframes sx-working-slide\{from\{left:-40%\}to\{left:100%\}\}/);
+  assert.match(css, /prefers-reduced-motion:reduce\)\{\.sx-working-bar>span\{animation:none/);
+});

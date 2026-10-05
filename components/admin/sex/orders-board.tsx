@@ -8,6 +8,7 @@ import { confirmNoRequestAction, createNoRequestAction, transitionOrderAction } 
 import type { OrderRow } from "@/lib/sex/queries";
 import { ACTION_LABEL, STATUS_LABEL, STATUS_TONE, actionFor, type OrderAction } from "@/lib/sex/rules";
 import { formatUsd } from "@/lib/prays/rules";
+import { WorkingProgress } from "./working-progress";
 
 type Option = { id: string; name: string };
 type PartOption = { id: string; label: string };
@@ -70,10 +71,11 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
             <td style={{ fontWeight: 700, color: row.purpose === "SHOP" ? "#3E4A60" : "#1E4E8C" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</td>
             <td style={{ minWidth: 230 }}><div className="sx-steps">{row.steps.map(step => <span key={step.label} className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>)}</div></td>
             <td><span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{STATUS_LABEL[row.status]}</span>{row.overdue && <div className="sx-muted" style={{ color: "#A41F15", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</td>
-            <td style={{ minWidth: 140 }}>
+            <td style={{ minWidth: 190 }}>
               {action ? <button type="button" className={`sx-btn is-md ${action === "receive" ? "is-red" : "is-primary"}`} disabled={pending} onClick={() => act(row, action)}>{ACTION_LABEL[action]}</button>
                 : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id))}>Tasdiqlayman</button>
-                : <span className="sx-muted">{WAIT_TEXT[row.status]}</span>}
+                : row.status !== "ACCEPTED" && <span className="sx-muted">{WAIT_TEXT[row.status]}</span>}
+              {row.status === "ACCEPTED" && row.acceptedAt && <WorkingProgress acceptedAt={row.acceptedAt} dueDate={row.dueDate}/>}
             </td>
           </tr>;
         })}</tbody>

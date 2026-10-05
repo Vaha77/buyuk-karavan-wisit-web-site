@@ -146,3 +146,20 @@ export function monthRange(value: string | undefined, now = new Date()) {
   const y = valid ? year : now.getUTCFullYear(), m = valid ? month : now.getUTCMonth() + 1;
   return { key: `${y}-${String(m).padStart(2, "0")}`, label: `${MONTH_NAMES[m - 1]} ${y}`, from: new Date(Date.UTC(y, m - 1, 1, -5)), to: new Date(Date.UTC(y, m, 1, -5)) };
 }
+
+/** "35 daqiqadan beri", "2 soat 15 daqiqadan beri", "1 kun 3 soatdan beri" — how long an order has been in the workshop. */
+export function workingSince(since: Date | string, now = new Date()) {
+  const minutes = Math.max(1, Math.floor((now.getTime() - new Date(since).getTime()) / 60_000));
+  if (minutes < 60) return `${minutes} daqiqadan beri`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return minutes % 60 ? `${hours} soat ${minutes % 60} daqiqadan beri` : `${hours} soatdan beri`;
+  const days = Math.floor(hours / 24);
+  return hours % 24 ? `${days} kun ${hours % 24} soatdan beri` : `${days} kundan beri`;
+}
+
+/** Whole days past the due date (YYYY-MM-DD, Tashkent calendar day); 0 when not overdue or no due date. */
+export function daysPastDue(dueDate: string | null, now = new Date()) {
+  if (!dueDate) return 0;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tashkent" }).format(now);
+  return Math.max(0, Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${dueDate}T00:00:00Z`)) / 86_400_000));
+}
