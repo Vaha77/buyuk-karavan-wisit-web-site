@@ -8,6 +8,7 @@ export type BotOrder = {
   startedAt: Date | string | null; issuedAt: Date | string | null; issuedByName: string | null;
   /** Agregat option lines as shown on the order ("Resiver: 20 L", "Kondensator: FNV200 (standart FN160 o‘rniga), rama bilan"). */
   details: string[]; items: BotItem[];
+  cancelReason?: string | null;
 };
 
 type Button = { text: string; callback_data: string };
@@ -34,9 +35,14 @@ export function personalMessage(order: BotOrder, queue: number | null) {
   if (order.type === "AGREGAT") lines.push(...order.details);
   lines.push([`Kimga: ${recipient(order)}`, `Sotuvchi: ${order.sellerName}`, order.dueDate && `Muddat: ${shortDay(order.dueDate)}`].filter(Boolean).join(" · "));
   if (order.note) lines.push(`Izoh: ${order.note}`);
-  const status = statusLine(order, queue);
+  const status = order.status === "CANCELLED" ? cancelledText(order) : statusLine(order, queue);
   if (status) lines.push("", status);
   return lines.join("\n");
+}
+
+/** "❌ #0003 bekor qilindi" (+ reason): the personal message is edited to this and loses its buttons. */
+export function cancelledText(order: Pick<BotOrder, "number" | "cancelReason">) {
+  return `❌ ${orderNumber(order.number)} bekor qilindi${order.cancelReason ? ` · Sabab: ${order.cancelReason}` : ""}`;
 }
 
 /** The one next step as a button: Qabul qildim → Terishni boshladim → Chiqib ketdi; nothing after that. */

@@ -445,6 +445,7 @@ model AdminUser {
   workshopOrdersStarted  WorkshopOrder[]            @relation("WorkshopOrderStarter")
   workshopOrdersIssued   WorkshopOrder[]            @relation("WorkshopOrderIssuer")
   workshopOrdersReceived WorkshopOrder[]            @relation("WorkshopOrderReceiver")
+  workshopOrdersCancelled WorkshopOrder[]           @relation("WorkshopOrderCanceller")
 
   @@index([approvalStatus, isActive])
 }
@@ -1095,6 +1096,8 @@ enum WorkshopOrderStatus {
   STARTED
   ISSUED
   RECEIVED
+  // "Bekor qilingan": kept in the list (soft), never deleted.
+  CANCELLED
 }
 
 enum WorkshopItemKind {
@@ -1127,6 +1130,11 @@ model WorkshopOrder {
   issuedAt          DateTime?
   receivedById      String?
   receivedAt        DateTime?
+  cancelledById     String?
+  cancelledAt       DateTime?
+  cancelReason      String?              @db.VarChar(300)
+  // One-time id from the order form: the same submit never creates two orders.
+  requestId         String?              @unique @db.VarChar(64)
   // Prices at order time (base, markup, sale); later price-list changes never touch it.
   priceSnapshot     Json?
   // Seh group report ("✅ Sehdan chiqdi"), sent once the order is ISSUED.
@@ -1144,6 +1152,7 @@ model WorkshopOrder {
   startedBy         AdminUser?           @relation("WorkshopOrderStarter", fields: [startedById], references: [id], onDelete: SetNull)
   issuedBy          AdminUser?           @relation("WorkshopOrderIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
   receivedBy        AdminUser?           @relation("WorkshopOrderReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
+  cancelledBy       AdminUser?           @relation("WorkshopOrderCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
   items             WorkshopOrderItem[]
   messages          WorkshopOrderMessage[]
 

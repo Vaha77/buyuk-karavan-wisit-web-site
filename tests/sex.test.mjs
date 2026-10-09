@@ -73,7 +73,7 @@ test("status machine: NEW→ACCEPTED (Navbatda)→STARTED (Terilmoqda)→ISSUED�
   for (const status of ["NEW", "ACCEPTED", "STARTED"]) assert.equal(rules.actionFor("SUPER_ADMIN", status), null, `SUPER_ADMIN has no workshop button on ${status}`);
   assert.deepEqual(["NEW", "ACCEPTED", "STARTED", "ISSUED"].map(status => rules.actionFor("WORKSHOP", status)), ["accept", "start", "issue", null]);
   assert.equal(rules.actionFor("SELLER", "NEW"), null);
-  assert.deepEqual(rules.STATUS_LABEL, { NEW: "Yangi", ACCEPTED: "Navbatda", STARTED: "Terilmoqda", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi" });
+  assert.deepEqual(rules.STATUS_LABEL, { NEW: "Yangi", ACCEPTED: "Navbatda", STARTED: "Terilmoqda", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi", CANCELLED: "Bekor qilingan" });
 });
 
 test("visibility: a seller sees only their own orders, the workshop only open tasks", () => {
@@ -244,7 +244,7 @@ test("WORKSHOP panel payload: no price fields; the panel component never reads p
   const board = await readFile(new URL("../components/admin/sex/workshop-board.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(board, /formatUsd|baseUsd|BaseUsd|priceSnapshot|\.prices/);
   const page = await readFile(new URL("../app/admin/(sex)/seh/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /listOrders\(user, month\)/, "rows go through listOrders → stripPrices(role)");
+  assert.match(page, /listOrders\(user, month, cancelledView\)/, "rows go through listOrders → stripPrices(role)");
 });
 
 
@@ -425,4 +425,78 @@ test("new order → personal messages to linked WORKSHOP chats, never the group;
   assert.match(form, /saytda saqlandi, lekin seh mas’uli Telegramga ulanmagan/);
   assert.match(form, /"⚠️ Telegramga yuborilmadi"/);
   assert.match(form, /Telegram · seh mas’uli/);
+});
+
+
+test("double submit: two fast clicks with the same requestId create one order", async () => {
+  const { createOnce } = await import("../lib/sex/idempotency.ts");
+  const store = [];
+  const unique = error => error?.code === "P2002";
+  const find = async requestId => store.find(order => order.requestId === requestId) ?? null;
+  // Insert with a unique requestId, as the database does; a small delay lets both submits pass the first check.
+  const create = requestId => async () => {
+    await new Promise(resolve => setTimeout(resolve, 5));
+    if (store.some(order => order.requestId === requestId)) throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    const order = { id: `o${store.length + 1}`, number: store.length + 2, requestId };
+    store.push(order);
+    return order;
+  };
+  const [first, second] = await Promise.all([createOnce("req-1", find, create("req-1"), unique), createOnce("req-1", find, create("req-1"), unique)]);
+  assert.equal(store.length, 1, "one order");
+  assert.equal(first.value.id, second.value.id);
+  assert.deepEqual([first.repeated, second.repeated].sort(), [false, true]);
+  const later = await createOnce("req-1", find, create("req-1"), unique);
+  assert.equal(later.repeated, true, "a retry of the same submit gets the same order");
+  assert.equal(store.length, 1);
+  await createOnce("req-2", find, create("req-2"), unique);
+  assert.equal(store.length, 2, "a new submit (new requestId) is a new order");
+  await assert.rejects(createOnce(null, find, async () => { throw new Error("boom"); }, unique), /boom/, "other errors are not swallowed");
+
+  const form = await readFile(new URL("../components/admin/sex/new-order.tsx", import.meta.url), "utf8");
+  assert.match(form, /if \(submittingRef\.current\) return;\s*submittingRef\.current = true;/, "the second click is ignored before React re-renders");
+  assert.match(form, /disabled=\{pending \|\| !ready \|\| !!duplicate\} aria-busy=\{pending\}/);
+  const schema = await readFile(new URL("../prisma/schema.prisma", import.meta.url), "utf8");
+  assert.match(schema, /requestId\s+String\?\s+@unique/);
+});
+
+test("the same order again within 10 minutes asks “Baribir yana yuborasizmi?”; after confirmation it is created", () => {
+  const now = new Date("2026-10-09T11:55:00Z");
+  const base = { sellerId: "s1", type: "AGREGAT", purpose: "CLIENT", customerId: null, customerName: "Rustam aka", qty: 1, items: [{ ref: "p1", title: "BITZER 4NES+20 vazdushniy agregat · FNV200", qty: 1 }] };
+  const earlier = { ...base, number: 2, status: "NEW", createdAt: new Date("2026-10-09T11:54:00Z"), customerName: "  rustam   AKA " };
+  const found = rules.findDuplicate(base, [earlier], now);
+  assert.equal(found?.number, 2, "same seller, goods, customer, quantity (name case/spaces ignored)");
+  assert.equal(rules.duplicateWarning(found, now), "⚠️ Bu zakaz 1 daqiqa oldin yuborilgan (#0002). Baribir yana yuborasizmi?");
+  assert.equal(rules.findDuplicate(base, [{ ...earlier, createdAt: new Date("2026-10-09T11:44:00Z") }], now), null, "older than 10 minutes");
+  assert.equal(rules.findDuplicate({ ...base, qty: 2 }, [earlier], now), null, "different quantity");
+  assert.equal(rules.findDuplicate({ ...base, sellerId: "s2" }, [earlier], now), null, "another seller");
+  assert.equal(rules.findDuplicate({ ...base, purpose: "SHOP" }, [earlier], now), null, "another recipient");
+  assert.equal(rules.findDuplicate(base, [{ ...earlier, status: "CANCELLED" }], now), null, "a cancelled order is no duplicate");
+  const zap = { sellerId: "s1", type: "ZAPCHAST", purpose: "SHOP", customerId: null, customerName: null, qty: 1, items: [{ ref: "g", title: "", qty: 2 }, { ref: "v", title: "", qty: 10 }] };
+  assert.equal(rules.findDuplicate(zap, [{ ...zap, items: [{ ref: "v", title: "Vibro shlang F28", qty: 10 }, { ref: "g", title: "Glazok 3/8", qty: 2 }], number: 5, status: "ACCEPTED", createdAt: now }], now)?.number, 5, "item order does not matter");
+});
+
+test("cancel: seller only their own NEW order; SUPER_ADMIN until it leaves the workshop, with a reason; soft, never deleted", async () => {
+  assert.deepEqual(rules.checkCancel("SELLER", "NEW", true, null), { ok: true });
+  assert.equal(rules.checkCancel("SELLER", "NEW", false, null).ok, false, "not someone else's order");
+  for (const status of ["ACCEPTED", "STARTED", "ISSUED", "RECEIVED"]) assert.equal(rules.checkCancel("SELLER", status, true, null).ok, false, `seller cannot cancel ${status}`);
+  for (const status of ["NEW", "ACCEPTED", "STARTED"]) assert.deepEqual(rules.checkCancel("SUPER_ADMIN", status, false, "Mijoz fikridan qaytdi"), { ok: true });
+  assert.deepEqual(rules.checkCancel("SUPER_ADMIN", "NEW", false, " "), { ok: false, error: "Bekor qilish sababini yozing." });
+  for (const status of ["ISSUED", "RECEIVED"]) assert.equal(rules.checkCancel("SUPER_ADMIN", status, false, "sabab").ok, false, `not after ${status}`);
+  for (const role of ["ADMIN", "MANAGER", "WORKSHOP"]) assert.equal(rules.checkCancel(role, "NEW", true, "sabab").ok, false, `${role} cannot cancel`);
+  assert.deepEqual(rules.checkCancel("SUPER_ADMIN", "CANCELLED", false, "x"), { ok: false, error: "Bu zakaz allaqachon bekor qilingan." });
+  assert.equal(rules.checkTransition("WORKSHOP", "CANCELLED", "accept").ok, false, "a cancelled order cannot move on");
+  assert.equal(rules.canCancel("SELLER", "NEW", true), true);
+  assert.equal(rules.canCancel("SELLER", "ACCEPTED", true), false);
+
+  // Telegram: the personal message becomes "❌ #0003 bekor qilindi" without buttons; nothing to the group.
+  const cancelled = botOrder({ number: 3, status: "CANCELLED", cancelReason: "Mijoz fikridan qaytdi" });
+  assert.match(bot.personalMessage(cancelled, null), /\n\n❌ #0003 bekor qilindi · Sabab: Mijoz fikridan qaytdi$/);
+  assert.deepEqual(bot.personalKeyboard(cancelled.id, "CANCELLED").inline_keyboard, []);
+  assert.deepEqual(bot.deliveryPlan({ status: "CANCELLED", noRequest: false }, ["1001"], ["1001"]), { personal: [], group: false });
+
+  const service = await readFile(new URL("../lib/sex/service.ts", import.meta.url), "utf8");
+  assert.match(service, /data: \{ status: "CANCELLED", cancelledById: actor\.id, cancelledAt: new Date\(\), cancelReason: cleanReason \}/);
+  assert.doesNotMatch(service, /workshopOrder\.delete/, "no hard delete");
+  const queries = await readFile(new URL("../lib/sex/queries.ts", import.meta.url), "utf8");
+  assert.match(queries, /status: cancelled \? "CANCELLED" : \{ not: "CANCELLED" \}/, "hidden by default, shown under “Bekor qilingan”");
 });

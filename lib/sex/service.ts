@@ -4,8 +4,9 @@ import { Prisma, type AdminUser } from "@/generated/prisma/client";
 import { writeAudit } from "@/lib/audit/service";
 import { getDb } from "@/lib/db";
 import { getPraysProducts, getSexParts } from "@/lib/prays/queries";
-import { STATUS_LABEL, alreadyText, checkTransition, orderNumber, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
-import { notifyChanged, notifyCreated } from "./bot";
+import { DUPLICATE_WINDOW_MS, STATUS_LABEL, alreadyText, checkCancel, checkTransition, duplicateWarning, findDuplicate, orderNumber, type FingerprintInput, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
+import { notifyCancelled, notifyChanged, notifyCreated } from "./bot";
+import { createOnce } from "./idempotency";
 import type { DeliveryStatus } from "./bot-text";
 import { buildZborkaCatalog, quoteZborka, type Assembly } from "./zborka";
 
@@ -32,8 +33,30 @@ async function resolveCustomer(actor: Actor, input: OrderCommon): Promise<Result
 }
 const dueDateOf = (value: string | null) => (value ? new Date(`${value}T00:00:00.000Z`) : null);
 
+/** requestId: one id per form submit; confirmDuplicate: the seller answered "Ha" to "Baribir yana yuborasizmi?". */
+export type SubmitMeta = { requestId: string | null; confirmDuplicate: boolean };
+export type CreateResult = { ok: true; id: string; number: number; telegram: DeliveryStatus; repeated?: boolean } | { ok: false; error: string; duplicate?: { number: number } };
+
+/** The same submit again (double click, retry): the order it already created. */
+async function sameRequest(requestId: string | null): Promise<CreateResult | null> {
+  const order = requestId ? await findByRequest(requestId) : null;
+  return order ? { ok: true, id: order.id, number: order.number, telegram: "sent", repeated: true } : null;
+}
+const findByRequest = (requestId: string) => getDb().workshopOrder.findUnique({ where: { requestId }, select: { id: true, number: true } });
+/** Same seller, goods, recipient and quantity within 10 minutes → ask before creating another one. */
+async function recentDuplicate(candidate: FingerprintInput) {
+  const recent = await getDb().workshopOrder.findMany({
+    where: { sellerId: candidate.sellerId, createdAt: { gte: new Date(Date.now() - DUPLICATE_WINDOW_MS) }, status: { not: "CANCELLED" } },
+    select: { number: true, createdAt: true, status: true, sellerId: true, type: true, purpose: true, customerId: true, customerName: true, qty: true, items: { select: { productId: true, partId: true, title: true, qty: true } } },
+  });
+  return findDuplicate(candidate, recent.map(order => ({ ...order, items: order.items.map(item => ({ ref: item.productId ?? item.partId, title: item.title, qty: item.qty })) })));
+}
+const isUniqueViolation = (error: unknown) => !!error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2002";
+
 export type AgregatInput = OrderCommon & { groupKey: string; modelKey: string; assembly: Assembly; liters: string | null; hp: string | null; fn: string | null; qty: number };
-export async function createAgregatOrder(actor: Actor, input: AgregatInput): Promise<Result<{ id: string; number: number; telegram: DeliveryStatus }>> {
+export async function createAgregatOrder(actor: Actor, input: AgregatInput, meta: SubmitMeta = { requestId: null, confirmDuplicate: false }): Promise<CreateResult> {
+  const again = await sameRequest(meta.requestId);
+  if (again) return again;
   const catalog = await loadZborkaCatalog();
   const group = catalog.groups.find(item => item.key === input.groupKey), model = group?.models.find(item => item.key === input.modelKey);
   if (!group || !model) return { ok: false, error: "Kompressor praysda topilmadi." };
@@ -41,21 +64,30 @@ export async function createAgregatOrder(actor: Actor, input: AgregatInput): Pro
   if (!quote.ok) return quote;
   const customer = await resolveCustomer(actor, input);
   if (!customer.ok) return customer;
+  if (!meta.confirmDuplicate) {
+    const duplicate = await recentDuplicate({ sellerId: actor.id, type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, items: [{ ref: quote.product.id, title: quote.title, qty: input.qty }] });
+    if (duplicate) return { ok: false, error: duplicateWarning(duplicate), duplicate: { number: duplicate.number } };
+  }
   const snapshot: PriceSnapshot = { unitBaseUsd: quote.base, totalBaseUsd: Math.round(quote.base * input.qty * 100) / 100, standardBaseUsd: quote.standard };
-  const order = await getDb().workshopOrder.create({
+  const created = await createOnce(meta.requestId, findByRequest, () => getDb().workshopOrder.create({
     data: {
-      type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, dueDate: dueDateOf(input.dueDate), note: input.note,
+      requestId: meta.requestId, type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, dueDate: dueDateOf(input.dueDate), note: input.note,
       sellerId: actor.id, createdById: actor.id, priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
       items: { create: [{ kind: "PRODUCT", productId: quote.product.id, title: quote.title, qty: input.qty, baseUsd: money(quote.base), changedFromStandard: quote.changes.length > 0, options: { assembly: input.assembly, ...quote.options, standard: { liters: model.liters, hp: model.hp, fn: model.fn }, changes: quote.telegram, priceList: group.label } as Prisma.InputJsonValue }] },
     },
-  });
+    select: { id: true, number: true },
+  }), isUniqueViolation);
+  if (created.repeated) return { ok: true, id: created.value.id, number: created.value.number, telegram: "sent", repeated: true };
+  const order = created.value;
   const telegram = await afterCreate(actor, order.id, `${orderNumber(order.number)} zborka zakazini berdi`, { title: quote.title, qty: input.qty, purpose: input.purpose, customer: customer.customerName, changes: quote.changes.length });
   return { ok: true, id: order.id, number: order.number, telegram };
 }
 
 export type ZapchastInput = OrderCommon & { items: Array<{ partId: string; qty: number }> };
 /** Spare-part request; `noRequestFor` = "Zayavkasiz chiqim" by the workshop for that seller (already handed out → ISSUED). */
-export async function createZapchastOrder(actor: Actor, input: ZapchastInput, noRequestFor?: string): Promise<Result<{ id: string; number: number; telegram: DeliveryStatus }>> {
+export async function createZapchastOrder(actor: Actor, input: ZapchastInput, noRequestFor?: string, meta: SubmitMeta = { requestId: null, confirmDuplicate: false }): Promise<CreateResult> {
+  const again = await sameRequest(meta.requestId);
+  if (again) return again;
   const ids = [...new Set(input.items.map(item => item.partId))];
   const parts = await getDb().sexPart.findMany({ where: { id: { in: ids }, active: true } });
   const byId = new Map(parts.map(part => [part.id, part]));
@@ -68,18 +100,25 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
     if (!seller) return { ok: false, error: "Sotuvchini tanlang." };
     sellerId = seller.id;
   }
+  if (!meta.confirmDuplicate) {
+    const duplicate = await recentDuplicate({ sellerId, type: "ZAPCHAST", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: 1, items: input.items.map(item => ({ ref: item.partId, title: "", qty: item.qty })) });
+    if (duplicate) return { ok: false, error: duplicateWarning(duplicate), duplicate: { number: duplicate.number } };
+  }
   const known = input.items.filter(item => byId.get(item.partId)!.basePriceUsd !== null);
   const totalBase = Math.round(known.reduce((sum, item) => sum + Number(byId.get(item.partId)!.basePriceUsd) * item.qty, 0) * 100) / 100;
   const snapshot = { unitBaseUsd: totalBase, totalBaseUsd: totalBase, standardBaseUsd: null, missingPrices: input.items.length - known.length };
   const now = new Date();
-  const order = await getDb().workshopOrder.create({
+  const created = await createOnce(meta.requestId, findByRequest, () => getDb().workshopOrder.create({
     data: {
-      type: "ZAPCHAST", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: 1, dueDate: dueDateOf(input.dueDate), note: input.note,
+      requestId: meta.requestId, type: "ZAPCHAST", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: 1, dueDate: dueDateOf(input.dueDate), note: input.note,
       sellerId, createdById: actor.id, priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
       ...(noRequestFor ? { noRequest: true, status: "ISSUED" as const, acceptedById: actor.id, acceptedAt: now, startedById: actor.id, startedAt: now, issuedById: actor.id, issuedAt: now } : {}),
       items: { create: input.items.map((item, index) => { const part = byId.get(item.partId)!; return { kind: "PART" as const, partId: part.id, title: [part.name, part.size].filter(Boolean).join(" "), qty: item.qty, baseUsd: part.basePriceUsd, order: index }; }) },
     },
-  });
+    select: { id: true, number: true },
+  }), isUniqueViolation);
+  if (created.repeated) return { ok: true, id: created.value.id, number: created.value.number, telegram: "sent", repeated: true };
+  const order = created.value;
   const telegram = await afterCreate(actor, order.id, noRequestFor ? `${orderNumber(order.number)} zayavkasiz chiqimni yozdi` : `${orderNumber(order.number)} zapchast zayavkasini berdi`, { items: input.items.length, purpose: input.purpose, customer: customer.customerName, noRequest: !!noRequestFor });
   return { ok: true, id: order.id, number: order.number, telegram };
 }
@@ -118,6 +157,25 @@ export async function transitionOrder(actor: Actor, id: string, action: OrderAct
   await notifyChanged(id, action === "start");
   revalidatePath("/admin/seh");
   return { ok: true, status: check.to };
+}
+
+/** Soft cancel: status CANCELLED with who / when / why; the order stays in the list ("Bekor qilingan"). */
+export async function cancelOrder(actor: Actor, id: string, reason: string | null): Promise<Result> {
+  const db = getDb();
+  const order = await db.workshopOrder.findUnique({ where: { id }, select: { id: true, number: true, status: true, sellerId: true } });
+  if (!order) return { ok: false, error: "Zakaz topilmadi." };
+  const check = checkCancel(actor.role, order.status, order.sellerId === actor.id, reason);
+  if (!check.ok) return check;
+  const cleanReason = reason?.trim().slice(0, 300) || null;
+  const result = await db.workshopOrder.updateMany({ where: { id, status: order.status }, data: { status: "CANCELLED", cancelledById: actor.id, cancelledAt: new Date(), cancelReason: cleanReason } });
+  if (result.count !== 1) {
+    const current = await db.workshopOrder.findUnique({ where: { id }, select: { status: true } });
+    return { ok: false, error: current ? alreadyText(current.status) : "Zakaz topilmadi." };
+  }
+  await writeAudit(actor, { action: "CANCEL", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order.number), summary: `${orderNumber(order.number)}: ${STATUS_LABEL[order.status]} → Bekor qilingan`, before: { status: order.status }, after: { status: "CANCELLED", reason: cleanReason } });
+  await notifyCancelled(id);
+  revalidatePath("/admin/seh");
+  return { ok: true };
 }
 
 /** A seller confirms a "Zayavkasiz chiqim" written in their name. */

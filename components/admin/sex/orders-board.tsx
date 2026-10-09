@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/admin/bklead/dialog";
-import { confirmNoRequestAction, createNoRequestAction, resendTelegramAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
+import { cancelOrderAction, confirmNoRequestAction, createNoRequestAction, resendTelegramAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
 import type { OrderRow } from "@/lib/sex/queries";
 import { ACTION_LABEL, STATUS_LABEL, STATUS_TONE, actionFor, type OrderAction } from "@/lib/sex/rules";
 import { formatUsd } from "@/lib/prays/rules";
@@ -13,14 +13,15 @@ import { BusyLabel, DownloadButton, LinkButton, PendingArea, startNavigationProg
 type Option = { id: string; name: string };
 type PartOption = { id: string; label: string };
 type Props = {
+  cancelledView?: boolean;
   role: string; userName: string; rows: OrderRow[]; month: { key: string; label: string }; months: Array<{ key: string; label: string }>;
   parts: PartOption[]; sellers: Option[]; customers: Option[];
 };
 
-const WAIT_TEXT = { NEW: "Seh qabul qilishi kutilmoqda", ACCEPTED: "Navbatda · terish kutilmoqda", STARTED: "Sehda terilmoqda", ISSUED: "Krimga olish kutilmoqda", RECEIVED: "✓ Yopildi" } as const;
+const WAIT_TEXT = { NEW: "Seh qabul qilishi kutilmoqda", ACCEPTED: "Navbatda · terish kutilmoqda", STARTED: "Sehda terilmoqda", ISSUED: "Krimga olish kutilmoqda", RECEIVED: "✓ Yopildi", CANCELLED: "Bekor qilingan" } as const;
 const queueLabel = (row: OrderRow) => (row.queue ? `${STATUS_LABEL.ACCEPTED} (${row.queue}-navbat)` : STATUS_LABEL.ACCEPTED);
 
-export function OrdersBoard({ role, userName, rows, month, months, parts, sellers, customers }: Props) {
+export function OrdersBoard({ cancelledView = false, role, userName, rows, month, months, parts, sellers, customers }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   // Month change: the old table stays visible, dimmed, until the new month is rendered.
@@ -30,6 +31,9 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
   const [error, setError] = useState("");
   const [issuing, setIssuing] = useState<OrderRow | null>(null);
   const [noRequestOpen, setNoRequestOpen] = useState(false);
+  const [cancelling, setCancelling] = useState<OrderRow | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const showView = (cancelled: boolean) => { startNavigationProgress(); startMonth(() => router.push(`/admin/seh?month=${month.key}${cancelled ? "&status=cancelled" : ""}`)); };
   const boss = role === "SUPER_ADMIN", workshop = role === "WORKSHOP", seller = role === "SELLER", staff = !workshop && !seller;
   const run = (task: () => Promise<{ ok: boolean; error?: string }>, after?: () => void, key: string | null = null) => {
     setBusyKey(key);
@@ -63,7 +67,11 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
       </div>
     </div>
 
-    {!seller && <div className="sx-stats">{stats.map(stat => <div key={stat.k} className={`sx-stat is-flat ${stat.tone}`}><span>{stat.k}</span><strong>{stat.v}</strong></div>)}</div>}
+    {!workshop && <div className="sx-chips" aria-label="Zakazlar">
+      <button type="button" className="sx-chip" aria-pressed={!cancelledView} disabled={monthPending} onClick={() => showView(false)}>Faol</button>
+      <button type="button" className="sx-chip" aria-pressed={cancelledView} disabled={monthPending} onClick={() => showView(true)}>Bekor qilingan</button>
+    </div>}
+    {!seller && !cancelledView && <div className="sx-stats">{stats.map(stat => <div key={stat.k} className={`sx-stat is-flat ${stat.tone}`}><span>{stat.k}</span><strong>{stat.v}</strong></div>)}</div>}
     {error && <p className="sx-note is-error" role="alert">{error}</p>}
 
     <PendingArea pending={monthPending}><div className="sx-card">
@@ -85,6 +93,8 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
                 : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id), undefined, `${row.id}:confirm`)}><BusyLabel busy={isBusy(`${row.id}:confirm`)}>Tasdiqlayman</BusyLabel></button>
                 : row.status !== "STARTED" && <span className="sx-muted">{WAIT_TEXT[row.status]}</span>}
               {row.status === "STARTED" && row.startedAt && <WorkingStatus acceptedAt={row.startedAt} dueDate={row.dueDate}/>}
+              {row.cancelled && <div className="sx-muted" style={{ marginTop: 4 }}>{row.cancelled.by ?? "—"} · {row.cancelled.at}{row.cancelled.reason ? <><br/>Sabab: {row.cancelled.reason}</> : null}</div>}
+              {row.canCancel && <div style={{ marginTop: 6 }}><button type="button" className="sx-btn is-sm is-danger-ghost" disabled={pending} onClick={() => { setError(""); setCancelReason(""); setCancelling(row); }}>Bekor qilish</button></div>}
               {row.telegramFailed && (boss || role === "ADMIN") && <div className="sx-tg-fail">Telegramga yuborilmadi · <button type="button" className="sx-btn is-sm is-danger-ghost" disabled={pending} onClick={() => run(() => resendTelegramAction(row.id), undefined, `${row.id}:resend`)}><BusyLabel busy={isBusy(`${row.id}:resend`)} busyText="Yuborilmoqda…">qayta yuborish</BusyLabel></button></div>}
             </td>
           </tr>;
@@ -97,6 +107,18 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
     {issuing && <Dialog title={`${issuing.number} · Chiqib ketdi`} onClose={() => setIssuing(null)} busy={pending}>
       <IssueForm row={issuing} busy={pending} onSubmit={issuedQty => run(() => transitionOrderAction({ id: issuing.id, action: "issue", issuedQty }), () => setIssuing(null))}/>
       {error && <p className="sx-note is-error" role="alert" style={{ marginTop: 10 }}>{error}</p>}
+    </Dialog>}
+    {cancelling && <Dialog title={`${cancelling.number} · bekor qilish`} onClose={() => setCancelling(null)} busy={pending}>
+      <form style={{ display: "grid", gap: 12 }} onSubmit={event => { event.preventDefault(); run(() => cancelOrderAction({ id: cancelling.id, reason: cancelReason.trim() || null }), () => setCancelling(null), `${cancelling.id}:cancel`); }}>
+        <p className="sx-muted" style={{ fontSize: 14 }}>{cancelling.product}</p>
+        <p className="sx-note">Zakaz o‘chirilmaydi — “Bekor qilingan” filtrida qoladi. Seh mas’uliga Telegramda “❌ {cancelling.number} bekor qilindi” boradi.</p>
+        {boss && <label className="sx-field">Sabab<textarea value={cancelReason} onChange={event => setCancelReason(event.target.value)} maxLength={300} required minLength={3} placeholder="Masalan: mijoz fikridan qaytdi"/></label>}
+        {error && <p className="sx-note is-error" role="alert">{error}</p>}
+        <div className="sx-actions" style={{ justifyContent: "flex-end" }}>
+          <button type="button" className="sx-btn" onClick={() => setCancelling(null)} disabled={pending}>Yo‘q</button>
+          <button type="submit" className="sx-btn is-red" disabled={pending || (boss && cancelReason.trim().length < 3)}><BusyLabel busy={isBusy(`${cancelling.id}:cancel`)} busyText="Bekor qilinmoqda…">Ha, bekor qilish</BusyLabel></button>
+        </div>
+      </form>
     </Dialog>}
     {noRequestOpen && <Dialog title="Zayavkasiz chiqim" onClose={() => setNoRequestOpen(false)} busy={pending} wide>
       <NoRequestForm parts={parts} sellers={sellers} customers={customers} busy={pending} onSubmit={draft => run(() => createNoRequestAction(draft), () => setNoRequestOpen(false))}/>

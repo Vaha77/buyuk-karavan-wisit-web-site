@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createAgregatOrderAction, createZapchastOrderAction, resendTelegramAction, type SexActionResult } from "@/app/admin/(sex)/seh/actions";
 import { personalKeyboard, personalMessage, type BotOrder } from "@/lib/sex/bot-text";
@@ -25,6 +25,24 @@ function sentResult(response: SexActionResult, label: "Zakaz" | "Zayavka"): Sent
   if (response.telegram === "failed") return { ...base, tone: "warn", text: "⚠️ Telegramga yuborilmadi", retry: true };
   return { ...base, tone: "ok", text: sentText(number) };
 }
+const newRequestId = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+/**
+ * One submit at a time: a ref blocks a second click before React re-renders the disabled button, and the requestId
+ * (new after every created order) lets the server return the same order instead of creating a second one.
+ */
+function useSubmitOnce() {
+  const busy = useRef(false);
+  const [requestId, setRequestId] = useState(newRequestId);
+  return { busy, requestId, renew: () => setRequestId(newRequestId()) };
+}
+/** "⚠️ Bu zakaz 1 daqiqa oldin yuborilgan (#0002). Baribir yana yuborasizmi?" [Ha, yuborish] [Yo‘q]. */
+function DuplicateQuestion({ text, busy, onYes, onNo }: { text: string; busy: boolean; onYes: () => void; onNo: () => void }) {
+  return <div className="sx-note" role="alertdialog" aria-label="Takroriy zakaz" style={{ display: "grid", gap: 8, fontSize: 13 }}>
+    <span>{text}</span>
+    <span className="sx-actions"><button type="button" className="sx-btn is-sm is-primary" disabled={busy} onClick={onYes}><BusyLabel busy={busy}>Ha, yana yuborish</BusyLabel></button><button type="button" className="sx-btn is-sm" disabled={busy} onClick={onNo}>Yo‘q</button></span>
+  </div>;
+}
+
 /** Result line under the order card (yellow when Telegram did not get it); a failed delivery can be retried here. */
 function SentNote({ result, onResent }: { result: SentResult; onResent: (next: SentResult) => void }) {
   const [pending, startTransition] = useTransition();
@@ -91,6 +109,8 @@ function AgregatForm({ userName, catalog, customers }: Props) {
   const [liters, setLiters] = useState<string | null>(null), [hp, setHp] = useState<string | null>(null), [fn, setFn] = useState<string | null>(null);
   const [qty, setQty] = useState("1"), [dueDate, setDueDate] = useState(""), [purpose, setPurpose] = useState<"SHOP" | "CLIENT">("CLIENT"), [customer, setCustomer] = useState(""), [note, setNote] = useState("");
   const [result, setResult] = useState<SentResult | null>(null);
+  const [duplicate, setDuplicate] = useState<string | null>(null);
+  const { busy: submittingRef, requestId, renew } = useSubmitOnce();
   const available = (key: Assembly) => !!model?.[key];
   const effective = model && !available(assembly) ? ASSEMBLIES.find(item => available(item.key))?.key ?? assembly : assembly;
   const quote = useMemo(() => model && group ? quoteZborka(model, group, catalog.receivers, { assembly: effective, liters, hp, fn }) : null, [model, group, catalog.receivers, effective, liters, hp, fn]);
@@ -108,13 +128,21 @@ function AgregatForm({ userName, catalog, customers }: Props) {
   const price = quote?.ok ? quote.base : null;
   const ready = quote?.ok && Number.isInteger(qtyNumber) && qtyNumber >= 1 && (purpose === "SHOP" || customer.trim());
   const known = customers.find(item => item.name === customer.trim());
-  const submit = () => startTransition(async () => {
-    setResult(null);
-    const response = await createAgregatOrderAction({ groupKey: group.key, modelKey: model.key, assembly: effective, liters: effective === "k" ? null : liters, hp: effective === "vd" ? hp : null, fn: effective === "vz" ? fn : null, qty: qtyNumber, dueDate: dueDate || null, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, note: note.trim() || null });
-    setResult(sentResult(response, "Zakaz"));
-    if (!response.ok) return;
-    router.refresh();
-  });
+  const submit = (confirmDuplicate = false) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    startTransition(async () => {
+      try {
+        setResult(null); setDuplicate(null);
+        const response = await createAgregatOrderAction({ requestId, confirmDuplicate, groupKey: group.key, modelKey: model.key, assembly: effective, liters: effective === "k" ? null : liters, hp: effective === "vd" ? hp : null, fn: effective === "vz" ? fn : null, qty: qtyNumber, dueDate: dueDate || null, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, note: note.trim() || null });
+        if (!response.ok && response.duplicate) { setDuplicate(response.error); return; }
+        setResult(sentResult(response, "Zakaz"));
+        if (!response.ok) return;
+        renew();
+        router.refresh();
+      } finally { submittingRef.current = false; }
+    });
+  };
 
   return <div className="sx-split">
     <div className="sx-main">
@@ -161,8 +189,9 @@ function AgregatForm({ userName, catalog, customers }: Props) {
         <div className="sx-summary-line"><span>Soni</span><b>{qtyNumber || "—"}</b></div>
         {price !== null && quote?.ok && <PriceBlock base={Math.round(price * Math.max(qtyNumber, 1) * 100) / 100} delta={quote.changes.length ? (quote.base - quote.standard) * Math.max(qtyNumber, 1) : null}/>}
         {quote && !quote.ok && <p className="sx-note is-error">{quote.error}</p>}
+        {duplicate && <DuplicateQuestion text={duplicate} busy={pending} onYes={() => submit(true)} onNo={() => setDuplicate(null)}/>}
         {result && <SentNote result={result} onResent={setResult}/>}
-        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} disabled={pending || !ready} onClick={submit}><BusyLabel busy={pending}>{result?.ok ? "✓ Sehga yuborildi" : "Buyurtma berish"}</BusyLabel></button>
+        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} disabled={pending || !ready || !!duplicate} aria-busy={pending} onClick={() => submit()}><BusyLabel busy={pending}>{result?.ok ? "✓ Sehga yuborildi" : "Buyurtma berish"}</BusyLabel></button>
         {result?.ok && <button type="button" className="sx-btn" onClick={() => { setResult(null); setNote(""); }}>Yana buyurtma berish</button>}
       </div>
       <TelegramPreview order={{ type: "AGREGAT", qty: qtyNumber || 1, purpose, customerName: customer || "…", dueDate: dueDate || null, note: note || null, sellerName: userName, details: quote?.ok ? quote.telegram : [], items: [{ title: quote?.ok ? quote.title : `${group.brand} ${model.model}`, qty: qtyNumber || 1 }] }}/>
@@ -175,18 +204,28 @@ function ZapchastForm({ userName, parts, customers }: Props) {
   const [pending, startTransition] = useTransition();
   const [items, setItems] = useState([{ partId: "", qty: "1" }]), [purpose, setPurpose] = useState<"SHOP" | "CLIENT">("SHOP"), [customer, setCustomer] = useState(""), [dueDate, setDueDate] = useState(""), [note, setNote] = useState("");
   const [result, setResult] = useState<SentResult | null>(null);
+  const [duplicate, setDuplicate] = useState<string | null>(null);
+  const { busy: submittingRef, requestId, renew } = useSubmitOnce();
   const byId = new Map(parts.map(part => [part.id, part]));
   const ready = items.every(item => item.partId && Number(item.qty) >= 1) && (purpose === "SHOP" || customer.trim());
   const total = Math.round(items.reduce((sum, item) => sum + (byId.get(item.partId)?.basePriceUsd ?? 0) * (Number(item.qty) || 0), 0) * 100) / 100;
   const known = customers.find(item => item.name === customer.trim());
-  const submit = () => startTransition(async () => {
-    setResult(null);
-    const response = await createZapchastOrderAction({ items: items.map(item => ({ partId: item.partId, qty: Number(item.qty) })), purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, dueDate: dueDate || null, note: note.trim() || null });
-    setResult(sentResult(response, "Zayavka"));
-    if (!response.ok) return;
-    setItems([{ partId: "", qty: "1" }]); setNote("");
-    router.refresh();
-  });
+  const submit = (confirmDuplicate = false) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    startTransition(async () => {
+      try {
+        setResult(null); setDuplicate(null);
+        const response = await createZapchastOrderAction({ requestId, confirmDuplicate, items: items.map(item => ({ partId: item.partId, qty: Number(item.qty) })), purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, dueDate: dueDate || null, note: note.trim() || null });
+        if (!response.ok && response.duplicate) { setDuplicate(response.error); return; }
+        setResult(sentResult(response, "Zayavka"));
+        if (!response.ok) return;
+        renew();
+        setItems([{ partId: "", qty: "1" }]); setNote("");
+        router.refresh();
+      } finally { submittingRef.current = false; }
+    });
+  };
   if (!parts.length) return <div className="sx-card"><p className="sx-note">Seh zapchastlari hali kiritilmagan. Super Admin ularni Prays bo‘limida qo‘shadi.</p></div>;
   return <div className="sx-split">
     <div className="sx-main">
@@ -199,8 +238,9 @@ function ZapchastForm({ userName, parts, customers }: Props) {
           <label className="sx-field">Izoh<input value={note} onChange={event => setNote(event.target.value)} maxLength={500}/></label>
         </div>
         {total > 0 && <PriceBlock base={total} delta={null}/>}
+        {duplicate && <DuplicateQuestion text={duplicate} busy={pending} onYes={() => submit(true)} onNo={() => setDuplicate(null)}/>}
         {result && <SentNote result={result} onResent={setResult}/>}
-        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} style={{ height: 50, fontSize: 15 }} disabled={pending || !ready} onClick={submit}><BusyLabel busy={pending}>{result?.ok ? "✓ Sehga yuborildi" : "Zayavka yuborish"}</BusyLabel></button>
+        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} style={{ height: 50, fontSize: 15 }} disabled={pending || !ready || !!duplicate} aria-busy={pending} onClick={() => submit()}><BusyLabel busy={pending}>{result?.ok ? "✓ Sehga yuborildi" : "Zayavka yuborish"}</BusyLabel></button>
       </div>
     </div>
     <div className="sx-side">

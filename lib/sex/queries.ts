@@ -1,29 +1,30 @@
 import "server-only";
 import type { AdminUser, Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
-import { DEFAULT_WORKSHOP_DAILY_LIMIT, isReceiveOverdue, isStaff, monthRange, orderNumber, orderScope, processSteps, queuePositions, RECEIVE_OVERDUE_MS, stripPrices, tashkentDayStart, when, shortDay, type OrderStatus, type PriceSnapshot, type StepView } from "./rules";
+import { canCancel, DEFAULT_WORKSHOP_DAILY_LIMIT, isReceiveOverdue, isStaff, monthRange, orderNumber, orderScope, processSteps, queuePositions, RECEIVE_OVERDUE_MS, stripPrices, tashkentDayStart, when, shortDay, type OrderStatus, type PriceSnapshot, type StepView } from "./rules";
 
 type Viewer = Pick<AdminUser, "id" | "role" | "salesPersonId">;
 export type OrderRow = {
   id: string; number: string; day: string; type: "AGREGAT" | "ZAPCHAST"; product: string; qty: number;
   sellerName: string; sellerAt: string; purpose: "SHOP" | "CLIENT"; customerName: string | null; status: OrderStatus; steps: StepView[];
-  overdue: boolean; acceptedAt: string | null; startedAt: string | null; queue: number | null; telegramFailed: boolean; noRequest: boolean; sellerConfirmed: boolean; isNew: boolean; dueDate: string | null; note: string | null;
+  overdue: boolean; acceptedAt: string | null; startedAt: string | null; queue: number | null; telegramFailed: boolean; canCancel: boolean; cancelled: { at: string; by: string | null; reason: string | null } | null; noRequest: boolean; sellerConfirmed: boolean; isNew: boolean; dueDate: string | null; note: string | null;
   items: Array<{ id: string; title: string; qty: number; issuedQty?: number | null }>;
   prices?: Partial<PriceSnapshot>;
 };
 
 const include = {
-  seller: { select: { name: true } }, acceptedBy: { select: { name: true } }, startedBy: { select: { name: true } }, issuedBy: { select: { name: true } }, receivedBy: { select: { name: true } },
+  seller: { select: { name: true } }, acceptedBy: { select: { name: true } }, startedBy: { select: { name: true } }, cancelledBy: { select: { name: true } }, issuedBy: { select: { name: true } }, receivedBy: { select: { name: true } },
   items: { orderBy: { order: "asc" as const }, select: { id: true, title: true, qty: true, issuedQty: true, baseUsd: true } },
 } satisfies Prisma.WorkshopOrderInclude;
 type Loaded = Prisma.WorkshopOrderGetPayload<{ include: typeof include }>;
 
-function toRow(order: Loaded, role: string, now: Date, queue: Map<string, number>): OrderRow {
+function toRow(order: Loaded, viewer: Viewer, now: Date, queue: Map<string, number>): OrderRow {
+  const role = viewer.role;
   const product = order.type === "AGREGAT" ? `${order.items[0]?.title ?? "—"}${order.qty > 1 ? ` ×${order.qty}` : ""}` : order.items.map(item => `${item.title} ×${item.issuedQty ?? item.qty}`).join(", ");
   const base = {
     id: order.id, number: orderNumber(order.number), day: shortDay(order.createdAt), type: order.type, product, qty: order.qty,
     sellerName: order.seller.name, sellerAt: when(order.createdAt, now), purpose: order.purpose, customerName: order.customerName, status: order.status,
-    steps: processSteps(order, now), overdue: isReceiveOverdue(order, now), acceptedAt: order.acceptedAt?.toISOString() ?? null, startedAt: order.startedAt?.toISOString() ?? null, queue: queue.get(order.id) ?? null, telegramFailed: !!order.telegramFailedAt, noRequest: order.noRequest, sellerConfirmed: !!order.sellerConfirmedAt,
+    steps: processSteps(order, now), overdue: isReceiveOverdue(order, now), acceptedAt: order.acceptedAt?.toISOString() ?? null, startedAt: order.startedAt?.toISOString() ?? null, queue: queue.get(order.id) ?? null, telegramFailed: !!order.telegramFailedAt, canCancel: canCancel(role, order.status, order.sellerId === viewer.id), cancelled: order.cancelledAt ? { at: when(order.cancelledAt, now), by: order.cancelledBy?.name ?? null, reason: order.cancelReason } : null, noRequest: order.noRequest, sellerConfirmed: !!order.sellerConfirmedAt,
     isNew: now.getTime() - order.createdAt.getTime() < 10 * 60_000, dueDate: order.dueDate?.toISOString().slice(0, 10) ?? null, note: order.note,
     priceSnapshot: order.priceSnapshot, items: order.items.map(item => ({ id: item.id, title: item.title, qty: item.qty, issuedQty: item.issuedQty, baseUsd: item.baseUsd === null ? null : Number(item.baseUsd) })),
   };
@@ -31,17 +32,19 @@ function toRow(order: Loaded, role: string, now: Date, queue: Map<string, number
 }
 
 /** Orders a viewer may see: staff the month (plus anything still open), a seller their own, the workshop its open tasks. */
-export async function listOrders(viewer: Viewer, month?: string) {
+/** `cancelled` = the "Bekor qilingan" filter; otherwise cancelled orders are left out (they are never deleted). */
+export async function listOrders(viewer: Viewer, month?: string, cancelled = false) {
   const now = new Date(), range = monthRange(month, now);
   const where: Prisma.WorkshopOrderWhereInput = { ...orderScope(viewer) };
-  if (isStaff(viewer.role)) where.OR = [{ createdAt: { gte: range.from, lt: range.to } }, { status: { in: ["NEW", "ACCEPTED", "STARTED", "ISSUED"] } }];
+  if (viewer.role !== "WORKSHOP") where.AND = [{ status: cancelled ? "CANCELLED" : { not: "CANCELLED" } }];
+  if (isStaff(viewer.role)) where.OR = cancelled ? [{ createdAt: { gte: range.from, lt: range.to } }] : [{ createdAt: { gte: range.from, lt: range.to } }, { status: { in: ["NEW", "ACCEPTED", "STARTED", "ISSUED"] } }];
   // Queue numbers are global (a seller sees "2-navbat" even though they only list their own orders).
   const [orders, waiting] = await Promise.all([
     getDb().workshopOrder.findMany({ where, include, orderBy: { createdAt: "desc" }, take: viewer.role === "SELLER" ? 200 : 500 }),
     getDb().workshopOrder.findMany({ where: { status: "ACCEPTED" }, select: { id: true, status: true, acceptedAt: true } }),
   ]);
   const queue = queuePositions(waiting);
-  return { range, rows: orders.map(order => toRow(order, viewer.role, now, queue)) };
+  return { range, rows: orders.map(order => toRow(order, viewer, now, queue)) };
 }
 
 /** Orders of one month for the Excel export (SUPER_ADMIN only — it carries prices). */

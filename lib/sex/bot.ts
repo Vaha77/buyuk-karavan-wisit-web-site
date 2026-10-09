@@ -2,7 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { TelegramApiError, editMessageText, getMe, sendMessage, telegramErrorDetails, telegramWorkshopChatId } from "@/lib/telegram/client";
-import { LINK_PREFIX, LINK_TTL_MS, deliveryPlan, groupIssuedMessage, personalKeyboard, personalMessage, type BotOrder, type DeliveryStatus } from "./bot-text";
+import { LINK_PREFIX, LINK_TTL_MS, cancelledText, deliveryPlan, groupIssuedMessage, personalKeyboard, personalMessage, type BotOrder, type DeliveryStatus } from "./bot-text";
 import { sendToGroup } from "./group-send";
 import { queuePositions } from "./rules";
 
@@ -20,7 +20,7 @@ export async function loadBotOrder(id: string): Promise<BotOrder | null> {
   const options = order.items[0]?.options as { changes?: unknown } | null;
   return {
     id: order.id, number: order.number, type: order.type, purpose: order.purpose, customerName: order.customerName, qty: order.qty, dueDate: order.dueDate, note: order.note,
-    sellerName: order.seller.name, noRequest: order.noRequest, status: order.status, startedAt: order.startedAt, issuedAt: order.issuedAt, issuedByName: order.issuedBy?.name ?? null,
+    sellerName: order.seller.name, noRequest: order.noRequest, status: order.status, cancelReason: order.cancelReason, startedAt: order.startedAt, issuedAt: order.issuedAt, issuedByName: order.issuedBy?.name ?? null,
     details: Array.isArray(options?.changes) ? (options.changes as string[]) : [], items: order.items.map(item => ({ title: item.title, qty: item.qty, issuedQty: item.issuedQty })),
   };
 }
@@ -87,6 +87,19 @@ export async function notifyChanged(orderId: string, requeue: boolean) {
   if (!requeue) return;
   for (const [id] of [...queue].slice(0, 40)) if (id !== orderId) await deliver(id, queue).catch(error => flag(id, error));
 }
+/** Cancelled: every personal message becomes "❌ #… bekor qilindi" without buttons, plus a short new DM so it is noticed. */
+export async function notifyCancelled(orderId: string) {
+  await notifyChanged(orderId, true);
+  const order = await loadBotOrder(orderId);
+  if (!order) return;
+  const messages = await getDb().workshopOrderMessage.findMany({ where: { orderId }, select: { chatId: true, messageId: true } });
+  let failure: unknown = null;
+  for (const message of messages) {
+    try { await sendMessage(message.chatId, cancelledText(order)); } catch (error) { failure = error; }
+  }
+  if (failure) await flag(orderId, failure);
+}
+
 /** "Telegramga yuborilmadi · qayta yuborish" on the site. */
 export async function resendOrder(orderId: string) {
   return (await deliver(orderId, undefined, true)) === "sent";

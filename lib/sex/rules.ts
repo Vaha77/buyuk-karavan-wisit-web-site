@@ -2,14 +2,16 @@
 // Pure (no database, no "server-only"), so the tests run them directly.
 
 export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "SELLER" | "WORKSHOP";
-export type OrderStatus = "NEW" | "ACCEPTED" | "STARTED" | "ISSUED" | "RECEIVED";
+export type OrderStatus = "NEW" | "ACCEPTED" | "STARTED" | "ISSUED" | "RECEIVED" | "CANCELLED";
 export type OrderAction = "accept" | "start" | "issue" | "receive";
 /** Order of the stages; a transition only ever moves one step forward. */
 export const STATUS_ORDER: OrderStatus[] = ["NEW", "ACCEPTED", "STARTED", "ISSUED", "RECEIVED"];
+/** Stages a cancelled order may still be stopped from (never after it left the workshop). */
+export const CANCELLABLE: OrderStatus[] = ["NEW", "ACCEPTED", "STARTED"];
 export type Viewer = { id: string; role: Role | string };
 
-export const STATUS_LABEL: Record<OrderStatus, string> = { NEW: "Yangi", ACCEPTED: "Navbatda", STARTED: "Terilmoqda", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi" };
-export const STATUS_TONE: Record<OrderStatus, "blue" | "slate" | "yellow" | "red" | "green"> = { NEW: "blue", ACCEPTED: "slate", STARTED: "yellow", ISSUED: "red", RECEIVED: "green" };
+export const STATUS_LABEL: Record<OrderStatus, string> = { NEW: "Yangi", ACCEPTED: "Navbatda", STARTED: "Terilmoqda", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi", CANCELLED: "Bekor qilingan" };
+export const STATUS_TONE: Record<OrderStatus, "blue" | "slate" | "yellow" | "red" | "green" | "grey"> = { NEW: "blue", ACCEPTED: "slate", STARTED: "yellow", ISSUED: "red", RECEIVED: "green", CANCELLED: "grey" };
 export const PURPOSE_LABEL = { SHOP: "Magazinga (vitrina)", CLIENT: "Mijozga" } as const;
 export const TYPE_LABEL = { AGREGAT: "Agregat", ZAPCHAST: "Zapchast" } as const;
 /** An order still "Chiqib ketdi" after this long is highlighted in red and counted in the sidebar badge. */
@@ -138,6 +140,48 @@ export function startedToday(startedAt: Array<Date | string | null>, now = new D
 /** Header counter of the workshop panel: red with "kunlik limit" once the limit is reached (a warning only). */
 export function dailyCapView(started: number, limit: number) {
   return started >= limit ? { tone: "red" as const, note: "kunlik limit" } : { tone: "normal" as const, note: `${limit - started} ta joy bor` };
+}
+
+/**
+ * Cancelling (soft — the order stays, status CANCELLED): the seller only their own order while it is still "Yangi";
+ * SUPER_ADMIN any order before it left the workshop, with a reason.
+ */
+export function checkCancel(role: string, status: OrderStatus, isOwnOrder: boolean, reason: string | null | undefined): { ok: true } | { ok: false; error: string } {
+  if (status === "CANCELLED") return { ok: false, error: "Bu zakaz allaqachon bekor qilingan." };
+  if (role === "SUPER_ADMIN") {
+    if (!CANCELLABLE.includes(status)) return { ok: false, error: `“${STATUS_LABEL[status]}” holatidagi zakazni bekor qilib bo‘lmaydi.` };
+    if ((reason ?? "").trim().length < 3) return { ok: false, error: "Bekor qilish sababini yozing." };
+    return { ok: true };
+  }
+  if (role === "SELLER") {
+    if (!isOwnOrder) return { ok: false, error: "Faqat o‘z zakazingizni bekor qila olasiz." };
+    if (status !== "NEW") return { ok: false, error: "Seh qabul qilgan zakazni bekor qilib bo‘lmaydi — Super Admin’ga murojaat qiling." };
+    return { ok: true };
+  }
+  return { ok: false, error: "Zakazni bekor qilish huquqi yo‘q." };
+}
+export const canCancel = (role: string, status: OrderStatus, isOwnOrder: boolean) =>
+  (role === "SUPER_ADMIN" && CANCELLABLE.includes(status)) || (role === "SELLER" && isOwnOrder && status === "NEW");
+
+/** Same seller sending the same thing again within this window is asked "Baribir yana yuborasizmi?". */
+export const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
+export type FingerprintInput = { sellerId: string; type: "AGREGAT" | "ZAPCHAST"; purpose: "SHOP" | "CLIENT"; customerId: string | null; customerName: string | null; qty: number; items: Array<{ ref: string | null; title: string; qty: number }> };
+/** What makes two orders "the same": seller, goods (product / parts and quantities), recipient, quantity. Not the note or due date. */
+export function orderFingerprint(order: FingerprintInput) {
+  const customer = order.purpose === "CLIENT" ? (order.customerId ?? (order.customerName ?? "").trim().toLowerCase().replace(/\s+/g, " ")) : "";
+  const items = order.items.map(item => `${item.ref ?? item.title.trim().toLowerCase()}×${item.qty}`).sort().join("|");
+  return [order.sellerId, order.type, order.purpose, customer, order.qty, items].join("#");
+}
+/** The most recent identical, not cancelled order within the window, if any. */
+export function findDuplicate<T extends FingerprintInput & { number: number; createdAt: Date | string; status: OrderStatus }>(candidate: FingerprintInput, recent: T[], now = new Date()) {
+  const key = orderFingerprint(candidate);
+  return recent
+    .filter(order => order.status !== "CANCELLED" && now.getTime() - new Date(order.createdAt).getTime() <= DUPLICATE_WINDOW_MS && orderFingerprint(order) === key)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null;
+}
+export function duplicateWarning(order: { number: number; createdAt: Date | string }, now = new Date()) {
+  const minutes = Math.max(1, Math.round((now.getTime() - new Date(order.createdAt).getTime()) / 60_000));
+  return `⚠️ Bu zakaz ${minutes} daqiqa oldin yuborilgan (${orderNumber(order.number)}). Baribir yana yuborasizmi?`;
 }
 
 /** "2026-10" → its first moment and the next month's first moment, Tashkent time (UTC+5). */
