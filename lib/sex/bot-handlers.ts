@@ -26,6 +26,8 @@ export async function handleSehCallback(callback: TelegramCallbackQuery) {
   const answer = (text: string, alert = false) => answerCallbackQuery(callback.id, text, alert).catch(log("Seh callback answer failed"));
   const user = await workshopUser(callback.from.id);
   if (!user) { await answer(DENIED, true); return true; }
+  // Workflow buttons work only in the user's own private chat with the bot (not in the group).
+  if (!callback.message || callback.message.chat.type !== "private" || String(callback.message.chat.id) !== user.telegramChatId) { await answer("Bu tugma faqat bot bilan shaxsiy chatda ishlaydi.", true); return true; }
   const { action, orderId } = parsed;
   if (action === "startno") {
     await answer("Bekor qilindi");

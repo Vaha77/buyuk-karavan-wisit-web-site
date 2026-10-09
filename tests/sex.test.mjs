@@ -303,8 +303,9 @@ test("seh bot: an unlinked or non-WORKSHOP Telegram account is refused; every bo
 
 test("Seh group gets only the ISSUED report (no buttons, no price)", async () => {
   const report = bot.groupIssuedMessage(botOrder({ status: "ISSUED", issuedAt: new Date("2026-10-09T10:40:00Z"), issuedByName: "Ikromjon" }));
-  assert.equal(report, "✅ Sehdan chiqdi #0418\nBITZER 4NES+20 vazdushniy agregat · FNV200 ×1\nKimga: Mijoz — Rustam aka\nOldi: Abduraxmon · Berdi: Ikromjon · 09-okt 15:40");
-  assert.match(bot.groupIssuedMessage(botOrder({ status: "ISSUED", noRequest: true, purpose: "SHOP", issuedByName: "Ikromjon" })), /Kimga: Vitrina\nOldi: Abduraxmon · Berdi: Ikromjon\n⚠️ Zayavkasiz chiqim$/);
+  assert.equal(report, "✅ Sehdan chiqdi #0418\nBITZER 4NES+20 vazdushniy agregat · FNV200 ×1\nKimga: Mijoz — Rustam aka\nZayavka bergan: Abduraxmon\nSeh mas’uli: Ikromjon\nChiqdi: 09-okt 15:40");
+  const zap = bot.groupIssuedMessage(botOrder({ status: "ISSUED", type: "ZAPCHAST", noRequest: true, purpose: "SHOP", issuedByName: "Ikromjon", items: [{ title: "Vibro shlang F28", qty: 10, issuedQty: 8 }, { title: "Glazok 3/8", qty: 2 }] }));
+  assert.equal(zap, "✅ Sehdan chiqdi #0418\nVibro shlang F28 ×8\nGlazok 3/8 ×2\nKimga: Magazin (vitrina)\nZayavka bergan: Abduraxmon\nSeh mas’uli: Ikromjon\n⚠️ Zayavkasiz chiqim");
   const delivery = await readFile(new URL("../lib/sex/bot.ts", import.meta.url), "utf8");
   assert.match(delivery, /if \(!chatId \|\| order\.status !== "ISSUED"\) return;/, "group report only for ISSUED");
   assert.equal((delivery.match(/telegramWorkshopChatId\(\)/g) ?? []).length, 2, "the group chat is used only by the report and its test");
@@ -321,4 +322,44 @@ test("lead bot texts and buttons are unchanged", async () => {
   assert.match(crm, /callback_data: `contact:\$\{leadId\}`/);
   const route = await readFile(new URL("../app/api/telegram/webhook/route.ts", import.meta.url), "utf8");
   assert.match(route, /answerCallbackQuery\(update\.callback_query\.id, "So‘rov qabul qilindi\."\)/, "lead buttons are still acknowledged up front");
+});
+
+
+test("Seh group send (mocked Telegram): sends once; on migrate_to_chat_id resends to the new id and logs it; errors become readable", async () => {
+  const group = await import("../lib/sex/group-send.ts");
+  const calls = [], logs = [];
+  const ok = async (chatId, text) => { calls.push([chatId, text]); return { chat: { id: Number(chatId) }, message_id: 77 }; };
+  assert.deepEqual(await group.sendToGroup(ok, "-4313815181", "🔧 Test: seh guruhi ulandi", message => logs.push(message)), { ok: true, chatId: "-4313815181", messageId: 77 });
+  assert.deepEqual(calls, [["-4313815181", "🔧 Test: seh guruhi ulandi"]]);
+  assert.deepEqual(logs, []);
+
+  calls.length = 0;
+  const migrating = async (chatId, text) => {
+    calls.push([chatId, text]);
+    if (chatId === "-4313815181") throw Object.assign(new Error("Telegram sendMessage failed"), { name: "TelegramApiError", description: "Bad Request: group chat was upgraded to a supergroup chat", migrateToChatId: "-1001234567890" });
+    return { chat: { id: Number(chatId) }, message_id: 78 };
+  };
+  const moved = await group.sendToGroup(migrating, "-4313815181", "✅ Sehdan chiqdi #0418", message => logs.push(message));
+  assert.deepEqual(moved, { ok: true, chatId: "-1001234567890", messageId: 78, migratedTo: "-1001234567890" });
+  assert.deepEqual(calls.map(call => call[0]), ["-4313815181", "-1001234567890"], "resent once with the new id");
+  assert.deepEqual(logs, ["Guruh ID o‘zgardi: -1001234567890 — Vercel'da yangilang (TELEGRAM_WORKSHOP_CHAT_ID)"]);
+
+  const failing = description => async () => { throw Object.assign(new Error("Telegram sendMessage failed"), { name: "TelegramApiError", description }); };
+  assert.deepEqual(await group.sendToGroup(failing("Bad Request: chat not found"), "-1", "x", () => {}), { ok: false, error: "chat not found — chat ID noto‘g‘ri yoki bot guruhga qo‘shilmagan" });
+  assert.match((await group.sendToGroup(failing("Forbidden: bot is not a member of the group chat"), "-1", "x", () => {})).error, /^bot guruhda emas/);
+  assert.equal(group.describeTelegramError(Object.assign(new Error("TELEGRAM_BOT_TOKEN is not configured"), { name: "TelegramConfigError" })), "Bot token yoki TELEGRAM_WORKSHOP_CHAT_ID sozlanmagan");
+  const delivery = await readFile(new URL("../lib/sex/bot.ts", import.meta.url), "utf8");
+  assert.match(delivery, /sendToGroup\(sendMessage, chatId, "🔧 Test: seh guruhi ulandi"\)/);
+  assert.doesNotMatch(delivery, /-4313815181/, "the chat id is never hard-coded");
+});
+
+test("workflow buttons work only in the linked user's own private chat; the group test is SUPER_ADMIN only; unlinking is audited", async () => {
+  const handlers = await readFile(new URL("../lib/sex/bot-handlers.ts", import.meta.url), "utf8");
+  assert.match(handlers, /callback\.message\.chat\.type !== "private" \|\| String\(callback\.message\.chat\.id\) !== user\.telegramChatId/);
+  const settings = await readFile(new URL("../app/admin/(protected)/settings/actions.ts", import.meta.url), "utf8");
+  assert.match(settings, /sendSehGroupTestAction\(\)[^\n]*\r?\n\s*await requireRole\("SUPER_ADMIN"\);\r?\n\s*return sendGroupTest\(\);/);
+  const users = await readFile(new URL("../app/admin/(protected)/users/actions.ts", import.meta.url), "utf8");
+  assert.match(users, /unlinkUserTelegramAction\(userId:string\)[^\n]*?\{const actor=await requireRole\("SUPER_ADMIN"\)/);
+  assert.match(users, /createUserTelegramLinkAction\(userId:string\)[^\n]*?\{const actor=await requireRole\("SUPER_ADMIN"\)/);
+  assert.match(users, /if\(!form\.has\("telegramChatId"\)\)return undefined;/, "saving a user row never wipes a bot binding");
 });

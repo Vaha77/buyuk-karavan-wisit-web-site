@@ -20,7 +20,7 @@ export async function saveWorkshopLimitAction(raw: unknown): Promise<{ ok: true 
 }
 
 /** "Seh guruhiga test xabar". */
-export async function sendSehGroupTestAction(): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireRole("SUPER_ADMIN", "ADMIN");
+export async function sendSehGroupTestAction(): Promise<{ ok: true; migratedTo?: string | null } | { ok: false; error: string }> {
+  await requireRole("SUPER_ADMIN");
   return sendGroupTest();
 }

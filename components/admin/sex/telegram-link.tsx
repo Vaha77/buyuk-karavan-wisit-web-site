@@ -23,7 +23,9 @@ export function TelegramLink({ linked, groupTest = false, compact = false }: { l
   });
   const test = (kind: "me" | "group") => run(kind, async () => {
     const result = kind === "me" ? await sendMyTelegramTestAction() : await sendSehGroupTestAction();
-    setMessage(result.ok ? { ok: true, text: kind === "me" ? "Test xabar yuborildi — Telegramni tekshiring" : "Guruhga test xabar yuborildi" } : { ok: false, text: result.ok ? "" : result.error });
+    if (!result.ok) { setMessage({ ok: false, text: `❌ ${result.error}` }); return; }
+    const migrated = "migratedTo" in result && result.migratedTo ? ` · Guruh ID o‘zgardi: ${result.migratedTo} — Vercel'da TELEGRAM_WORKSHOP_CHAT_ID ni yangilang` : "";
+    setMessage({ ok: true, text: kind === "me" ? "✅ Test xabar yuborildi — Telegramni tekshiring" : `✅ Seh guruhiga yuborildi${migrated}` });
   });
   const isBusy = (kind: Busy) => pending && busy === kind;
 

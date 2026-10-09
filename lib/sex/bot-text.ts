@@ -60,9 +60,12 @@ export function parseSehCallback(data: string | undefined): { action: SehCallbac
   return match ? { action: match[1].toLowerCase() as SehCallbackAction, orderId: match[2] } : null;
 }
 
-/** Seh group gets only this final report, once an order is ISSUED. No buttons, no price. */
+/** Seh group gets only this final report, once an order is ISSUED: number, goods, for whom, who ordered, who issued, when. No buttons, no price. */
 export function groupIssuedMessage(order: BotOrder) {
-  const lines = [`✅ Sehdan chiqdi ${orderNumber(order.number)}`, ...itemLines(order), `Kimga: ${recipient(order)}`, `Oldi: ${order.sellerName} · Berdi: ${order.issuedByName ?? "—"}${order.issuedAt ? ` · ${shortDay(order.issuedAt)} ${clock(order.issuedAt)}` : ""}`];
+  const lines = [`✅ Sehdan chiqdi ${orderNumber(order.number)}`, ...itemLines(order),
+    `Kimga: ${order.purpose === "CLIENT" ? `Mijoz — ${order.customerName ?? "—"}` : "Magazin (vitrina)"}`,
+    `Zayavka bergan: ${order.sellerName}`, `Seh mas’uli: ${order.issuedByName ?? "—"}`];
+  if (order.issuedAt) lines.push(`Chiqdi: ${shortDay(order.issuedAt)} ${clock(order.issuedAt)}`);
   if (order.noRequest) lines.push("⚠️ Zayavkasiz chiqim");
   return lines.join("\n");
 }

@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { TelegramApiError, editMessageText, getMe, sendMessage, telegramErrorDetails, telegramWorkshopChatId } from "@/lib/telegram/client";
 import { LINK_PREFIX, LINK_TTL_MS, groupIssuedMessage, personalKeyboard, personalMessage, type BotOrder } from "./bot-text";
+import { sendToGroup } from "./group-send";
 import { queuePositions } from "./rules";
 
 // Seh bot delivery: personal messages to linked WORKSHOP users (edited on every status change) and the group report on ISSUED.
@@ -39,14 +40,15 @@ async function flag(orderId: string, error: unknown | null) {
   await getDb().workshopOrder.update({ where: { id: orderId }, data: error ? { telegramFailedAt: new Date(), telegramError: text } : { telegramFailedAt: null, telegramError: null } }).catch(() => undefined);
 }
 
-/** Group report "✅ Sehdan chiqdi" — only for ISSUED orders, only once. */
+/** Group report "✅ Sehdan chiqdi" — only for ISSUED orders, only once. Throws on failure so the order is flagged. */
 async function sendGroupReport(order: BotOrder) {
   const chatId = telegramWorkshopChatId();
   if (!chatId || order.status !== "ISSUED") return;
   const current = await getDb().workshopOrder.findUnique({ where: { id: order.id }, select: { telegramMessageId: true } });
   if (current?.telegramMessageId) return;
-  const sent = await sendMessage(chatId, groupIssuedMessage(order));
-  await getDb().workshopOrder.update({ where: { id: order.id }, data: { telegramChatId: String(sent.chat.id), telegramMessageId: sent.message_id } });
+  const sent = await sendToGroup(sendMessage, chatId, groupIssuedMessage(order));
+  if (!sent.ok) throw new Error(sent.error);
+  await getDb().workshopOrder.update({ where: { id: order.id }, data: { telegramChatId: sent.chatId, telegramMessageId: sent.messageId } });
 }
 
 /** Sends the personal message to every linked WORKSHOP user that has none yet, and edits the existing ones. */
@@ -115,11 +117,13 @@ export async function consumeLinkCode(code: string, chatId: string) {
   return user;
 }
 
+/** Sozlamalar → "Seh guruhiga test xabar": the result (or the reason it failed) is shown on the page. */
 export async function sendGroupTest() {
   const chatId = telegramWorkshopChatId();
-  if (!chatId) return { ok: false as const, error: "TELEGRAM_WORKSHOP_CHAT_ID sozlanmagan." };
-  try { await sendMessage(chatId, "🧪 Test: Seh guruhiga xabar keldi. Bu guruhga faqat “✅ Sehdan chiqdi” hisobotlari yuboriladi."); return { ok: true as const }; }
-  catch (error) { console.error("Seh group test failed", telegramErrorDetails(error)); return { ok: false as const, error: "Guruhga yuborilmadi — bot guruhda bormi va chat ID to‘g‘rimi, tekshiring." }; }
+  if (!chatId) return { ok: false as const, error: "TELEGRAM_WORKSHOP_CHAT_ID sozlanmagan (Vercel → Environment Variables)." };
+  const sent = await sendToGroup(sendMessage, chatId, "🔧 Test: seh guruhi ulandi");
+  if (!sent.ok) { console.error("Seh group test failed", { error: sent.error }); return { ok: false as const, error: sent.error }; }
+  return { ok: true as const, migratedTo: sent.migratedTo ?? null };
 }
 export async function sendPersonalTest(chatId: string | null) {
   if (!chatId) return { ok: false as const, error: "Telegram ulanmagan — avval “Telegram ulash” ni bosing." };

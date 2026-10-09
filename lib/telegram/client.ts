@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { InlineKeyboard } from "./types";
 
-type TelegramResponse<T> = { ok: boolean; result?: T; error_code?: number; description?: string };
+type TelegramResponse<T> = { ok: boolean; result?: T; error_code?: number; description?: string; parameters?: { migrate_to_chat_id?: number; retry_after?: number } };
 type SentMessage = { message_id: number; chat: { id: number } };
 type CallbackAck = { promise: Promise<boolean>; expiresAt: number };
 
@@ -16,7 +16,9 @@ type SafeTelegramError={type:string;stage:TelegramFailureStage;method?:string;ht
 export class TelegramConfigError extends Error { readonly stage="env_detection" as const; constructor(message:string){super(message);this.name="TelegramConfigError";} }
 export class TelegramApiError extends Error {
   readonly stage="bot_api_response" as const;
-  constructor(public method:string,public status:number,public errorCode?:number,public description?:string){super(`Telegram ${method} failed`);this.name="TelegramApiError";}
+  /** Set when a group was upgraded to a supergroup: the chat now lives under this id. */
+  migrateToChatId?:string;
+  constructor(public method:string,public status:number,public errorCode?:number,public description?:string,migrateToChatId?:number){super(`Telegram ${method} failed`);this.name="TelegramApiError";if(migrateToChatId)this.migrateToChatId=String(migrateToChatId);}
 }
 class TelegramRequestError extends Error {
   readonly stage="request" as const;
@@ -58,7 +60,7 @@ async function call<T>(method:string,payload:Record<string,unknown>):Promise<T>{
   let body:TelegramResponse<T>|null=null;
   try{body=await response.json() as TelegramResponse<T>;}
   catch{throw new TelegramResponseError(method,response.status);}
-  if(!response.ok||!body.ok||body.result===undefined)throw new TelegramApiError(method,response.status,body.error_code,body.description);
+  if(!response.ok||!body.ok||body.result===undefined)throw new TelegramApiError(method,response.status,body.error_code,body.description,body.parameters?.migrate_to_chat_id);
   return body.result;
 }
 /** Bot identity (username for t.me deep links). */
