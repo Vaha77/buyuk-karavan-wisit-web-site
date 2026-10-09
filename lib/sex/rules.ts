@@ -38,6 +38,8 @@ export function checkTransition(role: string, status: OrderStatus, action: Order
 export function actionFor(role: string, status: OrderStatus): OrderAction | null {
   return (Object.keys(TRANSITIONS) as OrderAction[]).find(action => TRANSITIONS[action].role === role && TRANSITIONS[action].from === status) ?? null;
 }
+/** Every action a button can send; taken from TRANSITIONS so validation never falls behind a new stage. */
+export const ORDER_ACTIONS = Object.keys(TRANSITIONS) as OrderAction[];
 export const ACTION_LABEL: Record<OrderAction, string> = { accept: "Qabul qildim", start: "Terishni boshladim", issue: "Chiqib ketdi", receive: "Krimga oldim" };
 
 export const isStaff = (role: string) => role === "SUPER_ADMIN" || role === "ADMIN" || role === "MANAGER";

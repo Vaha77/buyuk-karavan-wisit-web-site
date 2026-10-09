@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { requireSexUser } from "@/lib/auth/require-admin";
 import { canCreateOrders } from "@/lib/sex/rules";
+import { transitionInputError, transitionInputSchema } from "@/lib/sex/validation";
 import { confirmNoRequest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
 import { createLinkCode, resendOrder, sendPersonalTest } from "@/lib/sex/bot";
 import { revalidatePath } from "next/cache";
@@ -47,12 +48,11 @@ export async function createNoRequestAction(raw: unknown): Promise<SexActionResu
   return result.ok ? { ok: true, number: result.number } : result;
 }
 
-const transitionSchema = z.object({ id: z.string().min(1).max(40), action: z.enum(["accept", "issue", "receive"]), issuedQty: z.record(z.string().max(40), z.number().int().min(0).max(9999)).optional() });
 /** Status buttons; the role check for each step is in lib/sex/rules.ts (checkTransition). */
 export async function transitionOrderAction(raw: unknown): Promise<SexActionResult> {
   const user = await requireSexUser();
-  const parsed = transitionSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: "So‘rov noto‘g‘ri." };
+  const parsed = transitionInputSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: transitionInputError(parsed.error) };
   const result = await transitionOrder(user, parsed.data.id, parsed.data.action, parsed.data.issuedQty);
   return result.ok ? { ok: true } : result;
 }

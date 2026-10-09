@@ -363,3 +363,34 @@ test("workflow buttons work only in the linked user's own private chat; the grou
   assert.match(users, /createUserTelegramLinkAction\(userId:string\)[^\n]*?\{const actor=await requireRole\("SUPER_ADMIN"\)/);
   assert.match(users, /if\(!form\.has\("telegramChatId"\)\)return undefined;/, "saving a user row never wipes a bot binding");
 });
+
+test("bug #0001: the site button payload for every stage passes validation; ACCEPTED → STARTED → ISSUED → RECEIVED end to end", async () => {
+  const validation = await import("../lib/sex/validation.ts");
+  // Exactly what the buttons send (orders-board / workshop-board → transitionOrderAction).
+  for (const action of ["accept", "start", "issue", "receive"]) {
+    const parsed = validation.transitionInputSchema.safeParse({ id: "cm0abcdefghij0001", action });
+    assert.equal(parsed.success, true, `${action} must be accepted by the server action`);
+  }
+  assert.deepEqual([...rules.ORDER_ACTIONS].sort(), Object.keys(rules.TRANSITIONS).sort(), "validation follows TRANSITIONS");
+  const unknown = validation.transitionInputSchema.safeParse({ id: "x", action: "finish" });
+  assert.equal(unknown.success, false);
+  assert.equal(validation.transitionInputError(unknown.error), "Noma’lum amal: finish.", "a readable reason instead of “So‘rov noto‘g‘ri”");
+  assert.equal(validation.transitionInputSchema.safeParse({ id: "x", action: "issue", issuedQty: { item: 3 } }).success, true);
+
+  // An old order (created before STARTED existed, no startedAt) walks the whole chain with the WORKSHOP role.
+  let order = { id: "cm0abcdefghij0001", status: "ACCEPTED", acceptedAt: new Date("2026-10-05T13:12:00Z"), startedAt: null, issuedAt: null };
+  for (const [role, action, next] of [["WORKSHOP", "start", "STARTED"], ["WORKSHOP", "issue", "ISSUED"], ["SUPER_ADMIN", "receive", "RECEIVED"]]) {
+    const check = rules.checkTransition(role, order.status, action);
+    assert.deepEqual(check, { ok: true, to: next }, `${order.status} --${action}--> ${next}`);
+    order = { ...order, status: check.to };
+  }
+  assert.deepEqual(rules.checkTransition("WORKSHOP", "STARTED", "start"), { ok: false, error: "Bu zakaz allaqachon “Terilmoqda” holatida." });
+  assert.equal(rules.checkTransition("SUPER_ADMIN", "ACCEPTED", "start").ok, false, "only WORKSHOP starts");
+
+  // The Telegram "Terishni boshladim" goes through the same transitionOrder (no separate schema to fall behind).
+  const handlers = await readFile(new URL("../lib/sex/bot-handlers.ts", import.meta.url), "utf8");
+  assert.match(handlers, /const step = action === "startok" \? "start" : action;\s*const result = await transitionOrder\(user, orderId, step, undefined, "telegram"\);/);
+  const actions = await readFile(new URL("../app/admin/(sex)/seh/actions.ts", import.meta.url), "utf8");
+  assert.match(actions, /transitionInputSchema\.safeParse\(raw\)/);
+  assert.doesNotMatch(actions, /z\.enum\(\["accept"/, "no hand-written action list left");
+});
