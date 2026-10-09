@@ -500,3 +500,49 @@ test("cancel: seller only their own NEW order; SUPER_ADMIN until it leaves the w
   const queries = await readFile(new URL("../lib/sex/queries.ts", import.meta.url), "utf8");
   assert.match(queries, /status: cancelled \? "CANCELLED" : \{ not: "CANCELLED" \}/, "hidden by default, shown under “Bekor qilingan”");
 });
+
+test("plain /start: a chat bound to a profile is never registered as a seller; two /start make one record", async () => {
+  const start = await import("../lib/telegram/start-rules.ts");
+  assert.deepEqual(start.startDecision({ name: "Vaha", role: "SUPER_ADMIN" }, null), { kind: "menu", profile: { name: "Vaha", role: "SUPER_ADMIN" } });
+  assert.equal(start.startDecision({ name: "Vaha", role: "SUPER_ADMIN" }, { isApproved: false, isActive: true }).kind, "menu", "even if an old seller record exists");
+  assert.deepEqual(start.startDecision(null, { isApproved: false, isActive: true }), { kind: "agent", approved: false });
+  assert.deepEqual(start.startDecision(null, { isApproved: true, isActive: true }), { kind: "agent", approved: true });
+  assert.deepEqual(start.startDecision(null, null), { kind: "register" });
+
+  // The webhook flow with an in-memory store (unique telegramUserId, like the database).
+  const agents = [], replies = [];
+  const profiles = new Map([["777", { name: "Vaha", role: "SUPER_ADMIN" }]]);
+  const press = async userId => {
+    const decision = start.startDecision(profiles.get(userId) ?? null, agents.find(agent => agent.telegramUserId === userId) ?? null);
+    if (decision.kind === "menu") { replies.push([userId, "menu"]); return; }
+    if (decision.kind === "agent") { replies.push([userId, decision.approved ? "approved" : "pending"]); return; }
+    await new Promise(resolve => setTimeout(resolve, 2));
+    if (agents.some(agent => agent.telegramUserId === userId)) return; // P2002 → the other /start already answered
+    agents.push({ telegramUserId: userId, isApproved: false, isActive: true });
+    replies.push([userId, "registered"]);
+  };
+  await press("777");
+  assert.equal(agents.length, 0, "Super Admin's /start creates no seller record");
+  assert.deepEqual(replies, [["777", "menu"]]);
+  await Promise.all([press("555"), press("555")]);
+  assert.equal(agents.length, 1, "two quick /start → one record");
+  assert.deepEqual(replies.filter(reply => reply[0] === "555"), [["555", "registered"]], "and one reply");
+  await press("555");
+  assert.deepEqual(replies.at(-1), ["555", "pending"], "a later /start says it is waiting, no new record");
+  assert.equal(agents.length, 1);
+
+  assert.match(start.profileMenuText({ name: "Ikromjon", role: "WORKSHOP" }, "https://x"), /\/navbat[\s\S]*\/bugun/);
+  assert.match(start.profileMenuText({ name: "Vaha", role: "SUPER_ADMIN" }, "https://x"), /Admin menyu:[\s\S]*https:\/\/x\/admin/);
+  assert.match(start.profileMenuText({ name: "Ali", role: "SELLER" }, "https://x"), /Sotuvchi menyusi/);
+  assert.equal(start.linkedText({ name: "Ikromjon", role: "WORKSHOP" }, null).split("\n")[0], "✅ Ulandingiz: Ikromjon, Seh mas’uli");
+  assert.match(start.linkedText({ name: "Ikromjon", role: "WORKSHOP" }, "Test sehdan"), /Bu Telegram avval Test sehdan ga bog‘langan edi, endi Ikromjon ga o‘tkazildi\./);
+
+  const service = await readFile(new URL("../lib/telegram/service.ts", import.meta.url), "utf8");
+  assert.match(service, /const decision=startDecision\(profile\?\.isActive\?profile:null,agent\);/);
+  assert.match(service, /\(error as \{code\?:string\}\)\.code==="P2002"\)return true;/, "a racing second /start does not reply again");
+  assert.doesNotMatch(service, /salesAgent\.upsert/, "no blind upsert on /start");
+  const link = await readFile(new URL("../lib/sex/bot.ts", import.meta.url), "utf8");
+  assert.match(link, /updateMany\(\{ where: \{ telegramChatId: chatId, NOT: \{ id: user\.id \} \}, data: \{ telegramChatId: null \} \}\)/, "one chat = one profile");
+  const users = await readFile(new URL("../app/admin/(protected)/users/actions.ts", import.meta.url), "utf8");
+  assert.match(users, /deletePendingAgentAction\(agentId:string\)[^\n]*?\{const actor=await requireRole\("SUPER_ADMIN"\)/, "stray records are deleted only by the Super Admin's click");
+});

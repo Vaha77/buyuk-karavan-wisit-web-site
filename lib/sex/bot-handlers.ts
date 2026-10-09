@@ -7,6 +7,7 @@ import { isBotCommand, limitKeyboard, limitQuestion, orderRecipient, orderTitle,
 import { workshopDay } from "./queries";
 import { queuePositions, workingSince } from "./rules";
 import { transitionOrder } from "./service";
+import { linkedText } from "@/lib/telegram/start-rules";
 
 // Seh bot input: buttons in the personal order messages and the /start seh_<code>, /navbat, /bugun commands.
 // The webhook route does not pre-acknowledge "seh:" buttons, so every reply here is the button's own answer.
@@ -18,6 +19,11 @@ const log = (label: string) => (error: unknown) => console.error(label, telegram
 async function workshopUser(telegramUserId: number) {
   const user = await getDb().adminUser.findUnique({ where: { telegramChatId: String(telegramUserId) } });
   return user && user.role === "WORKSHOP" && user.isActive && user.approvalStatus === "APPROVED" ? user : null;
+}
+
+async function staffUser(telegramUserId: number) {
+  const user = await getDb().adminUser.findUnique({ where: { telegramChatId: String(telegramUserId) } });
+  return user && ["SUPER_ADMIN", "ADMIN", "MANAGER"].includes(user.role) && user.isActive && user.approvalStatus === "APPROVED" ? user : null;
 }
 
 export async function handleSehCallback(callback: TelegramCallbackQuery) {
@@ -58,13 +64,14 @@ export async function handleSehMessage(message: TelegramMessage) {
   if (code) {
     const user = await consumeLinkCode(code, String(message.chat.id));
     await reply(user
-      ? `✅ Ulandingiz, ${user.name}.${user.role === "WORKSHOP" ? " Yangi seh zakazlari shu yerga keladi: tugmalar bilan qabul qiling, terishni boshlang va “Chiqib ketdi” bosing.\n\n/navbat — navbatdagilar\n/bugun — bugungi hisob" : " Bu chatga test xabarlar keladi."}`
+      ? linkedText(user, user.previousName)
       : "Kod eskirgan yoki noto‘g‘ri. Saytda “Telegram ulash” ni qayta bosing (kod 15 daqiqa amal qiladi).");
     return true;
   }
   const navbat = isBotCommand(message.text, "navbat"), bugun = isBotCommand(message.text, "bugun");
   if (!navbat && !bugun) return false;
-  const user = await workshopUser(message.from.id);
+  // /navbat and /bugun are read-only: the Seh mas’uli and the admin-panel staff may use them.
+  const user = await workshopUser(message.from.id) ?? await staffUser(message.from.id);
   if (!user) { await reply(DENIED.replace("bu tugma", "bu buyruq")); return true; }
   if (bugun) {
     const day = await workshopDay();

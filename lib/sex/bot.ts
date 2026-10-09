@@ -118,16 +118,17 @@ export async function createLinkCode(userId: string) {
   const name = await username().catch(() => null);
   return { code: `${LINK_PREFIX}${code}`, url: name ? `https://t.me/${name}?start=${LINK_PREFIX}${code}` : null, expiresAt: expiresAt.toISOString() };
 }
-/** "/start seh_<code>" in a private chat: binds that chat to the user (an older binding of the same chat is removed). */
+/** "/start seh_<code>" in a private chat: binds that chat to the user. One chat = one profile: whoever had it is unbound. */
 export async function consumeLinkCode(code: string, chatId: string) {
   const db = getDb();
   const user = await db.adminUser.findUnique({ where: { telegramLinkCode: code }, select: { id: true, name: true, role: true, telegramLinkExpiresAt: true, isActive: true } });
   if (!user || !user.isActive || !user.telegramLinkExpiresAt || user.telegramLinkExpiresAt < new Date()) return null;
+  const previous = await db.adminUser.findFirst({ where: { telegramChatId: chatId, NOT: { id: user.id } }, select: { id: true, name: true } });
   await db.$transaction([
     db.adminUser.updateMany({ where: { telegramChatId: chatId, NOT: { id: user.id } }, data: { telegramChatId: null } }),
     db.adminUser.update({ where: { id: user.id }, data: { telegramChatId: chatId, telegramLinkCode: null, telegramLinkExpiresAt: null } }),
   ]);
-  return user;
+  return { ...user, previousName: previous?.name ?? null };
 }
 
 /** Sozlamalar → "Seh guruhiga test xabar": the result (or the reason it failed) is shown on the page. */

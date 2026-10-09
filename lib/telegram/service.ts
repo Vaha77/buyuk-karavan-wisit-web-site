@@ -5,6 +5,8 @@ import { agentName,claimedLeadGroupText,newLeadGroupText,privateLeadText,registr
 import { contactedKeyboard,handleCrmCallback,handleCrmText,mainMenu } from "./crm";
 import type { TelegramCallbackQuery,TelegramMessage,TelegramUpdate } from "./types";
 import { handleSehCallback,handleSehMessage } from "@/lib/sex/bot-handlers";
+import { SITE_URL } from "@/lib/site-url";
+import { pendingAgentText,profileMenuText,startDecision } from "./start-rules";
 
 type WebhookPerformance={callbackAcknowledged:boolean;timings:Record<string,number>};
 
@@ -43,10 +45,30 @@ async function reportUserId(message:TelegramMessage){
   await sendMessage(String(message.chat.id),`Sizning Telegram ID: ${message.from.id}\nUni admin panelda “Foydalanuvchilar” sahifasiga kiriting.`);
   return true;
 }
+/**
+ * Plain /start (the "/start seh_<code>" link is handled earlier): a chat bound to an admin-panel profile gets that role's
+ * menu and is never registered as a seller; an existing seller record is reused; only an unknown chat is registered once.
+ */
 async function registerAgent(message:TelegramMessage){
   if(message.chat.type!=="private"||!message.from||message.from.is_bot||!message.text?.trim().startsWith("/start"))return false;
-  const user=message.from,agent=await getDb().salesAgent.upsert({where:{telegramUserId:BigInt(user.id)},create:{telegramUserId:BigInt(user.id),telegramUsername:user.username||null,firstName:user.first_name,lastName:user.last_name||null},update:{telegramUsername:user.username||null,firstName:user.first_name,lastName:user.last_name||null}});
-  await sendMessage(String(user.id),registrationText(user.first_name,agent.isApproved&&agent.isActive),mainMenu);return true;
+  const user=message.from,db=getDb();
+  const [profile,agent]=await Promise.all([db.adminUser.findUnique({where:{telegramChatId:String(user.id)},select:{name:true,role:true,isActive:true}}),db.salesAgent.findUnique({where:{telegramUserId:BigInt(user.id)}})]);
+  const decision=startDecision(profile?.isActive?profile:null,agent);
+  if(decision.kind==="menu"){
+    const sellerMenu=decision.profile.role==="SELLER"&&agent?.isApproved&&agent.isActive;
+    await sendMessage(String(user.id),profileMenuText(decision.profile,SITE_URL),sellerMenu?mainMenu:undefined);return true;
+  }
+  if(decision.kind==="agent"){
+    await db.salesAgent.update({where:{id:agent!.id},data:{telegramUsername:user.username||null,firstName:user.first_name,lastName:user.last_name||null}});
+    await sendMessage(String(user.id),decision.approved?registrationText(user.first_name,true):pendingAgentText(user.first_name),decision.approved?mainMenu:undefined);return true;
+  }
+  try{await db.salesAgent.create({data:{telegramUserId:BigInt(user.id),telegramUsername:user.username||null,firstName:user.first_name,lastName:user.last_name||null}});}
+  catch(error){
+    // Two /start at once: the other one registered this chat and already answered.
+    if(error&&typeof error==="object"&&"code" in error&&(error as {code?:string}).code==="P2002")return true;
+    throw error;
+  }
+  await sendMessage(String(user.id),registrationText(user.first_name,false));return true;
 }
 async function welcomeMembers(message:TelegramMessage){
   if(!message.new_chat_members?.length||String(message.chat.id)!==telegramGroupChatId())return false;
