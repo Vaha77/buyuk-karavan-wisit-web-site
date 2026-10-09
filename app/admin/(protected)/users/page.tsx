@@ -6,6 +6,7 @@ import { roleLabel } from "@/lib/telegram/start-rules";
 import { CreateUserForm, UsersBoard, type ManagedUser, type SalesPersonOption } from "./user-forms";
 import { StrayAgents } from "./stray-agents";
 import { RestoreUserButton } from "./remove-user";
+import { ForceLogoutAllButton } from "./force-logout";
 
 /** Users (SUPER_ADMIN). `?view=archive` lists archived users with "Qayta tiklash". Passwords never travel with the page. */
 export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
@@ -32,6 +33,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const stray = linked.length ? await getDb().salesAgent.findMany({ where: { isApproved: false, telegramUserId: { in: linked.map(x => BigInt(x.telegramChatId!)) } }, select: { id: true, firstName: true, lastName: true, telegramUsername: true, telegramUserId: true } }) : [];
   const strayAgents = stray.map(a => { const owner = linked.find(x => x.telegramChatId === a.telegramUserId.toString())!; return { id: a.id, name: [a.firstName, a.lastName].filter(Boolean).join(" "), username: a.telegramUsername, profileName: owner.name, profileRole: roleLabel(owner.role) }; });
   return <div className="admin-products-page"><div className="admin-page-heading"><div><h1>Admin foydalanuvchilar</h1><p>Har bir xodim uchun alohida kirish hisobi</p></div></div>{filters}
+    <ForceLogoutAllButton/>
     <StrayAgents agents={strayAgents}/>
     <UsersBoard pending={pending} managed={managed} people={people} viewEnabled={isVaultEnabled()}><section className="admin-form-card"><div className="admin-form-card-heading"><h2>Yangi foydalanuvchi</h2></div><CreateUserForm people={people}/></section></UsersBoard>
   </div>;

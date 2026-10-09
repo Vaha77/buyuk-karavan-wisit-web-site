@@ -126,3 +126,10 @@ test("login keeps an encrypted copy of a correct password when there is none (or
   assert.match(action, /data: \{ passwordEncrypted: encryptPassword\(passwordInput\) \} \}\)\.catch\(\(\) => undefined\);/, "a failure never blocks the login");
   assert.doesNotMatch(action, /console\.|writeAudit/, "the password is never logged or audited");
 });
+
+test("“Hammani qayta kirishga majburlash”: Super Admin only, keeps their own session, audited", async () => {
+  const users = await read("../app/admin/(protected)/users/actions.ts");
+  assert.match(users, /export async function forceLogoutAllAction\(\)[^\n]*?\{const actor=await requireRole\("SUPER_ADMIN"\);const result=await getDb\(\)\.adminSession\.deleteMany\(\{where:\{userId:\{not:actor\.id\}\}\}\);await writeAudit\(actor,\{action:"FORCE_LOGOUT_ALL"/);
+  const button = await read("../app/admin/(protected)/users/force-logout.tsx");
+  assert.match(button, /<Dialog title="Hammani qayta kirishga majburlash"/, "asks before doing it");
+});
