@@ -24,10 +24,10 @@ export function WorkshopTelegramCell({ userId, linked }: { userId: string; linke
   return <div className="admin-user-seller" style={{ display: "grid", gap: 4, fontSize: 12 }}>
     {linked
       ? <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}><b style={{ color: "#1B6B43" }}>✅ Telegram ulangan</b><button type="button" className="admin-user-button is-danger" onClick={unlink} disabled={pending}>{pending ? "…" : "Uzish"}</button></span>
-      : <button type="button" className="admin-user-button" onClick={makeLink} disabled={pending}>{pending ? "Tayyorlanmoqda…" : "Telegram bog‘lash"}</button>}
+      : <button type="button" className="admin-user-button is-outline" onClick={makeLink} disabled={pending}>{pending ? "Tayyorlanmoqda…" : "Telegram bog‘lash"}</button>}
     {link && <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
       {link.startsWith("http") ? <a href={link} target="_blank" rel="noopener noreferrer" style={{ wordBreak: "break-all" }}>{link}</a> : <code>{link}</code>}
-      <button type="button" className="admin-user-button" onClick={copy}>{copied ? "Nusxalandi ✓" : "Nusxalash"}</button>
+      <button type="button" className="admin-user-button is-outline" onClick={copy}>{copied ? "Nusxalandi ✓" : "Nusxalash"}</button>
       <small style={{ color: "#5B6B82" }}>Seh mas’uliga yuboring · 15 daqiqa amal qiladi · u botda START bosadi</small>
     </span>}
     {error && <span role="alert" style={{ color: "#B42318" }}>{error}</span>}

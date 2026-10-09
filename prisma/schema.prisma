@@ -414,6 +414,8 @@ model AdminUser {
   role                 AdminRole                    @default(MANAGER)
   isActive             Boolean                      @default(true)
   approvalStatus       AdminApprovalStatus          @default(APPROVED)
+  // Set when the Super Admin resets the password: the next login goes straight to "Yangi parol o‘rnating".
+  mustPasswordChange   Boolean                      @default(false)
   // Telegram user id (= private chat id); WORKSHOP users press the workshop group buttons with it.
   telegramChatId       String?                      @unique @db.VarChar(32)
   // One-time "Telegram ulash" code (deep link t.me/<bot>?start=seh_<code>), valid 15 minutes.

@@ -2,7 +2,9 @@
 import {revalidatePath} from "next/cache";
 import {requireRole} from "@/lib/auth/require-admin";
 import {normalizeUzPhone} from "@/lib/auth/phone";
-import {hashPassword} from "@/lib/auth/password";
+import {hashPassword,hashTemporaryPassword,verifyPassword} from "@/lib/auth/password";
+import {generateTempPassword} from "@/lib/auth/temp-password";
+import {sendMessage} from "@/lib/telegram/client";
 import {getDb} from "@/lib/db";
 import {writeAudit} from "@/lib/audit/service";
 import {checkApproval,SELLER_TAKEN} from "@/lib/auth/approval-rules";
@@ -36,3 +38,12 @@ export async function unlinkUserTelegramAction(userId:string):Promise<{ok:true}|
  * presses "O‘chirish", only while unapproved and without any activity (leads, sales, marja, links…).
  */
 export async function deletePendingAgentAction(agentId:string):Promise<{ok:true}|{ok:false;error:string}>{const actor=await requireRole("SUPER_ADMIN");const agent=await getDb().salesAgent.findUnique({where:{id:agentId},include:{_count:{select:{assignedLeads:true,activities:true,followUps:true,sales:true,marjaTransactions:true,rewardRedemptions:true,referralLinks:true}}}});if(!agent)return{ok:false,error:"Yozuv topilmadi."};if(agent.isApproved)return{ok:false,error:"Tasdiqlangan sotuvchini bu yerdan o‘chirib bo‘lmaydi."};if(Object.values(agent._count).some(count=>count>0))return{ok:false,error:"Bu yozuvda faoliyat bor — o‘chirilmaydi."};await getDb().$transaction([getDb().telegramConversationState.deleteMany({where:{agentId}}),getDb().salesAgent.delete({where:{id:agentId}})]);await writeAudit(actor,{action:"DELETE",entityType:"SALES_AGENT",entityId:agentId,entityName:[agent.firstName,agent.lastName].filter(Boolean).join(" "),summary:"Keraksiz kutilayotgan BKLead sotuvchi yozuvini o‘chirdi",before:{telegramUserId:agent.telegramUserId.toString(),telegramUsername:agent.telegramUsername,isApproved:agent.isApproved}});revalidatePath("/admin/users");return{ok:true};}
+
+export type PasswordResetResult={ok:true;password:string;telegramLinked:boolean}|{ok:false;error:string};
+/**
+ * "Parolni tiklash" (SUPER_ADMIN): a new 8-character temporary password, stored only as a hash; the user must set a new
+ * one on the next login and every existing session ends. The password itself is returned once and never logged.
+ */
+export async function resetUserPasswordAction(userId:string):Promise<PasswordResetResult>{const actor=await requireRole("SUPER_ADMIN");if(userId===actor.id)return{ok:false,error:"O‘z parolingizni bu yerda tiklab bo‘lmaydi."};const user=await getDb().adminUser.findUnique({where:{id:userId},select:{id:true,name:true,telegramChatId:true}});if(!user)return{ok:false,error:"Foydalanuvchi topilmadi."};const password=generateTempPassword();await getDb().$transaction([getDb().adminUser.update({where:{id:user.id},data:{passwordHash:await hashTemporaryPassword(password),mustPasswordChange:true}}),getDb().adminSession.deleteMany({where:{userId:user.id}})]);await writeAudit(actor,{action:"PASSWORD_RESET",entityType:"ADMIN_USER",entityId:user.id,entityName:user.name,summary:"Foydalanuvchi parolini tikladi (vaqtinchalik parol, eski sessiyalar bekor)",after:{mustPasswordChange:true}});revalidatePath("/admin/users");return{ok:true,password,telegramLinked:!!user.telegramChatId};}
+/** "Telegramga yuborish": only the temporary password that is currently set for this user (checked against the hash). */
+export async function sendTempPasswordTelegramAction(userId:string,password:string):Promise<{ok:true}|{ok:false;error:string}>{const actor=await requireRole("SUPER_ADMIN");const user=await getDb().adminUser.findUnique({where:{id:userId},select:{id:true,name:true,telegramChatId:true,passwordHash:true,mustPasswordChange:true}});if(!user)return{ok:false,error:"Foydalanuvchi topilmadi."};if(!user.telegramChatId)return{ok:false,error:"Foydalanuvchi Telegram botga ulanmagan."};if(!user.mustPasswordChange||typeof password!=="string"||password.length>72||!(await verifyPassword(password,user.passwordHash)))return{ok:false,error:"Bu parol endi amal qilmaydi — qayta tiklang."};try{await sendMessage(user.telegramChatId,`🔑 Yangi vaqtinchalik parolingiz: ${password}\nKirgach almashtiring.`);}catch{return{ok:false,error:"Telegramga yuborilmadi — foydalanuvchi botda START bosganmi, tekshiring."};}await writeAudit(actor,{action:"PASSWORD_SENT",entityType:"ADMIN_USER",entityId:user.id,entityName:user.name,summary:"Vaqtinchalik parolni foydalanuvchining Telegramiga yubordi"});return{ok:true};}

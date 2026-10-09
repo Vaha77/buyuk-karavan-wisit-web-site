@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { normalizeUzPhone } from "@/lib/auth/phone";
 import { verifyPassword } from "@/lib/auth/password";
 import { createAdminSession, deleteAdminSession } from "@/lib/auth/session";
-import { homeFor } from "@/lib/auth/seller-access";
+import { PASSWORD_PAGE, homeFor } from "@/lib/auth/seller-access";
 import { clearLoginFailures, isLoginLimited, recordLoginFailure } from "@/lib/auth/login-limit";
 
 export type LoginState = { error: string | null };
@@ -28,7 +28,8 @@ export async function loginAction(_state: LoginState, formData: FormData): Promi
   }
   await clearLoginFailures(phone);
   await createAdminSession(user.id);
-  redirect(homeFor(user.role));
+  // Signed in with a temporary password from "Parolni tiklash": set a new one first.
+  redirect(user.mustPasswordChange ? PASSWORD_PAGE : homeFor(user.role));
 }
 
 export async function logoutAction(): Promise<void> {

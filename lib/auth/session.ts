@@ -60,5 +60,5 @@ export async function deleteAdminSession(): Promise<void> {
 /** Session of admin-panel staff only; a SELLER or WORKSHOP session counts as none (used by /api/admin routes → 401). */
 export async function getStaffSession() {
   const session = await getAdminSession();
-  return session && session.user.role !== "SELLER" && session.user.role !== "WORKSHOP" ? session : null;
+  return session && session.user.role !== "SELLER" && session.user.role !== "WORKSHOP" && !session.user.mustPasswordChange ? session : null;
 }

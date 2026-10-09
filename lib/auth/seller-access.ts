@@ -4,6 +4,9 @@ export const SELLER_HOME = "/admin/my";
 /** Seh zakazlari: sellers order here, the workshop (WORKSHOP) works only here. */
 export const SEX_HOME = "/admin/seh";
 
+/** "Yangi parol o‘rnating" after a password reset: every role may open it. */
+export const PASSWORD_PAGE = "/admin/password";
+
 const within = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 
 export function isSellerPathAllowed(pathname: string) {
@@ -34,6 +37,7 @@ export function sellerAccess(pathname: string, request: RequestLike): "allow" | 
 
 /** proxy.ts decision for any role: staff pass, SELLER / WORKSHOP only reach their own section. */
 export function roleAccess(role: string, pathname: string, request: RequestLike): "allow" | "redirect" | "forbid" {
+  if (pathname === PASSWORD_PAGE) return "allow";
   if (role === "SELLER") return sellerAccess(pathname, request);
   if (role === "WORKSHOP") return isWorkshopPathAllowed(pathname) ? "allow" : isPageRequest(request) ? "redirect" : "forbid";
   return "allow";

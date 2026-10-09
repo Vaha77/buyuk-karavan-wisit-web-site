@@ -3,11 +3,16 @@ import { headers } from "next/headers";
 import { forbidden, redirect } from "next/navigation";
 import type { AdminRole } from "@/generated/prisma/client";
 import { getAdminSession } from "./session";
-import { homeFor, isLimitedRole } from "./seller-access";
+import { PASSWORD_PAGE, homeFor, isLimitedRole } from "./seller-access";
 
+/** Signed in, and not still on a temporary password (that only opens "Yangi parol o‘rnating"; actions get 403). */
 async function requireSession() {
   const session = await getAdminSession();
   if (!session) redirect("/admin/login");
+  if (session.user.mustPasswordChange) {
+    if ((await headers()).has("next-action")) forbidden();
+    redirect(PASSWORD_PAGE);
+  }
   return session.user;
 }
 
