@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { register } from "node:module";
 
 register("./ts-resolve.mjs", import.meta.url);
+const bot = await import("../lib/sex/bot-text.ts");
 const excel = await import("../lib/prays/excel.ts");
 const zborka = await import("../lib/sex/zborka.ts");
 const rules = await import("../lib/sex/rules.ts");
@@ -112,22 +113,6 @@ test("workshop order sources never compute a selling price or markup", async () 
     const source = await readFile(new URL(file, import.meta.url), "utf8");
     assert.doesNotMatch(source, /sellPrice|getMarkupPercent|Sotuv narxi|SaleUsd/, file);
   }
-});
-
-test("workshop Telegram message: changes from standard, quantity, due date, recipient — never a price", () => {
-  const text = rules.workshopMessage({ number: 413, type: "AGREGAT", purpose: "CLIENT", customerName: "Rustam aka", qty: 1, dueDate: new Date("2026-10-08T00:00:00Z"), note: null, sellerName: "Abduraxmon", status: "NEW", items: [{ title: "BITZER 4NES+20 vazdushniy agregat · FNV200", qty: 1, changes: ["Kondensator: FNV200 (standart FN160 o‘rniga), rama bilan"] }] });
-  assert.match(text, /^🔧 Yangi zakaz #0413 — Abduraxmon/);
-  assert.match(text, /• Kondensator: FNV200 \(standart FN160 o‘rniga\), rama bilan/);
-  assert.match(text, /Soni: 1 · Muddat: 08\.10\.2026/);
-  assert.match(text, /Kimga: Mijoz — Rustam aka/);
-  assert.doesNotMatch(text, /\$|narx|usd/i);
-  const accepted = rules.workshopMessage({ number: 127, type: "ZAPCHAST", purpose: "SHOP", customerName: null, qty: 1, dueDate: null, note: null, sellerName: "Atxamaka", status: "ACCEPTED", acceptedByName: "Ikromjon", acceptedAt: new Date(), items: [{ title: "Vibro shlang F28", qty: 10 }] });
-  assert.match(accepted, /📦 Yangi zayavka #0127 — Atxamaka\n• Vibro shlang F28 — 10\nKimga: Magazinga/);
-  assert.match(accepted, /✅ Qabul qildi: Ikromjon/);
-  assert.deepEqual(rules.workshopKeyboard("abcdefghij", "NEW").inline_keyboard[0][0].callback_data, "ws:accept:abcdefghij");
-  assert.deepEqual(rules.workshopKeyboard("abcdefghij", "ISSUED").inline_keyboard, []);
-  assert.deepEqual(rules.parseWorkshopCallback("ws:issue:abcdefghij"), { action: "issue", orderId: "abcdefghij" });
-  assert.equal(rules.parseWorkshopCallback("ws:receive:abcdefghij"), null, "krim is never a Telegram button");
 });
 
 test("process steps (4 steps) and the 24 h overdue mark", () => {
@@ -253,15 +238,6 @@ test("daily “terish boshlandi” counter resets at the start of the Tashkent d
   assert.equal(rules.checkTransition("WORKSHOP", "ACCEPTED", "start").ok, true, "the limit never blocks a start");
 });
 
-test("Telegram buttons follow the stages: Qabul qildim → Terishni boshladim → Chiqib ketdi", () => {
-  const id = "abcdefghij";
-  assert.deepEqual(["NEW", "ACCEPTED", "STARTED", "ISSUED"].map(status => rules.workshopKeyboard(id, status).inline_keyboard[0]?.[0]?.text ?? null), ["✅ Qabul qildim", "🔧 Terishni boshladim", "🚚 Chiqib ketdi", null]);
-  assert.deepEqual(rules.parseWorkshopCallback(`ws:start:${id}`), { action: "start", orderId: id });
-  const text = rules.workshopMessage({ number: 418, type: "ZAPCHAST", purpose: "SHOP", customerName: null, qty: 1, dueDate: null, note: null, sellerName: "Atxamaka", status: "STARTED", acceptedByName: "Ikromjon", acceptedAt: new Date(), startedByName: "Ikromjon", startedAt: new Date(), items: [{ title: "Glazok 3/8", qty: 2 }] });
-  assert.match(text, /🔧 Terishni boshladi: Ikromjon/);
-  assert.doesNotMatch(text, /\$|narx/i);
-});
-
 test("WORKSHOP panel payload: no price fields; the panel component never reads prices", async () => {
   const row = { id: "o", number: "#0418", status: "STARTED", queue: null, priceSnapshot: { unitBaseUsd: 4541, totalBaseUsd: 4541, standardBaseUsd: 4123 }, items: [{ id: "i", title: "x", qty: 1, baseUsd: 4541 }] };
   assert.doesNotMatch(JSON.stringify(rules.stripPrices(row, "WORKSHOP")), /4541|4123|price|baseUsd|Usd/i);
@@ -269,4 +245,80 @@ test("WORKSHOP panel payload: no price fields; the panel component never reads p
   assert.doesNotMatch(board, /formatUsd|baseUsd|BaseUsd|priceSnapshot|\.prices/);
   const page = await readFile(new URL("../app/admin/(sex)/seh/page.tsx", import.meta.url), "utf8");
   assert.match(page, /listOrders\(user, month\)/, "rows go through listOrders → stripPrices(role)");
+});
+
+
+const botOrder = (patch = {}) => ({
+  id: "abcdefghij12", number: 418, type: "AGREGAT", purpose: "CLIENT", customerName: "Rustam aka", qty: 1, dueDate: new Date("2026-10-12T00:00:00Z"), note: null,
+  sellerName: "Abduraxmon", noRequest: false, status: "NEW", startedAt: null, issuedAt: null, issuedByName: null,
+  details: ["Resiver: 20 L"], items: [{ title: "BITZER 4NES+20 vazdushniy agregat · FNV200", qty: 1 }], ...patch,
+});
+
+test("seh bot: personal message and the one next button per stage; never a price", () => {
+  const text = bot.personalMessage(botOrder(), null);
+  assert.equal(text, "🔧 Yangi zakaz #0418 · Agregat\nBITZER 4NES+20 vazdushniy agregat · FNV200 ×1\nResiver: 20 L\nKimga: Mijoz — Rustam aka · Sotuvchi: Abduraxmon · Muddat: 12-okt");
+  assert.match(bot.personalMessage(botOrder({ status: "ACCEPTED" }), 2), /\n\n📋 Navbatda: 2-o‘rin$/);
+  assert.match(bot.personalMessage(botOrder({ status: "STARTED", startedAt: new Date("2026-10-09T04:40:00Z") }), null), /\n\n🔧 Terilmoqda · 09:40 dan$/);
+  assert.match(bot.personalMessage(botOrder({ status: "ISSUED", issuedAt: new Date("2026-10-09T10:40:00Z") }), null), /\n\n✅ Chiqib ketdi 15:40$/);
+  const zap = bot.personalMessage(botOrder({ type: "ZAPCHAST", note: "Shoshilinch", items: [{ title: "Vibro shlang F28", qty: 10 }, { title: "Glazok 3/8", qty: 2 }] }), null);
+  assert.match(zap, /^📦 Yangi zayavka #0418 · Zapchast\nVibro shlang F28 ×10\nGlazok 3\/8 ×2\n/);
+  assert.match(zap, /\nIzoh: Shoshilinch$/);
+  assert.doesNotMatch(zap + text, /Resiver: 20 L[\s\S]*Resiver/, "agregat details only for agregat");
+  for (const message of [text, zap]) assert.doesNotMatch(message, /\$|narx|usd/i);
+  const button = status => bot.personalKeyboard("abcdefghij12", status).inline_keyboard[0]?.[0] ?? null;
+  assert.deepEqual(["NEW", "ACCEPTED", "STARTED", "ISSUED", "RECEIVED"].map(status => button(status)?.text ?? null), ["✅ Qabul qildim", "🔧 Terishni boshladim", "📦 Chiqib ketdi", null, null]);
+  assert.deepEqual(["NEW", "ACCEPTED", "STARTED"].map(status => button(status).callback_data), ["seh:accept:abcdefghij12", "seh:start:abcdefghij12", "seh:issue:abcdefghij12"]);
+  assert.equal(bot.limitQuestion(5), "Bugun 5 ta boshlangan. Baribir boshlaysizmi?");
+  assert.deepEqual(bot.limitKeyboard("abcdefghij12").inline_keyboard[0].map(item => [item.text, item.callback_data]), [["Ha", "seh:startok:abcdefghij12"], ["Yo‘q", "seh:startno:abcdefghij12"]]);
+});
+
+test("seh bot buttons go through the same transition rule as the site (one step, WORKSHOP only)", () => {
+  for (const [data, step, from] of [["seh:accept:abcdefghij12", "accept", "NEW"], ["seh:start:abcdefghij12", "start", "ACCEPTED"], ["seh:startok:abcdefghij12", "start", "ACCEPTED"], ["seh:issue:abcdefghij12", "issue", "STARTED"]]) {
+    const parsed = bot.parseSehCallback(data);
+    assert.equal(parsed.orderId, "abcdefghij12");
+    const action = parsed.action === "startok" ? "start" : parsed.action;
+    assert.equal(action, step);
+    assert.equal(rules.checkTransition("WORKSHOP", from, action).ok, true);
+    for (const role of ["SUPER_ADMIN", "ADMIN", "MANAGER", "SELLER"]) assert.equal(rules.checkTransition(role, from, action).ok, false, `${role} via bot`);
+  }
+  assert.equal(bot.parseSehCallback("seh:receive:abcdefghij12"), null, "krim is never a bot button");
+  assert.equal(bot.parseSehCallback("claim:abcdefghij12"), null, "lead buttons are not seh buttons");
+  assert.deepEqual(rules.checkTransition("WORKSHOP", "ACCEPTED", "accept"), { ok: false, error: "Bu zakaz allaqachon “Navbatda” holatida." }, "second press");
+});
+
+test("seh bot: an unlinked or non-WORKSHOP Telegram account is refused; every bot step is audited as “Telegram orqali”", async () => {
+  const handlers = await readFile(new URL("../lib/sex/bot-handlers.ts", import.meta.url), "utf8");
+  assert.match(handlers, /findUnique\(\{ where: \{ telegramChatId: String\(telegramUserId\) \} \}\)/);
+  assert.match(handlers, /user\.role === "WORKSHOP" && user\.isActive && user\.approvalStatus === "APPROVED"/);
+  assert.match(handlers, /if \(!user\) \{ await answer\(DENIED, true\); return true; \}/);
+  assert.match(handlers, /transitionOrder\(user, orderId, step, undefined, "telegram"\)/);
+  const service = await readFile(new URL("../lib/sex/service.ts", import.meta.url), "utf8");
+  assert.match(service, /via === "telegram" \? " \(Telegram orqali\)" : ""/);
+  const route = await readFile(new URL("../app/api/telegram/webhook/route.ts", import.meta.url), "utf8");
+  assert.match(route, /validSecret\(request\.headers\.get\("x-telegram-bot-api-secret-token"\)\)/, "webhook secret_token is checked");
+  assert.equal(bot.parseStartPayload("/start seh_0123456789abcdef01234567"), "0123456789abcdef01234567");
+  assert.equal(bot.parseStartPayload("/start"), null, "plain /start stays the lead bot's registration");
+  assert.equal(bot.parseStartPayload("/start ref_123"), null);
+});
+
+test("Seh group gets only the ISSUED report (no buttons, no price)", async () => {
+  const report = bot.groupIssuedMessage(botOrder({ status: "ISSUED", issuedAt: new Date("2026-10-09T10:40:00Z"), issuedByName: "Ikromjon" }));
+  assert.equal(report, "✅ Sehdan chiqdi #0418\nBITZER 4NES+20 vazdushniy agregat · FNV200 ×1\nKimga: Mijoz — Rustam aka\nOldi: Abduraxmon · Berdi: Ikromjon · 09-okt 15:40");
+  assert.match(bot.groupIssuedMessage(botOrder({ status: "ISSUED", noRequest: true, purpose: "SHOP", issuedByName: "Ikromjon" })), /Kimga: Vitrina\nOldi: Abduraxmon · Berdi: Ikromjon\n⚠️ Zayavkasiz chiqim$/);
+  const delivery = await readFile(new URL("../lib/sex/bot.ts", import.meta.url), "utf8");
+  assert.match(delivery, /if \(!chatId \|\| order\.status !== "ISSUED"\) return;/, "group report only for ISSUED");
+  assert.equal((delivery.match(/telegramWorkshopChatId\(\)/g) ?? []).length, 2, "the group chat is used only by the report and its test");
+  assert.doesNotMatch(delivery.slice(delivery.indexOf("async function sendGroupReport"), delivery.indexOf("/** Sends the personal message")), /Keyboard|inline_keyboard/);
+});
+
+test("lead bot texts and buttons are unchanged", async () => {
+  const messages = await readFile(new URL("../lib/telegram/messages.ts", import.meta.url), "utf8");
+  assert.match(messages, /Siz BKLead tizimida faol sotuvchisiz\./);
+  const service = await readFile(new URL("../lib/telegram/service.ts", import.meta.url), "utf8");
+  assert.match(service, /\{text:"🙋 Mijozni olish",callback_data:`claim:\$\{leadId\}`\}/);
+  assert.match(service, /if\(await handleSehCallback\(update\.callback_query\)\)return;if\(await claimLead\(update\.callback_query,metrics\)\)return;await handleCrmCallback\(update\.callback_query\);/);
+  const crm = await readFile(new URL("../lib/telegram/crm.ts", import.meta.url), "utf8");
+  assert.match(crm, /callback_data: `contact:\$\{leadId\}`/);
+  const route = await readFile(new URL("../app/api/telegram/webhook/route.ts", import.meta.url), "utf8");
+  assert.match(route, /answerCallbackQuery\(update\.callback_query\.id, "So‘rov qabul qilindi\."\)/, "lead buttons are still acknowledged up front");
 });

@@ -23,11 +23,14 @@ export const TRANSITIONS: Record<OrderAction, { from: OrderStatus; to: OrderStat
   receive: { from: "ISSUED", to: "RECEIVED", role: "SUPER_ADMIN" },
 };
 
+/** Second press of the same button (site and bot at once): only the first one goes through. */
+export const alreadyText = (status: OrderStatus) => `Bu zakaz allaqachon “${STATUS_LABEL[status]}” holatida.`;
+
 export function checkTransition(role: string, status: OrderStatus, action: OrderAction): { ok: true; to: OrderStatus } | { ok: false; error: string } {
   const rule = TRANSITIONS[action];
   if (!rule) return { ok: false, error: "Noma’lum amal." };
   if (role !== rule.role) return { ok: false, error: action === "receive" ? "Krimga olishni faqat Super Admin tasdiqlaydi." : "Bu tugma faqat seh mas’uli uchun." };
-  if (status !== rule.from) return { ok: false, error: `Zakaz holati “${STATUS_LABEL[status]}” — bu amal bajarilmaydi.` };
+  if (status !== rule.from) return { ok: false, error: alreadyText(status) };
   return { ok: true, to: rule.to };
 }
 
@@ -133,38 +136,6 @@ export function startedToday(startedAt: Array<Date | string | null>, now = new D
 /** Header counter of the workshop panel: red with "kunlik limit" once the limit is reached (a warning only). */
 export function dailyCapView(started: number, limit: number) {
   return started >= limit ? { tone: "red" as const, note: "kunlik limit" } : { tone: "normal" as const, note: `${limit - started} ta joy bor` };
-}
-
-export type MessageItem = { title: string; qty: number; issuedQty?: number | null; changes?: string[] };
-export type MessageOrder = { startedByName?: string | null; startedAt?: Date | string | null; number: number; type: "AGREGAT" | "ZAPCHAST"; purpose: "SHOP" | "CLIENT"; customerName: string | null; qty: number; dueDate: Date | string | null; note: string | null; sellerName: string; noRequest?: boolean; status: OrderStatus; acceptedByName?: string | null; acceptedAt?: Date | string | null; issuedByName?: string | null; issuedAt?: Date | string | null; receivedAt?: Date | string | null; items: MessageItem[] };
-/** Workshop group message. Never contains a price. */
-export function workshopMessage(order: MessageOrder) {
-  const head = order.noRequest ? `📦 Zayavkasiz chiqim ${orderNumber(order.number)} — ${order.sellerName}` : `${order.type === "AGREGAT" ? "🔧 Yangi zakaz" : "📦 Yangi zayavka"} ${orderNumber(order.number)} — ${order.sellerName}`;
-  const lines = [head];
-  if (order.type === "AGREGAT") for (const item of order.items) { lines.push(item.title); for (const change of item.changes ?? []) lines.push(`• ${change}`); }
-  else for (const item of order.items) lines.push(`• ${item.title} — ${item.issuedQty ?? item.qty}`);
-  const amount = [order.type === "AGREGAT" && `Soni: ${order.qty}`, order.dueDate && `Muddat: ${fullDate(order.dueDate)}`].filter(Boolean).join(" · ");
-  if (amount) lines.push(amount);
-  lines.push(`Kimga: ${order.purpose === "CLIENT" ? `Mijoz — ${order.customerName ?? "—"}` : "Magazinga (vitrina)"}`);
-  if (order.note) lines.push(`Izoh: ${order.note}`);
-  lines.push("");
-  if (order.status === "NEW") lines.push("Holat: 🆕 Yangi — qabul qilinishi kutilmoqda");
-  if (order.acceptedAt) lines.push(`✅ Qabul qildi: ${order.acceptedByName ?? "—"} · ${when(order.acceptedAt)}`);
-  if (order.startedAt) lines.push(`🔧 Terishni boshladi: ${order.startedByName ?? "—"} · ${when(order.startedAt)}`);
-  if (order.issuedAt) lines.push(`🚚 Chiqib ketdi: ${order.issuedByName ?? "—"} · ${when(order.issuedAt)}`);
-  if (order.receivedAt) lines.push(`📥 Krimga olindi · ${when(order.receivedAt)}`);
-  return lines.join("\n").trim();
-}
-/** Inline buttons under the group message: only the next workshop step. */
-export function workshopKeyboard(orderId: string, status: OrderStatus) {
-  if (status === "NEW") return { inline_keyboard: [[{ text: "✅ Qabul qildim", callback_data: `ws:accept:${orderId}` }]] };
-  if (status === "ACCEPTED") return { inline_keyboard: [[{ text: "🔧 Terishni boshladim", callback_data: `ws:start:${orderId}` }]] };
-  if (status === "STARTED") return { inline_keyboard: [[{ text: "🚚 Chiqib ketdi", callback_data: `ws:issue:${orderId}` }]] };
-  return { inline_keyboard: [] as Array<Array<{ text: string; callback_data: string }>> };
-}
-export function parseWorkshopCallback(data: string | undefined): { action: "accept" | "start" | "issue"; orderId: string } | null {
-  const match = data?.match(/^ws:(accept|start|issue):([a-z0-9]{10,40})$/i);
-  return match ? { action: match[1] as "accept" | "start" | "issue", orderId: match[2] } : null;
 }
 
 /** "2026-10" → its first moment and the next month's first moment, Tashkent time (UTC+5). */

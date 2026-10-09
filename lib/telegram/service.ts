@@ -4,7 +4,7 @@ import { answerCallbackQuery,editMessageText,sendMessage,telegramErrorDetails,te
 import { agentName,claimedLeadGroupText,newLeadGroupText,privateLeadText,registrationText,welcomeText } from "./messages";
 import { contactedKeyboard,handleCrmCallback,handleCrmText,mainMenu } from "./crm";
 import type { TelegramCallbackQuery,TelegramMessage,TelegramUpdate } from "./types";
-import { handleWorkshopCallback } from "@/lib/sex/service";
+import { handleSehCallback,handleSehMessage } from "@/lib/sex/bot-handlers";
 
 type WebhookPerformance={callbackAcknowledged:boolean;timings:Record<string,number>};
 
@@ -78,4 +78,4 @@ async function claimLead(callback:TelegramCallbackQuery,metrics?:WebhookPerforma
   await Promise.all([groupUpdate,privateMessage]);
   return true;
 }
-export async function handleTelegramUpdate(update:TelegramUpdate,metrics?:WebhookPerformance){if(update.message){if(await reportChatIdentity(update.message))return;if(await reportUserId(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await handleWorkshopCallback(update.callback_query))return;if(await claimLead(update.callback_query,metrics))return;await handleCrmCallback(update.callback_query);}}
+export async function handleTelegramUpdate(update:TelegramUpdate,metrics?:WebhookPerformance){if(update.message){if(await reportChatIdentity(update.message))return;if(await reportUserId(update.message))return;if(await handleSehMessage(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await handleSehCallback(update.callback_query))return;if(await claimLead(update.callback_query,metrics))return;await handleCrmCallback(update.callback_query);}}

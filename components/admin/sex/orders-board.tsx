@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/admin/bklead/dialog";
-import { confirmNoRequestAction, createNoRequestAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
+import { confirmNoRequestAction, createNoRequestAction, resendTelegramAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
 import type { OrderRow } from "@/lib/sex/queries";
 import { ACTION_LABEL, STATUS_LABEL, STATUS_TONE, actionFor, type OrderAction } from "@/lib/sex/rules";
 import { formatUsd } from "@/lib/prays/rules";
@@ -85,6 +85,7 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
                 : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id), undefined, `${row.id}:confirm`)}><BusyLabel busy={isBusy(`${row.id}:confirm`)}>Tasdiqlayman</BusyLabel></button>
                 : row.status !== "STARTED" && <span className="sx-muted">{WAIT_TEXT[row.status]}</span>}
               {row.status === "STARTED" && row.startedAt && <WorkingStatus acceptedAt={row.startedAt} dueDate={row.dueDate}/>}
+              {row.telegramFailed && (boss || role === "ADMIN") && <div className="sx-tg-fail">Telegramga yuborilmadi · <button type="button" className="sx-btn is-sm is-danger-ghost" disabled={pending} onClick={() => run(() => resendTelegramAction(row.id), undefined, `${row.id}:resend`)}><BusyLabel busy={isBusy(`${row.id}:resend`)} busyText="Yuborilmoqda…">qayta yuborish</BusyLabel></button></div>}
             </td>
           </tr>;
         })}</tbody>

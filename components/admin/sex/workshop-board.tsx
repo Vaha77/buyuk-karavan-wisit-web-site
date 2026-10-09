@@ -8,9 +8,10 @@ import { createNoRequestAction, transitionOrderAction } from "@/app/admin/(sex)/
 import type { OrderRow } from "@/lib/sex/queries";
 import { ACTION_LABEL, dailyCapView, daysPastDue, workingSince, type OrderAction } from "@/lib/sex/rules";
 import { IssueForm, NoRequestForm } from "./orders-board";
+import { TelegramLink } from "./telegram-link";
 
 type Option = { id: string; name: string };
-type Props = { userName: string; rows: OrderRow[]; started: number; limit: number; issuedToday: string[]; parts: Array<{ id: string; label: string }>; sellers: Option[]; customers: Option[] };
+type Props = { telegramLinked: boolean; userName: string; rows: OrderRow[]; started: number; limit: number; issuedToday: string[]; parts: Array<{ id: string; label: string }>; sellers: Option[]; customers: Option[] };
 
 const MONTHS = ["yan", "fev", "mar", "apr", "may", "iyun", "iyul", "avg", "sen", "okt", "noy", "dek"];
 const dueLabel = (date: string) => { const [, month, day] = date.split("-"); return `${day}-${MONTHS[Number(month) - 1]}`; };
@@ -33,7 +34,7 @@ function useMinuteClock() {
 }
 
 /** WORKSHOP view of /admin/seh: three sections of receipt cards (Yangi → Navbatda → Terilmoqda). No prices anywhere. */
-export function WorkshopBoard({ userName, rows, started, limit, issuedToday, parts, sellers, customers }: Props) {
+export function WorkshopBoard({ telegramLinked, userName, rows, started, limit, issuedToday, parts, sellers, customers }: Props) {
   const router = useRouter();
   const now = useMinuteClock();
   const [pending, startTransition] = useTransition();
@@ -68,6 +69,10 @@ export function WorkshopBoard({ userName, rows, started, limit, issuedToday, par
         <div className="sx-cap"><span>Bugun terish boshlandi</span><div><b className={cap.tone === "red" ? "is-red" : ""}>{started} / {limit}</b><small className={cap.tone === "red" ? "is-red" : ""}>{cap.note}</small></div></div>
         <button type="button" className="sx-btn is-warn" style={{ height: 48 }} onClick={() => setNoRequestOpen(true)} disabled={!parts.length}>+ Zayavkasiz chiqim</button>
       </div>
+    </div>
+    <div className="sx-card" style={{ padding: 14, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+      <span className="sx-muted" style={{ fontSize: 13 }}>{telegramLinked ? "Yangi zakazlar Telegram botga ham keladi — tugmalar bilan ishlashingiz mumkin. /navbat, /bugun" : "Botni ulang: yangi zakazlar Telegramga keladi va tugmalar bilan qabul qilasiz."}</span>
+      <TelegramLink linked={telegramLinked} compact/>
     </div>
     {error && <p className="sx-note is-error" role="alert">{error}</p>}
 

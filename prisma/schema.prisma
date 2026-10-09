@@ -416,6 +416,9 @@ model AdminUser {
   approvalStatus       AdminApprovalStatus          @default(APPROVED)
   // Telegram user id (= private chat id); WORKSHOP users press the workshop group buttons with it.
   telegramChatId       String?                      @unique @db.VarChar(32)
+  // One-time "Telegram ulash" code (deep link t.me/<bot>?start=seh_<code>), valid 15 minutes.
+  telegramLinkCode      String?                     @unique @db.VarChar(40)
+  telegramLinkExpiresAt DateTime?
   createdAt            DateTime                     @default(now())
   updatedAt            DateTime                     @updatedAt
   sessions             AdminSession[]
@@ -1126,8 +1129,12 @@ model WorkshopOrder {
   receivedAt        DateTime?
   // Prices at order time (base, markup, sale); later price-list changes never touch it.
   priceSnapshot     Json?
+  // Seh group report ("✅ Sehdan chiqdi"), sent once the order is ISSUED.
   telegramChatId    String?              @db.VarChar(32)
   telegramMessageId Int?
+  // Last Telegram delivery failure (personal messages or group report); cleared after a successful resend.
+  telegramFailedAt  DateTime?
+  telegramError     String?              @db.VarChar(200)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   customer          RegularCustomer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
@@ -1138,6 +1145,7 @@ model WorkshopOrder {
   issuedBy          AdminUser?           @relation("WorkshopOrderIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
   receivedBy        AdminUser?           @relation("WorkshopOrderReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
   items             WorkshopOrderItem[]
+  messages          WorkshopOrderMessage[]
 
   @@index([status, createdAt])
   @@index([sellerId, createdAt])
@@ -1168,4 +1176,16 @@ model WorkshopOrderItem {
   @@index([orderId])
   @@index([productId])
   @@index([partId])
+}
+
+// Personal bot message about an order, one per linked WORKSHOP user; edited on every status change.
+model WorkshopOrderMessage {
+  id        String        @id @default(cuid())
+  orderId   String
+  chatId    String        @db.VarChar(32)
+  messageId Int
+  createdAt DateTime      @default(now())
+  order     WorkshopOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, chatId])
 }

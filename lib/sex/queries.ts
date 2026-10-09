@@ -7,7 +7,7 @@ type Viewer = Pick<AdminUser, "id" | "role" | "salesPersonId">;
 export type OrderRow = {
   id: string; number: string; day: string; type: "AGREGAT" | "ZAPCHAST"; product: string; qty: number;
   sellerName: string; sellerAt: string; purpose: "SHOP" | "CLIENT"; customerName: string | null; status: OrderStatus; steps: StepView[];
-  overdue: boolean; acceptedAt: string | null; startedAt: string | null; queue: number | null; noRequest: boolean; sellerConfirmed: boolean; isNew: boolean; dueDate: string | null; note: string | null;
+  overdue: boolean; acceptedAt: string | null; startedAt: string | null; queue: number | null; telegramFailed: boolean; noRequest: boolean; sellerConfirmed: boolean; isNew: boolean; dueDate: string | null; note: string | null;
   items: Array<{ id: string; title: string; qty: number; issuedQty?: number | null }>;
   prices?: Partial<PriceSnapshot>;
 };
@@ -23,7 +23,7 @@ function toRow(order: Loaded, role: string, now: Date, queue: Map<string, number
   const base = {
     id: order.id, number: orderNumber(order.number), day: shortDay(order.createdAt), type: order.type, product, qty: order.qty,
     sellerName: order.seller.name, sellerAt: when(order.createdAt, now), purpose: order.purpose, customerName: order.customerName, status: order.status,
-    steps: processSteps(order, now), overdue: isReceiveOverdue(order, now), acceptedAt: order.acceptedAt?.toISOString() ?? null, startedAt: order.startedAt?.toISOString() ?? null, queue: queue.get(order.id) ?? null, noRequest: order.noRequest, sellerConfirmed: !!order.sellerConfirmedAt,
+    steps: processSteps(order, now), overdue: isReceiveOverdue(order, now), acceptedAt: order.acceptedAt?.toISOString() ?? null, startedAt: order.startedAt?.toISOString() ?? null, queue: queue.get(order.id) ?? null, telegramFailed: !!order.telegramFailedAt, noRequest: order.noRequest, sellerConfirmed: !!order.sellerConfirmedAt,
     isNew: now.getTime() - order.createdAt.getTime() < 10 * 60_000, dueDate: order.dueDate?.toISOString().slice(0, 10) ?? null, note: order.note,
     priceSnapshot: order.priceSnapshot, items: order.items.map(item => ({ id: item.id, title: item.title, qty: item.qty, issuedQty: item.issuedQty, baseUsd: item.baseUsd === null ? null : Number(item.baseUsd) })),
   };

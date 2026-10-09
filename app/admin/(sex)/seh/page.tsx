@@ -21,7 +21,7 @@ export default async function SexOrdersPage({ searchParams }: { searchParams: Pr
     workshop ? workshopDay() : Promise.resolve(null),
   ]);
   const partOptions = parts.map(part => ({ id: part.id, label: [part.name, part.size].filter(Boolean).join(" ") }));
-  if (workshop && day) return <WorkshopBoard userName={user.name} rows={rows} started={day.started} limit={day.limit} issuedToday={day.issuedToday} parts={partOptions} sellers={sellers} customers={customers}/>;
+  if (workshop && day) return <WorkshopBoard telegramLinked={!!user.telegramChatId} userName={user.name} rows={rows} started={day.started} limit={day.limit} issuedToday={day.issuedToday} parts={partOptions} sellers={sellers} customers={customers}/>;
   const now = new Date();
   const months = Array.from({ length: 12 }, (_, index) => { const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - index, 15)); return monthRange(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`); }).map(({ key, label }) => ({ key, label }));
   if (!months.some(item => item.key === range.key)) months.push({ key: range.key, label: range.label });

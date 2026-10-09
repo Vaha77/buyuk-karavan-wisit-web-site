@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/require-admin";
 import { writeAudit } from "@/lib/audit/service";
 import { getDb } from "@/lib/db";
 import { DEFAULT_WORKSHOP_DAILY_LIMIT } from "@/lib/sex/rules";
+import { sendGroupTest } from "@/lib/sex/bot";
 
 /** Seh daily start limit (a warning on the workshop panel, never a block). */
 export async function saveWorkshopLimitAction(raw: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -16,4 +17,10 @@ export async function saveWorkshopLimitAction(raw: unknown): Promise<{ ok: true 
   revalidatePath("/admin/settings");
   revalidatePath("/admin/seh");
   return { ok: true };
+}
+
+/** "Seh guruhiga test xabar". */
+export async function sendSehGroupTestAction(): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireRole("SUPER_ADMIN", "ADMIN");
+  return sendGroupTest();
 }

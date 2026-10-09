@@ -211,3 +211,7 @@
 .sx-done-today{background:#fff;border-radius:14px;padding:14px 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:14px}
 .sx-done-today span{padding:4px 10px;border-radius:99px;background:var(--sx-green-soft);color:var(--sx-green);font-weight:800;font-size:13px}
 @media (max-width:640px){.sx-receipts{grid-template-columns:minmax(0,1fr)}}
+.sx-tg-link{display:flex;flex-direction:column;gap:10px}
+.sx-tg-link.is-compact{align-items:flex-end}
+.sx-tg-link code{font-family:ui-monospace,Menlo,Consolas,monospace;background:#fff;border-radius:6px;padding:1px 6px}
+.sx-tg-fail{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:12px;font-weight:700;color:var(--sx-red)}

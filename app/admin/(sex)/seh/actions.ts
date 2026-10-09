@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireSexUser } from "@/lib/auth/require-admin";
 import { canCreateOrders } from "@/lib/sex/rules";
 import { confirmNoRequest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
+import { createLinkCode, resendOrder, sendPersonalTest } from "@/lib/sex/bot";
+import { revalidatePath } from "next/cache";
 
 export type SexActionResult = { ok: true; number?: number } | { ok: false; error: string };
 
@@ -59,4 +61,28 @@ export async function confirmNoRequestAction(id: unknown): Promise<SexActionResu
   const user = await requireSexUser();
   if (user.role !== "SELLER" || typeof id !== "string") return { ok: false, error: "Faqat sotuvchi tasdiqlaydi." };
   return confirmNoRequest(user, id);
+}
+
+/** "Telegram ulash": a one-time deep link (15 min) that binds this user's private chat to the bot. */
+export type TelegramLinkResult = { ok: true; url: string | null; code: string; expiresAt: string } | { ok: false; error: string };
+export async function createTelegramLinkAction(): Promise<TelegramLinkResult> {
+  const user = await requireSexUser();
+  try { return { ok: true, ...(await createLinkCode(user.id)) }; }
+  catch { return { ok: false, error: "Kod yaratilmadi. Qayta urinib ko‘ring." }; }
+}
+
+/** "Menga test xabar (shaxsiy)". */
+export async function sendMyTelegramTestAction(): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  return sendPersonalTest(user.telegramChatId);
+}
+
+/** "Telegramga yuborilmadi · qayta yuborish" (staff who manage orders). */
+export async function resendTelegramAction(id: unknown): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  if (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN") return { ok: false, error: "Faqat Super Admin yoki administrator qayta yuboradi." };
+  if (typeof id !== "string" || !id) return { ok: false, error: "So‘rov noto‘g‘ri." };
+  const delivered = await resendOrder(id);
+  revalidatePath("/admin/seh");
+  return delivered ? { ok: true } : { ok: false, error: "Telegram yana xato berdi — bot sozlamalarini tekshiring." };
 }
