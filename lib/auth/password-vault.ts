@@ -32,3 +32,13 @@ export function decryptPassword(value: string, key = vaultKey()) {
   decipher.setAuthTag(data.subarray(12, 28));
   return Buffer.concat([decipher.update(data.subarray(28)), decipher.final()]).toString("utf8");
 }
+
+/**
+ * On a successful login: should the typed password be (re)saved as the encrypted copy? Yes when there is a key and the
+ * copy is missing, unreadable (old key) or no longer matches. Without a key: never (login works as usual).
+ */
+export function needsPasswordCapture(stored: string | null | undefined, typed: string, key = vaultKey()) {
+  if (!key) return false;
+  if (!stored) return true;
+  try { return decryptPassword(stored, key) !== typed; } catch { return true; }
+}

@@ -65,7 +65,8 @@ test("only the Super Admin views a password, on click only; every view is audite
   const cell = await read("../app/admin/(protected)/users/password-cell.tsx");
   assert.match(cell, /const HIDE_AFTER_MS = 30_000;/);
   assert.match(cell, /revealPasswordAction\(userId\)/, "fetched from the server on 👁");
-  assert.match(cell, /Parol saqlanmagan · ✏️ yangisini o‘rnating/);
+  assert.match(cell, /Xodim saytga bir marta kirgach ko‘rinadi/);
+  assert.doesNotMatch(cell, /setUserPasswordAction|✏️|<input/, "only 👁 and Nusxalash on the row");
 });
 
 test("delete vs archive: no links → deleted; links → archived (cannot log in, hidden, restorable); never yourself or the last Super Admin", async () => {
@@ -96,4 +97,32 @@ test("a forced password change still only opens “Yangi parol o‘rnating”", 
   for (const role of ["SELLER", "WORKSHOP"]) assert.equal(access.roleAccess(role, "/admin/password", request), "allow", role);
   const login = await read("../app/admin/login/page.tsx");
   assert.match(login, /Parolni unutdingizmi\? Admin bilan bog‘laning\./);
+});
+
+test("login keeps an encrypted copy of a correct password when there is none (or it is stale); never with a wrong password or without a key", async () => {
+  const k = vault.vaultKey(key);
+  assert.equal(vault.needsPasswordCapture(null, "Correct-Pass-1", k), true, "older account: captured on login");
+  const stored = vault.encryptPassword("Correct-Pass-1", k);
+  assert.equal(vault.needsPasswordCapture(stored, "Correct-Pass-1", k), false, "already up to date: no write");
+  assert.equal(vault.needsPasswordCapture(stored, "Changed-Pass-2", k), true, "stale copy is refreshed");
+  assert.equal(vault.needsPasswordCapture(vault.encryptPassword("x", vault.vaultKey(randomBytes(32).toString("base64"))), "Correct-Pass-1", k), true, "unreadable (old key) is refreshed");
+  assert.equal(vault.needsPasswordCapture(null, "Correct-Pass-1", null), false, "no PASSWORD_VIEW_KEY: nothing saved, login as usual");
+
+  // Simulated login with the real order of checks: a wrong password never reaches the capture.
+  const user = { passwordHash: await bcrypt.hash("Correct-Pass-1", 4), passwordEncrypted: null };
+  const login = async typed => {
+    if (!(await bcrypt.compare(typed, user.passwordHash))) return "invalid";
+    if (vault.needsPasswordCapture(user.passwordEncrypted, typed, k)) user.passwordEncrypted = vault.encryptPassword(typed, k);
+    return "ok";
+  };
+  assert.equal(await login("wrong-password"), "invalid");
+  assert.equal(user.passwordEncrypted, null, "wrong password: nothing saved");
+  assert.equal(await login("Correct-Pass-1"), "ok");
+  assert.equal(vault.decryptPassword(user.passwordEncrypted, k), "Correct-Pass-1", "correct login: copy saved");
+
+  const action = await read("../app/admin/login/actions.ts");
+  const verify = action.indexOf("!(await verifyPassword(passwordInput, user.passwordHash))"), capture = action.indexOf("needsPasswordCapture(user.passwordEncrypted, passwordInput)"), session = action.indexOf("await createAdminSession(user.id);");
+  assert.ok(verify > 0 && verify < capture && capture < session, "capture only after the password was verified, before the session");
+  assert.match(action, /data: \{ passwordEncrypted: encryptPassword\(passwordInput\) \} \}\)\.catch\(\(\) => undefined\);/, "a failure never blocks the login");
+  assert.doesNotMatch(action, /console\.|writeAudit/, "the password is never logged or audited");
 });
