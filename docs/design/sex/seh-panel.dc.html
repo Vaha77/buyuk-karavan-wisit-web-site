@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<title>Seh mas‘uli paneli</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#E9EDF3}
+@keyframes bkWrench{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(18deg)}}
+@keyframes bkFill{0%{width:8%}50%{width:72%}100%{width:8%}}
+.bk-wrench{animation:bkWrench .9s ease-in-out infinite;transform-origin:30% 70%}
+.bk-fill{animation:bkFill 2.2s ease-in-out infinite}
+.bk-zig{background:linear-gradient(-45deg,transparent 8px,#FFFFFF 0) 0 0/16px 16px repeat-x,linear-gradient(45deg,transparent 8px,#FFFFFF 0) 0 0/16px 16px repeat-x}
+@media (prefers-reduced-motion: reduce){.bk-wrench,.bk-fill{animation:none}}
+</style>
+</helmet>
+<div style="font-family: Manrope, system-ui, sans-serif; color: #14213D; background: #E9EDF3; min-height: 100vh; box-sizing: border-box; padding: 28px 24px 64px">
+<div style="max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px">
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4F5A70">Seh / Mening vazifalarim</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.02em">Salom, Ikromjon</h1>
+<p style="margin: 0; font-size: 14px; color: #4F5A70">Qabul qiling → navbatda turadi → terishni boshlang → tayyor bo‘lgach “Chiqib ketdi”</p>
+</div>
+<div style="display: flex; gap: 10px; flex-wrap: wrap">
+<div style="background: #FFFFFF; border-radius: 12px; padding: 10px 16px; display: flex; flex-direction: column; gap: 2px; min-width: 150px">
+<span style="font-size: 12px; font-weight: 700; color: #4F5A70">Bugun terish boshlandi</span>
+<div style="display: flex; align-items: baseline; gap: 6px"><b style="font-size: 22px; color: {{capC}}">{{started}} / 5</b><span style="font-size: 12px; color: {{capC}}; font-weight: 700">{{capNote}}</span></div>
+</div>
+<button style="height: 48px; align-self: center; padding: 0 16px; border-radius: 10px; border: 1px solid #C2410C; background: #FFFFFF; color: #9A3B0A; font: inherit; font-size: 14px; font-weight: 800; cursor: pointer">+ Zayavkasiz chiqim</button>
+</div>
+</div>
+
+<sc-for list="{{sections}}" as="sec" hint-placeholder-count="3">
+<section style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 12px; height: 12px; border-radius: 99px; background: {{sec.dot}}"></span>
+<h2 style="margin: 0; font-size: 18px; font-weight: 800">{{sec.title}}</h2>
+<span style="padding: 2px 10px; border-radius: 99px; background: #FFFFFF; font-size: 13px; font-weight: 800; color: #3E4A60">{{sec.count}}</span>
+<span style="font-size: 13px; color: #4F5A70">{{sec.hint}}</span>
+</div>
+<sc-if value="{{sec.empty}}" hint-placeholder-val="{{ false }}">
+<div style="border: 2px dashed #C9D3E6; border-radius: 14px; padding: 20px; text-align: center; font-size: 14px; color: #4F5A70">{{sec.emptyText}}</div>
+</sc-if>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; align-items: start">
+<sc-for list="{{sec.cards}}" as="c" hint-placeholder-count="3">
+<article style="display: flex; flex-direction: column; filter: drop-shadow(0 6px 14px rgba(20,33,61,0.10))">
+<div style="background: #FFFFFF; border-radius: 10px 10px 0 0; border-top: 6px solid {{c.top}}; padding: 16px 18px 12px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: #4F5A70">BUYUK KARAVAN · SEH</span>
+<b style="font-family: 'JetBrains Mono', monospace; font-size: 24px; letter-spacing: 0.02em">#{{c.n}}</b>
+</div>
+<sc-if value="{{c.hasQueue}}" hint-placeholder-val="{{ false }}">
+<span style="display: flex; flex-direction: column; align-items: center; padding: 6px 10px; border-radius: 10px; background: #EAF1FB; color: #1E4E8C"><b style="font-size: 20px; line-height: 1">{{c.queue}}</b><span style="font-size: 10px; font-weight: 800">NAVBAT</span></span>
+</sc-if>
+<span style="padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 800; background: #EEF1F6; color: #3E4A60">{{c.type}}</span>
+</div>
+<div style="border-top: 1px dashed #C9D3E6"></div>
+<div style="display: flex; flex-direction: column; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 13px">
+<sc-for list="{{c.items}}" as="it" hint-placeholder-count="2">
+<div style="display: flex; justify-content: space-between; gap: 10px"><span style="font-weight: 600; line-height: 1.35">{{it.t}}</span><b style="white-space: nowrap">×{{it.q}}</b></div>
+</sc-for>
+</div>
+<sc-if value="{{c.hasNote}}" hint-placeholder-val="{{ false }}">
+<div style="font-size: 12px; background: #FFF8E6; border-radius: 6px; padding: 6px 8px; color: #6E5200">Izoh: {{c.note}}</div>
+</sc-if>
+<div style="border-top: 1px dashed #C9D3E6"></div>
+<div style="display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px">
+<span style="color: #4F5A70">Kimga</span><b style="color: {{c.toC}}; text-align: right">{{c.to}}</b>
+<span style="color: #4F5A70">Sotuvchi</span><b style="text-align: right">{{c.seller}}</b>
+<span style="color: #4F5A70">Muddat</span><b style="text-align: right; color: {{c.dueC}}">{{c.due}}</b>
+<span style="color: #4F5A70">Keldi</span><span style="text-align: right">{{c.came}}</span>
+</div>
+<sc-if value="{{c.working}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: center; gap: 10px; background: #FFF8E6; border-radius: 8px; padding: 8px 10px; position: relative; overflow: hidden">
+<span class="bk-fill" style="position: absolute; top: 0; left: 0; height: 100%; background: rgba(242,194,48,0.28)"></span>
+<svg class="bk-wrench" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B8860B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative; flex-shrink: 0"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"></path></svg>
+<span style="position: relative; display: flex; flex-direction: column; gap: 1px"><b style="font-size: 13px">Terilmoqda</b><span style="font-size: 12px; color: #6E5200; font-weight: 700">{{c.since}}</span></span>
+</div>
+</sc-if>
+<button onClick="{{c.act}}" style="height: 46px; border-radius: 10px; border: 0; background: {{c.btnBg}}; color: #FFFFFF; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer">{{c.btn}}</button>
+</div>
+<div class="bk-zig" style="height: 10px"></div>
+</article>
+</sc-for>
+</div>
+</section>
+</sc-for>
+
+<sc-if value="{{hasDone}}" hint-placeholder-val="{{ false }}">
+<div style="background: #FFFFFF; border-radius: 14px; padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 14px">
+<b>Bugun chiqib ketdi:</b>
+<sc-for list="{{done}}" as="d" hint-placeholder-count="2">
+<span style="padding: 4px 10px; border-radius: 99px; background: #E2F3E8; color: #1B6B43; font-weight: 800; font-size: 13px">#{{d}} ✓</span>
+</sc-for>
+</div>
+</sc-if>
+
+<p style="margin: 0; font-size: 12px; color: #4F5A70">Seh narxni ko‘rmaydi. Zakazlar, ismlar va vaqtlar — namuna.</p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1900}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { st: { '0418': 0, '0417': 0, '0415': 1, '0414': 1, '0416': 1, '0412': 2, '0411': 2 }, started: 3 };
+  }
+  renderVals() {
+    var self = this, st = this.state;
+    var O = [
+      { n: '0418', type: 'Agregat', items: [['BITZER 4NES+20 vazdushniy agregat · FNV200', 1], ['Resiver 20 L (standart)', 1]], to: 'Mijoz: Rustam aka', seller: 'Abduraxmon', due: '12-okt', came: 'bugun 09:12' },
+      { n: '0417', type: 'Zapchast', items: [['Vibro shlang F28', 10], ['Glazok 3/8', 2]], to: 'Vitrina', seller: 'Atxamaka', due: '10-okt', came: 'bugun 08:40', note: 'Shoshilinch' },
+      { n: '0416', type: 'Agregat', items: [['XUEYING BR +25PG vadinoy agregat · 25HP', 1]], to: 'Vitrina', seller: 'Sirojiddin', due: '11-okt', came: 'kecha 17:05' },
+      { n: '0415', type: 'Agregat', items: [['Briliant YBF4FC+5G vazdushniy agregat · FN43', 2]], to: 'Mijoz: Qo‘qon meva', seller: 'Bositxon aka', due: '10-okt', came: 'kecha 15:30' },
+      { n: '0414', type: 'Agregat', items: [['XUEYING BR +20PG resiver ustida 30L', 1]], to: 'Mijoz: Ilhom fermer', seller: 'Anasxon aka', due: '13-okt', came: 'kecha 11:00' },
+      { n: '0412', type: 'Agregat', items: [['XUEYING BR +20PG vazdushniy agregat · FNV200', 1]], to: 'Mijoz: vaha', seller: 'Abulvohid Test', due: '08-okt', came: '05-okt 18:12', since: '3 kun 17 soatdan beri · muddat o‘tdi', late: true },
+      { n: '0411', type: 'Zapchast', items: [['Solenoid klapan 1/2', 4]], to: 'Vitrina', seller: 'Lola filiali', due: '09-okt', came: 'bugun 07:55', since: '1 soat 20 daqiqadan beri' }
+    ];
+    var STEP = [
+      { btn: 'Qabul qildim', bg: '#1E4E8C', top: '#1E4E8C' },
+      { btn: 'Terishni boshladim', bg: '#B8860B', top: '#7B97C4' },
+      { btn: 'Chiqib ketdi', bg: '#1B6B43', top: '#F2C230' }
+    ];
+    var queueOrder = O.filter(function (o) { return st.st[o.n] === 1; });
+    var card = function (o) {
+      var s = st.st[o.n], S = STEP[s];
+      var qi = queueOrder.indexOf(o);
+      return { n: o.n, type: o.type, items: o.items.map(function (x) { return { t: x[0], q: x[1] }; }), to: o.to, toC: o.to === 'Vitrina' ? '#3E4A60' : '#1E4E8C',
+        seller: o.seller, due: o.due, dueC: o.late ? '#A41F15' : '#14213D', came: o.came, note: o.note || '', hasNote: !!o.note,
+        hasQueue: s === 1, queue: qi + 1, working: s === 2, since: o.since || 'hozirgina boshlandi',
+        top: o.late && s === 2 ? '#D2372B' : S.top, btn: S.btn, btnBg: S.bg,
+        act: function () {
+          var n = Object.assign({}, st.st); n[o.n] = s + 1;
+          self.setState({ st: n, started: s === 1 ? st.started + 1 : st.started });
+        } };
+    };
+    var by = function (k) { return O.filter(function (o) { return st.st[o.n] === k; }).map(card); };
+    var sections = [
+      { title: 'Yangi zakazlar', dot: '#1E4E8C', hint: 'Ko‘rib chiqib qabul qiling', cards: by(0), emptyText: 'Yangi zakaz yo‘q' },
+      { title: 'Navbatda', dot: '#7B97C4', hint: 'Qabul qilingan · navbat bilan terasiz', cards: by(1), emptyText: 'Navbat bo‘sh' },
+      { title: 'Terilmoqda', dot: '#F2C230', hint: 'Tayyor bo‘lgach “Chiqib ketdi”', cards: by(2), emptyText: 'Hozir hech narsa terilmayapti' }
+    ].map(function (s) { s.count = s.cards.length; s.empty = s.cards.length === 0; return s; });
+    var done = O.filter(function (o) { return st.st[o.n] === 3; }).map(function (o) { return o.n; });
+    return {
+      sections: sections, done: done, hasDone: done.length > 0, started: st.started,
+      capC: st.started >= 5 ? '#A41F15' : '#14213D', capNote: st.started >= 5 ? 'kunlik limit' : (5 - st.started) + ' ta joy bor'
+    };
+  }
+}
+</script>
+</body>
+</html>

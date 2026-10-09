@@ -19,7 +19,7 @@ export async function loadZborkaCatalog() {
 
 const money = (value: number) => new Prisma.Decimal(value.toFixed(2));
 const orderInclude = {
-  seller: { select: { name: true } }, acceptedBy: { select: { name: true } }, issuedBy: { select: { name: true } }, receivedBy: { select: { name: true } },
+  seller: { select: { name: true } }, acceptedBy: { select: { name: true } }, startedBy: { select: { name: true } }, issuedBy: { select: { name: true } }, receivedBy: { select: { name: true } },
   items: { orderBy: { order: "asc" as const } },
 };
 
@@ -80,7 +80,7 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
     data: {
       type: "ZAPCHAST", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: 1, dueDate: dueDateOf(input.dueDate), note: input.note,
       sellerId, createdById: actor.id, priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
-      ...(noRequestFor ? { noRequest: true, status: "ISSUED" as const, acceptedById: actor.id, acceptedAt: now, issuedById: actor.id, issuedAt: now } : {}),
+      ...(noRequestFor ? { noRequest: true, status: "ISSUED" as const, acceptedById: actor.id, acceptedAt: now, startedById: actor.id, startedAt: now, issuedById: actor.id, issuedAt: now } : {}),
       items: { create: input.items.map((item, index) => { const part = byId.get(item.partId)!; return { kind: "PART" as const, partId: part.id, title: [part.name, part.size].filter(Boolean).join(" "), qty: item.qty, baseUsd: part.basePriceUsd, order: index }; }) },
     },
   });
@@ -99,7 +99,7 @@ async function loadMessageOrder(id: string) {
   if (!order) return null;
   const message = workshopMessage({
     number: order.number, type: order.type, purpose: order.purpose, customerName: order.customerName, qty: order.qty, dueDate: order.dueDate, note: order.note, sellerName: order.seller.name, noRequest: order.noRequest, status: order.status,
-    acceptedByName: order.acceptedBy?.name, acceptedAt: order.acceptedAt, issuedByName: order.issuedBy?.name, issuedAt: order.issuedAt, receivedAt: order.receivedAt,
+    acceptedByName: order.acceptedBy?.name, acceptedAt: order.acceptedAt, startedByName: order.startedBy?.name, startedAt: order.startedAt, issuedByName: order.issuedBy?.name, issuedAt: order.issuedAt, receivedAt: order.receivedAt,
     items: order.items.map(item => ({ title: item.title, qty: item.qty, issuedQty: item.issuedQty, changes: Array.isArray((item.options as { changes?: unknown } | null)?.changes) ? ((item.options as { changes: string[] }).changes).filter(change => /o‘rniga/.test(change)) : [] })),
   });
   return { order, message };
@@ -125,7 +125,7 @@ async function syncWorkshopMessage(id: string) {
   } catch (error) { console.error("Workshop order Telegram edit failed", telegramErrorDetails(error)); }
 }
 
-const ACTOR_FIELDS: Record<OrderAction, "accepted" | "issued" | "received"> = { accept: "accepted", issue: "issued", receive: "received" };
+const ACTOR_FIELDS: Record<OrderAction, "accepted" | "started" | "issued" | "received"> = { accept: "accepted", start: "started", issue: "issued", receive: "received" };
 /** The only way an order changes status (site buttons and Telegram buttons both end here). */
 export async function transitionOrder(actor: Actor, id: string, action: OrderAction, issuedQty?: Record<string, number>): Promise<Result<{ status: OrderStatus }>> {
   const db = getDb();

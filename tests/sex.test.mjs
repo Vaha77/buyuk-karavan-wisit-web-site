@@ -53,34 +53,35 @@ test("zborka quote: standard + Σ(chosen − standard); a receiver swap needs bo
   assert.equal(zborka.quoteZborka(small, group, catalog.receivers, { assembly: "k" }).base, 915);
 });
 
-test("status machine: only NEW→ACCEPTED→ISSUED→RECEIVED, each step by its one role", () => {
+test("status machine: NEW→ACCEPTED (Navbatda)→STARTED (Terilmoqda)→ISSUED→RECEIVED, one step at a time, each by its one role", () => {
   const ok = (role, status, action) => rules.checkTransition(role, status, action).ok;
   assert.deepEqual(rules.checkTransition("WORKSHOP", "NEW", "accept"), { ok: true, to: "ACCEPTED" });
-  assert.deepEqual(rules.checkTransition("WORKSHOP", "ACCEPTED", "issue"), { ok: true, to: "ISSUED" });
+  assert.deepEqual(rules.checkTransition("WORKSHOP", "ACCEPTED", "start"), { ok: true, to: "STARTED" });
+  assert.deepEqual(rules.checkTransition("WORKSHOP", "STARTED", "issue"), { ok: true, to: "ISSUED" });
   assert.deepEqual(rules.checkTransition("SUPER_ADMIN", "ISSUED", "receive"), { ok: true, to: "RECEIVED" });
-  assert.equal(ok("WORKSHOP", "ISSUED", "receive"), false, "WORKSHOP cannot receive (krim)");
-  for (const role of ["SUPER_ADMIN", "ADMIN", "MANAGER", "SELLER"]) {
-    assert.equal(ok(role, "NEW", "accept"), false, `${role} cannot accept`);
-    assert.equal(ok(role, "ACCEPTED", "issue"), false, `${role} cannot issue`);
+  // Every action is allowed from exactly one status, and moves exactly one step forward.
+  for (const [action, rule] of Object.entries(rules.TRANSITIONS)) {
+    assert.equal(rules.STATUS_ORDER.indexOf(rule.to), rules.STATUS_ORDER.indexOf(rule.from) + 1, action);
+    for (const status of rules.STATUS_ORDER) if (status !== rule.from) assert.equal(ok(rule.role, status, action), false, `${action} from ${status}`);
   }
+  assert.equal(ok("WORKSHOP", "ACCEPTED", "issue"), false, "Navbatda → Chiqib ketdi needs Terishni boshladim first");
+  assert.equal(ok("WORKSHOP", "ISSUED", "receive"), false, "WORKSHOP cannot receive (krim)");
+  for (const role of ["SUPER_ADMIN", "ADMIN", "MANAGER", "SELLER"]) for (const [action, from] of [["accept", "NEW"], ["start", "ACCEPTED"], ["issue", "STARTED"]]) assert.equal(ok(role, from, action), false, `${role} cannot ${action}`);
   for (const role of ["ADMIN", "MANAGER", "SELLER", "WORKSHOP"]) assert.equal(ok(role, "ISSUED", "receive"), false, `${role} cannot receive`);
-  assert.equal(ok("WORKSHOP", "NEW", "issue"), false, "no skipping ACCEPTED");
-  assert.equal(ok("WORKSHOP", "ACCEPTED", "accept"), false, "no repeat");
-  assert.equal(ok("SUPER_ADMIN", "ACCEPTED", "receive"), false, "krim only after Chiqib ketdi");
-  assert.equal(ok("SUPER_ADMIN", "RECEIVED", "receive"), false);
   assert.equal(rules.actionFor("SUPER_ADMIN", "ISSUED"), "receive");
-  assert.equal(rules.actionFor("SUPER_ADMIN", "NEW"), null, "SUPER_ADMIN has no workshop buttons");
-  assert.equal(rules.actionFor("WORKSHOP", "NEW"), "accept");
-  assert.equal(rules.actionFor("WORKSHOP", "ISSUED"), null);
+  for (const status of ["NEW", "ACCEPTED", "STARTED"]) assert.equal(rules.actionFor("SUPER_ADMIN", status), null, `SUPER_ADMIN has no workshop button on ${status}`);
+  assert.deepEqual(["NEW", "ACCEPTED", "STARTED", "ISSUED"].map(status => rules.actionFor("WORKSHOP", status)), ["accept", "start", "issue", null]);
   assert.equal(rules.actionFor("SELLER", "NEW"), null);
+  assert.deepEqual(rules.STATUS_LABEL, { NEW: "Yangi", ACCEPTED: "Navbatda", STARTED: "Terilmoqda", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi" });
 });
 
 test("visibility: a seller sees only their own orders, the workshop only open tasks", () => {
   assert.deepEqual(rules.orderScope({ id: "s1", role: "SELLER" }), { sellerId: "s1" });
-  assert.deepEqual(rules.orderScope({ id: "w", role: "WORKSHOP" }), { status: { in: ["NEW", "ACCEPTED"] } });
+  assert.deepEqual(rules.orderScope({ id: "w", role: "WORKSHOP" }), { status: { in: ["NEW", "ACCEPTED", "STARTED"] } });
   assert.deepEqual(rules.orderScope({ id: "a", role: "SUPER_ADMIN" }), {});
   assert.equal(rules.canViewOrder({ id: "s1", role: "SELLER" }, { sellerId: "s2", status: "NEW" }), false);
   assert.equal(rules.canViewOrder({ id: "s1", role: "SELLER" }, { sellerId: "s1", status: "RECEIVED" }), true);
+  assert.equal(rules.canViewOrder({ id: "w", role: "WORKSHOP" }, { sellerId: "s1", status: "STARTED" }), true);
   assert.equal(rules.canViewOrder({ id: "w", role: "WORKSHOP" }, { sellerId: "s1", status: "ISSUED" }), false);
   assert.equal(rules.canCreateOrders("WORKSHOP"), false);
   assert.equal(rules.canCreateOrders("SELLER"), true);
@@ -129,14 +130,18 @@ test("workshop Telegram message: changes from standard, quantity, due date, reci
   assert.equal(rules.parseWorkshopCallback("ws:receive:abcdefghij"), null, "krim is never a Telegram button");
 });
 
-test("process steps and the 24 h overdue mark", () => {
+test("process steps (4 steps) and the 24 h overdue mark", () => {
   const now = new Date("2026-10-05T12:00:00Z");
-  const issued = { status: "ISSUED", acceptedAt: new Date("2026-10-04T05:00:00Z"), issuedAt: new Date("2026-10-04T06:00:00Z"), receivedAt: null, acceptedBy: { name: "Ikromjon" }, issuedBy: { name: "Ikromjon" } };
-  assert.deepEqual(rules.processSteps(issued, now).map(step => step.state), ["done", "done", "wait"]);
-  assert.equal(rules.processSteps(issued, now)[0].text, "Ikromjon · 04-okt 10:00");
+  const issued = { status: "ISSUED", acceptedAt: new Date("2026-10-04T05:00:00Z"), startedAt: new Date("2026-10-04T05:30:00Z"), issuedAt: new Date("2026-10-04T06:00:00Z"), receivedAt: null, acceptedBy: { name: "Ikromjon" }, startedBy: { name: "Ikromjon" }, issuedBy: { name: "Ikromjon" } };
+  const steps = rules.processSteps(issued, now);
+  assert.deepEqual(steps.map(step => step.label), ["Qabul qildi", "Terishni boshladi", "Chiqarib yubordi", "Krimga oldi"]);
+  assert.deepEqual(steps.map(step => step.state), ["done", "done", "done", "wait"]);
+  assert.equal(steps[0].text, "Ikromjon · kecha 10:00");
+  assert.equal(steps[1].text, "Ikromjon · kecha 10:30");
+  assert.deepEqual(rules.processSteps({ ...issued, status: "ACCEPTED", startedAt: null, issuedAt: null }, now).map(step => [step.state, step.text]).slice(1, 3), [["wait", "navbatda"], ["later", "—"]]);
   assert.equal(rules.isReceiveOverdue(issued, now), true);
   assert.equal(rules.isReceiveOverdue({ ...issued, issuedAt: new Date("2026-10-05T01:00:00Z") }, now), false);
-  assert.deepEqual(rules.processSteps({ status: "NEW", acceptedAt: null, issuedAt: null, receivedAt: null }, now).map(step => step.state), ["wait", "later", "later"]);
+  assert.deepEqual(rules.processSteps({ status: "NEW", acceptedAt: null, issuedAt: null, receivedAt: null }, now).map(step => step.state), ["wait", "later", "later", "later"]);
   assert.equal(rules.orderNumber(7), "#0007");
 });
 
@@ -220,4 +225,48 @@ test("“Sex” → “Seh”: pages live under /admin/seh and old /admin/sex li
     { source: "/admin/sex/:path*", destination: "/admin/seh/:path*", permanent: true },
   ]);
   for (const file of ["../app/admin/(sex)/seh/page.tsx", "../app/admin/(sex)/seh/new/page.tsx", "../app/admin/(sex)/seh/export/route.ts"]) await readFile(new URL(file, import.meta.url));
+});
+
+
+test("queue numbers: Navbatda orders 1, 2, 3… by acceptance time; starting one renumbers the rest", () => {
+  const at = minute => new Date(Date.UTC(2026, 9, 9, 4, minute));
+  const orders = [
+    { id: "c", status: "ACCEPTED", acceptedAt: at(30) }, { id: "a", status: "ACCEPTED", acceptedAt: at(10) },
+    { id: "n", status: "NEW", acceptedAt: null }, { id: "b", status: "ACCEPTED", acceptedAt: at(20) }, { id: "s", status: "STARTED", acceptedAt: at(5) },
+  ];
+  assert.deepEqual([...rules.queuePositions(orders)], [["a", 1], ["b", 2], ["c", 3]]);
+  const afterStart = orders.map(order => order.id === "a" ? { ...order, status: "STARTED" } : order);
+  assert.deepEqual([...rules.queuePositions(afterStart)], [["b", 1], ["c", 2]]);
+  assert.equal(rules.queuePositions([]).size, 0);
+});
+
+test("daily “terish boshlandi” counter resets at the start of the Tashkent day; the limit only warns", () => {
+  // 18:59 UTC = 23:59 Tashkent; 19:00 UTC = 00:00 next Tashkent day.
+  assert.equal(rules.tashkentDayStart(new Date("2026-10-09T18:59:00Z")).toISOString(), "2026-10-08T19:00:00.000Z");
+  assert.equal(rules.tashkentDayStart(new Date("2026-10-09T19:00:00Z")).toISOString(), "2026-10-09T19:00:00.000Z");
+  const started = ["2026-10-09T03:00:00Z", "2026-10-09T18:30:00Z", "2026-10-08T18:59:00Z", null];
+  assert.equal(rules.startedToday(started, new Date("2026-10-09T18:59:00Z")), 2, "before midnight Tashkent: today's two");
+  assert.equal(rules.startedToday(started, new Date("2026-10-09T19:00:00Z")), 0, "at 00:00 Tashkent the counter is back to zero");
+  assert.deepEqual(rules.dailyCapView(3, 5), { tone: "normal", note: "2 ta joy bor" });
+  assert.deepEqual(rules.dailyCapView(5, 5), { tone: "red", note: "kunlik limit" });
+  assert.deepEqual(rules.dailyCapView(7, 5), { tone: "red", note: "kunlik limit" });
+  assert.equal(rules.checkTransition("WORKSHOP", "ACCEPTED", "start").ok, true, "the limit never blocks a start");
+});
+
+test("Telegram buttons follow the stages: Qabul qildim → Terishni boshladim → Chiqib ketdi", () => {
+  const id = "abcdefghij";
+  assert.deepEqual(["NEW", "ACCEPTED", "STARTED", "ISSUED"].map(status => rules.workshopKeyboard(id, status).inline_keyboard[0]?.[0]?.text ?? null), ["✅ Qabul qildim", "🔧 Terishni boshladim", "🚚 Chiqib ketdi", null]);
+  assert.deepEqual(rules.parseWorkshopCallback(`ws:start:${id}`), { action: "start", orderId: id });
+  const text = rules.workshopMessage({ number: 418, type: "ZAPCHAST", purpose: "SHOP", customerName: null, qty: 1, dueDate: null, note: null, sellerName: "Atxamaka", status: "STARTED", acceptedByName: "Ikromjon", acceptedAt: new Date(), startedByName: "Ikromjon", startedAt: new Date(), items: [{ title: "Glazok 3/8", qty: 2 }] });
+  assert.match(text, /🔧 Terishni boshladi: Ikromjon/);
+  assert.doesNotMatch(text, /\$|narx/i);
+});
+
+test("WORKSHOP panel payload: no price fields; the panel component never reads prices", async () => {
+  const row = { id: "o", number: "#0418", status: "STARTED", queue: null, priceSnapshot: { unitBaseUsd: 4541, totalBaseUsd: 4541, standardBaseUsd: 4123 }, items: [{ id: "i", title: "x", qty: 1, baseUsd: 4541 }] };
+  assert.doesNotMatch(JSON.stringify(rules.stripPrices(row, "WORKSHOP")), /4541|4123|price|baseUsd|Usd/i);
+  const board = await readFile(new URL("../components/admin/sex/workshop-board.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(board, /formatUsd|baseUsd|BaseUsd|priceSnapshot|\.prices/);
+  const page = await readFile(new URL("../app/admin/(sex)/seh/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /listOrders\(user, month\)/, "rows go through listOrders → stripPrices(role)");
 });

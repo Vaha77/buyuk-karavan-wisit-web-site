@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   sheet.columns = [
     { header: "№", key: "number", width: 8 }, { header: "Sana", key: "date", width: 16 }, { header: "Turi", key: "type", width: 10 }, { header: "Mahsulot", key: "product", width: 60 },
     { header: "Zayavka beruvchi", key: "seller", width: 18 }, { header: "Kimga", key: "to", width: 26 }, { header: "Holat", key: "status", width: 14 },
-    { header: "Qabul qildi", key: "accepted", width: 24 }, { header: "Chiqarib yubordi", key: "issued", width: 24 }, { header: "Krimga oldi", key: "received", width: 24 },
+    { header: "Qabul qildi", key: "accepted", width: 24 }, { header: "Terishni boshladi", key: "started", width: 24 }, { header: "Chiqarib yubordi", key: "issued", width: 24 }, { header: "Krimga oldi", key: "received", width: 24 },
     { header: "Prays narxi", key: "base", width: 12 }, { header: "Zayavkasiz", key: "noRequest", width: 11 },
   ];
   const step = (name: string | undefined, at: Date | null) => (at ? `${name ?? "—"} · ${when(at)}` : "");
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       number: orderNumber(order.number), date: when(order.createdAt), type: TYPE_LABEL[order.type],
       product: order.type === "AGREGAT" ? `${order.items[0]?.title ?? ""}${order.qty > 1 ? ` ×${order.qty}` : ""}` : order.items.map(item => `${item.title} ×${item.issuedQty ?? item.qty}`).join(", "),
       seller: order.seller.name, to: order.purpose === "CLIENT" ? `Mijoz: ${order.customerName ?? ""}` : PURPOSE_LABEL.SHOP, status: STATUS_LABEL[order.status],
-      accepted: step(order.acceptedBy?.name, order.acceptedAt), issued: step(order.issuedBy?.name, order.issuedAt), received: step(order.receivedBy?.name, order.receivedAt),
+      accepted: step(order.acceptedBy?.name, order.acceptedAt), started: step(order.startedBy?.name, order.startedAt), issued: step(order.issuedBy?.name, order.issuedAt), received: step(order.receivedBy?.name, order.receivedAt),
       base: snapshot?.totalBaseUsd ?? null, noRequest: order.noRequest ? "ha" : "",
     });
   }

@@ -17,7 +17,8 @@ type Props = {
   parts: PartOption[]; sellers: Option[]; customers: Option[];
 };
 
-const WAIT_TEXT = { NEW: "Seh qabul qilishi kutilmoqda", ACCEPTED: "Sehda ishlanmoqda", ISSUED: "Krimga olish kutilmoqda", RECEIVED: "✓ Yopildi" } as const;
+const WAIT_TEXT = { NEW: "Seh qabul qilishi kutilmoqda", ACCEPTED: "Navbatda · terish kutilmoqda", STARTED: "Sehda terilmoqda", ISSUED: "Krimga olish kutilmoqda", RECEIVED: "✓ Yopildi" } as const;
+const queueLabel = (row: OrderRow) => (row.queue ? `${STATUS_LABEL.ACCEPTED} (${row.queue}-navbat)` : STATUS_LABEL.ACCEPTED);
 
 export function OrdersBoard({ role, userName, rows, month, months, parts, sellers, customers }: Props) {
   const router = useRouter();
@@ -47,7 +48,7 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
   const count = (status: OrderRow["status"]) => rows.filter(row => row.status === status).length;
   const stats = workshop
     ? [{ k: "Qabul qilishim kerak", v: count("NEW"), tone: "is-blue" }, { k: "Ishlanmoqda · chiqarishim kerak", v: count("ACCEPTED"), tone: "is-yellow" }]
-    : [{ k: "Yangi · qabul kutmoqda", v: count("NEW"), tone: "is-blue" }, { k: "Sehda ishlanmoqda", v: count("ACCEPTED"), tone: "is-yellow" }, { k: "Chiqib ketdi · krim kutmoqda", v: count("ISSUED"), tone: "is-red" }, { k: "Krimga olindi", v: count("RECEIVED"), tone: "is-green" }];
+    : [{ k: "Yangi · qabul kutmoqda", v: count("NEW"), tone: "is-blue" }, { k: "Navbatda", v: count("ACCEPTED"), tone: "is-slate" }, { k: "Terilmoqda", v: count("STARTED"), tone: "is-yellow" }, { k: "Chiqib ketdi · krim kutmoqda", v: count("ISSUED"), tone: "is-red" }, { k: "Krimga olindi", v: count("RECEIVED"), tone: "is-green" }];
   const title = workshop ? `Mening vazifalarim · ${userName}` : seller ? "Mening zakazlarim" : `Seh zakazlari · ${month.label}`;
   const subtitle = workshop ? "Zapchast va agregat zakazlari · qabul qiling, chiqqach “Chiqib ketdi” bosing" : seller ? "Bergan zakazlaringiz va ularning holati" : boss ? "Hammasini ko‘rasiz · sizning tugmangiz faqat “Krimga oldim”" : "Hammasini ko‘rasiz · holatni seh va Super Admin o‘zgartiradi";
 
@@ -78,12 +79,12 @@ export function OrdersBoard({ role, userName, rows, month, months, parts, seller
             <td><div style={{ display: "grid", gap: 2 }}><b style={{ fontWeight: 600 }}>{row.sellerName}</b><span className="sx-muted">{row.sellerAt}</span></div></td>
             <td style={{ fontWeight: 700, color: row.purpose === "SHOP" ? "#3E4A60" : "#1E4E8C" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</td>
             <td style={{ minWidth: 230 }}><div className="sx-steps">{row.steps.map(step => <span key={step.label} className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>)}</div></td>
-            <td>{row.status === "ACCEPTED" ? <AcceptedBadge label={STATUS_LABEL.ACCEPTED} dueDate={row.dueDate}/> : <span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{STATUS_LABEL[row.status]}</span>}{row.overdue && <div className="sx-muted" style={{ color: "#A41F15", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</td>
+            <td>{row.status === "STARTED" ? <AcceptedBadge label={STATUS_LABEL.STARTED} dueDate={row.dueDate}/> : <span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{row.status === "ACCEPTED" ? queueLabel(row) : STATUS_LABEL[row.status]}</span>}{row.overdue && <div className="sx-muted" style={{ color: "#A41F15", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</td>
             <td style={{ minWidth: 210 }}>
               {action ? <button type="button" className={`sx-btn is-md ${action === "receive" ? "is-red" : "is-primary"}`} disabled={pending} aria-busy={isBusy(`${row.id}:${action}`)} onClick={() => act(row, action)}><BusyLabel busy={isBusy(`${row.id}:${action}`)}>{ACTION_LABEL[action]}</BusyLabel></button>
                 : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id), undefined, `${row.id}:confirm`)}><BusyLabel busy={isBusy(`${row.id}:confirm`)}>Tasdiqlayman</BusyLabel></button>
-                : row.status !== "ACCEPTED" && <span className="sx-muted">{WAIT_TEXT[row.status]}</span>}
-              {row.status === "ACCEPTED" && row.acceptedAt && <WorkingStatus acceptedAt={row.acceptedAt} dueDate={row.dueDate}/>}
+                : row.status !== "STARTED" && <span className="sx-muted">{WAIT_TEXT[row.status]}</span>}
+              {row.status === "STARTED" && row.startedAt && <WorkingStatus acceptedAt={row.startedAt} dueDate={row.dueDate}/>}
             </td>
           </tr>;
         })}</tbody>
@@ -108,7 +109,7 @@ function PriceLine({ prices }: { prices: NonNullable<OrderRow["prices"]> }) {
 }
 
 /** "berildi" per item: defaults to the requested quantity, the workshop corrects it. */
-function IssueForm({ row, busy, onSubmit }: { row: OrderRow; busy: boolean; onSubmit: (issued: Record<string, number>) => void }) {
+export function IssueForm({ row, busy, onSubmit }: { row: OrderRow; busy: boolean; onSubmit: (issued: Record<string, number>) => void }) {
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(row.items.map(item => [item.id, String(item.qty)])));
   const parsed = Object.fromEntries(Object.entries(values).map(([id, value]) => [id, Number(value)]));
   const valid = Object.values(parsed).every(value => Number.isInteger(value) && value >= 0);
@@ -121,7 +122,7 @@ function IssueForm({ row, busy, onSubmit }: { row: OrderRow; busy: boolean; onSu
   </form>;
 }
 
-function NoRequestForm({ parts, sellers, customers, busy, onSubmit }: { parts: PartOption[]; sellers: Option[]; customers: Option[]; busy: boolean; onSubmit: (draft: Record<string, unknown>) => void }) {
+export function NoRequestForm({ parts, sellers, customers, busy, onSubmit }: { parts: PartOption[]; sellers: Option[]; customers: Option[]; busy: boolean; onSubmit: (draft: Record<string, unknown>) => void }) {
   const [sellerId, setSellerId] = useState(""), [items, setItems] = useState([{ partId: "", qty: "1" }]), [purpose, setPurpose] = useState<"SHOP" | "CLIENT">("SHOP"), [customer, setCustomer] = useState(""), [note, setNote] = useState("");
   const ready = sellerId && items.every(item => item.partId && Number(item.qty) >= 1) && (purpose === "SHOP" || customer.trim());
   const known = customers.find(item => item.name === customer.trim());

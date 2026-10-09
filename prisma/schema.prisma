@@ -207,6 +207,8 @@ model SiteSettings {
   salesPlanZones   Json?
   // Prays: selling markup over basePriceUsd, 1–20 %.
   priceMarkupPercent Int     @default(10)
+  // Seh: how many orders the workshop should start per day (a warning, not a block).
+  workshopDailyLimit Int     @default(5)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -437,6 +439,7 @@ model AdminUser {
   workshopOrdersSold     WorkshopOrder[]            @relation("WorkshopOrderSeller")
   workshopOrdersCreated  WorkshopOrder[]            @relation("WorkshopOrderCreator")
   workshopOrdersAccepted WorkshopOrder[]            @relation("WorkshopOrderAcceptor")
+  workshopOrdersStarted  WorkshopOrder[]            @relation("WorkshopOrderStarter")
   workshopOrdersIssued   WorkshopOrder[]            @relation("WorkshopOrderIssuer")
   workshopOrdersReceived WorkshopOrder[]            @relation("WorkshopOrderReceiver")
 
@@ -1083,7 +1086,10 @@ enum WorkshopOrderPurpose {
 
 enum WorkshopOrderStatus {
   NEW
+  // "Navbatda": accepted, waiting in the queue (ordered by acceptedAt).
   ACCEPTED
+  // "Terilmoqda": the workshop started assembling it.
+  STARTED
   ISSUED
   RECEIVED
 }
@@ -1112,6 +1118,8 @@ model WorkshopOrder {
   status            WorkshopOrderStatus  @default(NEW)
   acceptedById      String?
   acceptedAt        DateTime?
+  startedById       String?
+  startedAt         DateTime?
   issuedById        String?
   issuedAt          DateTime?
   receivedById      String?
@@ -1126,6 +1134,7 @@ model WorkshopOrder {
   seller            AdminUser            @relation("WorkshopOrderSeller", fields: [sellerId], references: [id], onDelete: Restrict)
   createdBy         AdminUser            @relation("WorkshopOrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
   acceptedBy        AdminUser?           @relation("WorkshopOrderAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
+  startedBy         AdminUser?           @relation("WorkshopOrderStarter", fields: [startedById], references: [id], onDelete: SetNull)
   issuedBy          AdminUser?           @relation("WorkshopOrderIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
   receivedBy        AdminUser?           @relation("WorkshopOrderReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
   items             WorkshopOrderItem[]
@@ -1133,6 +1142,7 @@ model WorkshopOrder {
   @@index([status, createdAt])
   @@index([sellerId, createdAt])
   @@index([createdAt])
+  @@index([startedAt])
 }
 
 model WorkshopOrderItem {

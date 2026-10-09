@@ -88,7 +88,7 @@ const sellerNavigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Bugun qo‘ng‘iroq", href: "/admin/my/today", icon: PhoneCall, badge: "due" },
     { label: "Xarid kiritish", href: "/admin/my/purchase", icon: ShoppingBag },
   ] },
-  { group: "SEX", items: [
+  { group: "SEH", items: [
     { label: "Mening zakazlarim", href: "/admin/seh", icon: Wrench },
     { label: "Yangi zakaz", href: "/admin/seh/new", icon: PlusCircle },
   ] },
@@ -96,7 +96,7 @@ const sellerNavigation: Array<{ group: string; items: NavItem[] }> = [
 
 // WORKSHOP (Sex mas'uli) only works with workshop orders.
 const workshopNavigation: Array<{ group: string; items: NavItem[] }> = [
-  { group: "SEX", items: [
+  { group: "SEH", items: [
     { label: "Mening vazifalarim", href: "/admin/seh", icon: Wrench, badge: "sex" },
   ] },
 ];
@@ -124,7 +124,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
     <button className={`admin-drawer-backdrop ${open ? "is-open" : ""}`} aria-label="Menyuni yopish" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}/>
     <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
       <div className="admin-sidebar-brand"><Link href={home} className="admin-brand-link" onClick={() => setOpen(false)}><span className="admin-brand-mark">✳</span><strong>BUYUK KARAVAN</strong></Link><button className="admin-sidebar-close" onClick={() => setOpen(false)} aria-label="Menyuni yopish"><X size={18}/></button><span className="admin-sidebar-collapse"><ChevronLeft size={15}/></span></div>
-      <span className="admin-sidebar-label">{user.role === "SELLER" ? "SOTUVCHI" : user.role === "WORKSHOP" ? "SEX" : "ADMIN"}</span>
+      <span className="admin-sidebar-label">{user.role === "SELLER" ? "SOTUVCHI" : user.role === "WORKSHOP" ? "SEH" : "ADMIN"}</span>
       <nav aria-label="Admin navigatsiya">{groups.map(section => <div className="admin-nav-group" key={section.group}><span className="admin-nav-group-label">{section.group}</span>{section.items.filter(visible).map(item => {
         const Icon = item.icon;
         const active = item.href === activeHref;

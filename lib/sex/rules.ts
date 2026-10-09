@@ -2,12 +2,14 @@
 // Pure (no database, no "server-only"), so the tests run them directly.
 
 export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "SELLER" | "WORKSHOP";
-export type OrderStatus = "NEW" | "ACCEPTED" | "ISSUED" | "RECEIVED";
-export type OrderAction = "accept" | "issue" | "receive";
+export type OrderStatus = "NEW" | "ACCEPTED" | "STARTED" | "ISSUED" | "RECEIVED";
+export type OrderAction = "accept" | "start" | "issue" | "receive";
+/** Order of the stages; a transition only ever moves one step forward. */
+export const STATUS_ORDER: OrderStatus[] = ["NEW", "ACCEPTED", "STARTED", "ISSUED", "RECEIVED"];
 export type Viewer = { id: string; role: Role | string };
 
-export const STATUS_LABEL: Record<OrderStatus, string> = { NEW: "Yangi", ACCEPTED: "Qabul qilindi", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi" };
-export const STATUS_TONE: Record<OrderStatus, "blue" | "yellow" | "red" | "green"> = { NEW: "blue", ACCEPTED: "yellow", ISSUED: "red", RECEIVED: "green" };
+export const STATUS_LABEL: Record<OrderStatus, string> = { NEW: "Yangi", ACCEPTED: "Navbatda", STARTED: "Terilmoqda", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi" };
+export const STATUS_TONE: Record<OrderStatus, "blue" | "slate" | "yellow" | "red" | "green"> = { NEW: "blue", ACCEPTED: "slate", STARTED: "yellow", ISSUED: "red", RECEIVED: "green" };
 export const PURPOSE_LABEL = { SHOP: "Magazinga (vitrina)", CLIENT: "Mijozga" } as const;
 export const TYPE_LABEL = { AGREGAT: "Agregat", ZAPCHAST: "Zapchast" } as const;
 /** An order still "Chiqib ketdi" after this long is highlighted in red and counted in the sidebar badge. */
@@ -16,7 +18,8 @@ export const RECEIVE_OVERDUE_MS = 24 * 60 * 60 * 1000;
 /** The only transitions there are, and the one role that may make each. SUPER_ADMIN only receives; the workshop never does. */
 export const TRANSITIONS: Record<OrderAction, { from: OrderStatus; to: OrderStatus; role: Role }> = {
   accept: { from: "NEW", to: "ACCEPTED", role: "WORKSHOP" },
-  issue: { from: "ACCEPTED", to: "ISSUED", role: "WORKSHOP" },
+  start: { from: "ACCEPTED", to: "STARTED", role: "WORKSHOP" },
+  issue: { from: "STARTED", to: "ISSUED", role: "WORKSHOP" },
   receive: { from: "ISSUED", to: "RECEIVED", role: "SUPER_ADMIN" },
 };
 
@@ -32,7 +35,7 @@ export function checkTransition(role: string, status: OrderStatus, action: Order
 export function actionFor(role: string, status: OrderStatus): OrderAction | null {
   return (Object.keys(TRANSITIONS) as OrderAction[]).find(action => TRANSITIONS[action].role === role && TRANSITIONS[action].from === status) ?? null;
 }
-export const ACTION_LABEL: Record<OrderAction, string> = { accept: "Qabul qildim", issue: "Chiqib ketdi", receive: "Krimga oldim" };
+export const ACTION_LABEL: Record<OrderAction, string> = { accept: "Qabul qildim", start: "Terishni boshladim", issue: "Chiqib ketdi", receive: "Krimga oldim" };
 
 export const isStaff = (role: string) => role === "SUPER_ADMIN" || role === "ADMIN" || role === "MANAGER";
 export const canCreateOrders = (role: string) => role === "SELLER" || isStaff(role);
@@ -40,12 +43,12 @@ export const canCreateOrders = (role: string) => role === "SELLER" || isStaff(ro
 /** Prisma `where` for the orders a viewer may list: a seller only their own, the workshop only open tasks, staff everything. */
 export function orderScope(viewer: Viewer): { sellerId?: string; status?: { in: OrderStatus[] } } {
   if (viewer.role === "SELLER") return { sellerId: viewer.id };
-  if (viewer.role === "WORKSHOP") return { status: { in: ["NEW", "ACCEPTED"] } };
+  if (viewer.role === "WORKSHOP") return { status: { in: ["NEW", "ACCEPTED", "STARTED"] } };
   return {};
 }
 export function canViewOrder(viewer: Viewer, order: { sellerId: string; status: OrderStatus }) {
   if (viewer.role === "SELLER") return order.sellerId === viewer.id;
-  if (viewer.role === "WORKSHOP") return order.status === "NEW" || order.status === "ACCEPTED";
+  if (viewer.role === "WORKSHOP") return order.status === "NEW" || order.status === "ACCEPTED" || order.status === "STARTED";
   return isStaff(viewer.role);
 }
 
@@ -88,26 +91,52 @@ export function tashkentParts(date: Date | string) {
 /** "05-okt" */
 export function shortDay(date: Date | string) { const { day, month } = tashkentParts(date); return `${String(day).padStart(2, "0")}-${MONTHS[month - 1]}`; }
 export function clock(date: Date | string) { return timeFormat.format(new Date(date)); }
-/** "bugun 10:05" / "04-okt 10:05" */
-export function when(date: Date | string, now = new Date()) { return `${shortDay(date) === shortDay(now) ? "bugun" : shortDay(date)} ${clock(date)}`; }
+/** "bugun 10:05" / "kecha 17:05" / "04-okt 10:05" */
+export function when(date: Date | string, now = new Date()) {
+  const day = shortDay(date);
+  return `${day === shortDay(now) ? "bugun" : day === shortDay(new Date(now.getTime() - 86_400_000)) ? "kecha" : day} ${clock(date)}`;
+}
 export function fullDate(date: Date | string) { return fullDayFormat.format(new Date(date)).replace(/\//g, "."); }
 
 export type StepView = { label: string; text: string; state: "done" | "wait" | "later" };
-type StepOrder = { status: OrderStatus; acceptedAt: Date | string | null; issuedAt: Date | string | null; receivedAt: Date | string | null; acceptedBy?: { name: string } | null; issuedBy?: { name: string } | null; receivedBy?: { name: string } | null };
+type Person = { name: string } | null | undefined;
+type StepOrder = { status: OrderStatus; acceptedAt: Date | string | null; startedAt?: Date | string | null; issuedAt: Date | string | null; receivedAt: Date | string | null; acceptedBy?: Person; startedBy?: Person; issuedBy?: Person; receivedBy?: Person };
 /** "Jarayon": green = done, red = what is awaited now, grey = not yet its turn. */
 export function processSteps(order: StepOrder, now = new Date()): StepView[] {
-  const index = ["NEW", "ACCEPTED", "ISSUED", "RECEIVED"].indexOf(order.status);
-  const step = (label: string, at: number, by: { name: string } | null | undefined, time: Date | string | null, waiting: string): StepView =>
+  const index = STATUS_ORDER.indexOf(order.status);
+  const step = (label: string, at: number, by: Person, time: Date | string | null | undefined, waiting: string): StepView =>
     index >= at ? { label, text: `${by?.name ?? "—"} · ${time ? when(time, now) : ""}`.trim(), state: "done" } : index === at - 1 ? { label, text: waiting, state: "wait" } : { label, text: "—", state: "later" };
   return [
     step("Qabul qildi", 1, order.acceptedBy, order.acceptedAt, "kutilmoqda"),
-    step("Chiqarib yubordi", 2, order.issuedBy, order.issuedAt, "kutilmoqda"),
-    step("Krimga oldi", 3, order.receivedBy, order.receivedAt, "tasdiqlash kutilmoqda"),
+    step("Terishni boshladi", 2, order.startedBy, order.startedAt, "navbatda"),
+    step("Chiqarib yubordi", 3, order.issuedBy, order.issuedAt, "kutilmoqda"),
+    step("Krimga oldi", 4, order.receivedBy, order.receivedAt, "tasdiqlash kutilmoqda"),
   ];
 }
 
+/** Queue numbers of "Navbatda" orders: 1, 2, 3… by acceptance time; starting one renumbers the rest. */
+export function queuePositions(orders: Array<{ id: string; status: OrderStatus | string; acceptedAt: Date | string | null }>) {
+  const waiting = orders.filter(order => order.status === "ACCEPTED").sort((a, b) => new Date(a.acceptedAt ?? 0).getTime() - new Date(b.acceptedAt ?? 0).getTime() || a.id.localeCompare(b.id));
+  return new Map(waiting.map((order, index) => [order.id, index + 1]));
+}
+
+export const DEFAULT_WORKSHOP_DAILY_LIMIT = 5;
+/** Start of the current Tashkent day (UTC+5, no DST) as an instant: the daily "terish boshlandi" counter resets here. */
+export function tashkentDayStart(now = new Date()) {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tashkent" }).format(now);
+  return new Date(Date.parse(`${day}T00:00:00Z`) - 5 * 3_600_000);
+}
+export function startedToday(startedAt: Array<Date | string | null>, now = new Date()) {
+  const from = tashkentDayStart(now).getTime(), to = from + 86_400_000;
+  return startedAt.filter(value => { if (!value) return false; const time = new Date(value).getTime(); return time >= from && time < to; }).length;
+}
+/** Header counter of the workshop panel: red with "kunlik limit" once the limit is reached (a warning only). */
+export function dailyCapView(started: number, limit: number) {
+  return started >= limit ? { tone: "red" as const, note: "kunlik limit" } : { tone: "normal" as const, note: `${limit - started} ta joy bor` };
+}
+
 export type MessageItem = { title: string; qty: number; issuedQty?: number | null; changes?: string[] };
-export type MessageOrder = { number: number; type: "AGREGAT" | "ZAPCHAST"; purpose: "SHOP" | "CLIENT"; customerName: string | null; qty: number; dueDate: Date | string | null; note: string | null; sellerName: string; noRequest?: boolean; status: OrderStatus; acceptedByName?: string | null; acceptedAt?: Date | string | null; issuedByName?: string | null; issuedAt?: Date | string | null; receivedAt?: Date | string | null; items: MessageItem[] };
+export type MessageOrder = { startedByName?: string | null; startedAt?: Date | string | null; number: number; type: "AGREGAT" | "ZAPCHAST"; purpose: "SHOP" | "CLIENT"; customerName: string | null; qty: number; dueDate: Date | string | null; note: string | null; sellerName: string; noRequest?: boolean; status: OrderStatus; acceptedByName?: string | null; acceptedAt?: Date | string | null; issuedByName?: string | null; issuedAt?: Date | string | null; receivedAt?: Date | string | null; items: MessageItem[] };
 /** Workshop group message. Never contains a price. */
 export function workshopMessage(order: MessageOrder) {
   const head = order.noRequest ? `📦 Zayavkasiz chiqim ${orderNumber(order.number)} — ${order.sellerName}` : `${order.type === "AGREGAT" ? "🔧 Yangi zakaz" : "📦 Yangi zayavka"} ${orderNumber(order.number)} — ${order.sellerName}`;
@@ -121,6 +150,7 @@ export function workshopMessage(order: MessageOrder) {
   lines.push("");
   if (order.status === "NEW") lines.push("Holat: 🆕 Yangi — qabul qilinishi kutilmoqda");
   if (order.acceptedAt) lines.push(`✅ Qabul qildi: ${order.acceptedByName ?? "—"} · ${when(order.acceptedAt)}`);
+  if (order.startedAt) lines.push(`🔧 Terishni boshladi: ${order.startedByName ?? "—"} · ${when(order.startedAt)}`);
   if (order.issuedAt) lines.push(`🚚 Chiqib ketdi: ${order.issuedByName ?? "—"} · ${when(order.issuedAt)}`);
   if (order.receivedAt) lines.push(`📥 Krimga olindi · ${when(order.receivedAt)}`);
   return lines.join("\n").trim();
@@ -128,12 +158,13 @@ export function workshopMessage(order: MessageOrder) {
 /** Inline buttons under the group message: only the next workshop step. */
 export function workshopKeyboard(orderId: string, status: OrderStatus) {
   if (status === "NEW") return { inline_keyboard: [[{ text: "✅ Qabul qildim", callback_data: `ws:accept:${orderId}` }]] };
-  if (status === "ACCEPTED") return { inline_keyboard: [[{ text: "🚚 Chiqib ketdi", callback_data: `ws:issue:${orderId}` }]] };
+  if (status === "ACCEPTED") return { inline_keyboard: [[{ text: "🔧 Terishni boshladim", callback_data: `ws:start:${orderId}` }]] };
+  if (status === "STARTED") return { inline_keyboard: [[{ text: "🚚 Chiqib ketdi", callback_data: `ws:issue:${orderId}` }]] };
   return { inline_keyboard: [] as Array<Array<{ text: string; callback_data: string }>> };
 }
-export function parseWorkshopCallback(data: string | undefined): { action: "accept" | "issue"; orderId: string } | null {
-  const match = data?.match(/^ws:(accept|issue):([a-z0-9]{10,40})$/i);
-  return match ? { action: match[1] as "accept" | "issue", orderId: match[2] } : null;
+export function parseWorkshopCallback(data: string | undefined): { action: "accept" | "start" | "issue"; orderId: string } | null {
+  const match = data?.match(/^ws:(accept|start|issue):([a-z0-9]{10,40})$/i);
+  return match ? { action: match[1] as "accept" | "start" | "issue", orderId: match[2] } : null;
 }
 
 /** "2026-10" → its first moment and the next month's first moment, Tashkent time (UTC+5). */
