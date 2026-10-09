@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { getPraysProducts, getSexParts } from "@/lib/prays/queries";
 import { STATUS_LABEL, alreadyText, checkTransition, orderNumber, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
 import { notifyChanged, notifyCreated } from "./bot";
+import type { DeliveryStatus } from "./bot-text";
 import { buildZborkaCatalog, quoteZborka, type Assembly } from "./zborka";
 
 type Actor = Pick<AdminUser, "id" | "name" | "role" | "salesPersonId">;
@@ -32,7 +33,7 @@ async function resolveCustomer(actor: Actor, input: OrderCommon): Promise<Result
 const dueDateOf = (value: string | null) => (value ? new Date(`${value}T00:00:00.000Z`) : null);
 
 export type AgregatInput = OrderCommon & { groupKey: string; modelKey: string; assembly: Assembly; liters: string | null; hp: string | null; fn: string | null; qty: number };
-export async function createAgregatOrder(actor: Actor, input: AgregatInput): Promise<Result<{ id: string; number: number }>> {
+export async function createAgregatOrder(actor: Actor, input: AgregatInput): Promise<Result<{ id: string; number: number; telegram: DeliveryStatus }>> {
   const catalog = await loadZborkaCatalog();
   const group = catalog.groups.find(item => item.key === input.groupKey), model = group?.models.find(item => item.key === input.modelKey);
   if (!group || !model) return { ok: false, error: "Kompressor praysda topilmadi." };
@@ -48,13 +49,13 @@ export async function createAgregatOrder(actor: Actor, input: AgregatInput): Pro
       items: { create: [{ kind: "PRODUCT", productId: quote.product.id, title: quote.title, qty: input.qty, baseUsd: money(quote.base), changedFromStandard: quote.changes.length > 0, options: { assembly: input.assembly, ...quote.options, standard: { liters: model.liters, hp: model.hp, fn: model.fn }, changes: quote.telegram, priceList: group.label } as Prisma.InputJsonValue }] },
     },
   });
-  await afterCreate(actor, order.id, `${orderNumber(order.number)} zborka zakazini berdi`, { title: quote.title, qty: input.qty, purpose: input.purpose, customer: customer.customerName, changes: quote.changes.length });
-  return { ok: true, id: order.id, number: order.number };
+  const telegram = await afterCreate(actor, order.id, `${orderNumber(order.number)} zborka zakazini berdi`, { title: quote.title, qty: input.qty, purpose: input.purpose, customer: customer.customerName, changes: quote.changes.length });
+  return { ok: true, id: order.id, number: order.number, telegram };
 }
 
 export type ZapchastInput = OrderCommon & { items: Array<{ partId: string; qty: number }> };
 /** Spare-part request; `noRequestFor` = "Zayavkasiz chiqim" by the workshop for that seller (already handed out → ISSUED). */
-export async function createZapchastOrder(actor: Actor, input: ZapchastInput, noRequestFor?: string): Promise<Result<{ id: string; number: number }>> {
+export async function createZapchastOrder(actor: Actor, input: ZapchastInput, noRequestFor?: string): Promise<Result<{ id: string; number: number; telegram: DeliveryStatus }>> {
   const ids = [...new Set(input.items.map(item => item.partId))];
   const parts = await getDb().sexPart.findMany({ where: { id: { in: ids }, active: true } });
   const byId = new Map(parts.map(part => [part.id, part]));
@@ -79,14 +80,15 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
       items: { create: input.items.map((item, index) => { const part = byId.get(item.partId)!; return { kind: "PART" as const, partId: part.id, title: [part.name, part.size].filter(Boolean).join(" "), qty: item.qty, baseUsd: part.basePriceUsd, order: index }; }) },
     },
   });
-  await afterCreate(actor, order.id, noRequestFor ? `${orderNumber(order.number)} zayavkasiz chiqimni yozdi` : `${orderNumber(order.number)} zapchast zayavkasini berdi`, { items: input.items.length, purpose: input.purpose, customer: customer.customerName, noRequest: !!noRequestFor });
-  return { ok: true, id: order.id, number: order.number };
+  const telegram = await afterCreate(actor, order.id, noRequestFor ? `${orderNumber(order.number)} zayavkasiz chiqimni yozdi` : `${orderNumber(order.number)} zapchast zayavkasini berdi`, { items: input.items.length, purpose: input.purpose, customer: customer.customerName, noRequest: !!noRequestFor });
+  return { ok: true, id: order.id, number: order.number, telegram };
 }
 
 async function afterCreate(actor: Actor, id: string, summary: string, after: Record<string, unknown>) {
   await writeAudit(actor, { action: "CREATE", entityType: "WORKSHOP_ORDER", entityId: id, summary, after });
-  await notifyCreated(id);
+  const telegram = await notifyCreated(id);
   revalidatePath("/admin/seh");
+  return telegram;
 }
 
 const ACTOR_FIELDS: Record<OrderAction, "accepted" | "started" | "issued" | "received"> = { accept: "accepted", start: "started", issue: "issued", receive: "received" };

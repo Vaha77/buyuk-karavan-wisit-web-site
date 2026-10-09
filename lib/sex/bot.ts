@@ -2,7 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { TelegramApiError, editMessageText, getMe, sendMessage, telegramErrorDetails, telegramWorkshopChatId } from "@/lib/telegram/client";
-import { LINK_PREFIX, LINK_TTL_MS, groupIssuedMessage, personalKeyboard, personalMessage, type BotOrder } from "./bot-text";
+import { LINK_PREFIX, LINK_TTL_MS, deliveryPlan, groupIssuedMessage, personalKeyboard, personalMessage, type BotOrder, type DeliveryStatus } from "./bot-text";
 import { sendToGroup } from "./group-send";
 import { queuePositions } from "./rules";
 
@@ -52,31 +52,33 @@ async function sendGroupReport(order: BotOrder) {
 }
 
 /** Sends the personal message to every linked WORKSHOP user that has none yet, and edits the existing ones. */
-async function deliver(orderId: string, queue?: Map<string, number>, sendMissing = false) {
+async function deliver(orderId: string, queue?: Map<string, number>, sendMissing = false): Promise<DeliveryStatus> {
   const order = await loadBotOrder(orderId);
-  if (!order) return;
+  if (!order) return "failed";
   let failure: unknown = null;
   const positions = queue ?? await queueOf();
+  const [recipients, messages] = order.noRequest ? [[], []] : await Promise.all([workshopRecipients(), getDb().workshopOrderMessage.findMany({ where: { orderId } })]);
+  const plan = deliveryPlan(order, recipients.map(user => user.telegramChatId!), messages.map(message => message.chatId), sendMissing);
   if (!order.noRequest) {
-    const [recipients, messages] = await Promise.all([workshopRecipients(), getDb().workshopOrderMessage.findMany({ where: { orderId } })]);
     const text = personalMessage(order, positions.get(order.id) ?? null), keyboard = personalKeyboard(order.id, order.status);
     for (const message of messages) {
       try { await editMessageText(message.chatId, message.messageId, text, keyboard); } catch (error) { if (!notModified(error)) failure = error; }
     }
-    // New orders reach every linked workshop user; later stages only update what was already sent (a resend also fills gaps).
-    if (order.status === "NEW" || (sendMissing && (order.status === "ACCEPTED" || order.status === "STARTED"))) for (const user of recipients.filter(item => !messages.some(message => message.chatId === item.telegramChatId))) {
+    for (const chatId of plan.personal) {
       try {
-        const sent = await sendMessage(user.telegramChatId!, text, keyboard);
-        await getDb().workshopOrderMessage.create({ data: { orderId, chatId: user.telegramChatId!, messageId: sent.message_id } });
+        const sent = await sendMessage(chatId, text, keyboard);
+        await getDb().workshopOrderMessage.create({ data: { orderId, chatId, messageId: sent.message_id } });
       } catch (error) { failure = error; }
     }
   }
-  try { await sendGroupReport(order); } catch (error) { failure = error; }
+  if (plan.group) { try { await sendGroupReport(order); } catch (error) { failure = error; } }
   await flag(orderId, failure);
+  return failure ? "failed" : !order.noRequest && !recipients.length ? "no-recipients" : "sent";
 }
 
-export async function notifyCreated(orderId: string) {
-  await deliver(orderId).catch(error => flag(orderId, error));
+/** New order → personal messages to linked WORKSHOP users (never the group). Tells the form how it went. */
+export async function notifyCreated(orderId: string): Promise<DeliveryStatus> {
+  return deliver(orderId).catch(async error => { await flag(orderId, error); return "failed" as const; });
 }
 /** After a status change; `requeue` also refreshes every "Navbatda" message (queue numbers moved). */
 export async function notifyChanged(orderId: string, requeue: boolean) {
@@ -87,9 +89,7 @@ export async function notifyChanged(orderId: string, requeue: boolean) {
 }
 /** "Telegramga yuborilmadi · qayta yuborish" on the site. */
 export async function resendOrder(orderId: string) {
-  await deliver(orderId, undefined, true);
-  const order = await getDb().workshopOrder.findUnique({ where: { id: orderId }, select: { telegramFailedAt: true } });
-  return !order?.telegramFailedAt;
+  return (await deliver(orderId, undefined, true)) === "sent";
 }
 
 // ---- Linking a Telegram account ("Telegram ulash") -------------------------------------------------

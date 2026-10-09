@@ -6,8 +6,10 @@ import { transitionInputError, transitionInputSchema } from "@/lib/sex/validatio
 import { confirmNoRequest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
 import { createLinkCode, resendOrder, sendPersonalTest } from "@/lib/sex/bot";
 import { revalidatePath } from "next/cache";
+import { getDb } from "@/lib/db";
+import type { DeliveryStatus } from "@/lib/sex/bot-text";
 
-export type SexActionResult = { ok: true; number?: number } | { ok: false; error: string };
+export type SexActionResult = { ok: true; number?: number; id?: string; telegram?: DeliveryStatus } | { ok: false; error: string };
 
 const common = {
   purpose: z.enum(["SHOP", "CLIENT"]),
@@ -26,7 +28,7 @@ export async function createAgregatOrderAction(raw: unknown): Promise<SexActionR
   const parsed = agregatSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
   const result = await createAgregatOrder(user, parsed.data);
-  return result.ok ? { ok: true, number: result.number } : result;
+  return result.ok ? { ok: true, number: result.number, id: result.id, telegram: result.telegram } : result;
 }
 
 export async function createZapchastOrderAction(raw: unknown): Promise<SexActionResult> {
@@ -35,7 +37,7 @@ export async function createZapchastOrderAction(raw: unknown): Promise<SexAction
   const parsed = zapchastSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
   const result = await createZapchastOrder(user, parsed.data);
-  return result.ok ? { ok: true, number: result.number } : result;
+  return result.ok ? { ok: true, number: result.number, id: result.id, telegram: result.telegram } : result;
 }
 
 /** "+ Zayavkasiz chiqim": only the workshop writes it, for a chosen seller. */
@@ -45,7 +47,7 @@ export async function createNoRequestAction(raw: unknown): Promise<SexActionResu
   const parsed = zapchastSchema.extend({ sellerId: z.string().min(1, "Sotuvchini tanlang.").max(40) }).safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
   const result = await createZapchastOrder(user, parsed.data, parsed.data.sellerId);
-  return result.ok ? { ok: true, number: result.number } : result;
+  return result.ok ? { ok: true, number: result.number, id: result.id, telegram: result.telegram } : result;
 }
 
 /** Status buttons; the role check for each step is in lib/sex/rules.ts (checkTransition). */
@@ -80,9 +82,12 @@ export async function sendMyTelegramTestAction(): Promise<SexActionResult> {
 /** "Telegramga yuborilmadi · qayta yuborish" (staff who manage orders). */
 export async function resendTelegramAction(id: unknown): Promise<SexActionResult> {
   const user = await requireSexUser();
-  if (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN") return { ok: false, error: "Faqat Super Admin yoki administrator qayta yuboradi." };
-  if (typeof id !== "string" || !id) return { ok: false, error: "So‘rov noto‘g‘ri." };
+  if (typeof id !== "string" || !id) return { ok: false, error: "Zakaz tanlanmagan." };
+  // Staff who manage orders, or the seller who placed this one (from the order form right after sending).
+  const order = await getDb().workshopOrder.findUnique({ where: { id }, select: { sellerId: true } });
+  if (!order) return { ok: false, error: "Zakaz topilmadi." };
+  if (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN" && order.sellerId !== user.id) return { ok: false, error: "Bu zakazni qayta yuborish huquqi yo‘q." };
   const delivered = await resendOrder(id);
   revalidatePath("/admin/seh");
-  return delivered ? { ok: true } : { ok: false, error: "Telegram yana xato berdi — bot sozlamalarini tekshiring." };
+  return delivered ? { ok: true, telegram: "sent" } : { ok: false, error: "Telegramga yana yuborilmadi — seh mas’uli botni ulaganini tekshiring." };
 }

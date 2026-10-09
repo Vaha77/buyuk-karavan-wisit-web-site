@@ -394,3 +394,35 @@ test("bug #0001: the site button payload for every stage passes validation; ACCE
   assert.match(actions, /transitionInputSchema\.safeParse\(raw\)/);
   assert.doesNotMatch(actions, /z\.enum\(\["accept"/, "no hand-written action list left");
 });
+
+test("new order → personal messages to linked WORKSHOP chats, never the group; the group only gets ISSUED", async () => {
+  const linked = ["1001", "1002"];
+  // Creating an agregat / zapchast order: DMs to every linked seh mas'uli, nothing to the group.
+  assert.deepEqual(bot.deliveryPlan({ status: "NEW", noRequest: false }, linked, []), { personal: ["1001", "1002"], group: false });
+  assert.deepEqual(bot.deliveryPlan({ status: "NEW", noRequest: false }, [], []), { personal: [], group: false }, "nobody linked: saved on the site only");
+  assert.deepEqual(bot.deliveryPlan({ status: "NEW", noRequest: false }, linked, ["1001"]), { personal: ["1002"], group: false }, "no duplicates");
+  // Later stages edit what was sent; only ISSUED reaches the group.
+  assert.deepEqual(bot.deliveryPlan({ status: "ACCEPTED", noRequest: false }, linked, ["1001"]), { personal: [], group: false });
+  assert.deepEqual(bot.deliveryPlan({ status: "STARTED", noRequest: false }, linked, ["1001"], true), { personal: ["1002"], group: false }, "qayta yuborish fills gaps");
+  assert.deepEqual(bot.deliveryPlan({ status: "ISSUED", noRequest: false }, linked, ["1001", "1002"]), { personal: [], group: true });
+  assert.deepEqual(bot.deliveryPlan({ status: "ISSUED", noRequest: true }, linked, []), { personal: [], group: true }, "zayavkasiz chiqim: only the final report");
+
+  // Mocked delivery following the plan: sendMessage is called for the DMs only.
+  const calls = [];
+  const send = async chatId => { calls.push(chatId); return { message_id: 1, chat: { id: Number(chatId) } }; };
+  const plan = bot.deliveryPlan({ status: "NEW", noRequest: false }, linked, []);
+  for (const chatId of plan.personal) await send(chatId);
+  if (plan.group) await send("-4313815181");
+  assert.deepEqual(calls, ["1001", "1002"]);
+  assert.ok(!calls.includes("-4313815181"), "the group is never messaged for a new order");
+
+  const delivery = await readFile(new URL("../lib/sex/bot.ts", import.meta.url), "utf8");
+  assert.match(delivery, /if \(plan\.group\) \{ try \{ await sendGroupReport\(order\); \}/, "the group report is sent only when the plan says so");
+  const form = await readFile(new URL("../components/admin/sex/new-order.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(form, /guruhiga yuborildi|seh guruhi/i);
+  assert.match(form, /✓ \$\{number\} seh mas’uliga yuborildi/);
+  assert.match(form, /"✓ Sehga yuborildi"/);
+  assert.match(form, /saytda saqlandi, lekin seh mas’uli Telegramga ulanmagan/);
+  assert.match(form, /"⚠️ Telegramga yuborilmadi"/);
+  assert.match(form, /Telegram · seh mas’uli/);
+});

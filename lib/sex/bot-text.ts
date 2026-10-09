@@ -97,3 +97,14 @@ export function todayText(started: number, limit: number, issued: number[]) {
 }
 export const orderTitle = (order: Pick<BotOrder, "type" | "qty" | "items">) => itemLines(order).join(", ");
 export const orderRecipient = recipient;
+
+/**
+ * Who gets what for an order right now: personal messages to linked WORKSHOP chats that have none yet (new orders, or a
+ * resend of an open one) and the group report only once it is ISSUED. A new order never goes to the group.
+ */
+export function deliveryPlan(order: Pick<BotOrder, "status" | "noRequest">, linkedChatIds: string[], alreadySent: string[], resend = false) {
+  const open = order.status === "NEW" || (resend && (order.status === "ACCEPTED" || order.status === "STARTED"));
+  const personal = !order.noRequest && open ? linkedChatIds.filter(chatId => !alreadySent.includes(chatId)) : [];
+  return { personal, group: order.status === "ISSUED" };
+}
+export type DeliveryStatus = "sent" | "no-recipients" | "failed";

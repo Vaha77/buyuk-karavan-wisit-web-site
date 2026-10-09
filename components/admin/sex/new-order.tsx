@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createAgregatOrderAction, createZapchastOrderAction } from "@/app/admin/(sex)/seh/actions";
+import { createAgregatOrderAction, createZapchastOrderAction, resendTelegramAction, type SexActionResult } from "@/app/admin/(sex)/seh/actions";
+import { personalKeyboard, personalMessage, type BotOrder } from "@/lib/sex/bot-text";
 import { formatSignedUsd, formatUsd } from "@/lib/prays/rules";
 import { ASSEMBLIES, quoteZborka, type Assembly, type ZborkaCatalog } from "@/lib/sex/zborka";
 import { orderNumber } from "@/lib/sex/rules";
@@ -13,6 +14,30 @@ type Option = { id: string; name: string };
 export type PartChoice = { id: string; label: string; basePriceUsd?: number | null };
 type Props = { type: "agregat" | "zapchast"; userName: string; catalog: ZborkaCatalog; parts: PartChoice[]; customers: Option[] };
 const today = () => new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);
+
+/** Outcome of "Buyurtma berish": saved on the site, then sent to the Seh mas’uli in Telegram (never to the group). */
+type SentResult = { ok: boolean; tone: "ok" | "warn" | "error"; text: string; orderId?: string; number?: string; retry?: boolean };
+const sentText = (number: string) => `✓ ${number} seh mas’uliga yuborildi`;
+function sentResult(response: SexActionResult, label: "Zakaz" | "Zayavka"): SentResult {
+  if (!response.ok) return { ok: false, tone: "error", text: response.error };
+  const number = orderNumber(response.number ?? 0), base = { ok: true, orderId: response.id, number };
+  if (response.telegram === "no-recipients") return { ...base, tone: "warn", text: `⚠️ ${label} saytda saqlandi, lekin seh mas’uli Telegramga ulanmagan` };
+  if (response.telegram === "failed") return { ...base, tone: "warn", text: "⚠️ Telegramga yuborilmadi", retry: true };
+  return { ...base, tone: "ok", text: sentText(number) };
+}
+/** Result line under the order card (yellow when Telegram did not get it); a failed delivery can be retried here. */
+function SentNote({ result, onResent }: { result: SentResult; onResent: (next: SentResult) => void }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const retry = () => startTransition(async () => {
+    setError("");
+    const response = await resendTelegramAction(result.orderId);
+    if (response.ok) onResent({ ...result, tone: "ok", text: sentText(result.number ?? ""), retry: false }); else setError(response.error);
+  });
+  return <p className={`sx-note ${result.tone === "ok" ? "is-ok" : result.tone === "warn" ? "" : "is-error"}`} role={result.tone === "error" ? "alert" : "status"}>
+    {result.text}{result.retry && result.orderId && <> · <button type="button" className="sx-btn is-sm" style={{ height: 26 }} disabled={pending} onClick={retry}><BusyLabel busy={pending} busyText="Yuborilmoqda…">qayta yuborish</BusyLabel></button></>}{error && <> ({error})</>}
+  </p>;
+}
 
 /** Price block of the order card: price-list price only (the workshop sells to the seller at prays price) and the change from the standard. */
 function PriceBlock({ base, delta }: { base: number; delta: number | null }) {
@@ -65,7 +90,7 @@ function AgregatForm({ userName, catalog, customers }: Props) {
   const [assembly, setAssembly] = useState<Assembly>("vz");
   const [liters, setLiters] = useState<string | null>(null), [hp, setHp] = useState<string | null>(null), [fn, setFn] = useState<string | null>(null);
   const [qty, setQty] = useState("1"), [dueDate, setDueDate] = useState(""), [purpose, setPurpose] = useState<"SHOP" | "CLIENT">("CLIENT"), [customer, setCustomer] = useState(""), [note, setNote] = useState("");
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [result, setResult] = useState<SentResult | null>(null);
   const available = (key: Assembly) => !!model?.[key];
   const effective = model && !available(assembly) ? ASSEMBLIES.find(item => available(item.key))?.key ?? assembly : assembly;
   const quote = useMemo(() => model && group ? quoteZborka(model, group, catalog.receivers, { assembly: effective, liters, hp, fn }) : null, [model, group, catalog.receivers, effective, liters, hp, fn]);
@@ -86,8 +111,8 @@ function AgregatForm({ userName, catalog, customers }: Props) {
   const submit = () => startTransition(async () => {
     setResult(null);
     const response = await createAgregatOrderAction({ groupKey: group.key, modelKey: model.key, assembly: effective, liters: effective === "k" ? null : liters, hp: effective === "vd" ? hp : null, fn: effective === "vz" ? fn : null, qty: qtyNumber, dueDate: dueDate || null, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, note: note.trim() || null });
-    if (!response.ok) { setResult({ ok: false, text: response.error }); return; }
-    setResult({ ok: true, text: `✓ ${orderNumber(response.number ?? 0)} seh guruhiga yuborildi` });
+    setResult(sentResult(response, "Zakaz"));
+    if (!response.ok) return;
     router.refresh();
   });
 
@@ -136,11 +161,11 @@ function AgregatForm({ userName, catalog, customers }: Props) {
         <div className="sx-summary-line"><span>Soni</span><b>{qtyNumber || "—"}</b></div>
         {price !== null && quote?.ok && <PriceBlock base={Math.round(price * Math.max(qtyNumber, 1) * 100) / 100} delta={quote.changes.length ? (quote.base - quote.standard) * Math.max(qtyNumber, 1) : null}/>}
         {quote && !quote.ok && <p className="sx-note is-error">{quote.error}</p>}
-        {result && <p className={`sx-note ${result.ok ? "is-ok" : "is-error"}`} role={result.ok ? "status" : "alert"}>{result.text}</p>}
-        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} disabled={pending || !ready} onClick={submit}><BusyLabel busy={pending}>{result?.ok ? "✓ Seh guruhiga yuborildi" : "Buyurtma berish"}</BusyLabel></button>
+        {result && <SentNote result={result} onResent={setResult}/>}
+        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} disabled={pending || !ready} onClick={submit}><BusyLabel busy={pending}>{result?.ok ? "✓ Sehga yuborildi" : "Buyurtma berish"}</BusyLabel></button>
         {result?.ok && <button type="button" className="sx-btn" onClick={() => { setResult(null); setNote(""); }}>Yana buyurtma berish</button>}
       </div>
-      <TelegramPreview head={`🔧 Yangi zakaz — ${userName}`} lines={[quote?.ok ? quote.title : `${group.brand} ${model.model}`, ...(quote?.ok ? quote.telegram.map(line => `• ${line}`) : []), `Soni: ${qtyNumber || 1}${dueDate ? ` · Muddat: ${dueDate.split("-").reverse().join(".")}` : ""}`, `Kimga: ${purpose === "CLIENT" ? `Mijoz — ${customer || "…"}` : "Magazinga (vitrina)"}`, ...(note ? [`Izoh: ${note}`] : [])]}/>
+      <TelegramPreview order={{ type: "AGREGAT", qty: qtyNumber || 1, purpose, customerName: customer || "…", dueDate: dueDate || null, note: note || null, sellerName: userName, details: quote?.ok ? quote.telegram : [], items: [{ title: quote?.ok ? quote.title : `${group.brand} ${model.model}`, qty: qtyNumber || 1 }] }}/>
     </div>
   </div>;
 }
@@ -149,7 +174,7 @@ function ZapchastForm({ userName, parts, customers }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [items, setItems] = useState([{ partId: "", qty: "1" }]), [purpose, setPurpose] = useState<"SHOP" | "CLIENT">("SHOP"), [customer, setCustomer] = useState(""), [dueDate, setDueDate] = useState(""), [note, setNote] = useState("");
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [result, setResult] = useState<SentResult | null>(null);
   const byId = new Map(parts.map(part => [part.id, part]));
   const ready = items.every(item => item.partId && Number(item.qty) >= 1) && (purpose === "SHOP" || customer.trim());
   const total = Math.round(items.reduce((sum, item) => sum + (byId.get(item.partId)?.basePriceUsd ?? 0) * (Number(item.qty) || 0), 0) * 100) / 100;
@@ -157,8 +182,8 @@ function ZapchastForm({ userName, parts, customers }: Props) {
   const submit = () => startTransition(async () => {
     setResult(null);
     const response = await createZapchastOrderAction({ items: items.map(item => ({ partId: item.partId, qty: Number(item.qty) })), purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, dueDate: dueDate || null, note: note.trim() || null });
-    if (!response.ok) { setResult({ ok: false, text: response.error }); return; }
-    setResult({ ok: true, text: `✓ Zayavka ${orderNumber(response.number ?? 0)} yuborildi — sehga ketdi` });
+    setResult(sentResult(response, "Zayavka"));
+    if (!response.ok) return;
     setItems([{ partId: "", qty: "1" }]); setNote("");
     router.refresh();
   });
@@ -174,22 +199,27 @@ function ZapchastForm({ userName, parts, customers }: Props) {
           <label className="sx-field">Izoh<input value={note} onChange={event => setNote(event.target.value)} maxLength={500}/></label>
         </div>
         {total > 0 && <PriceBlock base={total} delta={null}/>}
-        {result && <p className={`sx-note ${result.ok ? "is-ok" : "is-error"}`} role={result.ok ? "status" : "alert"}>{result.text}</p>}
-        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} style={{ height: 50, fontSize: 15 }} disabled={pending || !ready} onClick={submit}><BusyLabel busy={pending}>Zayavka yuborish</BusyLabel></button>
+        {result && <SentNote result={result} onResent={setResult}/>}
+        <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} style={{ height: 50, fontSize: 15 }} disabled={pending || !ready} onClick={submit}><BusyLabel busy={pending}>{result?.ok ? "✓ Sehga yuborildi" : "Zayavka yuborish"}</BusyLabel></button>
       </div>
     </div>
     <div className="sx-side">
-      <TelegramPreview head={`📦 Zayavka — ${userName}`} lines={[...items.filter(item => item.partId).map(item => `• ${byId.get(item.partId)?.label} — ${item.qty || 0}`), `Kimga: ${purpose === "CLIENT" ? `Mijoz — ${customer || "…"}` : "Magazinga (vitrina)"}`]} footer='Seh “Chiqib ketdi” bosgach shu xabar yangilanadi'/>
+      <TelegramPreview order={{ type: "ZAPCHAST", qty: 1, purpose, customerName: customer || "…", dueDate: dueDate || null, note: note || null, sellerName: userName, details: [], items: items.filter(item => item.partId).map(item => ({ title: byId.get(item.partId)?.label ?? "—", qty: Number(item.qty) || 0 })) }}/>
     </div>
   </div>;
 }
 
-function TelegramPreview({ head, lines, footer = "Seh narxni ko‘rmaydi — faqat nima yig‘ish kerakligini." }: { head: string; lines: string[]; footer?: string }) {
+type PreviewOrder = Pick<BotOrder, "type" | "qty" | "purpose" | "customerName" | "dueDate" | "note" | "sellerName" | "details" | "items">;
+/** The personal message the Seh mas’uli receives in the bot (same text builder as the bot), with its first button. */
+function TelegramPreview({ order }: { order: PreviewOrder }) {
+  const message: BotOrder = { ...order, id: "preview", number: 0, noRequest: false, status: "NEW", startedAt: null, issuedAt: null, issuedByName: null };
+  const [head, ...lines] = personalMessage(message, null).replace("#0000", "#…").split("\n");
+  const buttons = personalKeyboard("preview", "NEW").inline_keyboard.flat();
   return <div className="sx-tg">
-    <span className="sx-section-label" style={{ color: "#3E4A60" }}>Telegram · seh guruhi</span>
-    <div className="sx-tg-msg"><b style={{ color: "#1E4E8C" }}>BK Seh bot</b><b>{head}</b>{lines.map((line, index) => <span key={index}>{line}</span>)}
-      <div className="sx-tg-buttons"><span style={{ background: "#E2F3E8", color: "#1B6B43" }}>✅ Qabul qildim</span><span style={{ background: "#EAF1FB", color: "#1E4E8C" }}>🚚 Chiqib ketdi</span></div>
+    <span className="sx-section-label" style={{ color: "#3E4A60" }}>Telegram · seh mas’uli</span>
+    <div className="sx-tg-msg"><b style={{ color: "#1E4E8C" }}>BK bot · shaxsiy xabar</b><b>{head}</b>{lines.map((line, index) => <span key={index}>{line}</span>)}
+      <div className="sx-tg-buttons">{buttons.map(button => <span key={button.callback_data} style={{ background: "#E2F3E8", color: "#1B6B43" }}>{button.text}</span>)}</div>
     </div>
-    <span className="sx-muted" style={{ color: "#3E4A60" }}>{footer}</span>
+    <span className="sx-muted" style={{ color: "#3E4A60" }}>Seh mas’uli botda qabul qiladi → navbat → terishni boshlaydi → “Chiqib ketdi”. Guruhga faqat yakuniy “✅ Sehdan chiqdi” boradi. Narx ko‘rinmaydi.</span>
   </div>;
 }
