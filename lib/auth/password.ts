@@ -10,12 +10,6 @@ export async function hashPassword(password: string): Promise<string> {
   return hash(password, WORK_FACTOR);
 }
 
-/** The 8-character one-time password from "Parolni tiklash" (stored only as a hash; the user must replace it on login). */
-export async function hashTemporaryPassword(password: string): Promise<string> {
-  if (password.length < 8 || Buffer.byteLength(password, "utf8") > 72) throw new Error("Temporary password must be 8–72 UTF-8 bytes.");
-  return hash(password, WORK_FACTOR);
-}
-
 export async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
   return compare(password, passwordHash);
 }

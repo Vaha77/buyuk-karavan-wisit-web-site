@@ -2,7 +2,7 @@ import "server-only";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
-const DB_SCHEMA_REVISION = "20261012090000";
+const DB_SCHEMA_REVISION = "20261013090000";
 const globalForDb = globalThis as unknown as { buyukKaravanDb?: PrismaClient; buyukKaravanDbRevision?: string };
 
 /** Server-side only. The client is created on first use, not during a frontend build. */

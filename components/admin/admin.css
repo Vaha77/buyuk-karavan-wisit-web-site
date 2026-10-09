@@ -111,4 +111,8 @@
 .admin-forbidden{min-height:100dvh;display:grid;place-items:center;padding:24px 16px;background:#f7fbff;color:#102c47}.admin-forbidden-card{width:100%;max-width:440px;display:grid;justify-items:center;gap:10px;padding:36px 28px;text-align:center;background:#fff;border:1px solid #d7e6f8;border-radius:20px;box-shadow:0 18px 40px #1b4a7612}.admin-forbidden-icon{width:56px;height:56px;display:grid;place-items:center;border-radius:16px;background:#fff3f3;color:#b23b3b}.admin-forbidden-card small{font-weight:700;letter-spacing:.14em;color:#8aa0b5}.admin-forbidden-card h1{margin:0;font-size:22px;line-height:1.25}.admin-forbidden-card p{margin:0 0 10px;color:#5f7790;font-size:14px;line-height:1.55}
 .admin-user-button.is-outline{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #bdd2e8;background:#fff;color:#245487;font-weight:700;white-space:nowrap}
 .admin-user-button.is-outline:hover:not(:disabled){background:#f3f8fd;border-color:#8fb3d7}
-.admin-temp-password{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:12px;background:#f3f8fd;border:1px dashed #8fb3d7;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:24px;font-weight:700;letter-spacing:.12em;color:#102c47}
+.admin-user-button.is-icon{min-width:38px;padding:0 8px}
+.admin-password-cell{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px}
+.admin-password-cell code{min-width:110px;padding:7px 10px;border:1px solid #d7e6f8;border-radius:8px;background:#f7fbff;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;letter-spacing:.08em}
+.admin-password-cell input{height:38px;min-width:200px;border:1px solid #bdd2e8;border-radius:8px;padding:0 10px;font:inherit}
+.admin-password-cell .is-muted{color:#8aa0b5;font-style:italic}.admin-password-cell .is-ok{color:#1B6B43;font-weight:700}.admin-password-cell .is-error{color:#B42318;font-weight:700}

@@ -1,73 +1,99 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { register } from "node:module";
 import bcrypt from "bcryptjs";
 
 register("./ts-resolve.mjs", import.meta.url);
-const temp = await import("../lib/auth/temp-password.ts");
+const vault = await import("../lib/auth/password-vault.ts");
+const removal = await import("../lib/auth/user-removal.ts");
 const access = await import("../lib/auth/seller-access.ts");
 const read = path => readFile(new URL(path, import.meta.url), "utf8");
+const key = randomBytes(32).toString("base64");
 
-test("temporary password: 8 easy-to-read characters (no 0/O/o, 1/l/I), mixed, different every time", () => {
-  const seen = new Set();
-  for (let i = 0; i < 500; i++) {
-    const password = temp.generateTempPassword();
-    assert.equal(password.length, 8);
-    assert.match(password, /^[A-HJ-NP-Za-km-np-z2-9]{8}$/);
-    assert.doesNotMatch(password, /[0Oo1lI]/);
-    assert.ok(/[A-Z]/.test(password) && /[a-z]/.test(password) && /\d/.test(password), password);
-    seen.add(password);
-  }
-  assert.ok(seen.size > 495, "random");
-});
-
-test("the password is stored only as a bcrypt hash and never written in clear text (audit, logs)", async () => {
-  const password = temp.generateTempPassword();
+test("passwords: bcrypt hash for login + AES-256-GCM copy for 👁; no clear text stored", async () => {
+  const password = "Ikromjon-Seh-2026!";
   const hash = await bcrypt.hash(password, 4);
-  assert.notEqual(hash, password);
-  assert.ok(!hash.includes(password));
-  assert.equal(await bcrypt.compare(password, hash), true);
+  assert.ok(!hash.includes(password) && await bcrypt.compare(password, hash));
+  const k = vault.vaultKey(key);
+  const one = vault.encryptPassword(password, k), two = vault.encryptPassword(password, k);
+  assert.match(one, /^v1:[A-Za-z0-9+/=]+$/);
+  assert.ok(!one.includes(password) && !Buffer.from(one.slice(3), "base64").toString("utf8").includes(password), "ciphertext only");
+  assert.notEqual(one, two, "random IV every time");
+  assert.equal(vault.decryptPassword(one, k), password);
+  assert.throws(() => vault.decryptPassword(one, vault.vaultKey(randomBytes(32).toString("base64"))), "a different key cannot read it");
+  const bytes = Buffer.from(one.slice(3), "base64");
+  bytes[30] ^= 1;
+  assert.throws(() => vault.decryptPassword(`v1:${bytes.toString("base64")}`, k), "GCM rejects a changed value");
+  assert.equal(vault.vaultKey(""), null);
+  assert.equal(vault.vaultKey(Buffer.alloc(16).toString("base64")), null, "the key must be 32 bytes");
+  assert.equal(vault.encryptPassword(password, null), null, "no key → nothing kept for viewing");
+  assert.equal(vault.isVaultEnabled(""), false);
+  assert.equal(vault.isVaultEnabled(key), true);
+  const source = await read("../lib/auth/password-vault.ts");
+  assert.doesNotMatch(source, /[A-Za-z0-9+/]{43}=/, "the key is never in the code");
+  const example = await read("../.env.example");
+  assert.match(example, /^PASSWORD_VIEW_KEY=\r?$/m);
+});
 
-  const passwords = await read("../lib/auth/password.ts");
-  assert.match(passwords, /export async function hashTemporaryPassword[\s\S]*?return hash\(password, WORK_FACTOR\);/);
-  const actions = await read("../app/admin/(protected)/users/actions.ts");
-  const reset = actions.slice(actions.indexOf("export async function resetUserPasswordAction"), actions.indexOf("/** \"Telegramga yuborish\""));
-  assert.match(reset, /passwordHash:await hashTemporaryPassword\(password\),mustPasswordChange:true/);
-  assert.match(reset, /getDb\(\)\.adminSession\.deleteMany\(\{where:\{userId:user\.id\}\}\)/, "old sessions end");
-  const audit = reset.slice(reset.indexOf("writeAudit("), reset.indexOf("revalidatePath"));
-  assert.doesNotMatch(audit, /\bpassword\b/, "the audit entry has no password");
-  assert.doesNotMatch(actions, /console\.(log|info|warn|error)\([^)]*password/i, "no password in logs");
-  const send = actions.slice(actions.indexOf("export async function sendTempPasswordTelegramAction"));
-  assert.match(send, /verifyPassword\(password,user\.passwordHash\)/, "only the password that is currently set can be sent");
-  assert.doesNotMatch(send.slice(send.indexOf("writeAudit(")), /\$\{password\}/, "the Telegram audit entry has no password");
+test("every place a password is set also keeps the encrypted copy", async () => {
+  const users = await read("../app/admin/(protected)/users/actions.ts");
+  assert.match(users, /adminUser\.create\(\{data:\{name,phone,passwordHash,passwordEncrypted:encryptPassword\(password\)/, "create");
+  assert.match(users, /passwordHash:await hashPassword\(password\),passwordEncrypted:encryptPassword\(password\),mustPasswordChange:false/, "✏️ by the Super Admin");
+  const registration = await read("../app/admin/register/actions.ts");
+  assert.match(registration, /passwordHash:await hashPassword\(password\),passwordEncrypted:encryptPassword\(password\)/, "self-registration");
+  const own = await read("../app/admin/password/actions.ts");
+  assert.match(own, /passwordHash: await hashPassword\(password\), passwordEncrypted: encryptPassword\(password\)/, "the user's own change");
   const schema = await read("../prisma/schema.prisma");
-  assert.doesNotMatch(schema, /tempPassword|plainPassword/i, "no clear-text column");
+  assert.doesNotMatch(schema, /plainPassword|passwordPlain|tempPassword/i);
 });
 
-test("only the Super Admin resets passwords or sends them to Telegram", async () => {
-  const actions = await read("../app/admin/(protected)/users/actions.ts");
-  assert.match(actions, /export async function resetUserPasswordAction\(userId:string\):Promise<PasswordResetResult>\{const actor=await requireRole\("SUPER_ADMIN"\);/);
-  assert.match(actions, /export async function sendTempPasswordTelegramAction\(userId:string,password:string\)[^\n]*?\{const actor=await requireRole\("SUPER_ADMIN"\);/);
-  assert.match(actions, /if\(userId===actor\.id\)return\{ok:false/, "not your own password from this list");
+test("only the Super Admin views a password, on click only; every view is audited without the password; never logged", async () => {
+  const users = await read("../app/admin/(protected)/users/actions.ts");
+  for (const name of ["revealPasswordAction", "setUserPasswordAction", "userRemovalPreviewAction", "removeUserAction", "restoreUserAction"]) {
+    assert.match(users, new RegExp(`export async function ${name}\\([^\\n]*?\\{const actor=await requireRole\\("SUPER_ADMIN"\\);`), name);
+  }
+  const reveal = users.slice(users.indexOf("export async function revealPasswordAction"), users.indexOf("// ---- Delete / archive"));
+  assert.match(reveal, /if\(!isVaultEnabled\(\)\)return\{ok:false,error:"Vercel’da PASSWORD_VIEW_KEY o‘rnating\."\}/);
+  assert.match(reveal, /action:"PASSWORD_VIEW"/);
+  const audit = reveal.slice(reveal.indexOf("writeAudit("), reveal.indexOf("return{ok:true,password}"));
+  assert.doesNotMatch(audit, /\bpassword\b/, "the audit entry has no password");
+  assert.doesNotMatch(users, /console\.(log|info|warn|error)/, "nothing from these actions goes to the log");
   const page = await read("../app/admin/(protected)/users/page.tsx");
-  assert.match(page, /await requireRole\("SUPER_ADMIN"\)/);
+  assert.match(page, /passwordStored: !!passwordEncrypted/, "the page sends only “stored or not”, not the ciphertext");
+  const cell = await read("../app/admin/(protected)/users/password-cell.tsx");
+  assert.match(cell, /const HIDE_AFTER_MS = 30_000;/);
+  assert.match(cell, /revealPasswordAction\(userId\)/, "fetched from the server on 👁");
+  assert.match(cell, /Parol saqlanmagan · ✏️ yangisini o‘rnating/);
 });
 
-test("a temporary password only opens “Yangi parol o‘rnating” until a new one is set", async () => {
-  const guard = await read("../lib/auth/require-admin.ts");
-  assert.match(guard, /if \(session\.user\.mustPasswordChange\) \{\s*if \(\(await headers\(\)\)\.has\("next-action"\)\) forbidden\(\);\s*redirect\(PASSWORD_PAGE\);/);
-  const login = await read("../app/admin/login/actions.ts");
-  assert.match(login, /redirect\(user\.mustPasswordChange \? PASSWORD_PAGE : homeFor\(user\.role\)\)/);
-  const request = { method: "GET", headers: { has: () => false } };
-  for (const role of ["SELLER", "WORKSHOP", "SUPER_ADMIN"]) assert.equal(access.roleAccess(role, "/admin/password", request), "allow", role);
-  assert.equal(access.PASSWORD_PAGE, "/admin/password");
-  const change = await read("../app/admin/password/actions.ts");
-  assert.match(change, /if \(password\.length < 12/);
-  assert.match(change, /passwordHash: await hashPassword\(password\), mustPasswordChange: false/);
-  assert.match(change, /db\.adminSession\.deleteMany\(\{ where: \{ userId: user\.id \} \}\)/);
+test("delete vs archive: no links → deleted; links → archived (cannot log in, hidden, restorable); never yourself or the last Super Admin", async () => {
+  const none = { orders: 0, calculations: 0, customers: 0, sales: 0, other: 0, activity: 0 };
+  assert.equal(removal.removalPlan(none).mode, "delete");
+  const busy = removal.removalPlan({ ...none, orders: 12, activity: 40 });
+  assert.equal(busy.mode, "archive");
+  assert.match(busy.text, /^Bu foydalanuvchida 12 ta zakaz, 40 ta faoliyat yozuvi bor — arxivlanadi/);
+  assert.deepEqual(removal.checkRemoval("me", { id: "me", role: "ADMIN" }, 3), { ok: false, error: "O‘zingizni o‘chira olmaysiz." });
+  assert.deepEqual(removal.checkRemoval("me", { id: "boss", role: "SUPER_ADMIN" }, 0), { ok: false, error: "Oxirgi Super Adminni o‘chirib bo‘lmaydi." });
+  assert.deepEqual(removal.checkRemoval("me", { id: "boss", role: "SUPER_ADMIN" }, 1), { ok: true });
+  assert.deepEqual(removal.checkRemoval("me", { id: "seller", role: "SELLER" }, 0), { ok: true });
+
+  const users = await read("../app/admin/(protected)/users/actions.ts");
+  assert.match(users, /if\(plan\.mode==="delete"\)\{await db\.\$transaction\(\[db\.adminSession\.deleteMany\(\{where:\{userId\}\}\),db\.adminUser\.delete\(\{where:\{id:userId\}\}\)\]\)/);
+  assert.match(users, /data:\{archivedAt:new Date\(\),isActive:false,telegramChatId:null,telegramLinkCode:null,telegramLinkExpiresAt:null,salesPersonId:null\}\}\),db\.adminSession\.deleteMany\(\{where:\{userId\}\}\)/, "archived: no login, no Telegram, no sessions");
+  assert.match(users, /role:"SUPER_ADMIN",isActive:true,archivedAt:null,NOT:\{id:user\.id\}/, "counts the other active Super Admins");
+  const page = await read("../app/admin/(protected)/users/page.tsx");
+  assert.match(page, /where: \{ archivedAt: archive \? \{ not: null \} : null \}/, "hidden from the list, shown under “Arxiv”");
   const session = await read("../lib/auth/session.ts");
-  assert.match(session, /!session\.user\.mustPasswordChange \? session : null/, "API routes refuse it too");
-  const loginPage = await read("../app/admin/login/page.tsx");
-  assert.match(loginPage, /Parolni unutdingizmi\? Admin bilan bog‘laning\./);
+  assert.match(session, /!session\.user\.isActive/, "an archived (inactive) user's session is refused");
+});
+
+test("a forced password change still only opens “Yangi parol o‘rnating”", async () => {
+  const guard = await read("../lib/auth/require-admin.ts");
+  assert.match(guard, /if \(session\.user\.mustPasswordChange\) \{/);
+  const request = { method: "GET", headers: { has: () => false } };
+  for (const role of ["SELLER", "WORKSHOP"]) assert.equal(access.roleAccess(role, "/admin/password", request), "allow", role);
+  const login = await read("../app/admin/login/page.tsx");
+  assert.match(login, /Parolni unutdingizmi\? Admin bilan bog‘laning\./);
 });

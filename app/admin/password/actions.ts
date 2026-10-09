@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { writeAudit } from "@/lib/audit/service";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { encryptPassword } from "@/lib/auth/password-vault";
 import { homeFor } from "@/lib/auth/seller-access";
 import { createAdminSession, getAdminSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
@@ -21,7 +22,7 @@ export async function setNewPasswordAction(_state: NewPasswordState, form: FormD
   if (await verifyPassword(password, user.passwordHash)) return { error: "Vaqtinchalik paroldan boshqa parol tanlang." };
   const db = getDb();
   await db.$transaction([
-    db.adminUser.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(password), mustPasswordChange: false } }),
+    db.adminUser.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(password), passwordEncrypted: encryptPassword(password), mustPasswordChange: false } }),
     db.adminSession.deleteMany({ where: { userId: user.id } }),
   ]);
   await createAdminSession(user.id);
