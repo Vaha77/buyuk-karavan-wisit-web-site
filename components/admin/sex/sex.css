@@ -85,6 +85,7 @@
 .sx-table tr.is-green td{background:#F1FAF4}
 .sx-table tr.is-new td{background:#F5F9FF}
 .sx-table tr.is-late td{background:#FFF5F4}
+.sx-table tr[data-focus] td{background:#FFF7D6;box-shadow:inset 0 2px 0 #E9C46A,inset 0 -2px 0 #E9C46A}.sx-table tr[id]{scroll-margin-top:96px}
 .sx-price-box{display:inline-block;padding:6px 10px;border-radius:8px;border:1px solid var(--sx-chip);font-weight:800;min-width:70px;text-align:right}
 .sx-row-actions{display:flex;gap:6px;justify-content:flex-end}
 

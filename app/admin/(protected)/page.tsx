@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { ArrowDownRight, ArrowUpRight, CheckCircle2, Clock3, MessageSquare, Plus, TrendingUp } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getUsdUzsRate } from "@/lib/currency/cbu";
@@ -15,6 +16,8 @@ import { RangeSelect, SourceIcon } from "@/components/admin/bklead/bits";
 import { WeeklyLines } from "@/components/admin/bklead/charts";
 import { RegionMap } from "@/components/admin/bklead/region-map";
 import { CustomerRanking } from "@/components/admin/bklead/customer-ranking";
+import { WorkshopSection } from "@/components/admin/bklead/workshop-section";
+import { WorkshopSectionSkeleton } from "@/components/admin/skeletons";
 
 export const metadata: Metadata = { title: "BKLead Dashboard — Admin | BUYUK KARAVAN" };
 type Search = { range?: string; from?: string; to?: string; cyear?: string };
@@ -52,6 +55,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const maxClicks = Math.max(1, ...linkRows.map(row => row.clicks));
   const now = new Date();
   const query = periodQuery(period);
+  const boss = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
 
   return <div className="bk">
     <div className="bk-head">
@@ -139,6 +143,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       </section>
     </div>
 
-    <CustomerRanking data={customerYear} now={today} canEdit={user.role === "SUPER_ADMIN" || user.role === "ADMIN"} uzsPerUsd={rate ? Number(rate.rate) : null} yearHref={year => { const next = new URLSearchParams(query.replace(/^\?/, "")); if (year !== today.year) next.set("cyear", String(year)); const text = next.toString(); return `/admin${text ? `?${text}` : ""}`; }}/>
+    <CustomerRanking data={customerYear} now={today} canEdit={boss} uzsPerUsd={rate ? Number(rate.rate) : null} yearHref={year => { const next = new URLSearchParams(query.replace(/^\?/, "")); if (year !== today.year) next.set("cyear", String(year)); const text = next.toString(); return `/admin${text ? `?${text}` : ""}`; }}/>
+
+    {boss && <Suspense key={query} fallback={<WorkshopSectionSkeleton/>}><WorkshopSection period={period}/></Suspense>}
   </div>;
 }

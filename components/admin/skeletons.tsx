@@ -36,6 +36,17 @@ export function GenericSkeleton() {
   </Page>;
 }
 
+/** Dashboard "Seh zakazlari" block while its queries run (the rest of the dashboard is already shown). */
+export function WorkshopSectionSkeleton() {
+  return <div className="sk-page" role="status" aria-label="Seh zakazlari yuklanmoqda">
+    <div style={{ display: "grid", gap: 8 }}><Sk w={180} h={20}/><Sk w="min(420px, 90%)" h={13}/></div>
+    <Stats count={4}/>
+    <div className="sk-split"><div className="sk-main"><Card style={{ height: 300 }}><Sk w={160} h={16}/><Sk h={230}/></Card></div><div className="sk-side"><Card style={{ height: 300 }}><Sk w={150} h={16}/>{times(6).map(index => <Sk key={index} w={`${92 - index * 12}%`} h={14}/>)}</Card></div></div>
+    <div className="sk-split"><div className="sk-main"><Card><Sk w={180} h={16}/><TableRows rows={4} columns={4}/></Card></div><div className="sk-side"><Card><Sk w={130} h={16}/>{times(4).map(index => <Sk key={index} h={34}/>)}</Card></div></div>
+    <span className="sr-only">Yuklanmoqda…</span>
+  </div>;
+}
+
 /** /admin/sex: heading, four counters, orders table. */
 export function SexListSkeleton() {
   return <Page label="Seh zakazlari yuklanmoqda"><Heading actions={3}/><Stats count={4} height={78}/>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/admin/bklead/dialog";
 import { cancelOrderAction, confirmNoRequestAction, createNoRequestAction, resendTelegramAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
@@ -33,6 +33,13 @@ export function OrdersBoard({ cancelledView = false, role, userName, rows, month
   const [noRequestOpen, setNoRequestOpen] = useState(false);
   const [cancelling, setCancelling] = useState<OrderRow | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  // "/admin/seh#order-<id>" (dashboard "Diqqat talab"): scroll to that order and highlight it.
+  useEffect(() => {
+    const row = window.location.hash.startsWith("#order-") ? document.getElementById(window.location.hash.slice(1)) : null;
+    if (!row) return;
+    row.dataset.focus = "1";
+    row.scrollIntoView({ block: "center" });
+  }, []);
   const showView = (cancelled: boolean) => { startNavigationProgress(); startMonth(() => router.push(`/admin/seh?month=${month.key}${cancelled ? "&status=cancelled" : ""}`)); };
   const boss = role === "SUPER_ADMIN", workshop = role === "WORKSHOP", seller = role === "SELLER", staff = !workshop && !seller;
   const run = (task: () => Promise<{ ok: boolean; error?: string }>, after?: () => void, key: string | null = null) => {
@@ -79,7 +86,7 @@ export function OrdersBoard({ cancelledView = false, role, userName, rows, month
         <thead><tr><th>№</th><th>Sana</th><th>Turi</th><th>Mahsulot</th><th>Zayavka beruvchi</th><th>Kimga</th><th>Jarayon</th><th>Holat</th><th>Amal</th></tr></thead>
         <tbody>{rows.map(row => {
           const action = actionFor(role, row.status);
-          return <tr key={row.id} className={row.overdue ? "is-late" : row.isNew ? "is-new" : ""}>
+          return <tr key={row.id} id={`order-${row.id}`} className={row.overdue ? "is-late" : row.isNew ? "is-new" : ""}>
             <td><b>{row.number}</b></td>
             <td style={{ color: "#3E4A60", whiteSpace: "nowrap" }}>{row.day}</td>
             <td><span className="sx-tag">{row.type === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.noRequest && <><br/><span className="sx-pill is-sm is-orange" style={{ marginTop: 4 }}>Zayavkasiz</span></>}</td>

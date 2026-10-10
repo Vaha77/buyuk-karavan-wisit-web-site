@@ -271,3 +271,10 @@
 @media(max-width:1180px){.sl-regions-grid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:760px){.sl-hero{grid-template-columns:minmax(0,1fr);padding:18px}.sl-hero-circle{width:62px;height:62px}.sl-hero-circle b{font-size:26px}.sl-hero-text strong{font-size:18px}.sl-ranking li{grid-template-columns:22px minmax(0,1fr) auto;gap:6px 10px}.sl-ranking-track{grid-column:2/-1;grid-row:2}.sl-ranking em{grid-column:3;grid-row:1}.sl-zone{grid-column:2/-1;grid-row:3;justify-self:start}}
 @media(max-width:420px){.sl-region-cards{grid-template-columns:minmax(0,1fr)}}
+
+/* Dashboard "Seh zakazlari" section */
+.bk-section{display:grid;gap:16px;min-width:0;padding-top:8px}
+.bk-section-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px}.bk-section-head>div{display:grid;gap:3px;min-width:0}.bk-section-head h2{font-size:20px}
+.bk-delta.is-red,.bk-badge.is-red{background:#FDECEA;color:#A41F15}
+.bk-alert-icon{width:30px;height:30px;display:grid;place-items:center;flex:none;border-radius:9px;background:#FDECEA;color:#A41F15}
+.bk-list .bk-grow .bk-alert-reasons{display:flex;flex-wrap:wrap;gap:4px 10px;white-space:normal}.bk-alert-reasons em{font-style:normal;color:#A41F15;font-weight:700}
