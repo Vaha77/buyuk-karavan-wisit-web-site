@@ -79,7 +79,7 @@ export async function handleSehMessage(message: TelegramMessage) {
     return true;
   }
   const open = await getDb().workshopOrder.findMany({
-    where: { status: { in: ["ACCEPTED", "STARTED"] } }, orderBy: { acceptedAt: "asc" },
+    where: { status: { in: ["ACCEPTED", "STARTED"] }, isTest: false }, orderBy: { acceptedAt: "asc" },
     select: { id: true, number: true, type: true, qty: true, purpose: true, customerName: true, status: true, acceptedAt: true, startedAt: true, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } },
   });
   const positions = queuePositions(open), now = new Date();

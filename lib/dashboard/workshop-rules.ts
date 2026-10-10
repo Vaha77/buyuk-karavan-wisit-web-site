@@ -42,3 +42,11 @@ export function attentionReasons(order: { status: string; createdAt: Date; dueDa
   if (order.status === "NEW" && now.getTime() - order.createdAt.getTime() > UNACCEPTED_ALERT_MS) reasons.push("unaccepted");
   return reasons;
 }
+
+/** Change vs the previous period as a percent: "+25%", "−10%", "0%"; "yangi" when the previous period had none. */
+export function percentChange(current: number, previous: number): { text: string; direction: "up" | "down" | "flat" | "new" } {
+  if (!previous) return current ? { text: "yangi", direction: "new" } : { text: "0%", direction: "flat" };
+  const value = Math.round(((current - previous) / previous) * 100);
+  if (!value) return { text: "0%", direction: "flat" };
+  return value > 0 ? { text: `+${value}%`, direction: "up" } : { text: `−${Math.abs(value)}%`, direction: "down" };
+}

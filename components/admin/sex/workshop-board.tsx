@@ -88,7 +88,7 @@ export function WorkshopBoard({ telegramLinked, userName, rows, started, limit, 
               <div className="sx-receipt-head">
                 <div><span className="sx-mono sx-receipt-brand">BUYUK KARAVAN · SEH</span><b className="sx-mono sx-receipt-no">{row.number}</b></div>
                 {section.status === "ACCEPTED" && row.queue && <span className="sx-queue"><b>{row.queue}</b><span>NAVBAT</span></span>}
-                <span className="sx-tag">{row.type === "AGREGAT" ? "Agregat" : "Zapchast"}</span>
+                <span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.isTest && <span className="sx-pill is-sm is-grey">Test</span>}
               </div>
               <hr className="sx-dash"/>
               <div className="sx-mono sx-receipt-items">{items.map(item => <div key={item.id}><span>{item.title}</span><b>×{item.qty}</b></div>)}</div>

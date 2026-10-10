@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Factory, PackageCheck, Timer, Wrench } from "lucide-react";
-import { delta } from "@/lib/dashboard/rules";
-import { formatDayMonth, formatInt, formatPercent, formatUsd } from "@/lib/dashboard/format";
+import { formatDayMonth, formatInt, formatUsd } from "@/lib/dashboard/format";
 import { getWorkshopDashboard } from "@/lib/dashboard/workshop-queries";
-import { formatPrepTime } from "@/lib/dashboard/workshop-rules";
+import { formatPrepTime, percentChange } from "@/lib/dashboard/workshop-rules";
 import { orderNumber, STATUS_LABEL, when } from "@/lib/sex/rules";
 import { WeeklyLines } from "./charts";
 
@@ -15,23 +14,21 @@ const orderHref = (id: string) => `/admin/seh#order-${id}`;
 export async function WorkshopSection({ period }: { period: Period }) {
   const now = new Date();
   const { kpis, weekly, sellers, products, attention } = await getWorkshopDashboard(period, now);
-  const change = delta(kpis.total, kpis.prev);
-  const DeltaIcon = change.direction === "down" ? ArrowDownRight : ArrowUpRight;
+  const change = percentChange(kpis.total, kpis.prev);
+  const DeltaIcon = change.direction === "down" ? ArrowDownRight : change.direction === "flat" ? null : ArrowUpRight;
   const inShop = kpis.now.new + kpis.now.accepted + kpis.now.started;
   const maxQty = Math.max(1, ...products.map(product => product.qty));
 
   return <section className="bk-section" aria-labelledby="bk-sex-title">
     <div className="bk-section-head">
-      <div><h2 id="bk-sex-title">Seh zakazlari</h2><span className="bk-muted">Agregat va zapchast zakazlari · {period.label.toLocaleLowerCase("uz-UZ")} · bekor qilinganlar hisobga olinmagan</span></div>
+      <div><h2 id="bk-sex-title">Seh zakazlari</h2><span className="bk-muted">Agregat va zapchast zakazlari · {period.label.toLocaleLowerCase("uz-UZ")} · bekor qilingan va test zakazlar hisobga olinmagan</span></div>
       <Link className="bk-btn" href="/admin/seh">Seh zakazlari →</Link>
     </div>
 
     <div className="bk-grid-4">
       <div className="bk-card bk-kpi"><div className="bk-kpi-top">Jami zakazlar<span className="bk-kpi-icon"><Wrench size={16}/></span></div><strong>{formatInt(kpis.total)}</strong>
-        <span className="bk-kpi-foot">
-          {change.direction === "flat" ? <span className="bk-delta">0</span> : <span className={`bk-delta${change.direction === "down" ? " is-down" : ""}`}><DeltaIcon size={12}/>{change.relative ? formatPercent(change.value, 0) : formatInt(kpis.total - kpis.prev)}</span>}
-          Agregat {formatInt(kpis.agregat)} · Zapchast {formatInt(kpis.zapchast)}
-        </span></div>
+        <span className="bk-kpi-foot"><span className={`bk-delta${change.direction === "down" ? " is-down" : ""}`}>{DeltaIcon && <DeltaIcon size={12}/>}{change.text}</span>oldingi davrga nisbatan</span>
+        <span className="bk-kpi-foot">Agregat {formatInt(kpis.agregat)} · Zapchast {formatInt(kpis.zapchast)}</span></div>
       <div className="bk-card bk-kpi"><div className="bk-kpi-top">Hozir sehda<span className="bk-kpi-icon is-orange"><Factory size={16}/></span></div><strong>{formatInt(inShop)}</strong>
         <span className="bk-kpi-foot">Yangi {formatInt(kpis.now.new)} · Navbatda {formatInt(kpis.now.accepted)} · Terilmoqda {formatInt(kpis.now.started)}</span></div>
       <div className="bk-card bk-kpi"><div className="bk-kpi-top">Chiqib ketdi<span className="bk-kpi-icon"><PackageCheck size={16}/></span></div><strong>{formatInt(kpis.issued)}</strong>

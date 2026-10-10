@@ -1139,6 +1139,8 @@ model WorkshopOrder {
   cancelledById     String?
   cancelledAt       DateTime?
   cancelReason      String?              @db.VarChar(300)
+  // "Test deb belgilash" (SUPER_ADMIN): kept in the list, left out of statistics, the Excel export and queue numbers.
+  isTest            Boolean              @default(false)
   // One-time id from the order form: the same submit never creates two orders.
   requestId         String?              @unique @db.VarChar(64)
   // Prices at order time (base, markup, sale); later price-list changes never touch it.

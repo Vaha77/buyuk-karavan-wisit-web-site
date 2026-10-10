@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/admin/bklead/dialog";
-import { cancelOrderAction, confirmNoRequestAction, createNoRequestAction, resendTelegramAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
+import { cancelOrderAction, confirmNoRequestAction, createNoRequestAction, resendTelegramAction, setOrderTestAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
 import type { OrderRow } from "@/lib/sex/queries";
 import { ACTION_LABEL, STATUS_LABEL, STATUS_TONE, actionFor, type OrderAction } from "@/lib/sex/rules";
 import { formatUsd } from "@/lib/prays/rules";
@@ -13,7 +13,7 @@ import { BusyLabel, DownloadButton, LinkButton, PendingArea, startNavigationProg
 type Option = { id: string; name: string };
 type PartOption = { id: string; label: string };
 type Props = {
-  cancelledView?: boolean;
+  view?: "active" | "cancelled" | "test";
   role: string; userName: string; rows: OrderRow[]; month: { key: string; label: string }; months: Array<{ key: string; label: string }>;
   parts: PartOption[]; sellers: Option[]; customers: Option[];
 };
@@ -21,7 +21,7 @@ type Props = {
 const WAIT_TEXT = { NEW: "Seh qabul qilishi kutilmoqda", ACCEPTED: "Navbatda · terish kutilmoqda", STARTED: "Sehda terilmoqda", ISSUED: "Krimga olish kutilmoqda", RECEIVED: "✓ Yopildi", CANCELLED: "Bekor qilingan" } as const;
 const queueLabel = (row: OrderRow) => (row.queue ? `${STATUS_LABEL.ACCEPTED} (${row.queue}-navbat)` : STATUS_LABEL.ACCEPTED);
 
-export function OrdersBoard({ cancelledView = false, role, userName, rows, month, months, parts, sellers, customers }: Props) {
+export function OrdersBoard({ view = "active", role, userName, rows, month, months, parts, sellers, customers }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   // Month change: the old table stays visible, dimmed, until the new month is rendered.
@@ -40,7 +40,8 @@ export function OrdersBoard({ cancelledView = false, role, userName, rows, month
     row.dataset.focus = "1";
     row.scrollIntoView({ block: "center" });
   }, []);
-  const showView = (cancelled: boolean) => { startNavigationProgress(); startMonth(() => router.push(`/admin/seh?month=${month.key}${cancelled ? "&status=cancelled" : ""}`)); };
+  const cancelledView = view === "cancelled";
+  const showView = (next: "active" | "cancelled" | "test") => { startNavigationProgress(); startMonth(() => router.push(`/admin/seh?month=${month.key}${next === "active" ? "" : `&status=${next}`}`)); };
   const boss = role === "SUPER_ADMIN", workshop = role === "WORKSHOP", seller = role === "SELLER", staff = !workshop && !seller;
   const run = (task: () => Promise<{ ok: boolean; error?: string }>, after?: () => void, key: string | null = null) => {
     setBusyKey(key);
@@ -75,10 +76,12 @@ export function OrdersBoard({ cancelledView = false, role, userName, rows, month
     </div>
 
     {!workshop && <div className="sx-chips" aria-label="Zakazlar">
-      <button type="button" className="sx-chip" aria-pressed={!cancelledView} disabled={monthPending} onClick={() => showView(false)}>Faol</button>
-      <button type="button" className="sx-chip" aria-pressed={cancelledView} disabled={monthPending} onClick={() => showView(true)}>Bekor qilingan</button>
+      <button type="button" className="sx-chip" aria-pressed={view === "active"} disabled={monthPending} onClick={() => showView("active")}>Faol</button>
+      <button type="button" className="sx-chip" aria-pressed={cancelledView} disabled={monthPending} onClick={() => showView("cancelled")}>Bekor qilingan</button>
+      {staff && <button type="button" className="sx-chip" aria-pressed={view === "test"} disabled={monthPending} onClick={() => showView("test")}>Test</button>}
     </div>}
-    {!seller && !cancelledView && <div className="sx-stats">{stats.map(stat => <div key={stat.k} className={`sx-stat is-flat ${stat.tone}`}><span>{stat.k}</span><strong>{stat.v}</strong></div>)}</div>}
+    {view === "test" && <p className="sx-note">Test zakazlari statistika, Excel eksport va navbat raqamlariga kirmaydi.</p>}
+    {!seller && view === "active" && <div className="sx-stats">{stats.map(stat => <div key={stat.k} className={`sx-stat is-flat ${stat.tone}`}><span>{stat.k}</span><strong>{stat.v}</strong></div>)}</div>}
     {error && <p className="sx-note is-error" role="alert">{error}</p>}
 
     <PendingArea pending={monthPending}><div className="sx-card">
@@ -89,7 +92,7 @@ export function OrdersBoard({ cancelledView = false, role, userName, rows, month
           return <tr key={row.id} id={`order-${row.id}`} className={row.overdue ? "is-late" : row.isNew ? "is-new" : ""}>
             <td><b>{row.number}</b></td>
             <td style={{ color: "#3E4A60", whiteSpace: "nowrap" }}>{row.day}</td>
-            <td><span className="sx-tag">{row.type === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.noRequest && <><br/><span className="sx-pill is-sm is-orange" style={{ marginTop: 4 }}>Zayavkasiz</span></>}</td>
+            <td><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.isTest && <><br/><span className="sx-pill is-sm is-grey" style={{ marginTop: 4 }}>Test</span></>}{row.noRequest && <><br/><span className="sx-pill is-sm is-orange" style={{ marginTop: 4 }}>Zayavkasiz</span></>}</td>
             <td style={{ minWidth: 220, fontWeight: 600, lineHeight: 1.35 }}>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices}/>}</td>
             <td><div style={{ display: "grid", gap: 2 }}><b style={{ fontWeight: 600 }}>{row.sellerName}</b><span className="sx-muted">{row.sellerAt}</span></div></td>
             <td style={{ fontWeight: 700, color: row.purpose === "SHOP" ? "#3E4A60" : "#1E4E8C" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</td>
@@ -102,6 +105,7 @@ export function OrdersBoard({ cancelledView = false, role, userName, rows, month
               {row.status === "STARTED" && row.startedAt && <WorkingStatus acceptedAt={row.startedAt} dueDate={row.dueDate}/>}
               {row.cancelled && <div className="sx-muted" style={{ marginTop: 4 }}>{row.cancelled.by ?? "—"} · {row.cancelled.at}{row.cancelled.reason ? <><br/>Sabab: {row.cancelled.reason}</> : null}</div>}
               {row.canCancel && <div style={{ marginTop: 6 }}><button type="button" className="sx-btn is-sm is-danger-ghost" disabled={pending} onClick={() => { setError(""); setCancelReason(""); setCancelling(row); }}>Bekor qilish</button></div>}
+              {row.canMarkTest && <div style={{ marginTop: 6 }}><button type="button" className="sx-btn is-sm" disabled={pending} onClick={() => run(() => setOrderTestAction({ id: row.id, isTest: !row.isTest }), undefined, `${row.id}:test`)}><BusyLabel busy={isBusy(`${row.id}:test`)}>{row.isTest ? "Testdan olib tashlash" : "Test deb belgilash"}</BusyLabel></button></div>}
               {row.telegramFailed && (boss || role === "ADMIN") && <div className="sx-tg-fail">Telegramga yuborilmadi · <button type="button" className="sx-btn is-sm is-danger-ghost" disabled={pending} onClick={() => run(() => resendTelegramAction(row.id), undefined, `${row.id}:resend`)}><BusyLabel busy={isBusy(`${row.id}:resend`)} busyText="Yuborilmoqda…">qayta yuborish</BusyLabel></button></div>}
             </td>
           </tr>;

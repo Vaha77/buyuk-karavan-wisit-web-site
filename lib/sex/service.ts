@@ -4,7 +4,7 @@ import { Prisma, type AdminUser } from "@/generated/prisma/client";
 import { writeAudit } from "@/lib/audit/service";
 import { getDb } from "@/lib/db";
 import { getPraysProducts, getSexParts } from "@/lib/prays/queries";
-import { DUPLICATE_WINDOW_MS, STATUS_LABEL, alreadyText, checkCancel, checkTransition, duplicateWarning, findDuplicate, orderNumber, type FingerprintInput, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
+import { DUPLICATE_WINDOW_MS, STATUS_LABEL, alreadyText, canMarkTest, checkCancel, checkTransition, duplicateWarning, findDuplicate, orderNumber, type FingerprintInput, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
 import { notifyCancelled, notifyChanged, notifyCreated } from "./bot";
 import { createOnce } from "./idempotency";
 import type { DeliveryStatus } from "./bot-text";
@@ -175,6 +175,19 @@ export async function cancelOrder(actor: Actor, id: string, reason: string | nul
   await writeAudit(actor, { action: "CANCEL", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order.number), summary: `${orderNumber(order.number)}: ${STATUS_LABEL[order.status]} → Bekor qilingan`, before: { status: order.status }, after: { status: "CANCELLED", reason: cleanReason } });
   await notifyCancelled(id);
   revalidatePath("/admin/seh");
+  return { ok: true };
+}
+
+/** "Test deb belgilash / olib tashlash" (SUPER_ADMIN): only the flag changes; the order, its status and Telegram messages stay. */
+export async function setOrderTest(actor: Actor, id: string, isTest: boolean): Promise<Result> {
+  if (!canMarkTest(actor.role)) return { ok: false, error: "Test belgisini faqat Super Admin qo‘yadi." };
+  const order = await getDb().workshopOrder.findUnique({ where: { id }, select: { number: true, isTest: true } });
+  if (!order) return { ok: false, error: "Zakaz topilmadi." };
+  if (order.isTest === isTest) return { ok: true };
+  await getDb().workshopOrder.update({ where: { id }, data: { isTest } });
+  await writeAudit(actor, { action: "UPDATE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order.number), summary: `${orderNumber(order.number)}: ${isTest ? "test deb belgilandi" : "test belgisi olib tashlandi"}`, before: { isTest: order.isTest }, after: { isTest } });
+  revalidatePath("/admin/seh");
+  revalidatePath("/admin");
   return { ok: true };
 }
 

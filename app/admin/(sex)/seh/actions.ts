@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSexUser } from "@/lib/auth/require-admin";
 import { canCreateOrders } from "@/lib/sex/rules";
 import { transitionInputError, transitionInputSchema } from "@/lib/sex/validation";
-import { cancelOrder, confirmNoRequest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
+import { cancelOrder, confirmNoRequest, setOrderTest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
 import { createLinkCode, resendOrder, sendPersonalTest } from "@/lib/sex/bot";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
@@ -101,4 +101,12 @@ export async function cancelOrderAction(raw: unknown): Promise<SexActionResult> 
   const parsed = z.object({ id: z.string().min(1, "Zakaz tanlanmagan.").max(40), reason: z.string().trim().max(300).nullable().default(null) }).safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
   return cancelOrder(user, parsed.data.id, parsed.data.reason);
+}
+
+/** "Test deb belgilash / olib tashlash" — SUPER_ADMIN only (checked again in setOrderTest). */
+export async function setOrderTestAction(raw: unknown): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  const parsed = z.object({ id: z.string().min(1, "Zakaz tanlanmagan.").max(40), isTest: z.boolean() }).safeParse(raw);
+  if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+  return setOrderTest(user, parsed.data.id, parsed.data.isTest);
 }

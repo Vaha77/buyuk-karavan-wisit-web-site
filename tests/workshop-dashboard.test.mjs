@@ -41,3 +41,11 @@ test("attention: past due (Tashkent day) and NEW for over 24 hours; closed order
   assert.deepEqual(rules.attentionReasons({ status: "NEW", createdAt: old, dueDate: "2026-10-01" }, now), ["overdue", "unaccepted"]);
   for (const status of ["ISSUED", "RECEIVED", "CANCELLED"]) assert.deepEqual(rules.attentionReasons({ status, createdAt: old, dueDate: "2026-10-01" }, now), []);
 });
+
+test("change vs previous period is a percent; an empty previous period reads 'yangi'", () => {
+  assert.deepEqual(rules.percentChange(10, 8), { text: "+25%", direction: "up" });
+  assert.deepEqual(rules.percentChange(9, 10), { text: "−10%", direction: "down" });
+  assert.deepEqual(rules.percentChange(10, 10), { text: "0%", direction: "flat" });
+  assert.deepEqual(rules.percentChange(10, 0), { text: "yangi", direction: "new" });
+  assert.deepEqual(rules.percentChange(0, 0), { text: "0%", direction: "flat" });
+});

@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { requireRole } from "@/lib/auth/require-admin";
-import { monthOrders } from "@/lib/sex/queries";
+import { kindOf, monthOrders } from "@/lib/sex/queries";
 import { PURPOSE_LABEL, STATUS_LABEL, TYPE_LABEL, orderNumber, when, type PriceSnapshot } from "@/lib/sex/rules";
 
 export const runtime = "nodejs";
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   for (const order of orders) {
     const snapshot = order.priceSnapshot as PriceSnapshot | null;
     sheet.addRow({
-      number: orderNumber(order.number), date: when(order.createdAt), type: TYPE_LABEL[order.type],
+      number: orderNumber(order.number), date: when(order.createdAt), type: TYPE_LABEL[kindOf(order)],
       product: order.type === "AGREGAT" ? `${order.items[0]?.title ?? ""}${order.qty > 1 ? ` ×${order.qty}` : ""}` : order.items.map(item => `${item.title} ×${item.issuedQty ?? item.qty}`).join(", "),
       seller: order.seller.name, to: order.purpose === "CLIENT" ? `Mijoz: ${order.customerName ?? ""}` : PURPOSE_LABEL.SHOP, status: STATUS_LABEL[order.status],
       accepted: step(order.acceptedBy?.name, order.acceptedAt), started: step(order.startedBy?.name, order.startedAt), issued: step(order.issuedBy?.name, order.issuedAt), received: step(order.receivedBy?.name, order.receivedAt),

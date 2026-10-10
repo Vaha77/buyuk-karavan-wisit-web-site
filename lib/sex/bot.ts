@@ -30,7 +30,7 @@ export async function workshopRecipients() {
   return getDb().adminUser.findMany({ where: { role: "WORKSHOP", isActive: true, approvalStatus: "APPROVED", telegramChatId: { not: null } }, select: { id: true, name: true, telegramChatId: true } });
 }
 async function queueOf() {
-  return queuePositions(await getDb().workshopOrder.findMany({ where: { status: "ACCEPTED" }, select: { id: true, status: true, acceptedAt: true } }));
+  return queuePositions(await getDb().workshopOrder.findMany({ where: { status: "ACCEPTED", isTest: false }, select: { id: true, status: true, acceptedAt: true } }));
 }
 
 const notModified = (error: unknown) => error instanceof TelegramApiError && /message is not modified/i.test(error.description ?? "");

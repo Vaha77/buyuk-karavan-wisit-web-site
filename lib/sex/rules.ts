@@ -83,6 +83,24 @@ export function orderFormParts(role: string, parts: FormPart[]) {
   return parts.map(part => ({ id: part.id, label: [part.name, part.size].filter(Boolean).join(" "), basePriceUsd: part.basePriceUsd }));
 }
 
+/**
+ * Agregat / Zapchast comes from the goods, not from the order form: compressor on a receiver ("…resiver bachok ustida",
+ * "Resiver ustidagi kompressor"), water / air-cooled units and their kits are Agregat; a bare compressor, receiver,
+ * condenser, evaporator and every other part is Zapchast. The same pattern runs in SQL (dashboard), so keep it POSIX-safe.
+ */
+export const AGREGAT_CATEGORY_PATTERN = "ag+regat|komplekt|ustida";
+const AGREGAT_CATEGORY = new RegExp(AGREGAT_CATEGORY_PATTERN, "i");
+type Category = { slug?: string | null; name?: string | null } | null | undefined;
+export const isAgregatCategory = (category: Category) => !!category && AGREGAT_CATEGORY.test(`${category.slug ?? ""} ${category.name ?? ""}`);
+/** Label of an order: Agregat when any product is in an Agregat category; Zapchast for other products and parts; the form's type only when nothing is known. */
+export function orderKind(order: { type: "AGREGAT" | "ZAPCHAST"; items: Array<{ category?: Category; partId?: string | null }> }): "AGREGAT" | "ZAPCHAST" {
+  if (order.items.some(item => isAgregatCategory(item.category))) return "AGREGAT";
+  if (order.items.some(item => item.category || item.partId)) return "ZAPCHAST";
+  return order.type;
+}
+/** "Test deb belgilash": test orders stay in the list ("Test" filter) but never reach statistics, the Excel export or queue numbers. */
+export const canMarkTest = (role: string) => role === "SUPER_ADMIN";
+
 export const orderNumber = (number: number) => `#${String(number).padStart(4, "0")}`;
 export const isReceiveOverdue = (order: { status: OrderStatus; issuedAt: Date | string | null }, now = new Date()) => order.status === "ISSUED" && !!order.issuedAt && now.getTime() - new Date(order.issuedAt).getTime() > RECEIVE_OVERDUE_MS;
 
@@ -121,9 +139,9 @@ export function processSteps(order: StepOrder, now = new Date()): StepView[] {
   ];
 }
 
-/** Queue numbers of "Navbatda" orders: 1, 2, 3… by acceptance time; starting one renumbers the rest. */
-export function queuePositions(orders: Array<{ id: string; status: OrderStatus | string; acceptedAt: Date | string | null }>) {
-  const waiting = orders.filter(order => order.status === "ACCEPTED").sort((a, b) => new Date(a.acceptedAt ?? 0).getTime() - new Date(b.acceptedAt ?? 0).getTime() || a.id.localeCompare(b.id));
+/** Queue numbers of "Navbatda" orders: 1, 2, 3… by acceptance time; starting one renumbers the rest. Test orders get none. */
+export function queuePositions(orders: Array<{ id: string; status: OrderStatus | string; acceptedAt: Date | string | null; isTest?: boolean }>) {
+  const waiting = orders.filter(order => order.status === "ACCEPTED" && !order.isTest).sort((a, b) => new Date(a.acceptedAt ?? 0).getTime() - new Date(b.acceptedAt ?? 0).getTime() || a.id.localeCompare(b.id));
   return new Map(waiting.map((order, index) => [order.id, index + 1]));
 }
 

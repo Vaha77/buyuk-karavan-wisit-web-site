@@ -244,7 +244,7 @@ test("WORKSHOP panel payload: no price fields; the panel component never reads p
   const board = await readFile(new URL("../components/admin/sex/workshop-board.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(board, /formatUsd|baseUsd|BaseUsd|priceSnapshot|\.prices/);
   const page = await readFile(new URL("../app/admin/(sex)/seh/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /listOrders\(user, month, cancelledView\)/, "rows go through listOrders → stripPrices(role)");
+  assert.match(page, /listOrders\(user, month, view\)/, "rows go through listOrders → stripPrices(role)");
 });
 
 
