@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { appConfig } from "@/lib/instagram/graph";
-import { validSignature, verifyChallenge } from "@/lib/instagram/rules";
+import { verifyChallenge } from "@/lib/instagram/rules";
+import { handleWebhookPost } from "@/lib/instagram/webhook-handler";
 import { afterNotification, ingestNotification } from "@/lib/instagram/service";
 
 export const runtime = "nodejs";
@@ -16,21 +17,13 @@ export function GET(request: Request) {
 
 /**
  * Comment / Direct notifications. X-Hub-Signature-256 (HMAC-SHA256 of the raw body with INSTAGRAM_APP_SECRET) must match,
- * else 401. Rows are written right away (comment id = unique, so a repeated delivery does nothing); sending is done in
- * the background so Meta gets a fast 200. A database error returns 500 so Meta retries the delivery.
+ * else 401. Only the rows are written before answering (comment id = unique, so a repeated delivery does nothing); all
+ * other work runs after the response (lib/instagram/webhook-handler.ts), so Meta gets its 200 at once. A database error
+ * returns 500 so Meta retries the delivery.
  */
 export async function POST(request: Request) {
   if (Number(request.headers.get("content-length") || 0) > 1_000_000) return NextResponse.json({ ok: false }, { status: 413 });
   const raw = Buffer.from(await request.arrayBuffer());
-  if (!validSignature(raw, request.headers.get("x-hub-signature-256"), appConfig().appSecret)) return NextResponse.json({ ok: false }, { status: 401 });
-  let payload: unknown;
-  try { payload = JSON.parse(raw.toString("utf8")); } catch { return NextResponse.json({ ok: false }, { status: 400 }); }
-  try {
-    const result = await ingestNotification(payload);
-    if (result) after(() => afterNotification(result));
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error("Instagram webhook failed", { type: error instanceof Error ? error.name : "UnknownError" });
-    return NextResponse.json({ ok: false }, { status: 500 });
-  }
+  const response = await handleWebhookPost(raw, request.headers.get("x-hub-signature-256"), { appSecret: appConfig().appSecret, ingest: ingestNotification, background: afterNotification, schedule: after, log: console.error });
+  return NextResponse.json(response.body, { status: response.status });
 }

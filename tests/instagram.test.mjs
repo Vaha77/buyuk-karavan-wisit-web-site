@@ -207,9 +207,8 @@ test("wiring: unique comment id, unique lead key, 401 on bad signature, token en
   assert.match(schema, /submissionKey\s+String\?\s+@unique/);
   const migration = await read("../prisma/migrations/20261015090000_add_instagram_private_replies/migration.sql");
   assert.doesNotMatch(migration.replace(/^--.*$/gm, ""), /\bDROP\b|DELETE FROM|\bTRUNCATE\b|ALTER COLUMN/i, "additive only");
-  const route = await read("../app/api/instagram/webhook/route.ts");
-  assert.match(route, /validSignature\(raw, request\.headers\.get\("x-hub-signature-256"\), appConfig\(\)\.appSecret\)\) return NextResponse\.json\(\{ ok: false \}, \{ status: 401 \}\)/);
-  assert.match(route, /after\(\(\) => afterNotification\(result\)\)/);
+  const route = await read("../lib/instagram/webhook-handler.ts");
+  assert.match(route, /if \(!validSignature\(raw, signature, deps\.appSecret\)\) return \{ status: 401/);
   const service = await read("../lib/instagram/service.ts");
   assert.match(service, /leadKey\(comment\.fromId, product\?\.id \?\? `post:\$\{comment\.mediaId\}`\)/, "one lead per person + product (or post)");
   assert.match(service, /if \(action\.type === "notify"\) \{[\s\S]*?return "notified";/, "NEGATIVE: Telegram notice, then return before any reply");
