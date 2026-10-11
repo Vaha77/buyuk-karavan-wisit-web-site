@@ -1,0 +1,152 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
+import { Camera, ExternalLink, Film, RefreshCw, Search, X } from "lucide-react";
+import { runInstagramQueueAction, saveInstagramGeneralAction, saveMediaRuleAction } from "@/app/admin/(protected)/instagram/actions";
+import { BusyLabel } from "@/components/admin/feedback";
+import type { BoardMedia, InstagramBoard as Board } from "@/lib/instagram/queries";
+import { DEFAULT_DM_TEMPLATE, DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY, PLACEHOLDERS } from "@/lib/instagram/constants";
+
+type Result = { ok: true; message?: string } | { ok: false; error: string };
+type Product = Board["products"][number];
+const dateTime = (iso: string) => new Intl.DateTimeFormat("uz-UZ", { timeZone: "Asia/Tashkent", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+const day = (iso: string) => new Intl.DateTimeFormat("uz-UZ", { timeZone: "Asia/Tashkent", day: "2-digit", month: "short", year: "numeric" }).format(new Date(iso));
+
+function useSave() {
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, startTransition] = useTransition();
+  const save = (action: () => Promise<Result>) => startTransition(async () => {
+    const result = await action();
+    setMessage(result.ok ? { ok: true, text: result.message ?? "Saqlandi ✓" } : { ok: false, text: result.error });
+  });
+  const note = message && <span className={message.ok ? "ig-ok" : "ig-error"} role={message.ok ? "status" : "alert"}>{message.text}</span>;
+  return { pending, save, note, clear: () => setMessage(null) };
+}
+
+/** Searchable product select (catalogue, archived products excluded). */
+function ProductPicker({ products, value, onChange }: { products: Product[]; value: string | null; onChange: (id: string | null) => void }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = products.find(item => item.id === value) ?? null;
+  const matches = useMemo(() => {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    return products.filter(item => words.every(word => `${item.name} ${item.model}`.toLowerCase().includes(word))).slice(0, 30);
+  }, [products, query]);
+  if (selected && !open) return <div className="ig-picked">
+    <span><strong>{selected.name}</strong>{selected.model && <small> · {selected.model}</small>}{!selected.hasPrice && <em className="ig-tag is-bad">narx yo‘q</em>}{!selected.isVisible && <em className="ig-tag is-bad">saytda yashirin</em>}</span>
+    <button type="button" className="bk-icon-btn" aria-label="Boshqa mahsulot" onClick={() => setOpen(true)}><Search size={15}/></button>
+    <button type="button" className="bk-icon-btn" aria-label="Mahsulotni olib tashlash" onClick={() => onChange(null)}><X size={15}/></button>
+  </div>;
+  return <div className="ig-picker">
+    <input value={query} autoFocus={open} onChange={event => { setQuery(event.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder="Mahsulot qidiring: nomi yoki modeli…" aria-label="Mahsulot qidirish"/>
+    {open && <ul role="listbox">
+      {matches.map(item => <li key={item.id}><button type="button" role="option" aria-selected={item.id === value} onClick={() => { onChange(item.id); setOpen(false); setQuery(""); }}>{item.name}{item.model && <small> · {item.model}</small>}{!item.hasPrice && <em className="ig-tag is-bad">narx yo‘q</em>}</button></li>)}
+      {!matches.length && <li className="bk-muted">Topilmadi</li>}
+      {selected && <li><button type="button" onClick={() => setOpen(false)}>Bekor qilish</button></li>}
+    </ul>}
+  </div>;
+}
+
+function MediaCard({ media, rule, stats, products, canEdit }: { media: BoardMedia; rule: Board["rules"][string] | undefined; stats: Board["stats"][string] | undefined; products: Product[]; canEdit: boolean }) {
+  const [productId, setProductId] = useState<string | null>(rule?.productId ?? null);
+  const [isActive, setActive] = useState(rule?.isActive ?? true);
+  const [keywords, setKeywords] = useState((rule?.keywords ?? DEFAULT_KEYWORDS).join(", "));
+  const [dmTemplate, setTemplate] = useState(rule?.dmTemplate ?? DEFAULT_DM_TEMPLATE);
+  const [publicReplyEnabled, setPublic] = useState(rule?.publicReplyEnabled ?? true);
+  const [publicReplyText, setPublicText] = useState(rule?.publicReplyText ?? DEFAULT_PUBLIC_REPLY);
+  const [open, setOpen] = useState(false);
+  const { pending, save, note, clear } = useSave();
+  const change = <T,>(setter: (value: T) => void) => (value: T) => { setter(value); clear(); };
+  const product = products.find(item => item.id === productId);
+  const state = !rule ? "Sozlanmagan" : !rule.isActive ? "O‘chiq" : rule.productId ? "Faol" : "Mahsulot yo‘q";
+
+  return <article className={`bk-card ig-media ${rule?.isActive && rule.productId ? "is-live" : ""}`}>
+    <div className="ig-media-top">
+      <a className="ig-thumb" href={media.permalink ?? undefined} target="_blank" rel="noreferrer" aria-label="Instagram’da ochish">
+        {/* Instagram CDN URLs expire; next/image would cache them through the optimizer. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {media.thumbnail ? <img src={media.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer"/> : <span>{media.isReel ? <Film size={22}/> : <Camera size={22}/>}</span>}
+        {media.isReel && <em className="ig-reel">Reels</em>}
+      </a>
+      <div className="ig-media-meta">
+        <p className="ig-caption">{media.caption || <span className="bk-muted">Izohsiz</span>}</p>
+        <p className="bk-muted">{media.postedAt ? day(media.postedAt) : "—"}{media.commentsCount !== null && ` · ${media.commentsCount} komment`}{!media.fromApi && " · eski post"}</p>
+        <p className="ig-stats"><span>{stats?.comments ?? 0} komment</span><span>{stats?.sent ?? 0} DM</span><span>{stats?.leads ?? 0} lid</span>{!!stats?.failed && <span className="is-bad">{stats.failed} xato</span>}</p>
+        <p><span className={`ig-tag ${state === "Faol" ? "is-ok" : ""}`}>{state}</span>{product && <span className="ig-product"> {product.name}</span>}</p>
+      </div>
+    </div>
+    {canEdit && <button type="button" className="bk-btn" onClick={() => setOpen(value => !value)} aria-expanded={open}>{open ? "Yopish" : "Sozlash"}</button>}
+    {canEdit && open && <form className="ig-rule" onSubmit={event => { event.preventDefault(); save(() => saveMediaRuleAction({ mediaId: media.id, productId, isActive, keywords, dmTemplate, publicReplyEnabled, publicReplyText, permalink: media.permalink, caption: media.caption || null, postedAt: media.postedAt })); }}>
+      <div className="bk-field"><span>Mahsulot</span><ProductPicker products={products} value={productId} onChange={change(setProductId)}/></div>
+      <label className="ig-switch"><input type="checkbox" checked={isActive} onChange={event => change(setActive)(event.target.checked)}/><span>Avto-javob faol</span></label>
+      <label className="bk-field"><span>Kalit so‘zlar <small className="bk-muted">(vergul bilan; “+” va “?” faqat komment shu belgilardan iborat bo‘lsa)</small></span><input value={keywords} onChange={event => change(setKeywords)(event.target.value)}/></label>
+      <label className="bk-field"><span>DM matni <small className="bk-muted">{PLACEHOLDERS.join(" ")}</small></span><textarea rows={4} value={dmTemplate} onChange={event => change(setTemplate)(event.target.value)}/></label>
+      <button type="button" className="ig-link-btn" onClick={() => change(setTemplate)(DEFAULT_DM_TEMPLATE)}>Standart matnni tiklash</button>
+      <label className="ig-switch"><input type="checkbox" checked={publicReplyEnabled} onChange={event => change(setPublic)(event.target.checked)}/><span>Kommentga ochiq javob</span></label>
+      {publicReplyEnabled && <label className="bk-field"><span>Ochiq javob matni</span><input value={publicReplyText} onChange={event => change(setPublicText)(event.target.value)} maxLength={300}/></label>}
+      <div className="bk-actions"><button type="submit" className="bk-btn is-primary" disabled={pending}><BusyLabel busy={pending}>Saqlash</BusyLabel></button>{note}</div>
+    </form>}
+  </article>;
+}
+
+function GeneralSettings({ account }: { account: NonNullable<Board["account"]> }) {
+  const [enabled, setEnabled] = useState(account.generalReplyEnabled);
+  const [text, setText] = useState(account.generalReplyText || DEFAULT_GENERAL_REPLY);
+  const [phone, setPhone] = useState(account.phone);
+  const { pending, save, note, clear } = useSave();
+  return <form className="bk-card ig-general" onSubmit={event => { event.preventDefault(); save(() => saveInstagramGeneralAction({ generalReplyEnabled: enabled, generalReplyText: text, phone })); }}>
+    <div><h2>Umumiy sozlamalar</h2><p className="bk-muted">Mahsulot biriktirilmagan postdagi narx kommentiga ochiq javob va DM’dagi {"{telefon}"}.</p></div>
+    <label className="ig-switch"><input type="checkbox" checked={enabled} onChange={event => { setEnabled(event.target.checked); clear(); }}/><span>Mahsulotsiz postda umumiy javob</span></label>
+    {enabled && <label className="bk-field"><span>Umumiy javob matni</span><input value={text} onChange={event => { setText(event.target.value); clear(); }} maxLength={300}/></label>}
+    <label className="bk-field"><span>Telefon {"{telefon}"} <small className="bk-muted">(bo‘sh — sayt pastidagi raqam)</small></span><input value={phone} onChange={event => { setPhone(event.target.value); clear(); }} placeholder="+998 …" maxLength={40}/></label>
+    <div className="bk-actions"><button type="submit" className="bk-btn is-primary" disabled={pending}><BusyLabel busy={pending}>Saqlash</BusyLabel></button>{note}</div>
+  </form>;
+}
+
+const STATUS: Record<string, { label: string; className: string }> = { SENT: { label: "Yuborildi", className: "is-ok" }, FAILED: { label: "Xato", className: "is-bad" }, SKIPPED: { label: "O‘tkazildi", className: "" }, PENDING: { label: "Navbatda", className: "is-wait" } };
+
+function Journal({ rows }: { rows: Board["journal"] }) {
+  const [filter, setFilter] = useState<string>("ALL");
+  const counts = rows.reduce<Record<string, number>>((all, row) => ({ ...all, [row.status]: (all[row.status] ?? 0) + 1 }), {});
+  const shown = filter === "ALL" ? rows : rows.filter(row => row.status === filter);
+  const { pending, save, note } = useSave();
+  return <section className="bk-card" aria-labelledby="ig-journal">
+    <div className="bk-card-head"><div><h2 id="ig-journal">Jurnal</h2><p className="bk-muted">Oxirgi 150 komment · lid “Mijoz so‘rovlari”da (manba: Instagram)</p></div>
+      <div className="bk-actions">{!!counts.PENDING && <button type="button" className="bk-btn" disabled={pending} onClick={() => save(runInstagramQueueAction)}><RefreshCw size={14}/><BusyLabel busy={pending} busyText="Yuborilmoqda…">Navbatni hozir yuborish</BusyLabel></button>}{note}</div>
+    </div>
+    <div className="bk-chips" role="tablist">{["ALL", "SENT", "FAILED", "SKIPPED", "PENDING"].map(key => <button key={key} type="button" role="tab" className="bk-chip" aria-selected={filter === key} onClick={() => setFilter(key)}>{key === "ALL" ? "Hammasi" : STATUS[key].label}<small>{key === "ALL" ? rows.length : counts[key] ?? 0}</small></button>)}</div>
+    {shown.length ? <div className="bk-table-wrap"><table className="bk-table ig-table"><thead><tr><th>Sana</th><th className="is-left">Kim</th><th className="is-left">Komment</th><th className="is-left">Mahsulot</th><th className="is-left">Holat</th></tr></thead><tbody>
+      {shown.map(row => <tr key={row.commentId}>
+        <td>{dateTime(row.createdAt)}</td>
+        <td className="is-left">{row.username ? <a href={`https://instagram.com/${row.username}`} target="_blank" rel="noreferrer">@{row.username}</a> : "—"}</td>
+        <td className="is-left ig-wrap">{row.text || "—"}{row.permalink && <a className="ig-ext" href={row.permalink} target="_blank" rel="noreferrer" aria-label="Post"><ExternalLink size={12}/></a>}</td>
+        <td className="is-left">{row.productName ?? "—"}</td>
+        <td className="is-left ig-wrap"><span className={`ig-tag ${STATUS[row.status].className}`}>{STATUS[row.status].label}</span>{row.leadId && <span className="ig-tag is-ok">lid</span>}{row.reason && <small className="ig-reason">{row.reason}</small>}{row.publicReplyError && <small className="ig-reason">Ochiq javob: {row.publicReplyError}</small>}</td>
+      </tr>)}
+    </tbody></table></div> : <div className="bk-empty">Hali yozuv yo‘q</div>}
+  </section>;
+}
+
+function Messages({ rows }: { rows: Board["messages"] }) {
+  return <section className="bk-card" aria-labelledby="ig-dm">
+    <div className="bk-card-head"><div><h2 id="ig-dm">Direct’dan kelgan javoblar</h2><p className="bk-muted">Faqat jurnal — javobni Instagram ilovasida yozing (Madina AI keyingi bosqichda).</p></div></div>
+    {rows.length ? <ul className="ig-messages">{rows.map(row => <li key={row.mid}><span className="bk-muted">{dateTime(row.sentAt)}</span><strong>{row.username ? `@${row.username}` : "Instagram foydalanuvchisi"}</strong><p>{row.text ?? (row.hasAttachments ? "📎 Fayl / rasm" : "—")}</p></li>)}</ul> : <div className="bk-empty">Hali xabar yo‘q</div>}
+  </section>;
+}
+
+export function InstagramBoard({ board, canConnect }: { board: Board; canConnect: boolean }) {
+  const [query, setQuery] = useState("");
+  const media = board.media.filter(item => !query || item.caption.toLowerCase().includes(query.toLowerCase()));
+  if (!board.account) return <div className="bk-empty"><strong>Instagram ulanmagan</strong><span>{canConnect ? <Link href="/admin/settings#instagram">Sozlamalar → Instagram</Link> : "Super Admin Sozlamalarda ulashi kerak."}</span></div>;
+  return <div className="ig">
+    <div className="bk-grid-main">
+      <section className="bk-card ig-summary"><h2>@{board.account.username}</h2><p className="bk-muted">Reels/postga mahsulot biriktiring — “narx”, “qancha”, “цена”… deb yozganlarga Direct’ga narx boradi (1 kommentga 1 marta, 7 kun ichida). Narx Prays’dan jonli, CBU kursi bo‘yicha.</p>{board.mediaError && <p className="ig-error" role="alert">{board.mediaError}</p>}</section>
+      <GeneralSettings account={board.account}/>
+    </div>
+    <div className="ig-toolbar"><h2>Postlar va Reels</h2><label className="ig-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Izoh bo‘yicha qidirish" aria-label="Postlarni qidirish"/></label></div>
+    {media.length ? <div className="ig-grid">{media.map(item => <MediaCard key={item.id} media={item} rule={board.rules[item.id]} stats={board.stats[item.id]} products={board.products} canEdit/>)}</div> : <div className="bk-empty">Post topilmadi</div>}
+    <Journal rows={board.journal}/>
+    <Messages rows={board.messages}/>
+  </div>;
+}

@@ -30,6 +30,7 @@ enum LeadSource {
   PROJECT
   HOME_CTA
   OTHER
+  INSTAGRAM
 }
 
 enum TelegramNotificationStatus {
@@ -189,6 +190,7 @@ model Product {
   asset360             Product360Asset?
   calculationLineItems CalculationLineItem[]
   workshopItems        WorkshopOrderItem[]
+  instagramRules       InstagramMediaRule[]
 
   @@index([isVisible, order])
   @@index([isVisible, categoryId])
@@ -1205,4 +1207,95 @@ model WorkshopOrderMessage {
   order     WorkshopOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@unique([orderId, chatId])
+}
+
+// ---- Instagram: comment → Direct price (Private Reply) -----------------------------------------------
+enum InstagramReplyStatus {
+  // Waiting in the queue (new, or a retry after a rate limit / temporary error).
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+// The connected professional account (one row, id "global"). The token is AES-256-GCM (lib/auth/password-vault.ts).
+model InstagramAccount {
+  id                  String    @id @default("global")
+  // Instagram professional account id (= "user_id" of GET /me, = entry.id in webhooks).
+  igUserId            String    @db.VarChar(64)
+  username            String
+  tokenEncrypted      String
+  tokenExpiresAt      DateTime
+  tokenRefreshedAt    DateTime
+  webhookSubscribedAt DateTime?
+  webhookError        String?
+  lastWebhookAt       DateTime?
+  connectedById       String?
+  // Price comment on a post without a product: public reply "Direct'ga yozing…".
+  generalReplyEnabled Boolean   @default(false)
+  generalReplyText    String    @default("Direct'ga yozing, mutaxassis javob beradi")
+  // {telefon} in DM templates; empty = the phone from the site footer.
+  phone               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+// A Reels / post with its product and reply settings.
+model InstagramMediaRule {
+  mediaId            String    @id @db.VarChar(64)
+  productId          String?
+  product            Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  isActive           Boolean   @default(true)
+  keywords           String[]  @default([])
+  dmTemplate         String
+  publicReplyEnabled Boolean   @default(true)
+  publicReplyText    String    @default("Narxini Direct'ga yubordik ✅")
+  permalink          String?
+  caption            String?
+  postedAt           DateTime?
+  updatedById        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([productId])
+}
+
+// Every comment on our media (the journal); commentId is the idempotency key: one comment → at most one Private Reply.
+model InstagramComment {
+  commentId        String               @id @db.VarChar(64)
+  mediaId          String               @db.VarChar(64)
+  fromId           String               @db.VarChar(64)
+  username         String?
+  text             String
+  status           InstagramReplyStatus @default(PENDING)
+  reason           String?
+  productId        String?
+  productName      String?
+  dmMessageId      String?
+  dmSentAt         DateTime?
+  publicReplyId    String?
+  publicReplyError String?
+  leadId           String?
+  attempts         Int                  @default(0)
+  nextAttemptAt    DateTime             @default(now())
+  lockedUntil      DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([mediaId, createdAt])
+  @@index([createdAt])
+}
+
+// Direct messages people send us (logged only; Madina is a later step).
+model InstagramMessage {
+  mid            String   @id @db.VarChar(255)
+  fromId         String   @db.VarChar(64)
+  text           String?
+  hasAttachments Boolean  @default(false)
+  sentAt         DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([fromId])
 }

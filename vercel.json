@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/seller-reminders", "schedule": "0 4 * * *" }
+    { "path": "/api/cron/seller-reminders", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/instagram", "schedule": "30 3 * * *" }
   ]
 }

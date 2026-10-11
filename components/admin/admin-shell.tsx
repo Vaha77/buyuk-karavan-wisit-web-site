@@ -26,6 +26,7 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "CRM", items: [
     { label: "Mijoz so‘rovlari", href: "/admin/leads", icon: MessageSquare, badge: "leads" },
     { label: "Referal linklar", href: "/admin/links", icon: Link2, badge: "new" },
+    { label: "Instagram", href: "/admin/instagram", icon: Camera, adminOnly: true },
     { label: "Buyurtmalar", href: "#", icon: ShoppingBag, soon: true },
     { label: "Seh zakazlari", href: "/admin/seh", icon: Wrench, badge: "sex" },
     { label: "Sotuvchilar", href: "/admin/sales-agents", icon: UserCheck },
@@ -55,6 +56,7 @@ const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path
   { match: path => path.startsWith("/admin/my/purchase"), title: "Xarid kiritish", subtitle: "Xarid admin tasdiqlagach hisobga olinadi" },
   { match: path => path.startsWith("/admin/my/"), title: "Mijoz", subtitle: "Qo‘ng‘iroqlar va xaridlar" },
   { match: path => path.startsWith("/admin/customers"), title: "Doimiy mijozlar", subtitle: "Viloyatlar bo‘yicha savdo va yillik reyting" },
+  { match: path => path.startsWith("/admin/instagram"), title: "Instagram", subtitle: "Komment → Direct’ga avtomatik narx" },
   { match: path => path.startsWith("/admin/links"), title: "Referal linklar", subtitle: "Havolalar, kliklar va ulardan kelgan lidlar" },
   { match: path => path.startsWith("/admin/calculations"), title: path => path === "/admin/calculations" ? "Hisob-kitob" : path === "/admin/calculations/new" ? "Hisob-kitob / Yangi tijorat taklifi" : path === "/admin/calculations/configurator" ? "Hisob-kitob / Komplekt konfiguratori" : "Hisob-kitob / Tijorat taklifi", subtitle: "Tijorat takliflarini tayyorlash va boshqarish" },
   { match: path => path.startsWith("/admin/ai-office"), title: "AI Ofis", subtitle: "AI operatsiyalar uchun vizual makon" },
