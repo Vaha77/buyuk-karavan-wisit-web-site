@@ -12,6 +12,7 @@ import { addUsage, classifyWithAi, writePositiveReply, type AiUsage } from "./ai
 import { DEFAULT_PUBLIC_REPLY, type CommentKind } from "./constants";
 import { GraphError, getMediaPermalink, refreshLongLived, replyToComment, sendPrivateReply } from "./graph";
 import { ingestWebhook, type IngestStore } from "./ingest";
+import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { notifyNegative } from "./telegram";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, leadKey, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
@@ -36,18 +37,25 @@ const prismaStore: IngestStore = {
     const result = await getDb().instagramComment.createMany({ data: [row], skipDuplicates: true });
     return result.count === 1;
   },
-  async insertMessages(rows) {
-    await getDb().instagramMessage.createMany({ data: rows, skipDuplicates: true });
-  },
 };
 
-/** Synchronous part of the webhook: journal rows only (fast). Classifying and replying happen in processQueue, after the 200. */
+/**
+ * Synchronous part of the webhook: comment rows and Direct conversations (DB only, fast). Classifying / replying to
+ * comments and the Telegram side of Direct run in `afterNotification`, after the 200.
+ */
 export async function ingestNotification(payload: unknown) {
   const account = await getInstagramAccount();
   if (!account) return null;
   const result = await ingestWebhook(payload, account, prismaStore);
+  const direct = await recordDirectEvents(result.direct, account);
   await getDb().instagramAccount.update({ where: { id: ACCOUNT_ID }, data: { lastWebhookAt: new Date() } }).catch(() => undefined);
-  return result;
+  return { queued: result.queued, direct, account };
+}
+
+/** Background part of the webhook. Never throws. */
+export async function afterNotification(result: NonNullable<Awaited<ReturnType<typeof ingestNotification>>>) {
+  if (result.direct.touched.length || result.direct.phones.length) await afterDirectEvents(result.direct, result.account, accountToken(result.account)).catch(error => console.error("Instagram Direct failed", { type: safeType(error) }));
+  if (result.queued.length) await processQueue({ budgetMs: 240_000 });
 }
 
 // ---- Queue helpers ---------------------------------------------------------------------------------------
@@ -203,12 +211,15 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   const publicReply = action.type === "price" && !rule!.publicReplyEnabled ? null : reply?.trim() || null;
 
   if (dm) {
+    // Saved before sending: the echo of this DM may arrive before the API call returns, and must count as automatic.
+    await update({ dmText: dm, dmSentAt: new Date() });
     try {
       const sent = await sendPrivateReply(context.token, account.igUserId, commentId, dm);
       await update({ dmText: dm, dmMessageId: sent.message_id ?? null, dmSentAt: new Date(), attempts: { increment: 1 } });
     } catch (error) {
       const info = errorInfo(error), attempts = comment.attempts + 1;
       console.error("Instagram private reply failed", { type: safeType(error) });
+      await update({ dmText: null, dmSentAt: null });
       if (isRetryable(info) && attempts < MAX_ATTEMPTS && !tooOld(comment.createdAt, new Date(Date.now() + backoffMs(attempts)))) {
         await update({ attempts, nextAttemptAt: new Date(Date.now() + backoffMs(attempts)), reason: `Qayta urinadi: ${errorReason(info)}`, lockedUntil: null });
         return isRateLimit(info) ? "rate-limited" : "retry";

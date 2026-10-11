@@ -4,6 +4,8 @@ import "server-only";
 import { getDb } from "@/lib/db";
 import { answerCallbackQuery, editMessageText, sendMessage } from "@/lib/telegram/client";
 import type { InlineKeyboard, TelegramCallbackQuery } from "@/lib/telegram/types";
+import { dismissConversation, dismissReason, syncCards } from "./direct";
+import { DISMISS_REASONS } from "./direct-rules";
 
 const PREFIX = "igrev:";
 const time = (date: Date) => new Intl.DateTimeFormat("uz-UZ", { timeZone: "Asia/Tashkent", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
@@ -30,6 +32,7 @@ export async function notifyNegative(input: { commentId: string; username: strin
 
 /** "✅ Ko‘rib chiqildi" in a Super Admin's private chat: marks the comment reviewed and updates the message. */
 export async function handleInstagramCallback(callback: TelegramCallbackQuery) {
+  if (callback.data?.startsWith(DIRECT_PREFIX)) return handleDirectCallback(callback);
   if (!callback.data?.startsWith(PREFIX)) return false;
   const answer = (text: string, alert = false) => answerCallbackQuery(callback.id, text, alert).catch(() => undefined);
   const admin = await getDb().adminUser.findFirst({ where: { telegramChatId: String(callback.from.id), role: "SUPER_ADMIN", isActive: true, archivedAt: null }, select: { name: true } });
@@ -46,3 +49,39 @@ export async function handleInstagramCallback(callback: TelegramCallbackQuery) {
   }
   return true;
 }
+
+// ---- Direct cards: "🚫 Kerak emas" → reason → done ---------------------------------------------------------
+
+const DIRECT_PREFIX = "igdm:";
+
+/**
+ * igdm:x:<id> shows the reasons on that card, igdm:r:<id>:<code> dismisses (every card is edited), igdm:b:<id> goes back.
+ * Allowed for users who receive Instagram Direct and for Super Admins.
+ */
+async function handleDirectCallback(callback: TelegramCallbackQuery) {
+  const answer = (text: string, alert = false) => answerCallbackQuery(callback.id, text, alert).catch(() => undefined);
+  const admin = await getDb().adminUser.findFirst({ where: { telegramChatId: String(callback.from.id), isActive: true, archivedAt: null, OR: [{ receivesInstagramDirect: true }, { role: "SUPER_ADMIN" }] }, select: { name: true } });
+  if (!admin) { await answer("Ruxsat yo‘q", true); return true; }
+  const [, action, id, code] = callback.data!.split(":");
+  if (!id) { await answer("Noto‘g‘ri tugma", true); return true; }
+  if (action === "x" && callback.message) {
+    const reasons: InlineKeyboard = { inline_keyboard: [Object.entries(DISMISS_REASONS).map(([key, label]) => ({ text: label, callback_data: `${DIRECT_PREFIX}r:${id}:${key}` })), [{ text: "↩ Orqaga", callback_data: `${DIRECT_PREFIX}b:${id}` }]] };
+    await answer("Sababini tanlang");
+    await editMessageReplyMarkup(String(callback.message.chat.id), callback.message.message_id, callback.message.text ?? "", reasons);
+    return true;
+  }
+  if (action === "b") { await answer("Bekor qilindi"); await syncCards(id).catch(() => undefined); return true; }
+  if (action === "r") {
+    const reason = dismissReason(code ?? "");
+    if (!reason) { await answer("Noto‘g‘ri sabab", true); return true; }
+    const done = await dismissConversation(id, reason, admin.name);
+    await answer(done ? `Kerak emas: ${reason} ✓` : "Holat allaqachon o‘zgargan");
+    if (!done) await syncCards(id).catch(() => undefined);
+    return true;
+  }
+  await answer("Noma’lum tugma", true);
+  return true;
+}
+
+/** Same text, new buttons (Telegram has no plain keyboard edit in our client; editing the text to itself does it). */
+const editMessageReplyMarkup = (chatId: string, messageId: number, text: string, keyboard: InlineKeyboard) => editMessageText(chatId, messageId, text, keyboard).catch(() => undefined);

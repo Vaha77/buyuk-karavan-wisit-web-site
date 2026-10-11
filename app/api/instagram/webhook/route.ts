@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { appConfig } from "@/lib/instagram/graph";
 import { validSignature, verifyChallenge } from "@/lib/instagram/rules";
-import { ingestNotification, processQueue } from "@/lib/instagram/service";
+import { afterNotification, ingestNotification } from "@/lib/instagram/service";
 
 export const runtime = "nodejs";
 // Replies are sent after the 200 (next/server `after`), 20–90 s apart, within this route's duration.
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   try { payload = JSON.parse(raw.toString("utf8")); } catch { return NextResponse.json({ ok: false }, { status: 400 }); }
   try {
     const result = await ingestNotification(payload);
-    if (result?.queued.length) after(() => processQueue({ budgetMs: 240_000 }));
+    if (result) after(() => afterNotification(result));
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Instagram webhook failed", { type: error instanceof Error ? error.name : "UnknownError" });

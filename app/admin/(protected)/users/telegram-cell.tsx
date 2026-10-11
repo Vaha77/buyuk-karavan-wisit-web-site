@@ -1,10 +1,10 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createUserTelegramLinkAction, unlinkUserTelegramAction } from "./actions";
+import { createUserTelegramLinkAction, setInstagramDirectAction, unlinkUserTelegramAction } from "./actions";
 
 /** WORKSHOP row: "✅ Telegram ulangan" + "Uzish", or "Telegram bog‘lash" → a one-time t.me link to hand to the person. */
-export function WorkshopTelegramCell({ userId, linked }: { userId: string; linked: boolean }) {
+export function WorkshopTelegramCell({ userId, linked, hint = "Seh mas’uliga yuboring" }: { userId: string; linked: boolean; hint?: string }) {
   const router = useRouter();
   const [link, setLink] = useState<string | null>(null), [error, setError] = useState(""), [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -28,8 +28,27 @@ export function WorkshopTelegramCell({ userId, linked }: { userId: string; linke
     {link && <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
       {link.startsWith("http") ? <a href={link} target="_blank" rel="noopener noreferrer" style={{ wordBreak: "break-all" }}>{link}</a> : <code>{link}</code>}
       <button type="button" className="admin-user-button is-outline" onClick={copy}>{copied ? "Nusxalandi ✓" : "Nusxalash"}</button>
-      <small style={{ color: "#5B6B82" }}>Seh mas’uliga yuboring · 15 daqiqa amal qiladi · u botda START bosadi</small>
+      <small style={{ color: "#5B6B82" }}>{hint} · 15 daqiqa amal qiladi · u botda START bosadi</small>
     </span>}
+    {error && <span role="alert" style={{ color: "#B42318" }}>{error}</span>}
+  </div>;
+}
+
+/** Staff row: "Instagram so‘rovlarini oladi" (Direct cards in Telegram) + the Telegram link it needs. */
+export function InstagramDirectCell({ userId, linked, enabled }: { userId: string; linked: boolean; enabled: boolean }) {
+  const router = useRouter();
+  const [checked, setChecked] = useState(enabled), [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+  const toggle = (value: boolean) => startTransition(async () => {
+    setError(""); setChecked(value);
+    const result = await setInstagramDirectAction(userId, value);
+    if (!result.ok) { setChecked(!value); setError(result.error); return; }
+    router.refresh();
+  });
+  return <div className="admin-user-seller" style={{ display: "grid", gap: 4, fontSize: 12 }}>
+    <label style={{ display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={checked} disabled={pending} onChange={event => toggle(event.target.checked)}/> Instagram so‘rovlarini oladi</label>
+    {(checked || linked) && <WorkshopTelegramCell userId={userId} linked={linked} hint="Xodimga yuboring"/>}
+    {checked && !linked && <small style={{ color: "#B42318" }}>Telegram ulanmagan — xabar bormaydi</small>}
     {error && <span role="alert" style={{ color: "#B42318" }}>{error}</span>}
   </div>;
 }

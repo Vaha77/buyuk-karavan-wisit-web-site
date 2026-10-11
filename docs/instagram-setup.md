@@ -154,6 +154,23 @@ va javob-kommentlarga (reply) javob yo'q; javoblar orasida tasodifiy 20–90 son
 Salbiy xabar kelishi uchun Super Admin Telegram'ni ulagan bo'lishi kerak (Sozlamalar → "Seh Telegram boti" → ulash).
 Like qo'yish API'da yo'q.
 
+## 12. Direct → Telegram
+
+Madina Direct'da javob bermaydi. Mijoz yozsa (shu jumladan "So'rovlar" papkasi) — Telegram'da kartochka keladi:
+`📩 Instagram: @username (Ism) — "xabar" — 14:32` + [Instagram'da ochish ↗] [🚫 Kerak emas].
+
+- Kim oladi: Foydalanuvchilar → xodim qatorida **"Instagram so'rovlarini oladi"** + **Telegram bog'lash** (bir martalik havola, botda START).
+- Holatlar: Qaralmagan → Ochildi ("Instagram'da ochish" bosilganda; birinchi bosgan — mas'ul) → Javob berildi (faqat Instagram'dan javob yozilganda). "Kerak emas" — sababi bilan.
+- Bir odamning keyingi xabarlari shu kartochkani yangilaydi (oxirgi 3 ta + jami).
+- Eslatma: 30 daqiqa javobsiz → ⏰; 2 soat → Super Admin'ga ham. Faqat ish vaqti hisoblanadi (Instagram → Direct, standart 09:00–20:00).
+- Ish vaqtidan tashqari kelganlar ertalab bitta ro'yxat bo'lib keladi; 20:00 da kunlik hisobot.
+- Telefon raqam yozilsa — BKLead'da lid (manba "Instagram DM"), bir odamga bitta.
+
+**Vercel Hobby** cron'i kuniga 1 marta (±59 daqiqa) ishlaydi: ertalabki ro'yxat va hisobot shu bilan keladi, eslatmalar esa
+Instagram/Telegram'dan har hodisa kelganda tekshiriladi. Eslatmalar aniq vaqtda kelishi uchun tashqi cron
+(masalan cron-job.org) har 5 daqiqada `GET https://buyukkaravan.com/api/cron/instagram-direct` ni
+`Authorization: Bearer <CRON_SECRET>` sarlavhasi bilan chaqirsin (Pro tarifda `*/5 * * * *` qo'yish mumkin).
+
 ## Nosozliklar
 
 | Belgi | Sabab / yechim |

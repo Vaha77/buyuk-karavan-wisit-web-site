@@ -1,19 +1,17 @@
 // Webhook notification → journal rows. Pure (the store is passed in), so idempotency is testable without a database.
-import { decideIngest, parseWebhook } from "./rules";
+import { decideIngest, parseWebhook, type MessageEvent } from "./rules";
 
 export type IngestAccount = { igUserId: string; username: string };
 export type CommentRow = { commentId: string; mediaId: string; fromId: string; username: string | null; text: string; parentId: string | null; status: "PENDING" | "SKIPPED"; reason: string | null; createdAt: Date; nextAttemptAt: Date };
-export type MessageRow = { mid: string; fromId: string; text: string | null; hasAttachments: boolean; sentAt: Date };
 export type IngestStore = {
   /** false when the comment id is already in the journal (unique key) — then nothing else happens for it. */
   insertComment: (row: CommentRow) => Promise<boolean>;
-  insertMessages: (rows: MessageRow[]) => Promise<void>;
 };
 
 /**
- * Stores every comment on our media once (comment id = unique key) and every incoming Direct message once. Returns the
- * queued comment ids; classification and replies happen later in the queue. Events for another account, our own
- * comments and echoes of our own messages are ignored.
+ * Stores every comment on our media once (comment id = unique key). Returns the queued comment ids (classified and
+ * answered later in the queue) and this account's Direct events (customer messages and echoes of ours, in time order)
+ * for lib/instagram/direct.ts. Events for another account and our own comments are ignored.
  */
 export async function ingestWebhook(payload: unknown, account: IngestAccount, store: IngestStore, now = new Date()) {
   const { comments, messages } = parseWebhook(payload, now);
@@ -26,7 +24,6 @@ export async function ingestWebhook(payload: unknown, account: IngestAccount, st
     if (!inserted) { duplicates++; continue; }
     if (decision.action === "queue") queued.push(event.commentId);
   }
-  const incoming = messages.filter(event => event.accountId === account.igUserId && !event.isEcho && event.fromId !== account.igUserId);
-  if (incoming.length) await store.insertMessages(incoming.map(event => ({ mid: event.mid, fromId: event.fromId, text: event.text, hasAttachments: event.hasAttachments, sentAt: event.time })));
-  return { queued, duplicates, messages: incoming.length };
+  const direct: MessageEvent[] = messages.filter(event => event.accountId === account.igUserId).sort((a, b) => a.time.getTime() - b.time.getTime());
+  return { queued, duplicates, direct };
 }

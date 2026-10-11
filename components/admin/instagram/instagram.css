@@ -47,3 +47,4 @@
 .ig-reply{display:block;margin-bottom:4px;font-size:12px;overflow-wrap:anywhere}
 @media (max-width:900px){.ig .bk-grid-main{grid-template-columns:1fr}}
 @media (max-width:520px){.ig-grid{grid-template-columns:1fr}.ig-search input{width:140px}.ig-media-top{grid-template-columns:72px minmax(0,1fr)}.ig-thumb{width:72px;height:90px}}
+.ig-dismiss{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.ig-dismiss select{min-height:38px;border:1px solid var(--bk-border);border-radius:10px;padding:0 8px;font:inherit;font-size:13px}

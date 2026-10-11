@@ -84,6 +84,17 @@ export async function listMedia(token: string, igUserId: string, limit = 24) {
   }
 }
 
+/** Name and @username of a person who messaged us (Meta allows it only after they wrote to the account). */
+export async function getUserProfile(token: string, igsid: string) {
+  const result = await call<{ name?: string; username?: string }>(graph(igsid, { fields: "name,username" }), { token });
+  return { name: result.name?.trim() || null, username: result.username?.trim() || null };
+}
+
+/** A Direct message to someone who wrote to us (within Meta's 24-hour window). */
+export function sendDirectMessage(token: string, igUserId: string, recipientId: string, text: string) {
+  return call<{ recipient_id?: string; message_id?: string }>(graph(`${igUserId}/messages`), { method: "POST", token, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: { id: recipientId }, message: { text } }) });
+}
+
 /** Permalink of one post (for the Telegram notice when the post has no saved settings). */
 export async function getMediaPermalink(token: string, mediaId: string) {
   return (await call<{ permalink?: string }>(graph(mediaId, { fields: "permalink" }), { token })).permalink ?? null;

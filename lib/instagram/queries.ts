@@ -19,7 +19,7 @@ export type InstagramStatus = Awaited<ReturnType<typeof getInstagramStatus>>;
 
 export type BoardMedia = { id: string; caption: string; isReel: boolean; thumbnail: string | null; permalink: string | null; postedAt: string | null; commentsCount: number | null; fromApi: boolean };
 
-/** "Instagram" section: latest media (API) + saved rules, per-media stats, the journal and incoming Direct messages. */
+/** "Instagram" section: latest media (API) + saved rules, per-media stats and the comment journal. */
 export async function getInstagramBoard() {
   const db = getDb();
   const account = await getInstagramAccount();
@@ -32,12 +32,11 @@ export async function getInstagramBoard() {
       catch (error) { mediaError = `Postlarni olib bo‘lmadi: ${error instanceof GraphError ? errorReason(error.info) : "tarmoq xatosi"}`; }
     }
   }
-  const [rules, stats, leads, journal, messages, products, kinds, cost, repliesToday] = await Promise.all([
+  const [rules, stats, leads, journal, products, kinds, cost, repliesToday] = await Promise.all([
     db.instagramMediaRule.findMany({ orderBy: { updatedAt: "desc" } }),
     db.instagramComment.groupBy({ by: ["mediaId", "status"], _count: { _all: true } }),
     db.instagramComment.groupBy({ by: ["mediaId"], where: { leadId: { not: null } }, _count: { _all: true } }),
     db.instagramComment.findMany({ orderBy: { createdAt: "desc" }, take: 150, select: { commentId: true, mediaId: true, username: true, text: true, status: true, reason: true, productName: true, createdAt: true, leadId: true, publicReplyError: true, kind: true, classifiedBy: true, aiCostUsd: true, aiTokens: true, dmText: true, publicReplyText: true, reviewedAt: true, reviewedBy: true } }),
-    db.instagramMessage.findMany({ orderBy: { sentAt: "desc" }, take: 50 }),
     db.product.findMany({ where: { archivedAt: null }, orderBy: [{ name: "asc" }], select: { id: true, name: true, model: true, priceUsd: true, isVisible: true } }),
     db.instagramComment.groupBy({ by: ["kind"], _count: { _all: true } }),
     db.instagramComment.aggregate({ _sum: { aiCostUsd: true, aiTokens: true } }),
@@ -56,8 +55,6 @@ export async function getInstagramBoard() {
   // Rules for posts outside the latest 24 stay listed (they keep working).
   for (const rule of rules) if (!list.some(item => item.id === rule.mediaId)) list.push({ id: rule.mediaId, caption: rule.caption ?? "", isReel: isReel(rule.permalink), thumbnail: null, permalink: rule.permalink, postedAt: rule.postedAt?.toISOString() ?? null, commentsCount: null, fromApi: false });
 
-  const senders = [...new Set(messages.map(item => item.fromId))];
-  const usernames = new Map((senders.length ? await db.instagramComment.findMany({ where: { fromId: { in: senders }, username: { not: null } }, select: { fromId: true, username: true }, distinct: ["fromId"] }) : []).map(row => [row.fromId, row.username!]));
   const permalinks = new Map(list.map(item => [item.id, item.permalink]));
 
   return {
@@ -71,7 +68,6 @@ export async function getInstagramBoard() {
     rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { productId: rule.productId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText, publicReplyVariants: rule.publicReplyVariants }])),
     stats: perMedia,
     journal: journal.map(row => ({ ...row, createdAt: row.createdAt.toISOString(), reviewedAt: row.reviewedAt?.toISOString() ?? null, aiCostUsd: row.aiCostUsd === null ? null : Number(row.aiCostUsd), permalink: permalinks.get(row.mediaId) ?? null })),
-    messages: messages.map(row => ({ mid: row.mid, username: usernames.get(row.fromId) ?? null, text: row.text, hasAttachments: row.hasAttachments, sentAt: row.sentAt.toISOString() })),
     products: products.map(item => ({ id: item.id, name: item.name, model: item.model, hasPrice: item.priceUsd !== null, isVisible: item.isVisible })),
   };
 }

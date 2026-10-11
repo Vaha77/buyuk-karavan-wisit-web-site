@@ -31,6 +31,8 @@ enum LeadSource {
   HOME_CTA
   OTHER
   INSTAGRAM
+  // A phone number written in an Instagram Direct message.
+  INSTAGRAM_DM
 }
 
 enum TelegramNotificationStatus {
@@ -427,6 +429,8 @@ model AdminUser {
   // One-time "Telegram ulash" code (deep link t.me/<bot>?start=seh_<code>), valid 15 minutes.
   telegramLinkCode      String?                     @unique @db.VarChar(40)
   telegramLinkExpiresAt DateTime?
+  // Gets Instagram Direct cards, reminders and the daily report in Telegram (needs telegramChatId).
+  receivesInstagramDirect Boolean                   @default(false)
   createdAt            DateTime                     @default(now())
   updatedAt            DateTime                     @updatedAt
   sessions             AdminSession[]
@@ -1260,6 +1264,15 @@ model InstagramAccount {
   // Pacing: the next reply may go out at this time (20–90 s random gap); one queue runner at a time.
   nextActionAt        DateTime?
   runnerUntil         DateTime?
+  // Direct → Telegram: working hours (minutes after midnight, Tashkent), optional one-time auto message.
+  directWorkStart     Int       @default(540)
+  directWorkEnd       Int       @default(1200)
+  directAutoAckEnabled Boolean  @default(false)
+  directAutoAckText   String    @default("Assalomu alaykum! Xabaringiz qabul qilindi, mutaxassisimiz tez orada javob beradi.")
+  // Tashkent dates (YYYY-MM-DD) of the last 09:00 digest / 20:00 report, and the last tick (throttle).
+  directDigestDate    String?   @db.VarChar(10)
+  directReportDate    String?   @db.VarChar(10)
+  directTickAt        DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }
@@ -1330,15 +1343,83 @@ model InstagramComment {
   @@index([kind, createdAt])
 }
 
-// Direct messages people send us (logged only; Madina is a later step).
+// Direct messages: incoming (IN) and our own (OUT, from the is_echo webhook). Madina never answers in Direct.
 model InstagramMessage {
-  mid            String   @id @db.VarChar(255)
-  fromId         String   @db.VarChar(64)
+  mid            String                     @id @db.VarChar(255)
+  fromId         String                     @db.VarChar(64)
   text           String?
-  hasAttachments Boolean  @default(false)
+  hasAttachments Boolean                    @default(false)
   sentAt         DateTime
-  createdAt      DateTime @default(now())
+  conversationId String?
+  conversation   InstagramConversation?     @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  direction      InstagramMessageDirection  @default(IN)
+  toId           String?                    @db.VarChar(64)
+  // TEXT, IMAGE, AUDIO, VIDEO, FILE, SHARE, STORY, STICKER, OTHER
+  kind           String                     @default("TEXT") @db.VarChar(20)
+  // Our automatic messages (comment Private Reply, Direct auto message): do not count as "Javob berildi".
+  isAuto         Boolean                    @default(false)
+  // On the OUT message that answered: time since the customer started waiting.
+  responseMs     Int?
+  createdAt      DateTime                   @default(now())
 
   @@index([createdAt])
   @@index([fromId])
+  @@index([conversationId, sentAt])
+  @@index([direction, sentAt])
+}
+
+enum InstagramMessageDirection {
+  IN
+  OUT
+}
+
+// Qaralmagan → Ochildi (an admin pressed "Instagram’da ochish" in Telegram) → Javob berildi (our echo arrived);
+// "Kerak emas" by hand. A new customer message after Javob berildi / Kerak emas starts a new cycle (Qaralmagan).
+enum InstagramConversationStatus {
+  UNREAD
+  OPENED
+  ANSWERED
+  DISMISSED
+}
+
+model InstagramConversation {
+  id             String                      @id @default(cuid())
+  // Instagram-scoped id of the customer.
+  igsid          String                      @unique @db.VarChar(64)
+  username       String?
+  name           String?
+  profileFetchedAt DateTime?
+  status         InstagramConversationStatus @default(UNREAD)
+  firstMessageAt DateTime
+  lastIncomingAt DateTime?
+  lastOutgoingAt DateTime?
+  // Start of the current unanswered stretch (null when answered / dismissed).
+  waitingSince   DateTime?
+  messageCount   Int                         @default(0)
+  cycleCount     Int                         @default(0)
+  openedAt       DateTime?
+  openedById     String?
+  openedByName   String?
+  answeredAt     DateTime?
+  // "INSTAGRAM": a person answered in the Instagram app / inbox.
+  answeredVia    String?                     @db.VarChar(20)
+  lastResponseMs Int?
+  dismissedAt    DateTime?
+  dismissReason  String?
+  dismissedBy    String?
+  // Came outside working hours: no card yet, listed in the 09:00 digest.
+  deferred       Boolean                     @default(false)
+  reminded30At   DateTime?
+  reminded2hAt   DateTime?
+  // Telegram cards of the current cycle: [{ chatId, messageId, adminId }], edited in place.
+  telegramCards  Json                        @default("[]")
+  cardLockUntil  DateTime?
+  autoAckAt      DateTime?
+  leadId         String?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  messages       InstagramMessage[]
+
+  @@index([status, waitingSince])
+  @@index([lastIncomingAt])
 }

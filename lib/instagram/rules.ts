@@ -133,7 +133,15 @@ export const isReel = (permalink?: string | null) => !!permalink && /\/reels?\//
 // ---- Webhook payload -----------------------------------------------------------------------------------
 
 export type CommentEvent = { accountId: string; commentId: string; mediaId: string; fromId: string; username: string | null; text: string; parentId: string | null; time: Date };
-export type MessageEvent = { accountId: string; mid: string; fromId: string; text: string | null; hasAttachments: boolean; isEcho: boolean; time: Date };
+export type MessageEvent = { accountId: string; mid: string; fromId: string; recipientId: string | null; text: string | null; hasAttachments: boolean; kind: string; isEcho: boolean; time: Date };
+
+const ATTACHMENT_KINDS: Record<string, string> = { image: "IMAGE", audio: "AUDIO", video: "VIDEO", file: "FILE", share: "SHARE", ig_reel: "SHARE", reel: "SHARE", story_mention: "STORY", sticker: "STICKER", animated_image: "IMAGE" };
+/** TEXT, or the first attachment's type (rasm, ovoz, video, fayl, ulashilgan post / reels, story, stiker). */
+export function messageKind(message: { text?: unknown; attachments?: unknown; reply_to?: unknown } | undefined) {
+  const first = Array.isArray(message?.attachments) ? (message.attachments[0] as { type?: unknown } | undefined) : undefined;
+  if (first) return typeof first.type === "string" ? ATTACHMENT_KINDS[first.type] ?? "OTHER" : "OTHER";
+  return typeof message?.text === "string" && message.text ? "TEXT" : "OTHER";
+}
 
 const str = (value: unknown) => typeof value === "string" && value ? value : typeof value === "number" ? String(value) : null;
 /** entry.time is seconds, messaging timestamps milliseconds; anything else → now. */
@@ -159,10 +167,10 @@ export function parseWebhook(payload: unknown, now = new Date()) {
       comments.push({ accountId, commentId, mediaId, fromId, username: str(value.from?.username), text: typeof value.text === "string" ? value.text.slice(0, 2000) : "", parentId: str(value.parent_id), time: eventTime(entry.time, now) });
     }
     for (const item of Array.isArray(entry.messaging) ? entry.messaging as Array<Record<string, unknown>> : []) {
-      const message = item?.message as { mid?: unknown; text?: unknown; is_echo?: unknown; attachments?: unknown } | undefined;
+      const message = item?.message as { mid?: unknown; text?: unknown; is_echo?: unknown; is_deleted?: unknown; attachments?: unknown } | undefined;
       const mid = str(message?.mid), fromId = str((item.sender as { id?: unknown } | undefined)?.id);
-      if (!message || !mid || !fromId) continue;
-      messages.push({ accountId, mid, fromId, text: typeof message.text === "string" ? message.text.slice(0, 4000) : null, hasAttachments: Array.isArray(message.attachments) && message.attachments.length > 0, isEcho: message.is_echo === true, time: eventTime(item.timestamp, now) });
+      if (!message || !mid || !fromId || message.is_deleted === true) continue;
+      messages.push({ accountId, mid, fromId, recipientId: str((item.recipient as { id?: unknown } | undefined)?.id), text: typeof message.text === "string" ? message.text.slice(0, 4000) : null, hasAttachments: Array.isArray(message.attachments) && message.attachments.length > 0, kind: messageKind(message), isEcho: message.is_echo === true, time: eventTime(item.timestamp, now) });
     }
   }
   return { comments, messages };

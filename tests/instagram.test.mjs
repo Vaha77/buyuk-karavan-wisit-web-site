@@ -157,11 +157,10 @@ test("variants, pacing, Tashkent day, AI cost", () => {
 });
 
 function memoryStore() {
-  const comments = new Map(), messages = new Map();
+  const comments = new Map();
   return {
-    comments, messages,
+    comments,
     insertComment: async row => { if (comments.has(row.commentId)) return false; comments.set(row.commentId, row); return true; },
-    insertMessages: async rows => { for (const row of rows) if (!messages.has(row.mid)) messages.set(row.mid, row); },
   };
 }
 
@@ -177,7 +176,7 @@ test("idempotency: the same comment delivered twice is stored and queued once", 
   assert.equal(store.comments.get("c-1").status, "PENDING");
 });
 
-test("ingest: other accounts, our own comments and echoes ignored; reply-comments logged as skipped; DMs logged once", async () => {
+test("ingest: other accounts and our own comments ignored; reply-comments logged as skipped; Direct events handed over", async () => {
   const store = memoryStore();
   const own = commentPayload("c-own", "narx", { from: { id: ACCOUNT.igUserId, username: ACCOUNT.username } });
   assert.deepEqual((await ingestWebhook(own, ACCOUNT, store, now)).queued, []);
@@ -193,10 +192,11 @@ test("ingest: other accounts, our own comments and echoes ignored; reply-comment
     { sender: { id: "9001" }, recipient: { id: ACCOUNT.igUserId }, timestamp: now.getTime(), message: { mid: "m-1", text: "Rahmat, yetkazib berasizmi?" } },
     { sender: { id: ACCOUNT.igUserId }, recipient: { id: "9001" }, timestamp: now.getTime(), message: { mid: "m-2", text: "echo", is_echo: true } },
   ] }] };
-  await ingestWebhook(dm, ACCOUNT, store, now);
-  await ingestWebhook(dm, ACCOUNT, store, now);
-  assert.equal(store.messages.size, 1);
-  assert.equal(store.messages.get("m-1").text, "Rahmat, yetkazib berasizmi?");
+  const { direct } = await ingestWebhook(dm, ACCOUNT, store, now);
+  assert.equal(direct.length, 2, "customer message + echo, for lib/instagram/direct.ts");
+  assert.deepEqual(direct.map(event => [event.mid, event.isEcho, event.fromId, event.recipientId, event.kind]), [["m-1", false, "9001", ACCOUNT.igUserId, "TEXT"], ["m-2", true, ACCOUNT.igUserId, "9001", "TEXT"]]);
+  const other2 = { ...dm, entry: [{ ...dm.entry[0], id: "999" }] };
+  assert.equal((await ingestWebhook(other2, ACCOUNT, store, now)).direct.length, 0, "another account");
   assert.deepEqual(rules.parseWebhook({ object: "page", entry: [] }), { comments: [], messages: [] });
   assert.deepEqual(rules.parseWebhook(null), { comments: [], messages: [] });
 });
@@ -209,7 +209,7 @@ test("wiring: unique comment id, unique lead key, 401 on bad signature, token en
   assert.doesNotMatch(migration.replace(/^--.*$/gm, ""), /\bDROP\b|DELETE FROM|\bTRUNCATE\b|ALTER COLUMN/i, "additive only");
   const route = await read("../app/api/instagram/webhook/route.ts");
   assert.match(route, /validSignature\(raw, request\.headers\.get\("x-hub-signature-256"\), appConfig\(\)\.appSecret\)\) return NextResponse\.json\(\{ ok: false \}, \{ status: 401 \}\)/);
-  assert.match(route, /after\(\(\) => processQueue/);
+  assert.match(route, /after\(\(\) => afterNotification\(result\)\)/);
   const service = await read("../lib/instagram/service.ts");
   assert.match(service, /leadKey\(comment\.fromId, product\?\.id \?\? `post:\$\{comment\.mediaId\}`\)/, "one lead per person + product (or post)");
   assert.match(service, /if \(action\.type === "notify"\) \{[\s\S]*?return "notified";/, "NEGATIVE: Telegram notice, then return before any reply");

@@ -6,7 +6,7 @@ import type { LeadActivityType, SalesAgent } from "@/generated/prisma/client";
 import type { ConversationMessage, Lead, LeadSource, LeadStatus, LeadTimelineItem } from "./types";
 
 const statusMap = { NEW:"new", REVIEWING:"reviewing", CONTACTED:"contacted", COMPLETED:"completed", IN_PROGRESS:"in_progress", WON:"won", LOST:"lost" } as const;
-const sourceMap = { CONTACT_FORM:"contact_form", MADINA:"madina", PRODUCT:"product", PRODUCT_CONSULTATION:"product_consultation", PROJECT:"project", HOME_CTA:"home_cta", OTHER:"other", INSTAGRAM:"instagram" } as const;
+const sourceMap = { CONTACT_FORM:"contact_form", MADINA:"madina", PRODUCT:"product", PRODUCT_CONSULTATION:"product_consultation", PROJECT:"project", HOME_CTA:"home_cta", OTHER:"other", INSTAGRAM:"instagram", INSTAGRAM_DM:"instagram_dm" } as const;
 const activityLabels: Record<LeadActivityType, string> = {
   LEAD_CREATED:"Madina yangi murojaat yaratdi", CLAIMED:"Mijoz sotuvchiga biriktirildi",
   CONTACTED:"Sotuvchi mijoz bilan bog‘landi", COMMENT_ADDED:"Izoh qo‘shildi",

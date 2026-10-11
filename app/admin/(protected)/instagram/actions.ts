@@ -11,6 +11,8 @@ import { getDb } from "@/lib/db";
 import { appConfig, GraphError, subscribeWebhooks, unsubscribeWebhooks } from "@/lib/instagram/graph";
 import { CALLBACK_PATH, STATE_COOKIE, authorizeUrl, requestOrigin } from "@/lib/instagram/oauth";
 import { DEFAULT_QUESTION_DM, DEFAULT_QUESTION_REPLY } from "@/lib/instagram/constants";
+import { dismissConversation } from "@/lib/instagram/direct";
+import { parseMinute } from "@/lib/instagram/direct-rules";
 import { DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY, errorReason, parseKeywords, parseVariants } from "@/lib/instagram/rules";
 import { accountToken, getInstagramAccount, processQueue, refreshTokenIfDue } from "@/lib/instagram/service";
 
@@ -135,4 +137,35 @@ export async function runInstagramQueueAction(): Promise<Result> {
   revalidatePath("/admin/instagram");
   if (totals.busy) return { ok: true, message: "Navbat hozir ishlayapti — javoblar 20–90 soniya oralig‘ida ketadi." };
   return { ok: true, message: `Yuborildi: ${totals.sent} · adminga: ${totals.notified} · o‘tkazildi: ${totals.skipped} · xato: ${totals.failed} · navbatda: ${totals.retry + totals.waiting}` };
+}
+
+// ---- Direct tab ------------------------------------------------------------------------------------------
+
+const directSettingsSchema = z.object({ workStart: z.string(), workEnd: z.string(), autoAckEnabled: z.boolean(), autoAckText: z.string().trim().max(600) });
+
+/** Working hours (Tashkent) and the optional one-time auto message. */
+export async function saveDirectSettingsAction(raw: unknown): Promise<Result> {
+  const actor = await requireRole("SUPER_ADMIN", "ADMIN");
+  const parsed = directSettingsSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "Ma’lumotlarni tekshiring." };
+  const start = parseMinute(parsed.data.workStart), end = parseMinute(parsed.data.workEnd);
+  if (start === null || end === null || end <= start) return { ok: false, error: "Ish vaqtini HH:MM ko‘rinishida kiriting (boshlanishi tugashidan oldin)." };
+  if (parsed.data.autoAckEnabled && !parsed.data.autoAckText) return { ok: false, error: "Avto-xabar matnini yozing." };
+  const { count } = await getDb().instagramAccount.updateMany({ where: { id: "global" }, data: { directWorkStart: start, directWorkEnd: end, directAutoAckEnabled: parsed.data.autoAckEnabled, ...(parsed.data.autoAckText ? { directAutoAckText: parsed.data.autoAckText } : {}) } });
+  if (!count) return { ok: false, error: "Avval Sozlamalarda Instagram’ni ulang." };
+  await writeAudit(actor, { action: "UPDATE", entityType: "SITE_SETTINGS", entityId: "instagram-direct", entityName: "Instagram Direct", summary: "Instagram Direct sozlamalarini saqladi", after: { workStart: parsed.data.workStart, workEnd: parsed.data.workEnd, autoAckEnabled: parsed.data.autoAckEnabled } });
+  revalidatePath("/admin/instagram");
+  return { ok: true, message: "Saqlandi ✓" };
+}
+
+/** "Kerak emas / spam" from the panel, with a reason (Telegram cards are updated). */
+export async function dismissDirectAction(conversationId: string, reason: string): Promise<Result> {
+  const actor = await requireRole("SUPER_ADMIN", "ADMIN");
+  const text = String(reason ?? "").trim().slice(0, 200);
+  if (!text) return { ok: false, error: "Sababini yozing." };
+  const done = await dismissConversation(String(conversationId), text, actor.name);
+  if (!done) return { ok: false, error: "Holat allaqachon o‘zgargan." };
+  await writeAudit(actor, { action: "UPDATE", entityType: "INSTAGRAM_DIRECT", entityId: String(conversationId), summary: `Instagram yozishmasini “Kerak emas” qildi: ${text}` });
+  revalidatePath("/admin/instagram");
+  return { ok: true, message: "Kerak emas ✓" };
 }

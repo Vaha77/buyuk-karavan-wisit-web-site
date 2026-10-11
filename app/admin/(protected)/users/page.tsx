@@ -13,7 +13,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   await requireRole("SUPER_ADMIN");
   const archive = (await searchParams).view === "archive";
   const [rows, salesPeople, archivedCount] = await Promise.all([
-    getDb().adminUser.findMany({ where: { archivedAt: archive ? { not: null } : null }, orderBy: [{ approvalStatus: "asc" }, { createdAt: "asc" }], select: { id: true, name: true, phone: true, role: true, isActive: true, approvalStatus: true, salesPersonId: true, telegramChatId: true, passwordEncrypted: true, archivedAt: true } }),
+    getDb().adminUser.findMany({ where: { archivedAt: archive ? { not: null } : null }, orderBy: [{ approvalStatus: "asc" }, { createdAt: "asc" }], select: { id: true, name: true, phone: true, role: true, isActive: true, approvalStatus: true, salesPersonId: true, telegramChatId: true, receivesInstagramDirect: true, passwordEncrypted: true, archivedAt: true } }),
     getDb().salesPerson.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true, user: { select: { id: true } } } }),
     getDb().adminUser.count({ where: { archivedAt: { not: null } } }),
   ]);

@@ -153,13 +153,6 @@ function Journal({ rows }: { rows: Board["journal"] }) {
   </section>;
 }
 
-function Messages({ rows }: { rows: Board["messages"] }) {
-  return <section className="bk-card" aria-labelledby="ig-dm">
-    <div className="bk-card-head"><div><h2 id="ig-dm">Direct’dan kelgan javoblar</h2><p className="bk-muted">Faqat jurnal — javobni Instagram ilovasida yozing (Madina AI keyingi bosqichda).</p></div></div>
-    {rows.length ? <ul className="ig-messages">{rows.map(row => <li key={row.mid}><span className="bk-muted">{dateTime(row.sentAt)}</span><strong>{row.username ? `@${row.username}` : "Instagram foydalanuvchisi"}</strong><p>{row.text ?? (row.hasAttachments ? "📎 Fayl / rasm" : "—")}</p></li>)}</ul> : <div className="bk-empty">Hali xabar yo‘q</div>}
-  </section>;
-}
-
 export function InstagramBoard({ board, canConnect }: { board: Board; canConnect: boolean }) {
   const [query, setQuery] = useState("");
   const media = board.media.filter(item => !query || item.caption.toLowerCase().includes(query.toLowerCase()));
@@ -173,6 +166,5 @@ export function InstagramBoard({ board, canConnect }: { board: Board; canConnect
     <div className="ig-toolbar"><h2>Postlar va Reels</h2><label className="ig-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Izoh bo‘yicha qidirish" aria-label="Postlarni qidirish"/></label></div>
     {media.length ? <div className="ig-grid">{media.map(item => <MediaCard key={item.id} media={item} rule={board.rules[item.id]} stats={board.stats[item.id]} products={board.products} canEdit/>)}</div> : <div className="bk-empty">Post topilmadi</div>}
     <Journal rows={board.journal}/>
-    <Messages rows={board.messages}/>
   </div>;
 }

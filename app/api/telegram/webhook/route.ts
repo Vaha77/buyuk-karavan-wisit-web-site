@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { directTick } from "@/lib/instagram/direct";
 import { answerCallbackQuery, telegramErrorDetails, telegramWebhookSecret } from "@/lib/telegram/client";
 import { handleTelegramUpdate } from "@/lib/telegram/service";
 import { isTelegramUpdate } from "@/lib/telegram/types";
@@ -41,12 +42,14 @@ export async function POST(request: Request) {
 
   const update: unknown = await request.json().catch(() => null);
   if (!isTelegramUpdate(update)) return NextResponse.json({ ok: false }, { status: 400 });
+  // Instagram Direct reminders / digest / report piggyback on bot traffic (throttled to once a minute inside).
+  after(() => directTick().catch(error => console.error("Instagram Direct tick failed", { type: error instanceof Error ? error.name : "UnknownError" })));
   timings.webhook_received_ms = Math.round(performance.now() - startedAt);
 
   // Start acknowledgement before database idempotency or any handler work. Seh buttons ("seh:" / old "ws:") and the
   // Instagram "Ko‘rib chiqildi" button ("igrev:") answer
   // themselves (e.g. "Ruxsat yo‘q" as an alert), so they are not pre-acknowledged here.
-  const sehButton = /^(?:seh|ws|igrev):/.test(update.callback_query?.data ?? "");
+  const sehButton = /^(?:seh|ws|igrev|igdm):/.test(update.callback_query?.data ?? "");
   const callbackAck = update.callback_query && !sehButton
     ? answerCallbackQuery(update.callback_query.id, "So‘rov qabul qilindi.")
         .then(() => { timings.callback_ack_ms = Math.round(performance.now() - startedAt); })
