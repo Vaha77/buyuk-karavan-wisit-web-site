@@ -84,6 +84,11 @@ export async function listMedia(token: string, igUserId: string, limit = 24) {
   }
 }
 
+/** Permalink of one post (for the Telegram notice when the post has no saved settings). */
+export async function getMediaPermalink(token: string, mediaId: string) {
+  return (await call<{ permalink?: string }>(graph(mediaId, { fields: "permalink" }), { token })).permalink ?? null;
+}
+
 /** Private Reply: one Direct message to the person who wrote the comment (within 7 days, once per comment). */
 export function sendPrivateReply(token: string, igUserId: string, commentId: string, text: string) {
   return call<{ recipient_id?: string; message_id?: string }>(graph(`${igUserId}/messages`), { method: "POST", token, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: { comment_id: commentId }, message: { text } }) });

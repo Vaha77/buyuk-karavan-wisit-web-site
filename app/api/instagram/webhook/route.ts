@@ -4,8 +4,8 @@ import { validSignature, verifyChallenge } from "@/lib/instagram/rules";
 import { ingestNotification, processQueue } from "@/lib/instagram/service";
 
 export const runtime = "nodejs";
-// Private Replies are sent after the 200 (next/server `after`), within this route's duration.
-export const maxDuration = 60;
+// Replies are sent after the 200 (next/server `after`), 20–90 s apart, within this route's duration.
+export const maxDuration = 300;
 
 /** Meta's subscription check: echo hub.challenge when hub.verify_token matches INSTAGRAM_WEBHOOK_VERIFY_TOKEN. */
 export function GET(request: Request) {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   try { payload = JSON.parse(raw.toString("utf8")); } catch { return NextResponse.json({ ok: false }, { status: 400 }); }
   try {
     const result = await ingestNotification(payload);
-    if (result && (result.queued.length || result.generalReplies.length)) after(() => processQueue({ limit: 10, generalReplies: result.generalReplies }));
+    if (result?.queued.length) after(() => processQueue({ budgetMs: 240_000 }));
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Instagram webhook failed", { type: error instanceof Error ? error.name : "UnknownError" });

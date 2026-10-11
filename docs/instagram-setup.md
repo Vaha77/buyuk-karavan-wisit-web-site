@@ -134,6 +134,26 @@ Rad etilsa — Meta yozgan sababni o'qing, videoni o'sha qadam bilan to'ldirib q
 2. Sozlamalar → Instagram → **Webhookni qayta ulash** (yoki "Qayta ulash").
 3. Haqiqiy akkauntdan sinab ko'ring.
 
+## 11. Komment turlari va avto-javoblar
+
+Har komment avval **kalit so'zlar** bilan turlanadi, noaniq bo'lsa **Madina AI** (OpenAI, `OPENAI_API_KEY`; model
+`OPENAI_INSTAGRAM_MODEL`, standart `gpt-4.1-mini`). AI ishlamasa — kalit so'z natijasi, u ham bo'lmasa javob berilmaydi.
+
+| Tur | Nima bo'ladi |
+|---|---|
+| Narx (PRICE) | Direct'ga post matni (erkin; `{narx_som}` `{mahsulot}` `{havola}` `{telefon}` ixtiyoriy) + ochiq javob (variantlardan tasodifiy) + lid |
+| Ijobiy (POSITIVE) | AI yozgan 1 jumlalik rahmat (3–12 so'z, kommentning tilida, narx/va'da/chegirmasiz, oxirgi 20 javobga o'xshamasin) |
+| Savol (QUESTION) | Ochiq javob "Batafsil ma'lumotni Direct'ga yubordik 📩" + Direct + lid |
+| Salbiy (NEGATIVE) | Javob YO'Q; Telegram'da Super Admin'ga xabar [Instagram'da ochish] [Ko'rib chiqildi] |
+| Spam | Javobsiz, faqat jurnal |
+
+Admin panel → Instagram → "Avto-javob sozlamalari"da har tur alohida yoqiladi (Ijobiy va Savol standart o'chiq),
+kunlik ochiq javob limiti (standart 150) o'rnatiladi. Qoidalar: bitta odamga bitta postda 1 javob; o'z kommentlarimiz
+va javob-kommentlarga (reply) javob yo'q; javoblar orasida tasodifiy 20–90 soniya.
+
+Salbiy xabar kelishi uchun Super Admin Telegram'ni ulagan bo'lishi kerak (Sozlamalar → "Seh Telegram boti" → ulash).
+Like qo'yish API'da yo'q.
+
 ## Nosozliklar
 
 | Belgi | Sabab / yechim |

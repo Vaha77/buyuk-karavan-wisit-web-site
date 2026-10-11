@@ -2,7 +2,7 @@ import "server-only";
 import { isVaultEnabled } from "@/lib/auth/password-vault";
 import { getDb } from "@/lib/db";
 import { appConfig, GraphError, listMedia, type IgMedia } from "./graph";
-import { errorReason, isReel } from "./rules";
+import { errorReason, isReel, tashkentDayStart } from "./rules";
 import { accountToken, getInstagramAccount } from "./service";
 
 /** Sozlamalar card: connection state without the token. */
@@ -32,13 +32,16 @@ export async function getInstagramBoard() {
       catch (error) { mediaError = `Postlarni olib bo‘lmadi: ${error instanceof GraphError ? errorReason(error.info) : "tarmoq xatosi"}`; }
     }
   }
-  const [rules, stats, leads, journal, messages, products] = await Promise.all([
+  const [rules, stats, leads, journal, messages, products, kinds, cost, repliesToday] = await Promise.all([
     db.instagramMediaRule.findMany({ orderBy: { updatedAt: "desc" } }),
     db.instagramComment.groupBy({ by: ["mediaId", "status"], _count: { _all: true } }),
     db.instagramComment.groupBy({ by: ["mediaId"], where: { leadId: { not: null } }, _count: { _all: true } }),
-    db.instagramComment.findMany({ orderBy: { createdAt: "desc" }, take: 150, select: { commentId: true, mediaId: true, username: true, text: true, status: true, reason: true, productName: true, createdAt: true, leadId: true, publicReplyError: true } }),
+    db.instagramComment.findMany({ orderBy: { createdAt: "desc" }, take: 150, select: { commentId: true, mediaId: true, username: true, text: true, status: true, reason: true, productName: true, createdAt: true, leadId: true, publicReplyError: true, kind: true, classifiedBy: true, aiCostUsd: true, aiTokens: true, dmText: true, publicReplyText: true, reviewedAt: true, reviewedBy: true } }),
     db.instagramMessage.findMany({ orderBy: { sentAt: "desc" }, take: 50 }),
     db.product.findMany({ where: { archivedAt: null }, orderBy: [{ name: "asc" }], select: { id: true, name: true, model: true, priceUsd: true, isVisible: true } }),
+    db.instagramComment.groupBy({ by: ["kind"], _count: { _all: true } }),
+    db.instagramComment.aggregate({ _sum: { aiCostUsd: true, aiTokens: true } }),
+    db.instagramComment.count({ where: { publicReplyAt: { gte: tashkentDayStart() } } }),
   ]);
   const perMedia: Record<string, { comments: number; sent: number; failed: number; leads: number }> = {};
   for (const row of stats) {
@@ -58,12 +61,16 @@ export async function getInstagramBoard() {
   const permalinks = new Map(list.map(item => [item.id, item.permalink]));
 
   return {
-    account: account && { username: account.username, generalReplyEnabled: account.generalReplyEnabled, generalReplyText: account.generalReplyText, phone: account.phone ?? "" },
+    account: account && { username: account.username, generalReplyEnabled: account.generalReplyEnabled, generalReplyText: account.generalReplyText, phone: account.phone ?? "", priceEnabled: account.priceEnabled, positiveEnabled: account.positiveEnabled, questionEnabled: account.questionEnabled, negativeNotify: account.negativeNotify, dailyReplyLimit: account.dailyReplyLimit, questionReplyText: account.questionReplyText, questionDmTemplate: account.questionDmTemplate },
+    kinds: Object.fromEntries(kinds.map(row => [row.kind ?? "PENDING", row._count._all])) as Record<string, number>,
+    aiCostUsd: Number(cost._sum.aiCostUsd ?? 0),
+    aiTokens: cost._sum.aiTokens ?? 0,
+    repliesToday,
     media: list,
     mediaError,
-    rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { productId: rule.productId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText }])),
+    rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { productId: rule.productId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText, publicReplyVariants: rule.publicReplyVariants }])),
     stats: perMedia,
-    journal: journal.map(row => ({ ...row, createdAt: row.createdAt.toISOString(), permalink: permalinks.get(row.mediaId) ?? null })),
+    journal: journal.map(row => ({ ...row, createdAt: row.createdAt.toISOString(), reviewedAt: row.reviewedAt?.toISOString() ?? null, aiCostUsd: row.aiCostUsd === null ? null : Number(row.aiCostUsd), permalink: permalinks.get(row.mediaId) ?? null })),
     messages: messages.map(row => ({ mid: row.mid, username: usernames.get(row.fromId) ?? null, text: row.text, hasAttachments: row.hasAttachments, sentAt: row.sentAt.toISOString() })),
     products: products.map(item => ({ id: item.id, name: item.name, model: item.model, hasPrice: item.priceUsd !== null, isVisible: item.isVisible })),
   };

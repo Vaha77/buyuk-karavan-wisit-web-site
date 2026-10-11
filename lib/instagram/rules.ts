@@ -1,4 +1,4 @@
-// Instagram comment → Direct price: pure rules (no DB / network), covered by tests/instagram.test.mjs.
+// Instagram comment auto-replies: pure rules (no DB / network), covered by tests/instagram.test.mjs.
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { usdToSellingUzs } from "../pricing/money";
 
@@ -10,7 +10,8 @@ export const OAUTH_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 export const SCOPES = ["instagram_business_basic", "instagram_business_manage_comments", "instagram_business_manage_messages"] as const;
 
 export { DEFAULT_DM_TEMPLATE, DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY, PLACEHOLDERS } from "./constants";
-import { DEFAULT_KEYWORDS } from "./constants";
+import { DEFAULT_KEYWORDS, type CommentKind } from "./constants";
+export type { CommentKind } from "./constants";
 
 /** Meta allows a Private Reply only within 7 days of the comment. */
 export const REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -167,25 +168,155 @@ export function parseWebhook(payload: unknown, now = new Date()) {
   return { comments, messages };
 }
 
-// ---- Decision for a new comment ------------------------------------------------------------------------
+// ---- Ingest: which comments enter the queue ------------------------------------------------------------
 
-export type RuleForDecision = { isActive: boolean; productId: string | null; keywords: string[] } | null;
-export type Decision =
-  | { action: "ignore" }
-  | { action: "queue" }
-  | { action: "skip"; reason: string; generalReply?: boolean };
+export type IngestDecision = { action: "ignore" } | { action: "queue" } | { action: "skip"; reason: string };
 
 /**
- * What to do with a comment: our own comments are ignored (not even logged); a price question on a post with an active
- * product rule is queued for a Private Reply; everything else is logged as skipped (with the "Direct'ga yozing" public
- * reply for price questions on posts without a product, when that is switched on).
+ * Our own comments (and our public replies coming back as events) are ignored, not even logged. Replies to another comment
+ * (reply to a reply), comments older than 7 days are logged as skipped. Everything else is queued: it is classified and
+ * answered in the background (classification may call the AI, so it never runs inside the webhook request).
  */
-export function decideComment(event: Pick<CommentEvent, "fromId" | "username" | "text" | "time">, account: { igUserId: string; username: string; generalReplyEnabled: boolean }, rule: RuleForDecision, now = new Date()): Decision {
+export function decideIngest(event: Pick<CommentEvent, "fromId" | "username" | "parentId" | "time">, account: { igUserId: string; username: string }, now = new Date()): IngestDecision {
   if (event.fromId === account.igUserId || (event.username && account.username && event.username.toLowerCase() === account.username.toLowerCase())) return { action: "ignore" };
+  if (event.parentId) return { action: "skip", reason: "Javob-komment (reply) — javob berilmaydi" };
   if (tooOld(event.time, now)) return { action: "skip", reason: "7 kundan eski komment" };
-  if (rule && !rule.isActive) return { action: "skip", reason: "Post uchun avto-javob o‘chirilgan" };
-  const keywords = rule?.keywords.length ? rule.keywords : DEFAULT_KEYWORDS;
-  if (!matchesKeywords(event.text, keywords)) return { action: "skip", reason: "Kalit so‘z yo‘q" };
-  if (!rule?.productId) return { action: "skip", reason: "Postga mahsulot biriktirilmagan", generalReply: account.generalReplyEnabled };
   return { action: "queue" };
+}
+
+// ---- Keyword classifier --------------------------------------------------------------------------------
+
+type ClassKind = "PRICE" | "POSITIVE" | "QUESTION" | "NEGATIVE" | "SPAM";
+
+const SPAM = [/https?:\/\//, /\bwww\./, /\bt\.me\//, /\b[a-z0-9-]+\.(?:com|ru|uz|net|org|io|me|link|shop|xyz)\b/, /(?:^|\s)@\w+.*@\w+.*@\w+/, /\bfollow (?:me|back)\b/, /\bcheck (?:my|out my)\b/, /\bdm me\b/, /\bfree followers?\b/, /подпиш/, /заработ/, /казино|casino|crypto|bitcoin|крипт|ставк|1xbet|promo ?code|промокод|реклам/];
+const NEGATIVE = ["qimmat", "киммат", "қиммат", "aldov", "aldam", "aldash", "aldadi", "firib", "ishlamadi", "ishlamaydi", "ishlamay", "yomon", "ёмон", "sifatsiz", "buzil", "buzuq", "shikoyat", "обман", "мошен", "развод", "дорого", "плохо", "ужас", "отстой", "не работает", "сломал", "жалоба", "scam", "fake", "terrible", "axmoq", "ahmoq", "tupoy", "тупой"];
+const NEGATIVE_EMOJI = /[👎😡🤬🤮💩😠😤🖕]/u;
+const QUESTION = ["qayer", "qaer", "қаер", "каер", "manzil", "манзил", "adres", "адрес", "yetkaz", "етказ", "dostav", "доставк", "kafolat", "кафолат", "garant", "гарант", "qachon", "қачон", "когда", "где", "bormi", "bor mi", "mumkinmi", "qanday", "қандай", "как ", "zakaz", "заказ", "buyurtma", "ulgurji", "оптом", "rassrochka", "рассрочк", "nasiya", "кредит", "kredit", "ish vaqti", "telefon raqam", "номер"];
+const POSITIVE = ["zo'r", "зўр", "зур", "qoyil", "қойил", "gap yo'q", "гап йўқ", "ajoyib", "ажойиб", "rahmat", "raxmat", "раҳмат", "рахмат", "barakalla", "mashalloh", "mashaalloh", "omad", "super", "супер", "класс", "klass", "отлично", "молодц", "круто", "красиво", "спасибо", "yaxshi", "яхши", "chiroyli", "чиройли", "zo'r ekan", "nice", "cool", "wow", "great", "amazing", "love", "👍"];
+const POSITIVE_EMOJI = /[🔥😍👍❤️❤💯👏🤩😊🙂😁😀🥰💪✅⭐🌟🙏💙💚💛🧡💜🤍]/u;
+const hasLetters = (value: string) => /\p{L}/u.test(value);
+const hasEmoji = (value: string) => /\p{Extended_Pictographic}/u.test(value);
+const containsWord = (text: string, words: readonly string[]) => words.some(word => text.includes(word));
+
+/**
+ * Fast keyword pass. `definite` when exactly one kind matched; otherwise (none or several) the AI decides, and if the AI is
+ * unavailable `fallback` is used: the most cautious of the matches (SPAM > NEGATIVE > PRICE > QUESTION > POSITIVE), or
+ * null (= no reply). A price match hides the generic "?" question signal, so "narxi qancha?" is just PRICE.
+ */
+export function classifyByKeywords(comment: string, priceKeywords: readonly string[] = []) {
+  const text = normalizeText(comment);
+  const matched = new Set<ClassKind>();
+  if (!text) return { definite: null, fallback: null, matched: [] as ClassKind[] };
+  if (SPAM.some(pattern => pattern.test(text))) matched.add("SPAM");
+  if (containsWord(text, NEGATIVE) || NEGATIVE_EMOJI.test(text)) matched.add("NEGATIVE");
+  const price = matchesKeywords(text, priceKeywords.length ? priceKeywords : [...DEFAULT_KEYWORDS]);
+  if (price) matched.add("PRICE");
+  if (containsWord(`${text} `, QUESTION) || (!price && hasLetters(text) && text.includes("?"))) matched.add("QUESTION");
+  if (containsWord(text, POSITIVE) || (!hasLetters(text) && (POSITIVE_EMOJI.test(text) || hasEmoji(text)) && !NEGATIVE_EMOJI.test(text) && !price)) matched.add("POSITIVE");
+  const list = [...matched];
+  const order: ClassKind[] = ["SPAM", "NEGATIVE", "PRICE", "QUESTION", "POSITIVE"];
+  const fallback = order.find(kind => matched.has(kind)) ?? null;
+  return { definite: list.length === 1 ? list[0] : null, fallback, matched: list };
+}
+
+// ---- Choosing the action -------------------------------------------------------------------------------
+
+export type ActionSettings = { priceEnabled: boolean; positiveEnabled: boolean; questionEnabled: boolean; negativeNotify: boolean; dailyReplyLimit: number };
+export type ActionContext = {
+  rule: { isActive: boolean; productId: string | null } | null;
+  /** This person already got a reply (DM or public) on this post. */
+  alreadyAnswered: boolean;
+  /** Public replies sent today (Tashkent day). */
+  repliesToday: number;
+  generalReplyEnabled: boolean;
+};
+export type Action =
+  | { type: "skip"; reason: string }
+  | { type: "notify" }
+  | { type: "price"; publicReply: boolean }
+  | { type: "general" }
+  | { type: "positive" }
+  | { type: "question"; publicReply: boolean };
+
+/**
+ * What to do for a classified comment. NEGATIVE is never answered (Telegram notice only), SPAM / UNKNOWN never; one reply
+ * per person per post; a post with "Avto-javoblar faol" off gets no replies; over the daily limit no public reply goes out
+ * (a PRICE / QUESTION DM still does, POSITIVE is skipped since it is a public reply only).
+ */
+export function chooseAction(kind: CommentKind, settings: ActionSettings, context: ActionContext): Action {
+  if (kind === "SPAM") return { type: "skip", reason: "Spam — javobsiz" };
+  if (kind === "UNKNOWN") return { type: "skip", reason: "Turi aniqlanmadi — javobsiz" };
+  if (kind === "NEGATIVE") return settings.negativeNotify ? { type: "notify" } : { type: "skip", reason: "Salbiy — xabarnoma o‘chirilgan" };
+  if (context.rule && !context.rule.isActive) return { type: "skip", reason: "Post uchun avto-javoblar o‘chirilgan" };
+  if (context.alreadyAnswered) return { type: "skip", reason: "Bu odamga shu postda javob berilgan" };
+  const underLimit = context.repliesToday < settings.dailyReplyLimit;
+  if (kind === "PRICE") {
+    if (!settings.priceEnabled) return { type: "skip", reason: "Narx javoblari o‘chirilgan" };
+    if (!context.rule?.productId) return context.generalReplyEnabled && underLimit ? { type: "general" } : { type: "skip", reason: context.generalReplyEnabled ? "Kunlik javob limiti tugadi" : "Postga mahsulot biriktirilmagan" };
+    return { type: "price", publicReply: underLimit };
+  }
+  if (kind === "POSITIVE") {
+    if (!settings.positiveEnabled) return { type: "skip", reason: "Ijobiy kommentlarga javob o‘chirilgan" };
+    return underLimit ? { type: "positive" } : { type: "skip", reason: "Kunlik javob limiti tugadi" };
+  }
+  if (!settings.questionEnabled) return { type: "skip", reason: "Savollarga javob o‘chirilgan" };
+  return { type: "question", publicReply: underLimit };
+}
+
+// ---- Public replies ------------------------------------------------------------------------------------
+
+export function pickVariant(variants: readonly string[], fallback: string, random = Math.random) {
+  const list = variants.map(item => item.trim()).filter(Boolean);
+  return list.length ? list[Math.floor(random() * list.length) % list.length] : fallback;
+}
+
+/** "a\nb\n\nc" → ["a", "b", "c"], at most 10 variants of 300 chars. */
+export const parseVariants = (input: string | string[]) => [...new Set((Array.isArray(input) ? input : input.split("\n")).map(item => item.trim().slice(0, 300)).filter(Boolean))].slice(0, 10);
+
+const emojiCount = (value: string) => [...value.matchAll(/\p{Extended_Pictographic}/gu)].length;
+const FORBIDDEN = /\d|narx|нарх|цен|price|so['‘’ʻ]?m|сўм|сум|\$|chegirma|чегирма|skidka|скидк|aksiya|акци|bepul|бесплат|tekin|va'?da|обеща|kafolat|гарант|%/i;
+
+/** A POSITIVE reply from the AI: one sentence, 3–12 words, no price / promise / discount, at most one emoji (exactly one if the comment had emoji). */
+export function validPositiveReply(reply: string, comment: string) {
+  const text = reply.trim();
+  if (!text || text.length > 160 || /\n/.test(text)) return false;
+  const words = text.replace(/\p{Extended_Pictographic}|️|‍/gu, " ").split(/\s+/).filter(word => /[\p{L}]/u.test(word));
+  if (words.length < 3 || words.length > 12) return false;
+  if ((text.replace(/[.!?…]+$/u, "").match(/[.!?…]\s+\S/gu) ?? []).length > 0) return false;
+  if (FORBIDDEN.test(text) || /https?:|www\.|@\w/.test(text)) return false;
+  const emoji = emojiCount(text);
+  return hasEmoji(comment) ? emoji === 1 : emoji <= 1;
+}
+
+const wordsOf = (value: string) => new Set(normalizeText(value).replace(/\p{Extended_Pictographic}|️|‍/gu, " ").replace(/[^\p{L}\p{N}\s']/gu, " ").split(" ").filter(word => word.length > 1));
+
+/** Same text, or ≥ 60 % word overlap (Jaccard), counts as a repeat. */
+export function isSimilar(a: string, b: string) {
+  const x = wordsOf(a), y = wordsOf(b);
+  if (!x.size || !y.size) return normalizeText(a) === normalizeText(b);
+  let both = 0;
+  for (const word of x) if (y.has(word)) both++;
+  return both / (x.size + y.size - both) >= 0.6;
+}
+export const tooSimilar = (reply: string, recent: readonly string[]) => recent.some(item => isSimilar(reply, item));
+
+// ---- Pacing, daily limit, AI cost ----------------------------------------------------------------------
+
+export const MIN_GAP_MS = 20_000;
+export const MAX_GAP_MS = 90_000;
+/** Random 20–90 s pause between two outgoing replies (looks human, stays under Meta's spam radar). */
+export const randomGapMs = (random = Math.random) => MIN_GAP_MS + Math.floor(random() * (MAX_GAP_MS - MIN_GAP_MS + 1));
+
+/** Start of the current day in Tashkent (UTC+5, no DST) as a UTC Date. */
+export function tashkentDayStart(now = new Date()) {
+  const shifted = new Date(now.getTime() + 5 * 3_600_000);
+  return new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()) - 5 * 3_600_000);
+}
+
+/** USD per 1M tokens (input, output); unknown model → null cost (tokens are still logged). */
+const PRICES: Record<string, [number, number]> = { "gpt-4.1-mini": [0.4, 1.6], "gpt-4.1-nano": [0.1, 0.4], "gpt-4o-mini": [0.15, 0.6], "gpt-5-mini": [0.25, 2], "gpt-5-nano": [0.05, 0.4] };
+export function aiCostUsd(model: string, inputTokens: number, outputTokens: number) {
+  const price = PRICES[model] ?? PRICES[Object.keys(PRICES).find(key => model.startsWith(`${key}-`)) ?? ""];
+  if (!price) return null;
+  return Math.round(((inputTokens * price[0] + outputTokens * price[1]) / 1_000_000) * 1e6) / 1e6;
 }

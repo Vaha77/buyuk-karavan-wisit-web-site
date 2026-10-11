@@ -19,6 +19,6 @@ export async function GET(request: Request) {
     console.error("Instagram token refresh failed", { type: error instanceof Error ? error.name : "UnknownError" });
     return { refreshed: false, reason: "error" };
   });
-  const queue = await processQueue({ limit: 50 });
+  const queue = await processQueue({ budgetMs: 45_000 });
   return NextResponse.json({ ok: true, token, queue });
 }

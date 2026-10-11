@@ -10,7 +10,8 @@ import { requireRole } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { appConfig, GraphError, subscribeWebhooks, unsubscribeWebhooks } from "@/lib/instagram/graph";
 import { CALLBACK_PATH, STATE_COOKIE, authorizeUrl, requestOrigin } from "@/lib/instagram/oauth";
-import { DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY, errorReason, parseKeywords } from "@/lib/instagram/rules";
+import { DEFAULT_QUESTION_DM, DEFAULT_QUESTION_REPLY } from "@/lib/instagram/constants";
+import { DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY, errorReason, parseKeywords, parseVariants } from "@/lib/instagram/rules";
 import { accountToken, getInstagramAccount, processQueue, refreshTokenIfDue } from "@/lib/instagram/service";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
@@ -81,6 +82,7 @@ const ruleSchema = z.object({
   dmTemplate: z.string().trim().min(5, "DM matni bo‘sh bo‘lmasin.").max(900, "DM matni 900 belgidan oshmasin."),
   publicReplyEnabled: z.boolean(),
   publicReplyText: z.string().trim().max(300, "Ochiq javob 300 belgidan oshmasin."),
+  publicReplyVariants: z.string().max(4000).default(""),
   permalink: z.string().trim().url().max(500).nullable(),
   caption: z.string().max(5000).nullable(),
   postedAt: z.string().max(40).nullable(),
@@ -91,19 +93,26 @@ export async function saveMediaRuleAction(raw: unknown): Promise<Result> {
   const parsed = ruleSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Ma’lumotlarni tekshiring." };
   const value = parsed.data;
-  if (!value.dmTemplate.includes("{narx_som}")) return { ok: false, error: "DM matnida {narx_som} bo‘lishi kerak." };
-  if (value.publicReplyEnabled && !value.publicReplyText) return { ok: false, error: "Ochiq javob matnini yozing yoki o‘chiring." };
+  // Free text; {narx_som} / {mahsulot} / {havola} need a product.
+  if (/\{(mahsulot|narx_som|havola)\}/.test(value.dmTemplate) && !value.productId) return { ok: false, error: "Matnda {mahsulot}/{narx_som}/{havola} bor — mahsulot tanlang yoki ularni olib tashlang." };
+  const variants = parseVariants(value.publicReplyVariants);
+  if (value.publicReplyEnabled && !variants.length && !value.publicReplyText) return { ok: false, error: "Ochiq javob matnini yozing yoki o‘chiring." };
   if (value.productId && !await getDb().product.findFirst({ where: { id: value.productId, archivedAt: null }, select: { id: true } })) return { ok: false, error: "Mahsulot topilmadi." };
   const keywords = parseKeywords(value.keywords);
   const postedAt = value.postedAt ? new Date(value.postedAt) : null;
-  const data = { productId: value.productId, isActive: value.isActive, keywords: keywords.length ? keywords : DEFAULT_KEYWORDS, dmTemplate: value.dmTemplate, publicReplyEnabled: value.publicReplyEnabled, publicReplyText: value.publicReplyText || DEFAULT_PUBLIC_REPLY, permalink: value.permalink, caption: value.caption?.slice(0, 500) ?? null, postedAt: postedAt && !Number.isNaN(postedAt.getTime()) ? postedAt : null, updatedById: actor.id };
+  const data = { productId: value.productId, isActive: value.isActive, keywords: keywords.length ? keywords : DEFAULT_KEYWORDS, dmTemplate: value.dmTemplate, publicReplyEnabled: value.publicReplyEnabled, publicReplyText: variants[0] ?? (value.publicReplyText || DEFAULT_PUBLIC_REPLY), publicReplyVariants: variants, permalink: value.permalink, caption: value.caption?.slice(0, 500) ?? null, postedAt: postedAt && !Number.isNaN(postedAt.getTime()) ? postedAt : null, updatedById: actor.id };
   await getDb().instagramMediaRule.upsert({ where: { mediaId: value.mediaId }, create: { mediaId: value.mediaId, ...data }, update: data });
   await writeAudit(actor, { action: "UPDATE", entityType: "INSTAGRAM_MEDIA", entityId: value.mediaId, entityName: value.permalink ?? value.mediaId, summary: `Instagram post sozlamasini saqladi (${value.isActive ? "faol" : "o‘chiq"})`, after: { productId: value.productId, isActive: value.isActive, keywords: data.keywords, publicReplyEnabled: value.publicReplyEnabled } });
   revalidatePath("/admin/instagram");
   return { ok: true, message: "Saqlandi ✓" };
 }
 
-const generalSchema = z.object({ generalReplyEnabled: z.boolean(), generalReplyText: z.string().trim().max(300), phone: z.string().trim().max(40) });
+const generalSchema = z.object({
+  generalReplyEnabled: z.boolean(), generalReplyText: z.string().trim().max(300), phone: z.string().trim().max(40),
+  priceEnabled: z.boolean(), positiveEnabled: z.boolean(), questionEnabled: z.boolean(), negativeNotify: z.boolean(),
+  dailyReplyLimit: z.number().int().min(1).max(1000),
+  questionReplyText: z.string().trim().max(300), questionDmTemplate: z.string().trim().max(900),
+});
 
 export async function saveInstagramGeneralAction(raw: unknown): Promise<Result> {
   const actor = await requireRole("SUPER_ADMIN", "ADMIN");
@@ -111,17 +120,19 @@ export async function saveInstagramGeneralAction(raw: unknown): Promise<Result> 
   if (!parsed.success) return { ok: false, error: "Ma’lumotlarni tekshiring." };
   const value = parsed.data;
   if (value.generalReplyEnabled && !value.generalReplyText) return { ok: false, error: "Umumiy javob matnini yozing." };
-  const { count } = await getDb().instagramAccount.updateMany({ where: { id: "global" }, data: { generalReplyEnabled: value.generalReplyEnabled, generalReplyText: value.generalReplyText || DEFAULT_GENERAL_REPLY, phone: value.phone || null } });
+  if (/\{(mahsulot|narx_som|havola)\}/.test(value.questionDmTemplate)) return { ok: false, error: "Umumiy savol matnida faqat {telefon} va {username} ishlatiladi." };
+  const { count } = await getDb().instagramAccount.updateMany({ where: { id: "global" }, data: { generalReplyEnabled: value.generalReplyEnabled, generalReplyText: value.generalReplyText || DEFAULT_GENERAL_REPLY, phone: value.phone || null, priceEnabled: value.priceEnabled, positiveEnabled: value.positiveEnabled, questionEnabled: value.questionEnabled, negativeNotify: value.negativeNotify, dailyReplyLimit: value.dailyReplyLimit, questionReplyText: value.questionReplyText || DEFAULT_QUESTION_REPLY, questionDmTemplate: value.questionDmTemplate || DEFAULT_QUESTION_DM } });
   if (!count) return { ok: false, error: "Avval Sozlamalarda Instagram’ni ulang." };
   await writeAudit(actor, { action: "UPDATE", entityType: "SITE_SETTINGS", entityId: "instagram", entityName: "Instagram", summary: "Instagram umumiy sozlamalarini saqladi", after: value });
   revalidatePath("/admin/instagram");
   return { ok: true, message: "Saqlandi ✓" };
 }
 
-/** "Navbatni hozir yuborish": sends due retries now instead of waiting for the next webhook / the daily cron. */
+/** "Navbatni hozir yuborish": handles due comments now instead of waiting for the next webhook / the daily cron. */
 export async function runInstagramQueueAction(): Promise<Result> {
   await requireRole("SUPER_ADMIN", "ADMIN");
-  const totals = await processQueue({ limit: 30 });
+  const totals = await processQueue({ budgetMs: 40_000 });
   revalidatePath("/admin/instagram");
-  return { ok: true, message: `Yuborildi: ${totals.sent} · xato: ${totals.failed} · navbatda: ${totals.retry}` };
+  if (totals.busy) return { ok: true, message: "Navbat hozir ishlayapti — javoblar 20–90 soniya oralig‘ida ketadi." };
+  return { ok: true, message: `Yuborildi: ${totals.sent} · adminga: ${totals.notified} · o‘tkazildi: ${totals.skipped} · xato: ${totals.failed} · navbatda: ${totals.retry + totals.waiting}` };
 }

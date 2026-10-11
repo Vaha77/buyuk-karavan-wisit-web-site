@@ -1216,6 +1216,18 @@ enum InstagramReplyStatus {
   SENT
   FAILED
   SKIPPED
+  // NEGATIVE comment: no reply, sent to the Super Admins on Telegram.
+  NOTIFIED
+}
+
+// What a comment is about (keywords first, AI when unclear); UNKNOWN gets no reply.
+enum InstagramCommentKind {
+  PRICE
+  POSITIVE
+  QUESTION
+  NEGATIVE
+  SPAM
+  UNKNOWN
 }
 
 // The connected professional account (one row, id "global"). The token is AES-256-GCM (lib/auth/password-vault.ts).
@@ -1236,6 +1248,18 @@ model InstagramAccount {
   generalReplyText    String    @default("Direct'ga yozing, mutaxassis javob beradi")
   // {telefon} in DM templates; empty = the phone from the site footer.
   phone               String?
+  // Which comment kinds are answered (NEGATIVE: Telegram notice to the Super Admins only, never a reply).
+  priceEnabled        Boolean   @default(true)
+  positiveEnabled     Boolean   @default(false)
+  questionEnabled     Boolean   @default(false)
+  negativeNotify      Boolean   @default(true)
+  // Public replies per Tashkent day (all kinds together).
+  dailyReplyLimit     Int       @default(150)
+  questionReplyText   String    @default("Batafsil ma'lumotni Direct'ga yubordik 📩")
+  questionDmTemplate  String    @default("Assalomu alaykum! Savolingiz bo'yicha mutaxassisimiz yordam beradi: {telefon}")
+  // Pacing: the next reply may go out at this time (20–90 s random gap); one queue runner at a time.
+  nextActionAt        DateTime?
+  runnerUntil         DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }
@@ -1250,6 +1274,8 @@ model InstagramMediaRule {
   dmTemplate         String
   publicReplyEnabled Boolean   @default(true)
   publicReplyText    String    @default("Narxini Direct'ga yubordik ✅")
+  // Variants for the PRICE public reply, one is picked at random; empty = publicReplyText.
+  publicReplyVariants String[]  @default([])
   permalink          String?
   caption            String?
   postedAt           DateTime?
@@ -1279,12 +1305,29 @@ model InstagramComment {
   attempts         Int                  @default(0)
   nextAttemptAt    DateTime             @default(now())
   lockedUntil      DateTime?
+  // Reply to another comment (parent_id): never answered.
+  parentId         String?              @db.VarChar(64)
+  kind             InstagramCommentKind?
+  // "KEYWORD" | "AI" | "KEYWORD_FALLBACK"
+  classifiedBy     String?              @db.VarChar(20)
+  aiTokens         Int                  @default(0)
+  aiCostUsd        Decimal?             @db.Decimal(12, 6)
+  // What actually went out.
+  dmText           String?
+  publicReplyText  String?
+  publicReplyAt    DateTime?
+  notifiedAt       DateTime?
+  reviewedAt       DateTime?
+  reviewedBy       String?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 
   @@index([status, nextAttemptAt])
   @@index([mediaId, createdAt])
   @@index([createdAt])
+  @@index([mediaId, fromId])
+  @@index([publicReplyAt])
+  @@index([kind, createdAt])
 }
 
 // Direct messages people send us (logged only; Madina is a later step).

@@ -41,5 +41,9 @@
 .ig-messages{display:grid;gap:8px;margin:0;padding:0;list-style:none}
 .ig-messages li{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:10px 12px;border:1px solid var(--bk-border);border-radius:10px;font-size:13px}
 .ig-messages p{grid-column:1/-1;margin:0;overflow-wrap:anywhere}
+.ig-toggles{display:grid;gap:8px}
+.ig-kinds{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.ig-kinds div{display:grid;gap:4px;justify-items:start}.ig-kinds strong{font-size:20px}
+.ig-reply{display:block;margin-bottom:4px;font-size:12px;overflow-wrap:anywhere}
 @media (max-width:900px){.ig .bk-grid-main{grid-template-columns:1fr}}
 @media (max-width:520px){.ig-grid{grid-template-columns:1fr}.ig-search input{width:140px}.ig-media-top{grid-template-columns:72px minmax(0,1fr)}.ig-thumb{width:72px;height:90px}}

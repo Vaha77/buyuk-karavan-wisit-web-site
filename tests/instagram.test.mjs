@@ -11,7 +11,7 @@ const read = path => readFile(new URL(path, import.meta.url), "utf8");
 
 const SECRET = "test-app-secret";
 const sign = body => `sha256=${createHmac("sha256", SECRET).update(body).digest("hex")}`;
-const ACCOUNT = { igUserId: "17841400000000001", username: "buyukkaravan", generalReplyEnabled: true };
+const ACCOUNT = { igUserId: "17841400000000001", username: "buyukkaravan" };
 const now = new Date("2026-10-11T10:00:00Z");
 const commentPayload = (id, text, extra = {}) => ({ object: "instagram", entry: [{ id: ACCOUNT.igUserId, time: Math.floor(now.getTime() / 1000), changes: [{ field: "comments", value: { id, text, from: { id: "9001", username: "mijoz_1" }, media: { id: "18000000000000001", media_product_type: "REELS" }, ...extra } }] }] });
 
@@ -76,31 +76,97 @@ test("limits: 7-day window, backoff, retryable vs permanent errors, token-free r
   assert.equal(rules.isReel("https://www.instagram.com/p/C8abc/"), false);
 });
 
-test("decision: own comments ignored, price question with product queued, others logged as skipped", () => {
-  const rule = { isActive: true, productId: "prod_1", keywords: [] };
-  const event = (text, extra = {}) => ({ fromId: "9001", username: "mijoz_1", text, time: now, ...extra });
-  assert.deepEqual(rules.decideComment(event("narxi?"), ACCOUNT, rule, now), { action: "queue" });
-  assert.deepEqual(rules.decideComment(event("narxi?", { fromId: ACCOUNT.igUserId }), ACCOUNT, rule, now), { action: "ignore" });
-  assert.deepEqual(rules.decideComment(event("narxi?", { fromId: "x", username: "BuyukKaravan" }), ACCOUNT, rule, now), { action: "ignore" });
-  assert.equal(rules.decideComment(event("zo'r"), ACCOUNT, rule, now).reason, "Kalit so‘z yo‘q");
-  assert.equal(rules.decideComment(event("narxi?", { time: new Date(now.getTime() - 8 * 86_400_000) }), ACCOUNT, rule, now).reason, "7 kundan eski komment");
-  assert.equal(rules.decideComment(event("narxi?"), ACCOUNT, { ...rule, isActive: false }, now).action, "skip");
-  assert.deepEqual(rules.decideComment(event("narxi?"), ACCOUNT, null, now), { action: "skip", reason: "Postga mahsulot biriktirilmagan", generalReply: true });
-  assert.equal(rules.decideComment(event("narxi?"), { ...ACCOUNT, generalReplyEnabled: false }, null, now).generalReply, false);
+test("ingest decision: own comments ignored, replies to replies and old comments skipped, the rest queued", () => {
+  const event = (extra = {}) => ({ fromId: "9001", username: "mijoz_1", parentId: null, time: now, ...extra });
+  assert.deepEqual(rules.decideIngest(event(), ACCOUNT, now), { action: "queue" });
+  assert.deepEqual(rules.decideIngest(event({ fromId: ACCOUNT.igUserId }), ACCOUNT, now), { action: "ignore" });
+  assert.deepEqual(rules.decideIngest(event({ fromId: "x", username: "BuyukKaravan" }), ACCOUNT, now), { action: "ignore" });
+  assert.equal(rules.decideIngest(event({ parentId: "c-0" }), ACCOUNT, now).action, "skip", "reply to a reply");
+  assert.equal(rules.decideIngest(event({ time: new Date(now.getTime() - 8 * 86_400_000) }), ACCOUNT, now).reason, "7 kundan eski komment");
 });
 
-function memoryStore(rule) {
+test("classifier: keywords decide clear cases; mixed / unknown go to the AI with a cautious fallback", () => {
+  const k = text => rules.classifyByKeywords(text);
+  const definite = { PRICE: ["Narxi qancha?", "nech pul", "Цена?", "сколько стоит", "нарх канча", "+", "?", "price pls"], POSITIVE: ["🔥🔥🔥", "😍", "Zo'r ekan", "Qoyil 👍", "gap yo'q", "Ajoyib", "Класс", "Rahmat"], QUESTION: ["Qayerdasiz?", "Yetkazib berasizmi", "Kafolat bormi?", "Где находитесь?", "Manzil qayerda"], NEGATIVE: ["Qimmat", "Aldov", "Ishlamadi", "Yomon sifat", "Это обман", "👎"], SPAM: ["Check my page www.example.com", "Подпишись и заработай", "Follow me https://x.co", "Crypto bitcoin promo code"] };
+  for (const [kind, texts] of Object.entries(definite)) for (const text of texts) assert.equal(k(text).definite, kind, `${kind}: ${text}`);
+  const mixed = k("Narxi qimmat ekan");
+  assert.equal(mixed.definite, null, "price + negative → AI");
+  assert.equal(mixed.fallback, "NEGATIVE", "cautious fallback");
+  assert.equal(k("Narxi qancha, yetkazib berasizmi?").fallback, "PRICE");
+  const unknown = k("@do'stim qara");
+  assert.equal(unknown.definite, null);
+  assert.equal(unknown.fallback, null, "no match → no reply without the AI");
+  assert.equal(k("Spam bot http://a.ru zo'r").fallback, "SPAM");
+  assert.equal(k("bozor").definite, null, "\"zor\" inside a word is not praise");
+  assert.equal(rules.classifyByKeywords("qancha", ["qancha"]).definite, "PRICE");
+  assert.equal(rules.classifyByKeywords("narxi", ["qancha"]).definite, null, "the post's own price keywords");
+});
+
+test("action choice: per-kind switches, NEGATIVE / SPAM never answered, one reply per person per post, daily limit", () => {
+  const settings = { priceEnabled: true, positiveEnabled: true, questionEnabled: true, negativeNotify: true, dailyReplyLimit: 150 };
+  const ctx = { rule: { isActive: true, productId: "p1" }, alreadyAnswered: false, repliesToday: 0, generalReplyEnabled: true };
+  assert.deepEqual(rules.chooseAction("PRICE", settings, ctx), { type: "price", publicReply: true });
+  assert.deepEqual(rules.chooseAction("POSITIVE", settings, ctx), { type: "positive" });
+  assert.deepEqual(rules.chooseAction("QUESTION", settings, ctx), { type: "question", publicReply: true });
+  assert.deepEqual(rules.chooseAction("NEGATIVE", settings, ctx), { type: "notify" });
+  assert.equal(rules.chooseAction("NEGATIVE", { ...settings, negativeNotify: false }, ctx).type, "skip");
+  assert.equal(rules.chooseAction("SPAM", settings, ctx).type, "skip");
+  assert.equal(rules.chooseAction("UNKNOWN", settings, ctx).type, "skip");
+  for (const [kind, key] of [["PRICE", "priceEnabled"], ["POSITIVE", "positiveEnabled"], ["QUESTION", "questionEnabled"]]) assert.equal(rules.chooseAction(kind, { ...settings, [key]: false }, ctx).type, "skip", key);
+  for (const kind of ["PRICE", "POSITIVE", "QUESTION"]) {
+    assert.equal(rules.chooseAction(kind, settings, { ...ctx, alreadyAnswered: true }).reason, "Bu odamga shu postda javob berilgan", `no second reply: ${kind}`);
+    assert.equal(rules.chooseAction(kind, settings, { ...ctx, rule: { isActive: false, productId: "p1" } }).type, "skip", `post off: ${kind}`);
+  }
+  assert.deepEqual(rules.chooseAction("NEGATIVE", settings, { ...ctx, alreadyAnswered: true, rule: { isActive: false, productId: null } }), { type: "notify" }, "admins still hear about negatives");
+  const full = { ...ctx, repliesToday: 150 };
+  assert.deepEqual(rules.chooseAction("PRICE", settings, full), { type: "price", publicReply: false }, "limit: DM only");
+  assert.deepEqual(rules.chooseAction("QUESTION", settings, full), { type: "question", publicReply: false });
+  assert.equal(rules.chooseAction("POSITIVE", settings, full).reason, "Kunlik javob limiti tugadi");
+  assert.deepEqual(rules.chooseAction("PRICE", settings, { ...ctx, rule: null }), { type: "general" });
+  assert.equal(rules.chooseAction("PRICE", settings, { ...ctx, rule: null, generalReplyEnabled: false }).reason, "Postga mahsulot biriktirilmagan");
+  assert.equal(rules.chooseAction("PRICE", settings, { ...ctx, rule: null, repliesToday: 150 }).type, "skip");
+});
+
+test("positive reply checks: 1 sentence, 3–12 words, no price / promise, emoji rule; repeats rejected", () => {
+  assert.equal(rules.validPositiveReply("Rahmat, e'tiboringiz uchun minnatdormiz 🙏", "Zo'r 🔥"), true);
+  assert.equal(rules.validPositiveReply("Спасибо за тёплые слова!", "Класс"), true);
+  assert.equal(rules.validPositiveReply("Rahmat!", "zo'r"), false, "too short");
+  assert.equal(rules.validPositiveReply("Rahmat, savollar bo'lsa yozing, narxini Direct'ga yuboramiz", "zo'r"), false, "no price talk");
+  assert.equal(rules.validPositiveReply("Rahmat, sizga 10% chegirma beramiz endi", "zo'r"), false, "no discount");
+  assert.equal(rules.validPositiveReply("Rahmat, e'tiboringiz uchun minnatdormiz", "Zo'r 🔥"), false, "comment had emoji → one emoji");
+  assert.equal(rules.validPositiveReply("Rahmat 🙏 e'tiboringiz uchun 🔥", "Zo'r 🔥"), false, "only one emoji");
+  assert.equal(rules.validPositiveReply("Rahmat sizga. Savol bo'lsa yozing bizga", "zo'r"), false, "one sentence");
+  const recent = ["Rahmat, e'tiboringiz uchun minnatdormiz 🙏", "Katta rahmat, doim xizmatingizdamiz"];
+  assert.equal(rules.tooSimilar("Rahmat, e'tiboringiz uchun minnatdormiz! 🔥", recent), true);
+  assert.equal(rules.tooSimilar("Iliq so'zlaringiz uchun tashakkur, kuting yangiliklarni", recent), false);
+});
+
+test("variants, pacing, Tashkent day, AI cost", () => {
+  assert.equal(rules.pickVariant(["A", " ", "B"], "X", () => 0), "A");
+  assert.equal(rules.pickVariant(["A", "B"], "X", () => 0.99), "B");
+  assert.equal(rules.pickVariant([], "X"), "X");
+  assert.deepEqual(rules.parseVariants("Bir\n\n Ikki \nBir"), ["Bir", "Ikki"]);
+  assert.equal(rules.randomGapMs(() => 0), 20_000);
+  assert.equal(rules.randomGapMs(() => 0.9999999), 90_000);
+  for (let i = 0; i < 200; i++) { const gap = rules.randomGapMs(); assert.ok(gap >= 20_000 && gap <= 90_000); }
+  assert.equal(rules.tashkentDayStart(new Date("2026-10-11T18:59:00Z")).toISOString(), "2026-10-10T19:00:00.000Z");
+  assert.equal(rules.tashkentDayStart(new Date("2026-10-11T19:00:00Z")).toISOString(), "2026-10-11T19:00:00.000Z");
+  assert.equal(rules.aiCostUsd("gpt-4.1-mini", 1_000_000, 0), 0.4);
+  assert.equal(rules.aiCostUsd("gpt-4.1-mini-2025-04-14", 200, 10), 0.000096);
+  assert.equal(rules.aiCostUsd("unknown-model", 100, 100), null);
+});
+
+function memoryStore() {
   const comments = new Map(), messages = new Map();
   return {
     comments, messages,
-    rules: async ids => new Map(ids.filter(id => rule && id === "18000000000000001").map(id => [id, rule])),
     insertComment: async row => { if (comments.has(row.commentId)) return false; comments.set(row.commentId, row); return true; },
     insertMessages: async rows => { for (const row of rows) if (!messages.has(row.mid)) messages.set(row.mid, row); },
   };
 }
 
 test("idempotency: the same comment delivered twice is stored and queued once", async () => {
-  const store = memoryStore({ isActive: true, productId: "prod_1", keywords: ["narx"] });
+  const store = memoryStore();
   const payload = commentPayload("c-1", "Narxi qancha?");
   const first = await ingestWebhook(payload, ACCOUNT, store, now);
   const second = await ingestWebhook(payload, ACCOUNT, store, now);
@@ -111,17 +177,18 @@ test("idempotency: the same comment delivered twice is stored and queued once", 
   assert.equal(store.comments.get("c-1").status, "PENDING");
 });
 
-test("ingest: other accounts and our own comments / echoes ignored; DMs logged once; general reply for posts without a product", async () => {
-  const store = memoryStore(null);
+test("ingest: other accounts, our own comments and echoes ignored; reply-comments logged as skipped; DMs logged once", async () => {
+  const store = memoryStore();
   const own = commentPayload("c-own", "narx", { from: { id: ACCOUNT.igUserId, username: ACCOUNT.username } });
   assert.deepEqual((await ingestWebhook(own, ACCOUNT, store, now)).queued, []);
   assert.equal(store.comments.size, 0, "own comment not even logged");
   const other = { ...commentPayload("c-x", "narx"), entry: [{ ...commentPayload("c-x", "narx").entry[0], id: "999" }] };
   await ingestWebhook(other, ACCOUNT, store, now);
   assert.equal(store.comments.size, 0, "another account");
-  const general = await ingestWebhook(commentPayload("c-2", "narxi?"), ACCOUNT, store, now);
-  assert.deepEqual(general.generalReplies, ["c-2"]);
+  const reply = await ingestWebhook(commentPayload("c-2", "zo'r", { parent_id: "c-1" }), ACCOUNT, store, now);
+  assert.deepEqual(reply.queued, []);
   assert.equal(store.comments.get("c-2").status, "SKIPPED");
+  assert.equal(store.comments.get("c-2").parentId, "c-1");
   const dm = { object: "instagram", entry: [{ id: ACCOUNT.igUserId, time: 1, messaging: [
     { sender: { id: "9001" }, recipient: { id: ACCOUNT.igUserId }, timestamp: now.getTime(), message: { mid: "m-1", text: "Rahmat, yetkazib berasizmi?" } },
     { sender: { id: ACCOUNT.igUserId }, recipient: { id: "9001" }, timestamp: now.getTime(), message: { mid: "m-2", text: "echo", is_echo: true } },
@@ -144,9 +211,16 @@ test("wiring: unique comment id, unique lead key, 401 on bad signature, token en
   assert.match(route, /validSignature\(raw, request\.headers\.get\("x-hub-signature-256"\), appConfig\(\)\.appSecret\)\) return NextResponse\.json\(\{ ok: false \}, \{ status: 401 \}\)/);
   assert.match(route, /after\(\(\) => processQueue/);
   const service = await read("../lib/instagram/service.ts");
-  assert.match(service, /leadKey\(input\.fromId, input\.product\.id\)/);
+  assert.match(service, /leadKey\(comment\.fromId, product\?\.id \?\? `post:\$\{comment\.mediaId\}`\)/, "one lead per person + product (or post)");
+  assert.match(service, /if \(action\.type === "notify"\) \{[\s\S]*?return "notified";/, "NEGATIVE: Telegram notice, then return before any reply");
+  assert.match(service, /OR: \[\{ dmSentAt: \{ not: null \} \}, \{ publicReplyAt: \{ not: null \} \}\]/, "a reply to this person on this post already exists");
+  assert.match(service, /publicReplyAt: \{ gte: tashkentDayStart\(\) \}/, "daily limit counts today's public replies");
+  const bot = await read("../lib/telegram/service.ts");
+  assert.match(bot, /if\(await handleInstagramCallback\(update\.callback_query\)\)return;/);
+  const migration2 = await read("../prisma/migrations/20261016090000_add_instagram_comment_kinds/migration.sql");
+  assert.doesNotMatch(migration2.replace(/^--.*$/gm, ""), /DROP|DELETE FROM|TRUNCATE|ALTER COLUMN/i, "additive only");
   assert.match(service, /encryptPassword\(token\)/);
-  for (const file of ["../lib/instagram/service.ts", "../lib/instagram/graph.ts", "../app/api/instagram/oauth/callback/route.ts", "../app/api/instagram/webhook/route.ts"]) {
+  for (const file of ["../lib/instagram/service.ts", "../lib/instagram/graph.ts", "../lib/instagram/ai.ts", "../lib/instagram/telegram.ts", "../app/api/instagram/oauth/callback/route.ts", "../app/api/instagram/webhook/route.ts"]) {
     const source = await read(file);
     assert.doesNotMatch(source, /console\.\w+\([^\n]*(?:[,{(]\s*(?:\w+\.)?token\s*[,})]|\$\{[^}]*token)/i, `${file}: no token value in logs`);
     assert.doesNotMatch(source, /console\.\w+\([^\n]*(?:url|payload|body)\b\s*[,})]/i, `${file}: no URLs / payloads in logs`);

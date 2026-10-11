@@ -43,9 +43,10 @@ export async function POST(request: Request) {
   if (!isTelegramUpdate(update)) return NextResponse.json({ ok: false }, { status: 400 });
   timings.webhook_received_ms = Math.round(performance.now() - startedAt);
 
-  // Start acknowledgement before database idempotency or any handler work. Seh buttons ("seh:" / old "ws:") answer
+  // Start acknowledgement before database idempotency or any handler work. Seh buttons ("seh:" / old "ws:") and the
+  // Instagram "Ko‘rib chiqildi" button ("igrev:") answer
   // themselves (e.g. "Ruxsat yo‘q" as an alert), so they are not pre-acknowledged here.
-  const sehButton = /^(?:seh|ws):/.test(update.callback_query?.data ?? "");
+  const sehButton = /^(?:seh|ws|igrev):/.test(update.callback_query?.data ?? "");
   const callbackAck = update.callback_query && !sehButton
     ? answerCallbackQuery(update.callback_query.id, "So‘rov qabul qilindi.")
         .then(() => { timings.callback_ack_ms = Math.round(performance.now() - startedAt); })
