@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     let webhookSubscribedAt: Date | null = null, webhookError: string | null = null;
     try { await subscribeWebhooks(long.token); webhookSubscribedAt = new Date(); }
     catch (error) { webhookError = error instanceof GraphError ? errorReason(error.info) : "Obuna bo‘lmadi"; }
-    const data = { igUserId: me.userId, username: me.username, tokenEncrypted, tokenExpiresAt: long.expiresAt, tokenRefreshedAt: new Date(), webhookSubscribedAt, webhookError, connectedById: session.user.id };
+    const data = { igUserId: me.userId, username: me.username, grantedScopes: short.permissions, tokenEncrypted, tokenExpiresAt: long.expiresAt, tokenRefreshedAt: new Date(), webhookSubscribedAt, webhookError, connectedById: session.user.id };
     await getDb().instagramAccount.upsert({ where: { id: "global" }, create: { id: "global", ...data }, update: data });
     await writeAudit(session.user, { action: "UPDATE", entityType: "SITE_SETTINGS", entityId: "instagram", entityName: "Instagram", summary: `Instagram @${me.username} ulandi`, after: { username: me.username, permissions: short.permissions, webhook: webhookSubscribedAt ? "ok" : webhookError } });
     return back(origin, webhookError ? "connected-no-webhook" : "connected");

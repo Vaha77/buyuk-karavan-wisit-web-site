@@ -84,3 +84,25 @@ export function RegionLines({ series, lastMonth, label }: { series: Array<{ name
   </svg>;
 }
 function niceStep(value: number) { const power = 10 ** Math.floor(Math.log10(Math.max(1, value))); const unit = value / power; return (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * power; }
+
+/** Day-by-day lines for a few series (counts), one y-axis, legend underneath; x labels thinned to ~8. */
+export function DailyLines({ days, series, label, dayLabel }: { days: string[]; series: Array<{ name: string; values: number[] }>; label: string; dayLabel: (day: string) => string }) {
+  const width = 640, height = 220, left = 40, right = 12, top = 12, bottom = 24;
+  const count = Math.max(1, days.length);
+  const max = Math.max(1, ...series.flatMap(item => item.values));
+  const step = niceStep(max / 3), scaleMax = step * 3;
+  const x = (index: number) => count === 1 ? (left + width - right) / 2 : left + (index * (width - left - right)) / (count - 1);
+  const y = (value: number) => top + (height - top - bottom) * (1 - value / scaleMax);
+  const every = Math.max(1, Math.ceil(count / 8));
+  return <figure style={{ margin: 0 }}>
+    <svg className="bk-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
+      {[0, 1, 2, 3].map(tick => <g key={tick}><line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} stroke="#E3E9F2"/><text x={left - 8} y={y(tick * step) + 4} textAnchor="end">{formatInt(tick * step)}</text></g>)}
+      {days.map((day, index) => index % every === 0 || index === count - 1 ? <text key={day} x={x(index)} y={height - 6} textAnchor="middle">{dayLabel(day)}</text> : null)}
+      {series.map((item, index) => <g key={item.name}>
+        <path d={item.values.map((value, day) => `${day ? "L" : "M"}${x(day).toFixed(1)} ${y(value).toFixed(1)}`).join("")} fill="none" stroke={SERIES_COLORS[index]} strokeWidth="2" strokeLinejoin="round"/>
+        {count <= 31 && item.values.map((value, day) => <circle key={day} cx={x(day)} cy={y(value)} r="3" fill="#fff" stroke={SERIES_COLORS[index]} strokeWidth="1.5"><title>{`${item.name}, ${dayLabel(days[day])}: ${formatInt(value)}`}</title></circle>)}
+      </g>)}
+    </svg>
+    <figcaption className="bk-legend" style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12 }}>{series.map((item, index) => <span key={item.name} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><i style={{ width: 10, height: 10, borderRadius: 3, background: SERIES_COLORS[index], display: "inline-block" }}/>{item.name}</span>)}</figcaption>
+  </figure>;
+}

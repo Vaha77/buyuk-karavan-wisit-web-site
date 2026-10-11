@@ -84,6 +84,38 @@ export async function listMedia(token: string, igUserId: string, limit = 24) {
   }
 }
 
+// ---- Insights (instagram_business_manage_insights) --------------------------------------------------------
+
+/** GET /{ig-user-id}/insights with the given query (metric, metric_type, period, since/until, breakdown, timeframe). */
+export const accountInsights = (token: string, igUserId: string, query: Record<string, string>) => call<unknown>(graph(`${igUserId}/insights`, query), { token });
+/** GET /{ig-media-id}/insights (lifetime). */
+export const mediaInsights = (token: string, mediaId: string, metrics: string[], breakdown?: string) => call<unknown>(graph(`${mediaId}/insights`, { metric: metrics.join(","), ...(breakdown ? { breakdown } : {}) }), { token });
+export async function followersCount(token: string) {
+  const result = await call<{ followers_count?: number; data?: Array<{ followers_count?: number }> }>(graph("me", { fields: "followers_count" }), { token });
+  return result.followers_count ?? result.data?.[0]?.followers_count ?? null;
+}
+/** Media newer than `since` (all pages), newest first. */
+export async function listMediaSince(token: string, igUserId: string, since: Date) {
+  const fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp";
+  const out: IgMedia[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    let result: { data?: IgMedia[]; paging?: { cursors?: { after?: string }; next?: string } };
+    // `caption` is listed as Facebook-Login-only; if refused, the page is fetched without it.
+    try { result = await call(graph(`${igUserId}/media`, { fields, limit: "50", ...(after ? { after } : {}) }), { token }); }
+    catch (error) { if (!(error instanceof GraphError) || error.info.code !== 100) throw error; result = await call(graph(`${igUserId}/media`, { fields: fields.replace("caption,", ""), limit: "50", ...(after ? { after } : {}) }), { token }); }
+    const rows = result.data ?? [];
+    out.push(...rows.filter(row => row.timestamp && new Date(row.timestamp) >= since));
+    if (!rows.length || rows.some(row => row.timestamp && new Date(row.timestamp) < since) || !result.paging?.next || !result.paging.cursors?.after) break;
+    after = result.paging.cursors.after;
+  }
+  return out;
+}
+/** Stories of the last 24 hours (their insights expire after that). */
+export async function listStories(token: string, igUserId: string) {
+  return (await call<{ data?: IgMedia[] }>(graph(`${igUserId}/stories`, { fields: "id,media_type,media_url,thumbnail_url,permalink,timestamp" }), { token })).data ?? [];
+}
+
 /** Name and @username of a person who messaged us (Meta allows it only after they wrote to the account). */
 export async function getUserProfile(token: string, igsid: string) {
   const result = await call<{ name?: string; username?: string }>(graph(igsid, { fields: "name,username" }), { token });

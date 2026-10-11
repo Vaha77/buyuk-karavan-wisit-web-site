@@ -42,6 +42,7 @@ export function InstagramConnectionCard({ status, result }: { status: InstagramS
     <div className="ig-connect-head"><span className="ig-logo"><Camera size={20}/></span><div><h2 id="ig-connect-title">Instagram</h2><p className="bk-muted">Komment → Direct’ga avtomatik narx. Postlarga mahsulot “Instagram” bo‘limida biriktiriladi.</p></div></div>
     {status.missingEnv.length > 0 && <p className="ig-warn" role="alert">Vercel’da o‘rnatilmagan: {status.missingEnv.join(", ")}. Yo‘riqnoma: docs/instagram-setup.md</p>}
     {!status.vault && <p className="ig-warn" role="alert">PASSWORD_VIEW_KEY o‘rnatilmagan — token shifrlab saqlanadi, usiz ulab bo‘lmaydi.</p>}
+    {account?.insightsReconnect && <p className="ig-warn" role="alert">Statistika uchun qayta ulash kerak: token “instagram_business_manage_insights” ruxsatisiz. “Qayta ulash”ni bosing va ruxsat bering.</p>}
     {account ? <dl className="ig-facts">
       <div><dt>Akkaunt</dt><dd><a href={`https://instagram.com/${account.username}`} target="_blank" rel="noreferrer">@{account.username}</a></dd></div>
       <div><dt>Token muddati</dt><dd className={daysLeft < 10 ? "is-bad" : ""}>{date(account.tokenExpiresAt)} · {daysLeft} kun qoldi{!account.tokenReadable && " · o‘qib bo‘lmadi, qayta ulang"}</dd></div>

@@ -1273,6 +1273,10 @@ model InstagramAccount {
   directDigestDate    String?   @db.VarChar(10)
   directReportDate    String?   @db.VarChar(10)
   directTickAt        DateTime?
+  // Permissions granted at the last Instagram Login (statistics need instagram_business_manage_insights).
+  grantedScopes       String[]  @default([])
+  insightsFetchedAt   DateTime?
+  insightsError       String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }
@@ -1422,4 +1426,72 @@ model InstagramConversation {
 
   @@index([status, waitingSince])
   @@index([lastIncomingAt])
+}
+
+// ---- Instagram statistics (Insights API, daily cron + "Hozir yangilash") -------------------------------
+// Account totals for one Tashkent day (Meta may revise the last 2 days, so they are fetched again).
+model InstagramDailyStat {
+  date              String   @id @db.VarChar(10)
+  followersCount    Int?
+  reach             Int?
+  views             Int?
+  accountsEngaged   Int?
+  totalInteractions Int?
+  likes             Int?
+  comments          Int?
+  shares            Int?
+  saves             Int?
+  replies           Int?
+  reposts           Int?
+  follows           Int?
+  unfollows         Int?
+  // profile_links_taps by contact_button_type
+  linkTaps          Int?
+  callTaps          Int?
+  directionTaps     Int?
+  emailTaps         Int?
+  textTaps          Int?
+  fetchedAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// One post / Reels / story with its lifetime insights (posts of the last 90 days are refreshed daily).
+model InstagramMediaStat {
+  mediaId           String   @id @db.VarChar(64)
+  // REELS | POST | STORY
+  type              String   @db.VarChar(10)
+  mediaType         String?  @db.VarChar(20)
+  postedAt          DateTime
+  caption           String?
+  permalink         String?
+  thumbnail         String?
+  views             Int?
+  reach             Int?
+  likes             Int?
+  comments          Int?
+  saved             Int?
+  shares            Int?
+  totalInteractions Int?
+  profileVisits     Int?
+  follows           Int?
+  // profile_activity action_type BIO_LINK_CLICKED (website), CALL, DIRECTION
+  websiteClicks     Int?
+  callClicks        Int?
+  directionClicks   Int?
+  // Reels: ig_reels_avg_watch_time (milliseconds)
+  avgWatchMs        Int?
+  fetchedAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([postedAt])
+}
+
+// Follower / engaged audience by country, city, age, gender: one snapshot per day, with Meta's timeframe.
+model InstagramAudienceSnapshot {
+  date      String   @id @db.VarChar(10)
+  timeframe String   @db.VarChar(20)
+  // { country: { UZ: 1234, … }, city: {…}, age: {…}, gender: {…} }
+  follower  Json     @default("{}")
+  engaged   Json     @default("{}")
+  fetchedAt DateTime @default(now())
 }

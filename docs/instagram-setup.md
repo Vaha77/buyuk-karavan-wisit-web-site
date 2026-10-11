@@ -75,6 +75,7 @@ URL harfma-harf mos bo'lishi shart (https, oxirida `/` yo'q).
 | `instagram_business_basic` | Akkaunt nomi, postlar/Reels ro'yxati |
 | `instagram_business_manage_comments` | Komment webhooklari, kommentga ochiq javob, Private Reply |
 | `instagram_business_manage_messages` | Direct'ga xabar (Private Reply) va kelgan xabarlar webhooki |
+| `instagram_business_manage_insights` | "Statistika" bo'limi: qamrov, ko'rishlar, postlar, auditoriya demografiyasi |
 
 ## 6. Saytda ulash
 
@@ -110,6 +111,9 @@ Har bir ruxsat uchun "How will your app use this permission?" maydoniga (inglizc
 
 **instagram_business_manage_messages**
 > For a price question in a comment we send exactly one Private Reply (POST /{ig-user-id}/messages with recipient.comment_id) containing the product name, its current price and a link to the product page on buyukkaravan.com. Replies the person sends back in Direct are received via the `messages` webhook and shown to our sales staff, who answer manually in the Instagram app. We do not send promotional or unsolicited messages.
+
+**instagram_business_manage_insights**
+> Our admin panel shows our own account's statistics to our staff: daily reach, views, interactions, follows, post and Reels insights, and follower / engaged audience demographics (country, city, age, gender) as aggregated numbers. The data is stored in our database for trend charts and is never shared outside the company.
 
 "Testing instructions" maydoniga:
 > 1. Log in at https://buyukkaravan.com/admin/login with the test credentials below. 2. Open Sozlamalar (Settings) → Instagram and click "Instagram'ni ulash" to connect via Instagram Login. 3. Open the "Instagram" section, click "Sozlash" on a post, choose a product and save. 4. From a tester Instagram account, comment "narxi qancha?" on that post. 5. The tester receives a Direct message with the price; the comment gets a public reply; the "Jurnal" table shows the status "Yuborildi".
@@ -170,6 +174,15 @@ Madina Direct'da javob bermaydi. Mijoz yozsa (shu jumladan "So'rovlar" papkasi) 
 Instagram/Telegram'dan har hodisa kelganda tekshiriladi. Eslatmalar aniq vaqtda kelishi uchun tashqi cron
 (masalan cron-job.org) har 5 daqiqada `GET https://buyukkaravan.com/api/cron/instagram-direct` ni
 `Authorization: Bearer <CRON_SECRET>` sarlavhasi bilan chaqirsin (Pro tarifda `*/5 * * * *` qo'yish mumkin).
+
+## 13. Statistika
+
+Admin panel → Instagram → **Statistika** (Super Admin, Admin). Ma'lumot har kuni 06:00 da (Vercel Cron, Hobby'da ±59 daq)
+yoki "Hozir yangilash" bilan olinadi. Avval ulangan akkauntlar uchun Sozlamalar → Instagram'da **"Qayta ulash"** kerak
+(yangi `instagram_business_manage_insights` ruxsati) — kartada ogohlantirish chiqadi.
+
+Meta cheklovlari: ma'lumot 48 soatgacha kechikishi mumkin; demografiya oxirgi 30 kun bo'yicha, eng ko'pi 45 guruh,
+100 dan kam obunachi/reaksiya bo'lsa berilmaydi; storis statistikasi faqat 24 soat.
 
 ## Nosozliklar
 

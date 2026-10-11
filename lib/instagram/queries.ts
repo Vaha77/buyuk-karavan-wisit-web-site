@@ -2,6 +2,7 @@ import "server-only";
 import { isVaultEnabled } from "@/lib/auth/password-vault";
 import { getDb } from "@/lib/db";
 import { appConfig, GraphError, listMedia, type IgMedia } from "./graph";
+import { needsInsightsReconnect } from "./insights-rules";
 import { errorReason, isReel, tashkentDayStart } from "./rules";
 import { accountToken, getInstagramAccount } from "./service";
 
@@ -12,7 +13,7 @@ export async function getInstagramStatus() {
   return {
     missingEnv: config.missing,
     vault: isVaultEnabled(),
-    account: account && { username: account.username, tokenExpiresAt: account.tokenExpiresAt.toISOString(), tokenDaysLeft: Math.floor((account.tokenExpiresAt.getTime() - Date.now()) / 86_400_000), webhookSubscribedAt: account.webhookSubscribedAt?.toISOString() ?? null, webhookError: account.webhookError, lastWebhookAt: account.lastWebhookAt?.toISOString() ?? null, tokenReadable: accountToken(account) !== null },
+    account: account && { username: account.username, tokenExpiresAt: account.tokenExpiresAt.toISOString(), tokenDaysLeft: Math.floor((account.tokenExpiresAt.getTime() - Date.now()) / 86_400_000), webhookSubscribedAt: account.webhookSubscribedAt?.toISOString() ?? null, webhookError: account.webhookError, lastWebhookAt: account.lastWebhookAt?.toISOString() ?? null, tokenReadable: accountToken(account) !== null, insightsReconnect: needsInsightsReconnect(account.grantedScopes, account.insightsError) },
   };
 }
 export type InstagramStatus = Awaited<ReturnType<typeof getInstagramStatus>>;

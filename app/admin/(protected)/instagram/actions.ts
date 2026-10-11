@@ -12,6 +12,7 @@ import { appConfig, GraphError, subscribeWebhooks, unsubscribeWebhooks } from "@
 import { CALLBACK_PATH, STATE_COOKIE, authorizeUrl, requestOrigin } from "@/lib/instagram/oauth";
 import { DEFAULT_QUESTION_DM, DEFAULT_QUESTION_REPLY } from "@/lib/instagram/constants";
 import { dismissConversation } from "@/lib/instagram/direct";
+import { refreshInsights } from "@/lib/instagram/insights";
 import { parseMinute } from "@/lib/instagram/direct-rules";
 import { DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY, errorReason, parseKeywords, parseVariants } from "@/lib/instagram/rules";
 import { accountToken, getInstagramAccount, processQueue, refreshTokenIfDue } from "@/lib/instagram/service";
@@ -168,4 +169,15 @@ export async function dismissDirectAction(conversationId: string, reason: string
   await writeAudit(actor, { action: "UPDATE", entityType: "INSTAGRAM_DIRECT", entityId: String(conversationId), summary: `Instagram yozishmasini “Kerak emas” qildi: ${text}` });
   revalidatePath("/admin/instagram");
   return { ok: true, message: "Kerak emas ✓" };
+}
+
+// ---- Statistika tab --------------------------------------------------------------------------------------
+
+/** "Hozir yangilash": Insights now (the daily cron does the same at 06:00). */
+export async function refreshInsightsAction(): Promise<Result> {
+  await requireRole("SUPER_ADMIN", "ADMIN");
+  const result = await refreshInsights();
+  revalidatePath("/admin/instagram");
+  if (!result.ok) return { ok: false, error: result.errors[0] ?? "Ma’lumot olinmadi." };
+  return { ok: true, message: `Yangilandi ✓ ${result.days} kun, ${result.media} post${result.audience ? ", auditoriya" : ""}${result.errors.length ? ` · ${result.errors.length} ta ogohlantirish` : ""}` };
 }

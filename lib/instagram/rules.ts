@@ -7,7 +7,7 @@ export const GRAPH_VERSION = "v25.0";
 export const GRAPH_HOST = "https://graph.instagram.com";
 export const OAUTH_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize";
 export const OAUTH_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
-export const SCOPES = ["instagram_business_basic", "instagram_business_manage_comments", "instagram_business_manage_messages"] as const;
+export const SCOPES = ["instagram_business_basic", "instagram_business_manage_comments", "instagram_business_manage_messages", "instagram_business_manage_insights"] as const;
 
 export { DEFAULT_DM_TEMPLATE, DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY, PLACEHOLDERS } from "./constants";
 import { DEFAULT_KEYWORDS, type CommentKind } from "./constants";
