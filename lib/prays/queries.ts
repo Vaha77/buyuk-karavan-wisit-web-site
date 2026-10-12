@@ -3,6 +3,7 @@ import { cache } from "react";
 import { getDb } from "@/lib/db";
 import type { CatalogPart, CatalogProduct } from "./import";
 import { DEFAULT_MARKUP, clampMarkup, formatShortDate } from "./rules";
+import { issueGroups, type CategoryFlags } from "@/lib/sex/categories";
 
 const toNumber = (value: { toString(): string } | null | undefined) => (value === null || value === undefined ? null : Number(value.toString()));
 
@@ -12,7 +13,7 @@ export const getMarkupPercent = cache(async function getMarkupPercent() {
   return clampMarkup(settings?.priceMarkupPercent ?? DEFAULT_MARKUP) ?? DEFAULT_MARKUP;
 });
 
-export type PraysProduct = CatalogProduct & { priceUsd: number | null; priceListDate: string | null; categoryName: string | null };
+export type PraysProduct = CatalogProduct & { priceUsd: number | null; priceListDate: string | null; categoryName: string | null; categoryId: string | null };
 export type PraysPart = CatalogPart & { priceListDate: string | null };
 export type HistoryEntry = { id: string; title: string; detail: string; who: string };
 
@@ -21,9 +22,9 @@ export const getPraysProducts = cache(async function getPraysProducts(): Promise
   const rows = await getDb().product.findMany({
     where: { archivedAt: null },
     orderBy: [{ brand: "asc" }, { model: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, brand: true, model: true, basePriceUsd: true, priceUsd: true, priceListDate: true, category: { select: { name: true } } },
+    select: { id: true, name: true, brand: true, model: true, basePriceUsd: true, priceUsd: true, priceListDate: true, categoryId: true, category: { select: { name: true } } },
   });
-  return rows.map(row => ({ id: row.id, name: row.name, brand: row.brand, model: row.model, categoryName: row.category.name, basePriceUsd: toNumber(row.basePriceUsd), priceUsd: toNumber(row.priceUsd), priceListDate: row.priceListDate?.toISOString() ?? null }));
+  return rows.map(row => ({ id: row.id, name: row.name, brand: row.brand, model: row.model, categoryName: row.category.name, categoryId: row.categoryId, basePriceUsd: toNumber(row.basePriceUsd), priceUsd: toNumber(row.priceUsd), priceListDate: row.priceListDate?.toISOString() ?? null }));
 });
 
 export const getSexParts = cache(async function getSexParts(includeInactive = false): Promise<PraysPart[]> {
@@ -54,4 +55,26 @@ export async function getPriceHistory(limit = 20): Promise<HistoryEntry[]> {
     }
     return { id: key, title: `${first.priceListName || kind} · ${SOURCE_LABEL[first.source]}`, detail, who: `${formatShortDate(first.createdAt)} · ${first.user?.name ?? "—"}` };
   });
+}
+
+export type PraysCategory = CategoryFlags & { isActive: boolean; productCount: number };
+/** Prays → Kategoriyalar: every category with its Seh flags and how many price-list products it has (archived ones excluded). */
+export const getPraysCategories = cache(async function getPraysCategories(): Promise<PraysCategory[]> {
+  const rows = await getDb().productCategory.findMany({
+    orderBy: [{ order: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, isActive: true, workshopAssembly: true, workshopRole: true, workshopIssue: true, _count: { select: { products: { where: { archivedAt: null } } } } },
+  });
+  return rows.map(({ _count, ...row }) => ({ ...row, productCount: _count.products }));
+});
+
+/** Zborka: the condenser category whose prices are the "standart" ones (Prays → Kategoriyalar). */
+export const getStandardCondenserCategoryId = cache(async function getStandardCondenserCategoryId() {
+  const settings = await getDb().siteSettings.findUnique({ where: { id: "global" }, select: { standardCondenserCategoryId: true } }).catch(() => null);
+  return settings?.standardCondenserCategoryId ?? null;
+});
+
+/** "Sehdan alohida chiqadi" goods (zapchast zayavkasi), grouped by category. */
+export async function getIssueGroups() {
+  const [products, categories] = await Promise.all([getPraysProducts(), getPraysCategories()]);
+  return issueGroups(products, categories);
 }

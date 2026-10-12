@@ -214,6 +214,8 @@ model SiteSettings {
   priceMarkupPercent Int     @default(10)
   // Seh: how many orders the workshop should start per day (a warning, not a block).
   workshopDailyLimit Int     @default(5)
+  // Zborka: the condenser category whose price is the "standart" one (price difference = chosen − standard).
+  standardCondenserCategoryId String? @db.VarChar(40)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -224,6 +226,12 @@ model ProductCategory {
   slug      String    @unique
   isActive  Boolean   @default(true)
   order     Int       @default(0)
+  // Seh (Prays → Kategoriyalar, Super Admin only; apply to every product of the category, present and future):
+  // "Zborkada ishlatiladi" with its role in the zborka form, and "Sehdan alohida chiqadi" (zapchast zayavkasi).
+  workshopAssembly Boolean @default(false)
+  // "COMPRESSOR" | "CONDENSER" (only with workshopAssembly)
+  workshopRole     String? @db.VarChar(20)
+  workshopIssue    Boolean @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   products  Product[]

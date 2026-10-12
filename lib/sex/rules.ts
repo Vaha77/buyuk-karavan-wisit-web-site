@@ -65,8 +65,9 @@ export function priceAccess(role: string): "base" | "none" {
 }
 
 /** Workshop orders carry only price-list prices: the workshop hands goods to the seller at prays price, the seller adds their own markup. */
-export type PriceSnapshot = { unitBaseUsd: number; totalBaseUsd: number; standardBaseUsd: number | null };
-const baseOnly = (snapshot: PriceSnapshot): PriceSnapshot => ({ unitBaseUsd: snapshot.unitBaseUsd, totalBaseUsd: snapshot.totalBaseUsd, standardBaseUsd: snapshot.standardBaseUsd ?? null });
+/** negotiated: a chiller without a typed price ("kelishiladi"); its sums are 0 and are shown as "kelishiladi". */
+export type PriceSnapshot = { unitBaseUsd: number; totalBaseUsd: number; standardBaseUsd: number | null; negotiated?: boolean };
+const baseOnly = (snapshot: PriceSnapshot): PriceSnapshot => ({ unitBaseUsd: snapshot.unitBaseUsd, totalBaseUsd: snapshot.totalBaseUsd, standardBaseUsd: snapshot.standardBaseUsd ?? null, ...(snapshot.negotiated ? { negotiated: true } : {}) });
 type WithPrices = { priceSnapshot?: unknown; items?: Array<{ baseUsd?: unknown } & Record<string, unknown>> } & Record<string, unknown>;
 /** What is sent to the browser: price-list prices only (no selling price / markup), and no price fields at all for WORKSHOP. */
 export function stripPrices<T extends WithPrices>(order: T, role: string) {

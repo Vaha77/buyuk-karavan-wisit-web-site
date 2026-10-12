@@ -21,8 +21,13 @@ const common = {
   requestId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/, "So‘rov identifikatori noto‘g‘ri.").nullable().default(null),
   confirmDuplicate: z.boolean().default(false),
 };
-const agregatSchema = z.object({ ...common, groupKey: z.string().min(1).max(80), modelKey: z.string().min(1).max(60), assembly: z.enum(["k", "rb", "vd", "vz"]), liters: z.string().max(10).nullable(), hp: z.string().max(10).nullable(), fn: z.string().max(12).nullable(), qty: z.number().int("Soni butun bo‘lsin.").min(1, "Soni kamida 1.").max(999) });
-const zapchastSchema = z.object({ ...common, items: z.array(z.object({ partId: z.string().min(1).max(40), qty: z.number().int("Soni butun bo‘lsin.").min(1, "Soni kamida 1.").max(9999) })).min(1, "Kamida bitta mahsulot qo‘shing.").max(50) });
+const agregatSchema = z.object({
+  ...common, groupKey: z.string().min(1).max(80), modelKey: z.string().min(1).max(60), assembly: z.enum(["k", "rb", "vd", "vz", "ch"]), liters: z.string().max(10).nullable(), hp: z.string().max(10).nullable(),
+  // Vazdushniy agregat: the chosen condenser product; Chiller: composition (required) and an optional price ("kelishiladi").
+  condenserId: z.string().max(40).nullable().default(null), composition: z.string().trim().max(1000).nullable().default(null), manualPrice: z.number().positive("Narx musbat bo‘lsin.").max(1_000_000).nullable().default(null),
+  qty: z.number().int("Soni butun bo‘lsin.").min(1, "Soni kamida 1.").max(999),
+});
+const zapchastSchema = z.object({ ...common, items: z.array(z.object({ productId: z.string().min(1).max(40), qty: z.number().int("Soni butun bo‘lsin.").min(1, "Soni kamida 1.").max(9999) })).min(1, "Kamida bitta mahsulot qo‘shing.").max(50) });
 const firstIssue = (error: z.ZodError) => error.issues[0]?.message || "Ma’lumotlarni tekshiring.";
 
 export async function createAgregatOrderAction(raw: unknown): Promise<SexActionResult> {

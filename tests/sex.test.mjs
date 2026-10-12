@@ -9,49 +9,103 @@ const excel = await import("../lib/prays/excel.ts");
 const zborka = await import("../lib/sex/zborka.ts");
 const rules = await import("../lib/sex/rules.ts");
 
+/** Categories as Prays → Kategoriyalar would flag them (nothing is flagged automatically). */
+const CATEGORIES = [
+  { id: "c-k", name: "Bitzer R22", workshopAssembly: true, workshopRole: "COMPRESSOR", workshopIssue: false },
+  { id: "c-ag", name: "Agregatlar", workshopAssembly: false, workshopRole: null, workshopIssue: false },
+  { id: "c-x", name: "FN/FNV Xitoy", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: true },
+  { id: "c-u", name: "FN/FNV UCS", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: false },
+  { id: "c-dd", name: "Xitoy DD/DJ havo sovutgichlar", workshopAssembly: false, workshopRole: null, workshopIssue: false },
+];
+/** Condensers in the price list: FN160 / FNV200 from two sources (Xitoy is the standard category). */
+const CONDENSERS = [
+  { id: "x-fn160", name: "FN160 vazdushniy kondensator", brand: "Xitoy", model: "FN160", categoryName: "FN/FNV Xitoy", categoryId: "c-x", basePriceUsd: 1228 },
+  { id: "x-fnv200", name: "FNV200 vazdushniy kondensator", brand: "Xitoy", model: "FNV200", categoryName: "FN/FNV Xitoy", categoryId: "c-x", basePriceUsd: 1646 },
+  { id: "u-fn160", name: "FN160 vazdushniy kondensator UCS", brand: "UCS", model: "FN160", categoryName: "FN/FNV UCS", categoryId: "c-u", basePriceUsd: 1400 },
+  { id: "u-fnv200", name: "FNV200 vazdushniy kondensator UCS", brand: "UCS", model: "FNV200", categoryName: "FN/FNV UCS", categoryId: "c-u", basePriceUsd: 1900 },
+];
+/** Air coolers that used to show up as "compressors" in the zborka form. */
+const AIR_COOLERS = [
+  { id: "dd30", name: "DD 30 havo sovutgich", brand: "Xitoy", model: "DD30", categoryName: "Xitoy DD/DJ havo sovutgichlar", categoryId: "c-dd", basePriceUsd: 410 },
+  { id: "dj45", name: "DJ 45 havo sovutgich", brand: "Xitoy", model: "DJ45", categoryName: "Xitoy DD/DJ havo sovutgichlar", categoryId: "c-dd", basePriceUsd: 520 },
+];
+
 /** Catalog products named the way the price list describes them, priced from the Bitzer R22 file. */
-async function bitzerCatalog(parts = []) {
+async function bitzerCatalog(parts = [], { categories = CATEGORIES, standard = "c-x" } = {}) {
   const [sheet] = await excel.readPriceWorkbook(new Uint8Array(await readFile(new URL("../docs/design/sex/bitzer-r22-15.07.26.xlsx", import.meta.url))));
   const products = sheet.rows.flatMap(row => {
     const model = row.model.replace(/\s+/g, ""), liters = row.receiverLiters.replace(/\D+/g, "");
     return [
-      { id: `${model}-k`, name: `BITZER ${model} kompressor R22`, brand: "BITZER", model, categoryName: "Kompressorlar", basePriceUsd: Number(row.compressorPrice) },
-      { id: `${model}-rb`, name: `BITZER ${model} kompressor resiver ustida ${liters}L R22`, brand: "BITZER", model, categoryName: "Kompressorlar", basePriceUsd: Number(row.receiverPrice) },
-      { id: `${model}-vd`, name: `BITZER ${model} vadinoy agregat · vadinoy kondensator ${row.waterCondenser} R22`, brand: "BITZER", model, categoryName: "Agregatlar", basePriceUsd: Number(row.waterPrice) },
-      { id: `${model}-vz`, name: `BITZER ${model} vazdushniy agregat · ${row.airCondenser} R22`, brand: "BITZER", model, categoryName: "Agregatlar", basePriceUsd: Number(row.airPrice) },
+      { id: `${model}-k`, name: `BITZER ${model} kompressor R22`, brand: "BITZER", model, categoryName: "Bitzer R22", categoryId: "c-k", basePriceUsd: Number(row.compressorPrice) },
+      { id: `${model}-rb`, name: `BITZER ${model} kompressor resiver ustida ${liters}L R22`, brand: "BITZER", model, categoryName: "Bitzer R22", categoryId: "c-k", basePriceUsd: Number(row.receiverPrice) },
+      { id: `${model}-vd`, name: `BITZER ${model} vadinoy agregat · vadinoy kondensator ${row.waterCondenser} R22`, brand: "BITZER", model, categoryName: "Agregatlar", categoryId: "c-ag", basePriceUsd: Number(row.waterPrice) },
+      { id: `${model}-vz`, name: `BITZER ${model} vazdushniy agregat · ${row.airCondenser} R22`, brand: "BITZER", model, categoryName: "Agregatlar", categoryId: "c-ag", basePriceUsd: Number(row.airPrice) },
     ];
   });
-  return zborka.buildZborkaCatalog(products, parts);
+  return zborka.buildZborkaCatalog([...products, ...CONDENSERS, ...AIR_COOLERS], parts, { categories, standardCondenserCategoryId: standard });
 }
 
-test("part prices come from the price list: water condenser = vadinoy − R/B ustida, FN block = vazdushniy − R/B ustida", async () => {
+test("zborka list: only models of 'Kompressor' categories; air coolers (DD/DJ) and UCS condensers are not compressors", async () => {
   const catalog = await bitzerCatalog();
-  assert.equal(catalog.groups.length, 1);
+  assert.equal(catalog.groups.length, 1, "only the Bitzer R22 price list");
   const [group] = catalog.groups;
   assert.equal(group.label, "Bitzer R22");
   assert.equal(group.models.length, 19);
+  assert.ok(!catalog.groups.some(item => /xitoy|ucs/i.test(item.label)), "no Xitoy / UCS group");
+  assert.ok(group.models.every(model => !/^D[DJ]|^FN/.test(model.key)), "no DD/DJ or FN as a compressor model");
+  const fourNes = group.models.find(item => item.key === "4NES+20");
+  assert.ok(fourNes.vd && fourNes.vz, "R/B, vadinoy and vazdushniy rows come from any category for an allowed model");
   assert.deepEqual(group.hpTable, { 3: 178, 5: 245, 8: 290, 10: 321, 15: 431, 20: 539, 30: 763, 40: 942, 50: 1125 });
-  assert.deepEqual(group.fnTable, { FN22: 250, FN43: 403, FN70: 626, FN80: 689, FN105: 833, FN120: 1016, FN160: 1228, FN180: 1381, FNV200: 1646, FNV240: 1900, FNV280: 2254, FNV300: 2411, FNV350: 2675 });
+  assert.equal("fnTable" in group, false, "the internal FN difference table is gone");
+  assert.deepEqual(catalog.condensers.map(item => item.label), ["FN160 · UCS", "FN160 · Xitoy", "FNV200 · UCS", "FNV200 · Xitoy"]);
   assert.deepEqual(catalog.receivers, {}, "no receiver prices until the admin enters them");
+  assert.equal(catalog.notice, null);
+  const none = await bitzerCatalog([], { categories: CATEGORIES.map(category => ({ ...category, workshopAssembly: false, workshopRole: null })) });
+  assert.equal(none.groups.length, 0, "nothing flagged → no compressors (nothing is marked automatically)");
+  assert.match(none.notice, /Kompressor/);
 });
 
-test("zborka quote: standard + Σ(chosen − standard); a receiver swap needs both receiver prices", async () => {
+test("zborka quote: condenser delta = chosen Prays price − standard condenser's Prays price; receivers; chiller", async () => {
   const catalog = await bitzerCatalog([{ id: "r20", name: "Resiver bachok", size: "20 L", group: "Resiver", basePriceUsd: 305 }, { id: "r30", name: "Resiver bachok 30 L", size: null, group: "Resiver", basePriceUsd: 387 }]);
   const [group] = catalog.groups, model = group.models.find(item => item.key === "4NES+20");
   assert.deepEqual([model.liters, model.hp, model.fn], ["20", "20", "FN160"]);
-  const standard = zborka.quoteZborka(model, group, catalog.receivers, { assembly: "vz" });
-  assert.deepEqual([standard.ok, standard.base, standard.changes.length, standard.title], [true, 4123, 0, "BITZER 4NES+20 vazdushniy agregat · FN160"]);
-  const fnv200 = zborka.quoteZborka(model, group, catalog.receivers, { assembly: "vz", fn: "FNV200" });
+  const standard = zborka.quoteZborka(model, group, catalog, { assembly: "vz" });
+  assert.deepEqual([standard.ok, standard.base, standard.changes.length, standard.title, standard.options.condenserId], [true, 4123, 0, "BITZER 4NES+20 vazdushniy agregat · FN160", "x-fn160"]);
+  assert.deepEqual(standard.telegram, ["Resiver: 20 L", "Kondensator: FN160 · Xitoy, rama bilan"]);
+  const fnv200 = zborka.quoteZborka(model, group, catalog, { assembly: "vz", condenserId: "x-fnv200" });
   assert.equal(fnv200.base, 4123 + 1646 - 1228);
-  assert.deepEqual(fnv200.telegram, ["Resiver: 20 L", "Kondensator: FNV200 (standart FN160 o‘rniga), rama bilan"]);
-  const bigger = zborka.quoteZborka(model, group, catalog.receivers, { assembly: "vz", fn: "FNV200", liters: "30" });
+  assert.deepEqual(fnv200.telegram, ["Resiver: 20 L", "Kondensator: FNV200 · Xitoy (standart FN160 · Xitoy o‘rniga), rama bilan"]);
+  const ucs = zborka.quoteZborka(model, group, catalog, { assembly: "vz", condenserId: "u-fn160" });
+  assert.equal(ucs.base, 4123 + 1400 - 1228, "same FN code from UCS: the real price difference");
+  assert.equal(ucs.title, "BITZER 4NES+20 vazdushniy agregat · FN160");
+  assert.match(ucs.telegram[1], /FN160 · UCS \(standart FN160 · Xitoy o‘rniga\)/, "Telegram shows the condenser's source");
+  const same = zborka.quoteZborka(model, group, catalog, { assembly: "vz", condenserId: "x-fn160" });
+  assert.equal(same.changes.length, 0, "choosing the standard condenser is no change");
+  const bigger = zborka.quoteZborka(model, group, catalog, { assembly: "vz", condenserId: "x-fnv200", liters: "30" });
   assert.equal(bigger.base, 4123 + 1646 - 1228 + 387 - 305);
-  const water = zborka.quoteZborka(model, group, catalog.receivers, { assembly: "vd", hp: "30" });
+  const water = zborka.quoteZborka(model, group, catalog, { assembly: "vd", hp: "30" });
   assert.equal(water.base, 3434 + 763 - 539);
-  assert.deepEqual(zborka.quoteZborka(model, group, catalog.receivers, { assembly: "rb", liters: "45" }), { ok: false, error: "Resiver narxi kiritilmagan" });
+  assert.deepEqual(zborka.quoteZborka(model, group, catalog, { assembly: "rb", liters: "45" }), { ok: false, error: "Resiver narxi kiritilmagan" });
   const small = group.models.find(item => item.key === "2FES+3"); // standard 8 L has no receiver price
-  assert.deepEqual(zborka.quoteZborka(small, group, catalog.receivers, { assembly: "rb", liters: "20" }), { ok: false, error: "Resiver narxi kiritilmagan" });
-  assert.equal(zborka.quoteZborka(small, group, catalog.receivers, { assembly: "k" }).base, 915);
+  assert.deepEqual(zborka.quoteZborka(small, group, catalog, { assembly: "rb", liters: "20" }), { ok: false, error: "Resiver narxi kiritilmagan" });
+  assert.equal(zborka.quoteZborka(small, group, catalog, { assembly: "k" }).base, 915);
+  // No standard category, or no standard price for this FN code → a warning, and the condenser cannot be swapped.
+  const noStandard = await bitzerCatalog([], { standard: null });
+  const [g2] = noStandard.groups, m2 = g2.models.find(item => item.key === "4NES+20");
+  assert.match(zborka.condenserWarning(m2, noStandard), /kategoriyasi tanlanmagan/);
+  assert.equal(zborka.quoteZborka(m2, g2, noStandard, { assembly: "vz", condenserId: "u-fn160" }).ok, false);
+  assert.equal(zborka.quoteZborka(m2, g2, noStandard, { assembly: "vz" }).ok, true, "the standard agregat can still be ordered");
+  const fn22 = group.models.find(item => item.fn === "FN22");
+  assert.match(zborka.condenserWarning(fn22, catalog), /FN22 narxi praysda topilmadi/);
+  assert.equal(zborka.condenserWarning(model, catalog), null);
+  // Chiller: no ready scheme — composition required, price typed or "kelishiladi".
+  assert.deepEqual(zborka.quoteZborka(model, group, catalog, { assembly: "ch", composition: "" }), { ok: false, error: "Chiller tarkibini yozing (tayyor sxema yo‘q)." });
+  const chiller = zborka.quoteZborka(model, group, catalog, { assembly: "ch", composition: "2 × 4NES-20, plastinkali isparitel, nasos" });
+  assert.deepEqual([chiller.ok, chiller.negotiated, chiller.base, chiller.title], [true, true, 0, "Chiller · BITZER 4NES+20"]);
+  assert.deepEqual(chiller.telegram, ["Chiller — tayyor sxema yo‘q", "Tarkibi: 2 × 4NES-20, plastinkali isparitel, nasos"]);
+  const priced = zborka.quoteZborka(model, group, catalog, { assembly: "ch", composition: "2 × 4NES-20", manualPrice: 15000 });
+  assert.deepEqual([priced.negotiated, priced.base], [false, 15000]);
+  assert.equal(zborka.ASSEMBLIES.some(item => item.key === "ch" && item.name === "Chiller"), true);
 });
 
 test("status machine: NEW→ACCEPTED (Navbatda)→STARTED (Terilmoqda)→ISSUED→RECEIVED, one step at a time, each by its one role", () => {

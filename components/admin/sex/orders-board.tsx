@@ -11,7 +11,8 @@ import { AcceptedBadge, WorkingStatus } from "./working-progress";
 import { BusyLabel, DownloadButton, LinkButton, PendingArea, startNavigationProgress } from "@/components/admin/feedback";
 
 type Option = { id: string; name: string };
-type PartOption = { id: string; label: string };
+/** group: the product's category ("Sehdan alohida chiqadi"), used for <optgroup> and search. */
+type PartOption = { id: string; label: string; group?: string };
 type Props = {
   view?: "active" | "cancelled" | "test";
   role: string; userName: string; rows: OrderRow[]; month: { key: string; label: string }; months: Array<{ key: string; label: string }>;
@@ -139,7 +140,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
 }
 
 function PriceLine({ prices }: { prices: NonNullable<OrderRow["prices"]> }) {
-  return <div className="sx-muted" style={{ fontWeight: 600 }}>Prays narxi {formatUsd(prices.totalBaseUsd ?? null)}</div>;
+  return <div className="sx-muted" style={{ fontWeight: 600 }}>Prays narxi {prices.negotiated ? "kelishiladi" : formatUsd(prices.totalBaseUsd ?? null)}</div>;
 }
 
 /** "berildi" per item: defaults to the requested quantity, the workshop corrects it. */
@@ -160,7 +161,7 @@ export function NoRequestForm({ parts, sellers, customers, busy, onSubmit }: { p
   const [sellerId, setSellerId] = useState(""), [items, setItems] = useState([{ partId: "", qty: "1" }]), [purpose, setPurpose] = useState<"SHOP" | "CLIENT">("SHOP"), [customer, setCustomer] = useState(""), [note, setNote] = useState("");
   const ready = sellerId && items.every(item => item.partId && Number(item.qty) >= 1) && (purpose === "SHOP" || customer.trim());
   const known = customers.find(item => item.name === customer.trim());
-  return <form style={{ display: "grid", gap: 12 }} onSubmit={event => { event.preventDefault(); if (ready) onSubmit({ sellerId, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, dueDate: null, note: note.trim() || null, items: items.map(item => ({ partId: item.partId, qty: Number(item.qty) })) }); }}>
+  return <form style={{ display: "grid", gap: 12 }} onSubmit={event => { event.preventDefault(); if (ready) onSubmit({ sellerId, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, dueDate: null, note: note.trim() || null, items: items.map(item => ({ productId: item.partId, qty: Number(item.qty) })) }); }}>
     <p className="sx-note">Shoshilinch berilgan tovar: “Chiqib ketdi” holatida yoziladi, sotuvchi tasdiqlaydi, Super Admin krimga oladi.</p>
     <label className="sx-field">Sotuvchi<select value={sellerId} onChange={event => setSellerId(event.target.value)} required><option value="">Tanlang</option>{sellers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     <PartRows parts={parts} items={items} setItems={setItems}/>
@@ -170,12 +171,25 @@ export function NoRequestForm({ parts, sellers, customers, busy, onSubmit }: { p
   </form>;
 }
 
+/** Options grouped by category; the search keeps every word (name or category); a chosen item always stays in its list. */
+function PartOptions({ parts, query, selected }: { parts: PartOption[]; query: string; selected: string }) {
+  const words = query.toLowerCase().split(/s+/).filter(Boolean);
+  const shown = parts.filter(part => part.id === selected || words.every(word => `${part.label} ${part.group ?? ""}`.toLowerCase().includes(word)));
+  const groups = [...new Set(shown.map(part => part.group ?? ""))];
+  return <>{groups.map(group => group
+    ? <optgroup key={group} label={group}>{shown.filter(part => part.group === group).map(part => <option key={part.id} value={part.id}>{part.label}</option>)}</optgroup>
+    : shown.filter(part => !part.group).map(part => <option key={part.id} value={part.id}>{part.label}</option>))}</>;
+}
+
 export function PartRows({ parts, items, setItems, priceOf }: { parts: PartOption[]; items: Array<{ partId: string; qty: string }>; setItems: (items: Array<{ partId: string; qty: string }>) => void; priceOf?: (partId: string) => string | null }) {
+  const [query, setQuery] = useState("");
+  const matches = query.trim() ? parts.filter(part => query.toLowerCase().split(/s+/).filter(Boolean).every(word => `${part.label} ${part.group ?? ""}`.toLowerCase().includes(word))).length : parts.length;
   return <div style={{ display: "grid", gap: 8 }}>
+    <label className="sx-field">Qidirish <small>· nomi, modeli yoki kategoriyasi</small><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Masalan: klapan 3/8" aria-label="Seh mahsulotini qidirish"/>{query.trim() && <small className="sx-muted">{matches} ta topildi</small>}</label>
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 44px", gap: 10, fontSize: 12, fontWeight: 700, color: "#4F5A70" }}><span>Seh mahsuloti</span><span>Soni</span><span/></div>
     {items.map((item, index) => <div key={index} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 44px", gap: 10, alignItems: "center" }}>
       <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-        <select className="sx-input" style={{ fontSize: 14, fontWeight: 600 }} value={item.partId} onChange={event => setItems(items.map((row, i) => i === index ? { ...row, partId: event.target.value } : row))} aria-label="Seh mahsuloti"><option value="">Tanlang</option>{parts.map(part => <option key={part.id} value={part.id}>{part.label}</option>)}</select>
+        <select className="sx-input" style={{ fontSize: 14, fontWeight: 600 }} value={item.partId} onChange={event => setItems(items.map((row, i) => i === index ? { ...row, partId: event.target.value } : row))} aria-label="Seh mahsuloti"><option value="">Tanlang</option><PartOptions parts={parts} query={query} selected={item.partId}/></select>
         {priceOf && item.partId && <span className="sx-muted">{priceOf(item.partId) ?? "narxi kiritilmagan"}</span>}
       </div>
       <input className="sx-input" style={{ fontSize: 14 }} value={item.qty} onChange={event => setItems(items.map((row, i) => i === index ? { ...row, qty: event.target.value.replace(/\D+/g, "") } : row))} inputMode="numeric" aria-label="Soni"/>

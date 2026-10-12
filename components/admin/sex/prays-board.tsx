@@ -3,8 +3,9 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Trash2 } from "lucide-react";
-import { applyMarkupAction, confirmPreviewAction, createPartAction, previewExcelAction, previewImageAction, previewPercentAction, removeEntryAction, updateBaseAction, type PreviewResult } from "@/app/admin/(protected)/prays/actions";
-import type { HistoryEntry, PraysPart, PraysProduct } from "@/lib/prays/queries";
+import { applyMarkupAction, confirmPreviewAction, createPartAction, previewExcelAction, previewImageAction, previewPercentAction, removeEntryAction, setStandardCondenserAction, updateBaseAction, updateCategoryFlagsAction, type PreviewResult } from "@/app/admin/(protected)/prays/actions";
+import type { HistoryEntry, PraysCategory, PraysPart, PraysProduct } from "@/lib/prays/queries";
+import { ROLE_LABELS, WORKSHOP_FILTERS, isCondenserCategory, matchesWorkshopFilter, type WorkshopFilter } from "@/lib/sex/categories";
 import { BusyLabel, DownloadButton, PendingArea } from "@/components/admin/feedback";
 import { CHANGE_LABEL, MARKUP_MAX, MARKUP_MIN, STALE_PRICE_LIST_DAYS, daysSince, formatShortDate, formatUsd, sellPrice, type ChangeStatus } from "@/lib/prays/rules";
 
@@ -13,13 +14,16 @@ type Preview = Extract<PreviewResult, { ok: true }>;
 const STATUS_TONE: Record<ChangeStatus, string> = { UP: "is-orange", DOWN: "is-green", NEW: "is-blue", SAME: "is-grey", NOT_FOUND: "is-red" };
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function PraysBoard({ products, parts, markup, history }: { products: PraysProduct[]; parts: PraysPart[]; markup: number; history: HistoryEntry[] }) {
+export function PraysBoard({ products, parts, markup, history, categories, standardCondenserCategoryId }: { products: PraysProduct[]; parts: PraysPart[]; markup: number; history: HistoryEntry[]; categories: PraysCategory[]; standardCondenserCategoryId: string | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   // Tab / chip switch re-renders hundreds of rows: keep the old table visible, dimmed, meanwhile.
   const [filtering, startFilter] = useTransition();
-  const [tab, setTab] = useState<"ready" | "sex">("ready");
+  // "sex" = the old Seh zapchastlari list, kept as an archive (zayavka and zborka goods now come from category flags).
+  const [tab, setTab] = useState<"ready" | "categories" | "sex">("ready");
   const [chip, setChip] = useState("all");
+  const [sehFilter, setSehFilter] = useState<WorkshopFilter>("all");
+  const categoryById = useMemo(() => new Map(categories.map(category => [category.id, category])), [categories]);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -41,9 +45,9 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
   const groups = useMemo(() => [...new Set(parts.map(part => part.group))].sort(), [parts]);
 
   const rows: Row[] = useMemo(() => tab === "ready"
-    ? products.map(product => ({ id: product.id, entityType: "PRODUCT" as const, name: product.name, tag: product.brand, base: product.basePriceUsd, sale: product.basePriceUsd === null ? product.priceUsd : sellPrice(product.basePriceUsd, markup), date: product.priceListDate }))
+    ? products.filter(product => matchesWorkshopFilter(product.categoryId ? categoryById.get(product.categoryId) : null, sehFilter)).map(product => ({ id: product.id, entityType: "PRODUCT" as const, name: product.name, tag: product.brand, base: product.basePriceUsd, sale: product.basePriceUsd === null ? product.priceUsd : sellPrice(product.basePriceUsd, markup), date: product.priceListDate }))
     : parts.map(part => ({ id: part.id, entityType: "SEX_PART" as const, name: [part.name, part.size].filter(Boolean).join(" "), tag: part.group, base: part.basePriceUsd, sale: part.basePriceUsd === null ? null : sellPrice(part.basePriceUsd, markup), date: part.priceListDate })),
-  [tab, products, parts, markup]);
+  [tab, products, parts, markup, sehFilter, categoryById]);
   const needle = query.trim().toLowerCase(), compact = needle.replace(/[^a-z0-9]+/g, "");
   const visible = rows.filter(row => (chip === "all" || row.tag === chip) && (!needle || row.name.toLowerCase().includes(needle) || (compact && row.name.toLowerCase().replace(/[^a-z0-9]+/g, "").includes(compact))));
 
@@ -157,10 +161,14 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
         <div className="sx-card-head">
           <div className="sx-tabs" role="tablist" aria-label="Prays turi">
             <button type="button" role="tab" className="sx-tab" aria-selected={tab === "ready"} onClick={() => startFilter(() => { setTab("ready"); setChip("all"); setEditing(null); setDeleting(null); })}>Tayyor mahsulotlar · {products.length}</button>
-            <button type="button" role="tab" className="sx-tab" aria-selected={tab === "sex"} onClick={() => startFilter(() => { setTab("sex"); setChip("all"); setEditing(null); setDeleting(null); })}>Seh zapchastlari · {parts.length}</button>
+            <button type="button" role="tab" className="sx-tab" aria-selected={tab === "categories"} onClick={() => startFilter(() => { setTab("categories"); setEditing(null); setDeleting(null); })}>Kategoriyalar · {categories.length}</button>
+            <button type="button" role="tab" className="sx-tab" aria-selected={tab === "sex"} onClick={() => startFilter(() => { setTab("sex"); setChip("all"); setEditing(null); setDeleting(null); })}>Eski ro‘yxat (arxiv) · {parts.length}</button>
           </div>
-          <label className="sx-search"><Search size={15} color="#4F5A70"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Nomi yoki model bo‘yicha qidirish" aria-label="Qidirish"/></label>
+          {tab !== "categories" && <label className="sx-search"><Search size={15} color="#4F5A70"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Nomi yoki model bo‘yicha qidirish" aria-label="Qidirish"/></label>}
         </div>
+        {tab === "categories" ? <CategoryFlagsPanel categories={categories} standardCondenserCategoryId={standardCondenserCategoryId} busy={pending} run={run}/> : <>
+        {tab === "ready" && <div className="sx-chips" role="group" aria-label="Seh filtri">{WORKSHOP_FILTERS.map(item => <button key={item.key} type="button" className="sx-chip" aria-pressed={sehFilter === item.key} onClick={() => startFilter(() => setSehFilter(item.key))}>{item.label}</button>)}</div>}
+        {tab === "sex" && <p className="sx-note">Eski ro‘yxat (arxiv): ma’lumot saqlanadi, lekin zapchast zayavkasi endi faqat “Sehdan alohida chiqadi” belgili kategoriyalardan olinadi. Bu yerdagi resiver bachok narxlari zborkada hali ishlatiladi.</p>}
         <div className="sx-chips">
           {["all", ...(tab === "ready" ? brands.map(([brand]) => brand) : groups)].map(value => <button key={value} type="button" className="sx-chip" aria-pressed={chip === value} onClick={() => startFilter(() => setChip(value))}>{value === "all" ? "Hammasi" : value}</button>)}
           {tab === "sex" && <button type="button" className="sx-btn is-dashed" onClick={() => setAddOpen(open => !open)}>+ Zapchast qo‘shish</button>}
@@ -189,6 +197,7 @@ export function PraysBoard({ products, parts, markup, history }: { products: Pra
         {!visible.length && <p className="sx-muted" style={{ padding: 16, textAlign: "center" }}>{rows.length ? "Hech narsa topilmadi." : tab === "sex" ? "Seh zapchastlari hali kiritilmagan — “+ Zapchast qo‘shish” yoki Excel yuklash orqali qo‘shing." : "Mahsulotlar yo‘q."}</p>}
         </div></PendingArea>
         <span className="sx-muted">“O‘zgartirish” — prays narxini tahrirlash · o‘chirishdan oldin tasdiq so‘raladi (mahsulot saytdan yashiriladi, o‘chib ketmaydi) · sotuv narxi ustama bo‘yicha o‘zi hisoblanadi</span>
+        </>}
       </div>
 
       <div className="sx-card" style={{ flex: "1 1 300px", gap: 10 }}>
@@ -224,4 +233,48 @@ function AddPartForm({ groups, busy, onSubmit }: { groups: string[]; busy: boole
     <label className="sx-field">Prays narxi, $<input value={price} onChange={event => setPrice(event.target.value)} inputMode="decimal" placeholder="0"/></label>
     <button type="submit" className="sx-btn is-primary" disabled={busy || !name.trim() || !group.trim()}>Qo‘shish</button>
   </form>;
+}
+
+type Runner = (task: () => Promise<{ ok: true; message?: string } | { ok: false; error: string }>, after?: () => void) => void;
+
+/**
+ * Prays → Kategoriyalar (Super Admin): two Seh flags per category, saved at once. "Zborkada ishlatiladi" needs a role
+ * (Kompressor / Kondensator) so the zborka form knows which list it belongs to. Flags apply to every product of the
+ * category, including ones added later; nothing is ticked automatically.
+ */
+function CategoryFlagsPanel({ categories, standardCondenserCategoryId, busy, run }: { categories: PraysCategory[]; standardCondenserCategoryId: string | null; busy: boolean; run: Runner }) {
+  const [drafts, setDrafts] = useState<Record<string, { workshopAssembly: boolean; workshopRole: string | null; workshopIssue: boolean }>>({});
+  const condensers = categories.filter(isCondenserCategory);
+  const save = (category: PraysCategory, next: { workshopAssembly: boolean; workshopRole: string | null; workshopIssue: boolean }) => {
+    setDrafts(current => ({ ...current, [category.id]: next }));
+    // "Zborkada" without a role waits until the role is chosen.
+    if (next.workshopAssembly && !next.workshopRole) return;
+    run(() => updateCategoryFlagsAction({ id: category.id, ...next, workshopRole: next.workshopAssembly ? next.workshopRole as "COMPRESSOR" | "CONDENSER" : null }), () => setDrafts(current => { const { [category.id]: _done, ...rest } = current; void _done; return rest; }));
+  };
+  return <div style={{ display: "grid", gap: 12 }}>
+    <p className="sx-muted" style={{ margin: 0 }}>Belgi kategoriyadagi barcha mahsulotlarga (keyin qo‘shiladiganlarga ham) amal qiladi. <b>Zborkada ishlatiladi</b> — seh agregat yig‘ishda ishlatadi (turi: kompressor yoki kondensator). <b>Sehdan alohida chiqadi</b> — o‘zini sotish uchun sehdan olinadi (zapchast zayavkasi). O‘zgarishlar faoliyat tarixiga yoziladi.</p>
+    <div className="sx-cat-standard">
+      <label className="sx-field">Standart kondensator kategoriyasi <small>· zborkada narx farqi shu kategoriya narxidan hisoblanadi</small>
+        <select value={standardCondenserCategoryId ?? ""} disabled={busy} onChange={event => run(() => setStandardCondenserAction(event.target.value || null))}>
+          <option value="">Tanlanmagan</option>
+          {condensers.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+        </select>
+      </label>
+      {!condensers.length && <span className="sx-muted">Avval kondensator kategoriyalarini “Zborkada · Kondensator” deb belgilang.</span>}
+    </div>
+    <ul className="sx-cat-list" aria-label="Kategoriyalar">{categories.map(category => {
+      const value = drafts[category.id] ?? { workshopAssembly: category.workshopAssembly, workshopRole: category.workshopRole, workshopIssue: category.workshopIssue };
+      return <li key={category.id} className={`sx-cat-row${value.workshopAssembly || value.workshopIssue ? " is-on" : ""}`}>
+        <div className="sx-cat-name"><b>{category.name}</b><small>{category.productCount} ta mahsulot{category.isActive ? "" : " · saytda o‘chiq"}{category.id === standardCondenserCategoryId ? " · standart kondensator" : ""}</small></div>
+        <label className="sx-cat-check"><input type="checkbox" checked={value.workshopAssembly} disabled={busy} onChange={event => save(category, { ...value, workshopAssembly: event.target.checked, workshopRole: event.target.checked ? value.workshopRole : null })}/>Zborkada ishlatiladi</label>
+        <label className="sx-cat-role">Turi
+          <select value={value.workshopRole ?? ""} disabled={busy || !value.workshopAssembly} onChange={event => save(category, { ...value, workshopRole: event.target.value || null })} aria-invalid={value.workshopAssembly && !value.workshopRole}>
+            <option value="">{value.workshopAssembly ? "Tanlang" : "—"}</option>
+            {(Object.keys(ROLE_LABELS) as Array<keyof typeof ROLE_LABELS>).map(role => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
+          </select>
+        </label>
+        <label className="sx-cat-check"><input type="checkbox" checked={value.workshopIssue} disabled={busy} onChange={event => save(category, { ...value, workshopIssue: event.target.checked })}/>Sehdan alohida chiqadi</label>
+      </li>;
+    })}</ul>
+  </div>;
 }

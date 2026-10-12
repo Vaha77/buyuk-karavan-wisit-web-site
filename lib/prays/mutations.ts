@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 import type { PartDraft } from "./import";
 import { getMarkupPercent } from "./queries";
 import { formatUsd, sellPrice } from "./rules";
+import { flagsText, isCondenserCategory, normalizeFlags } from "@/lib/sex/categories";
 
 type Actor = Pick<AdminUser, "id" | "name">;
 export type PriceUpdate = { entityType: "PRODUCT" | "SEX_PART"; entityId: string | null; newBase: number; create?: PartDraft };
@@ -100,4 +101,40 @@ export async function createPart(actor: Actor, draft: PartDraft & { base: number
   await writeAudit(actor, { action: "CREATE", entityType: "SEX_PART", entityId: row.id, entityName: label, summary: "Seh zapchastini qo‘shdi", after: { name: row.name, size: row.size, group: row.group, unit: row.unit, basePriceUsd: draft.base === null ? null : formatUsd(draft.base) } });
   revalidatePrices();
   return row.id;
+}
+
+// ---- Seh category flags (Prays → Kategoriyalar) ------------------------------------------------------
+function revalidateWorkshop() {
+  revalidatePath("/admin/prays");
+  revalidatePath("/admin/seh");
+  revalidatePath("/admin/seh/new");
+}
+
+/** Saves one category's Seh flags (they apply to all its products, present and future) and writes it to the activity history. */
+export async function updateCategoryFlags(actor: Actor, id: string, input: { workshopAssembly: boolean; workshopRole: string | null; workshopIssue: boolean }) {
+  const flags = normalizeFlags(input);
+  if (!flags.ok) return flags;
+  const db = getDb();
+  const before = await db.productCategory.findUnique({ where: { id }, select: { name: true, workshopAssembly: true, workshopRole: true, workshopIssue: true } });
+  if (!before) return { ok: false as const, error: "Kategoriya topilmadi." };
+  const same = before.workshopAssembly === flags.value.workshopAssembly && before.workshopRole === flags.value.workshopRole && before.workshopIssue === flags.value.workshopIssue;
+  if (same) return { ok: true as const, message: "O‘zgarish yo‘q" };
+  await db.productCategory.update({ where: { id }, data: flags.value });
+  // A condenser category that stops being one cannot stay the standard one.
+  if (flags.value.workshopRole !== "CONDENSER") await db.siteSettings.updateMany({ where: { id: "global", standardCondenserCategoryId: id }, data: { standardCondenserCategoryId: null } });
+  await writeAudit(actor, { action: "UPDATE", entityType: "PRODUCT_CATEGORY", entityId: id, entityName: before.name, summary: `Seh belgisi: ${before.name} — ${flagsText(flags.value)}`, before: { workshopAssembly: before.workshopAssembly, workshopRole: before.workshopRole, workshopIssue: before.workshopIssue }, after: flags.value });
+  revalidateWorkshop();
+  return { ok: true as const, message: `${before.name}: ${flagsText(flags.value)}` };
+}
+
+/** Zborka: the condenser category whose prices are the "standart" ones; null clears it. */
+export async function setStandardCondenserCategory(actor: Actor, id: string | null) {
+  const db = getDb();
+  const category = id ? await db.productCategory.findUnique({ where: { id }, select: { name: true, workshopAssembly: true, workshopRole: true } }) : null;
+  if (id && (!category || !isCondenserCategory(category))) return { ok: false as const, error: "Avval kategoriyani “Zborkada ishlatiladi · Kondensator” deb belgilang." };
+  const previous = await db.siteSettings.findUnique({ where: { id: "global" }, select: { standardCondenserCategoryId: true } });
+  await db.siteSettings.upsert({ where: { id: "global" }, create: { id: "global", standardCondenserCategoryId: id }, update: { standardCondenserCategoryId: id } });
+  await writeAudit(actor, { action: "UPDATE", entityType: "SITE_SETTINGS", entityId: "global", entityName: "Standart kondensator", summary: `Standart kondensator kategoriyasi: ${category?.name ?? "tanlanmagan"}`, before: { standardCondenserCategoryId: previous?.standardCondenserCategoryId ?? null }, after: { standardCondenserCategoryId: id } });
+  revalidateWorkshop();
+  return { ok: true as const, message: `Standart kondensator: ${category?.name ?? "tanlanmagan"}` };
 }

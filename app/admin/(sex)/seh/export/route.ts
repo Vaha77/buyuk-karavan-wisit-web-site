@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       product: order.type === "AGREGAT" ? `${order.items[0]?.title ?? ""}${order.qty > 1 ? ` ×${order.qty}` : ""}` : order.items.map(item => `${item.title} ×${item.issuedQty ?? item.qty}`).join(", "),
       seller: order.seller.name, to: order.purpose === "CLIENT" ? `Mijoz: ${order.customerName ?? ""}` : PURPOSE_LABEL.SHOP, status: STATUS_LABEL[order.status],
       accepted: step(order.acceptedBy?.name, order.acceptedAt), started: step(order.startedBy?.name, order.startedAt), issued: step(order.issuedBy?.name, order.issuedAt), received: step(order.receivedBy?.name, order.receivedAt),
-      base: snapshot?.totalBaseUsd ?? null, noRequest: order.noRequest ? "ha" : "",
+      base: snapshot?.negotiated ? "kelishiladi" : snapshot?.totalBaseUsd ?? null, noRequest: order.noRequest ? "ha" : "",
     });
   }
   sheet.getRow(1).font = { bold: true };

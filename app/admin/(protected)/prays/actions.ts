@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-admin";
 import { readPriceWorkbook, type PriceListSheet } from "@/lib/prays/excel";
 import { matchPartsTable, matchPriceList, matchProductTable, percentPreview, type PreviewRow } from "@/lib/prays/import";
-import { applyMarkup, applyPriceUpdates, archiveProduct, createPart, deactivatePart } from "@/lib/prays/mutations";
+import { applyMarkup, applyPriceUpdates, archiveProduct, createPart, deactivatePart, setStandardCondenserCategory, updateCategoryFlags } from "@/lib/prays/mutations";
 import { getPraysProducts, getSexParts } from "@/lib/prays/queries";
 import { clampMarkup, formatShortDate, normalizeBrand } from "@/lib/prays/rules";
 import { PriceImageError, readPriceImage } from "@/lib/prays/ai-image";
@@ -121,4 +121,21 @@ export async function applyMarkupAction(raw: unknown): Promise<ActionResult> {
   if (markup === null) return { ok: false, error: "Ustama 1% dan 20% gacha bo‘lishi kerak." };
   const count = await applyMarkup(actor, markup);
   return { ok: true, message: `Ustama +${markup}% · ${count} ta sotuv narxi yangilandi` };
+}
+
+const flagsSchema = z.object({ id: z.string().min(1).max(40), workshopAssembly: z.boolean(), workshopRole: z.enum(["COMPRESSOR", "CONDENSER"]).nullable(), workshopIssue: z.boolean() });
+/** Prays → Kategoriyalar: "Zborkada ishlatiladi" (+ turi) and "Sehdan alohida chiqadi" of one category (Super Admin only). */
+export async function updateCategoryFlagsAction(raw: unknown): Promise<ActionResult> {
+  const actor = await requireRole("SUPER_ADMIN");
+  const parsed = flagsSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "Ma’lumotni tekshiring." };
+  const { id, ...flags } = parsed.data;
+  return updateCategoryFlags(actor, id, flags);
+}
+
+export async function setStandardCondenserAction(raw: unknown): Promise<ActionResult> {
+  const actor = await requireRole("SUPER_ADMIN");
+  const parsed = z.string().min(1).max(40).nullable().safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "Kategoriyani tanlang." };
+  return setStandardCondenserCategory(actor, parsed.data);
 }

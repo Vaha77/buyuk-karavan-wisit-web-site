@@ -3,7 +3,8 @@ import { revalidatePath } from "next/cache";
 import { Prisma, type AdminUser } from "@/generated/prisma/client";
 import { writeAudit } from "@/lib/audit/service";
 import { getDb } from "@/lib/db";
-import { getPraysProducts, getSexParts } from "@/lib/prays/queries";
+import { getPraysCategories, getPraysProducts, getSexParts, getStandardCondenserCategoryId } from "@/lib/prays/queries";
+import { isIssueCategory } from "./categories";
 import { DUPLICATE_WINDOW_MS, STATUS_LABEL, alreadyText, canMarkTest, checkCancel, checkTransition, duplicateWarning, findDuplicate, orderNumber, type FingerprintInput, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
 import { notifyCancelled, notifyChanged, notifyCreated } from "./bot";
 import { createOnce } from "./idempotency";
@@ -13,9 +14,10 @@ import { buildZborkaCatalog, quoteZborka, type Assembly } from "./zborka";
 type Actor = Pick<AdminUser, "id" | "name" | "role" | "salesPersonId">;
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
+/** Compressors and condensers come from the categories flagged in Prays → Kategoriyalar; receivers from the old part list. */
 export async function loadZborkaCatalog() {
-  const [products, parts] = await Promise.all([getPraysProducts(), getSexParts()]);
-  return buildZborkaCatalog(products, parts);
+  const [products, parts, categories, standardCondenserCategoryId] = await Promise.all([getPraysProducts(), getSexParts(), getPraysCategories(), getStandardCondenserCategoryId()]);
+  return buildZborkaCatalog(products, parts, { categories, standardCondenserCategoryId });
 }
 
 const money = (value: number) => new Prisma.Decimal(value.toFixed(2));
@@ -53,14 +55,15 @@ async function recentDuplicate(candidate: FingerprintInput) {
 }
 const isUniqueViolation = (error: unknown) => !!error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2002";
 
-export type AgregatInput = OrderCommon & { groupKey: string; modelKey: string; assembly: Assembly; liters: string | null; hp: string | null; fn: string | null; qty: number };
+/** condenserId: vazdushniy agregat condenser (product); composition / manualPrice: chiller (null price = "kelishiladi"). */
+export type AgregatInput = OrderCommon & { groupKey: string; modelKey: string; assembly: Assembly; liters: string | null; hp: string | null; condenserId: string | null; composition: string | null; manualPrice: number | null; qty: number };
 export async function createAgregatOrder(actor: Actor, input: AgregatInput, meta: SubmitMeta = { requestId: null, confirmDuplicate: false }): Promise<CreateResult> {
   const again = await sameRequest(meta.requestId);
   if (again) return again;
   const catalog = await loadZborkaCatalog();
   const group = catalog.groups.find(item => item.key === input.groupKey), model = group?.models.find(item => item.key === input.modelKey);
   if (!group || !model) return { ok: false, error: "Kompressor praysda topilmadi." };
-  const quote = quoteZborka(model, group, catalog.receivers, { assembly: input.assembly, liters: input.liters, hp: input.hp, fn: input.fn });
+  const quote = quoteZborka(model, group, catalog, { assembly: input.assembly, liters: input.liters, hp: input.hp, condenserId: input.condenserId, composition: input.composition, manualPrice: input.manualPrice });
   if (!quote.ok) return quote;
   const customer = await resolveCustomer(actor, input);
   if (!customer.ok) return customer;
@@ -68,12 +71,12 @@ export async function createAgregatOrder(actor: Actor, input: AgregatInput, meta
     const duplicate = await recentDuplicate({ sellerId: actor.id, type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, items: [{ ref: quote.product.id, title: quote.title, qty: input.qty }] });
     if (duplicate) return { ok: false, error: duplicateWarning(duplicate), duplicate: { number: duplicate.number } };
   }
-  const snapshot: PriceSnapshot = { unitBaseUsd: quote.base, totalBaseUsd: Math.round(quote.base * input.qty * 100) / 100, standardBaseUsd: quote.standard };
+  const snapshot: PriceSnapshot = { unitBaseUsd: quote.base, totalBaseUsd: Math.round(quote.base * input.qty * 100) / 100, standardBaseUsd: quote.negotiated ? null : quote.standard, ...(quote.negotiated ? { negotiated: true } : {}) };
   const created = await createOnce(meta.requestId, findByRequest, () => getDb().workshopOrder.create({
     data: {
       requestId: meta.requestId, type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, dueDate: dueDateOf(input.dueDate), note: input.note,
       sellerId: actor.id, createdById: actor.id, priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
-      items: { create: [{ kind: "PRODUCT", productId: quote.product.id, title: quote.title, qty: input.qty, baseUsd: money(quote.base), changedFromStandard: quote.changes.length > 0, options: { assembly: input.assembly, ...quote.options, standard: { liters: model.liters, hp: model.hp, fn: model.fn }, changes: quote.telegram, priceList: group.label } as Prisma.InputJsonValue }] },
+      items: { create: [{ kind: "PRODUCT", productId: quote.product.id, title: quote.title, qty: input.qty, baseUsd: quote.negotiated ? null : money(quote.base), changedFromStandard: quote.changes.length > 0, options: { assembly: input.assembly, ...quote.options, standard: { liters: model.liters, hp: model.hp, fn: model.fn }, changes: quote.telegram, priceList: group.label, ...(quote.negotiated ? { negotiated: true } : {}) } as Prisma.InputJsonValue }] },
     },
     select: { id: true, number: true },
   }), isUniqueViolation);
@@ -83,15 +86,16 @@ export async function createAgregatOrder(actor: Actor, input: AgregatInput, meta
   return { ok: true, id: order.id, number: order.number, telegram };
 }
 
-export type ZapchastInput = OrderCommon & { items: Array<{ partId: string; qty: number }> };
+/** productId: goods of a "Sehdan alohida chiqadi" category (Prays → Kategoriyalar); the old part list is not used any more. */
+export type ZapchastInput = OrderCommon & { items: Array<{ productId: string; qty: number }> };
 /** Spare-part request; `noRequestFor` = "Zayavkasiz chiqim" by the workshop for that seller (already handed out → ISSUED). */
 export async function createZapchastOrder(actor: Actor, input: ZapchastInput, noRequestFor?: string, meta: SubmitMeta = { requestId: null, confirmDuplicate: false }): Promise<CreateResult> {
   const again = await sameRequest(meta.requestId);
   if (again) return again;
-  const ids = [...new Set(input.items.map(item => item.partId))];
-  const parts = await getDb().sexPart.findMany({ where: { id: { in: ids }, active: true } });
-  const byId = new Map(parts.map(part => [part.id, part]));
-  if (!input.items.length || input.items.some(item => !byId.has(item.partId))) return { ok: false, error: "Seh mahsulotini tanlang." };
+  const ids = [...new Set(input.items.map(item => item.productId))];
+  const products = await getDb().product.findMany({ where: { id: { in: ids }, archivedAt: null }, select: { id: true, name: true, model: true, basePriceUsd: true, category: { select: { workshopIssue: true } } } });
+  const byId = new Map(products.filter(product => isIssueCategory(product.category)).map(product => [product.id, product]));
+  if (!input.items.length || input.items.some(item => !byId.has(item.productId))) return { ok: false, error: "Seh mahsulotini tanlang." };
   const customer = await resolveCustomer(actor, input);
   if (!customer.ok) return customer;
   let sellerId = actor.id;
@@ -101,11 +105,11 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
     sellerId = seller.id;
   }
   if (!meta.confirmDuplicate) {
-    const duplicate = await recentDuplicate({ sellerId, type: "ZAPCHAST", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: 1, items: input.items.map(item => ({ ref: item.partId, title: "", qty: item.qty })) });
+    const duplicate = await recentDuplicate({ sellerId, type: "ZAPCHAST", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: 1, items: input.items.map(item => ({ ref: item.productId, title: "", qty: item.qty })) });
     if (duplicate) return { ok: false, error: duplicateWarning(duplicate), duplicate: { number: duplicate.number } };
   }
-  const known = input.items.filter(item => byId.get(item.partId)!.basePriceUsd !== null);
-  const totalBase = Math.round(known.reduce((sum, item) => sum + Number(byId.get(item.partId)!.basePriceUsd) * item.qty, 0) * 100) / 100;
+  const known = input.items.filter(item => byId.get(item.productId)!.basePriceUsd !== null);
+  const totalBase = Math.round(known.reduce((sum, item) => sum + Number(byId.get(item.productId)!.basePriceUsd) * item.qty, 0) * 100) / 100;
   const snapshot = { unitBaseUsd: totalBase, totalBaseUsd: totalBase, standardBaseUsd: null, missingPrices: input.items.length - known.length };
   const now = new Date();
   const created = await createOnce(meta.requestId, findByRequest, () => getDb().workshopOrder.create({
@@ -113,7 +117,7 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
       requestId: meta.requestId, type: "ZAPCHAST", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: 1, dueDate: dueDateOf(input.dueDate), note: input.note,
       sellerId, createdById: actor.id, priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
       ...(noRequestFor ? { noRequest: true, status: "ISSUED" as const, acceptedById: actor.id, acceptedAt: now, startedById: actor.id, startedAt: now, issuedById: actor.id, issuedAt: now } : {}),
-      items: { create: input.items.map((item, index) => { const part = byId.get(item.partId)!; return { kind: "PART" as const, partId: part.id, title: [part.name, part.size].filter(Boolean).join(" "), qty: item.qty, baseUsd: part.basePriceUsd, order: index }; }) },
+      items: { create: input.items.map((item, index) => { const product = byId.get(item.productId)!; return { kind: "PRODUCT" as const, productId: product.id, title: product.model && !product.name.toUpperCase().includes(product.model.toUpperCase()) ? `${product.name} ${product.model}` : product.name, qty: item.qty, baseUsd: product.basePriceUsd, order: index }; }) },
     },
     select: { id: true, number: true },
   }), isUniqueViolation);

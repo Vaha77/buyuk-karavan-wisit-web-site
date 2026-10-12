@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { createAgregatOrderAction, createZapchastOrderAction, resendTelegramAction, type SexActionResult } from "@/app/admin/(sex)/seh/actions";
 import { personalKeyboard, personalMessage, type BotOrder } from "@/lib/sex/bot-text";
 import { formatSignedUsd, formatUsd } from "@/lib/prays/rules";
-import { ASSEMBLIES, quoteZborka, type Assembly, type ZborkaCatalog } from "@/lib/sex/zborka";
+import { ASSEMBLIES, condenserWarning, quoteZborka, type Assembly, type ZborkaCatalog } from "@/lib/sex/zborka";
+import { standardCondenser } from "@/lib/sex/categories";
 import { orderNumber } from "@/lib/sex/rules";
 import { PartRows, PurposePicker } from "./orders-board";
 import { BusyLabel, LinkButton, PendingArea, startNavigationProgress } from "@/components/admin/feedback";
 
 type Option = { id: string; name: string };
-export type PartChoice = { id: string; label: string; basePriceUsd?: number | null };
+export type PartChoice = { id: string; label: string; group?: string; basePriceUsd?: number | null };
 type Props = { type: "agregat" | "zapchast"; userName: string; catalog: ZborkaCatalog; parts: PartChoice[]; customers: Option[] };
 const today = () => new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);
 
@@ -58,9 +59,9 @@ function SentNote({ result, onResent }: { result: SentResult; onResent: (next: S
 }
 
 /** Price block of the order card: price-list price only (the workshop sells to the seller at prays price) and the change from the standard. */
-function PriceBlock({ base, delta }: { base: number; delta: number | null }) {
+function PriceBlock({ base, delta, negotiated = false }: { base: number; delta: number | null; negotiated?: boolean }) {
   return <>
-    <div className="sx-total"><span>Prays narxi</span><strong>{formatUsd(base)}</strong></div>
+    <div className="sx-total"><span>Prays narxi</span><strong>{negotiated ? "kelishiladi" : formatUsd(base)}</strong></div>
     {delta !== null && delta !== 0 && <span className="sx-muted" style={{ fontWeight: 700, color: "#6E5200" }}>Standartdan {formatSignedUsd(Math.round(delta * 100) / 100)} (prays narxida)</span>}
   </>;
 }
@@ -106,27 +107,38 @@ function AgregatForm({ userName, catalog, customers }: Props) {
   const [modelKey, setModelKey] = useState(group?.models[0]?.key ?? "");
   const model = group?.models.find(item => item.key === modelKey) ?? group?.models[0];
   const [assembly, setAssembly] = useState<Assembly>("vz");
-  const [liters, setLiters] = useState<string | null>(null), [hp, setHp] = useState<string | null>(null), [fn, setFn] = useState<string | null>(null);
+  const [liters, setLiters] = useState<string | null>(null), [hp, setHp] = useState<string | null>(null), [condenserId, setCondenserId] = useState<string | null>(null);
+  // Chiller: no ready scheme — composition is required, the price is typed or left empty ("kelishiladi").
+  const [composition, setComposition] = useState(""), [manualPrice, setManualPrice] = useState("");
   const [qty, setQty] = useState("1"), [dueDate, setDueDate] = useState(""), [purpose, setPurpose] = useState<"SHOP" | "CLIENT">("CLIENT"), [customer, setCustomer] = useState(""), [note, setNote] = useState("");
   const [result, setResult] = useState<SentResult | null>(null);
   const [duplicate, setDuplicate] = useState<string | null>(null);
   const { busy: submittingRef, requestId, renew } = useSubmitOnce();
-  const available = (key: Assembly) => !!model?.[key];
+  const available = (key: Assembly) => key === "ch" ? !!model : !!model?.[key];
+  const manualNumber = manualPrice.trim() ? Number(manualPrice.replace(",", ".").replace(/\s/g, "")) : null;
   const effective = model && !available(assembly) ? ASSEMBLIES.find(item => available(item.key))?.key ?? assembly : assembly;
-  const quote = useMemo(() => model && group ? quoteZborka(model, group, catalog.receivers, { assembly: effective, liters, hp, fn }) : null, [model, group, catalog.receivers, effective, liters, hp, fn]);
-  const resetParts = () => { setLiters(null); setHp(null); setFn(null); setResult(null); };
-  if (!group || !model) return <div className="sx-card"><p className="sx-note">Praysda prays narxi kiritilgan kompressor/agregat topilmadi. Avval Prays bo‘limida narxlarni kiriting.</p></div>;
+  const quote = useMemo(() => model && group ? quoteZborka(model, group, catalog, { assembly: effective, liters, hp, condenserId, composition, manualPrice: manualNumber }) : null, [model, group, catalog, effective, liters, hp, condenserId, composition, manualNumber]);
+  const resetParts = () => { setLiters(null); setHp(null); setCondenserId(null); setResult(null); };
+  if (!group || !model) return <div className="sx-card"><p className="sx-note">{catalog.notice ?? "Praysda prays narxi kiritilgan kompressor/agregat topilmadi. Avval Prays bo‘limida narxlarni kiriting."}</p></div>;
+  const standardFn = standardCondenser(catalog.condensers, model.fn, catalog.standardCondenserCategoryId);
+  const fnWarning = effective === "vz" ? condenserWarning(model, catalog) : null;
+  const condenserPrice = Object.fromEntries(catalog.condensers.map(item => [item.id, item.base]));
 
   const receiverKnown = !!model.liters && catalog.receivers[model.liters] !== undefined;
   const receiverOptions = receiverKnown ? Object.keys(catalog.receivers) : [model.liters ?? ""].filter(Boolean);
   const parts = [] as Array<{ key: string; label: string; value: string; standard: string; options: Array<{ value: string; label: string; price?: number }>; set: (value: string) => void; table: Record<string, number>; disabledNote?: string; format: (value: string) => string }>;
-  if (effective !== "k" && model.liters) parts.push({ key: "res", label: "Resiver bachok", value: quote?.ok ? quote.options.liters : model.liters, standard: model.liters, options: receiverOptions.map(value => ({ value, label: `${value} L` })), set: value => { setLiters(value); setResult(null); }, table: catalog.receivers, disabledNote: receiverKnown ? undefined : "Resiver narxi kiritilmagan", format: value => `${value} L` });
+  if (effective !== "k" && effective !== "ch" && model.liters) parts.push({ key: "res", label: "Resiver bachok", value: quote?.ok ? quote.options.liters : model.liters, standard: model.liters, options: receiverOptions.map(value => ({ value, label: `${value} L` })), set: value => { setLiters(value); setResult(null); }, table: catalog.receivers, disabledNote: receiverKnown ? undefined : "Resiver narxi kiritilmagan", format: value => `${value} L` });
   if (effective === "vd" && model.hp) parts.push({ key: "vk", label: "Vadinoy kondensator", value: hp ?? model.hp, standard: model.hp, options: Object.keys(group.hpTable).map(value => ({ value, label: `${value} HP` })), set: value => { setHp(value); setResult(null); }, table: group.hpTable, format: value => `${value} HP` });
-  if (effective === "vz" && model.fn) parts.push({ key: "fn", label: "Vazdushniy kondensator (rama bilan)", value: fn ?? model.fn, standard: model.fn, options: Object.keys(group.fnTable).map(value => ({ value, label: value })), set: value => { setFn(value); setResult(null); }, table: group.fnTable, format: value => value });
+  // Condensers of the "Kondensator" categories with their Prays prices; the standard one comes from the Prays setting.
+  if (effective === "vz" && model.fn) {
+    const standardValue = standardFn?.id ?? "";
+    const options = [...(standardFn ? [] : [{ value: "", label: `${model.fn} · standart` }]), ...catalog.condensers.map(item => ({ value: item.id, label: item.label }))];
+    parts.push({ key: "fn", label: "Vazdushniy kondensator (rama bilan)", value: condenserId ?? standardValue, standard: standardValue, options, set: value => { setCondenserId(value || null); setResult(null); }, table: condenserPrice, disabledNote: fnWarning ?? undefined, format: value => catalog.condensers.find(item => item.id === value)?.label ?? model.fn ?? "" });
+  }
 
   const qtyNumber = Number(qty);
   const price = quote?.ok ? quote.base : null;
-  const ready = quote?.ok && Number.isInteger(qtyNumber) && qtyNumber >= 1 && (purpose === "SHOP" || customer.trim());
+  const ready = quote?.ok && Number.isInteger(qtyNumber) && qtyNumber >= 1 && (purpose === "SHOP" || customer.trim()) && (effective !== "ch" || composition.trim().length >= 3);
   const known = customers.find(item => item.name === customer.trim());
   const submit = (confirmDuplicate = false) => {
     if (submittingRef.current) return;
@@ -134,7 +146,7 @@ function AgregatForm({ userName, catalog, customers }: Props) {
     startTransition(async () => {
       try {
         setResult(null); setDuplicate(null);
-        const response = await createAgregatOrderAction({ requestId, confirmDuplicate, groupKey: group.key, modelKey: model.key, assembly: effective, liters: effective === "k" ? null : liters, hp: effective === "vd" ? hp : null, fn: effective === "vz" ? fn : null, qty: qtyNumber, dueDate: dueDate || null, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, note: note.trim() || null });
+        const response = await createAgregatOrderAction({ requestId, confirmDuplicate, groupKey: group.key, modelKey: model.key, assembly: effective, liters: effective === "k" || effective === "ch" ? null : liters, hp: effective === "vd" ? hp : null, condenserId: effective === "vz" ? condenserId : null, composition: effective === "ch" ? composition.trim() : null, manualPrice: effective === "ch" ? manualNumber : null, qty: qtyNumber, dueDate: dueDate || null, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, note: note.trim() || null });
         if (!response.ok && response.duplicate) { setDuplicate(response.error); return; }
         setResult(sentResult(response, "Zakaz"));
         if (!response.ok) return;
@@ -156,14 +168,19 @@ function AgregatForm({ userName, catalog, customers }: Props) {
       <div className="sx-card" style={{ gap: 16 }}>
         <span className="sx-section-label">2 · Nima yig‘iladi</span>
         <div className="sx-tiles">{ASSEMBLIES.map(item => <button key={item.key} type="button" className="sx-tile" aria-pressed={effective === item.key} disabled={!available(item.key)} style={!available(item.key) ? { opacity: .45, cursor: "not-allowed" } : undefined} onClick={() => { setAssembly(item.key); setResult(null); }}><b>{item.name}</b><span>{available(item.key) ? item.sub : "praysda yo‘q"}</span></button>)}</div>
+        {effective === "ch" && <div style={{ display: "grid", gap: 12, borderTop: "1px solid #EEF1F6", paddingTop: 16 }}>
+          <p className="sx-note">Chillerning tayyor sxemasi yo‘q: tarkibini yozing. Narxni kiriting yoki bo‘sh qoldiring — “kelishiladi”.</p>
+          <label className="sx-field">Tarkibi <small>· majburiy</small><textarea value={composition} onChange={event => { setComposition(event.target.value); setResult(null); }} rows={4} maxLength={1000} required placeholder="Masalan: 2 × Bitzer 4FES-5Y, plastinkali isparitel 40 kVt, FNV200 kondensator, nasos, shit" style={{ minHeight: 96, padding: 12, borderRadius: 10, border: "1px solid #C9D3E6", font: "inherit", fontSize: 14 }}/></label>
+          <label className="sx-field">Narx, $ <small>· ixtiyoriy (prays narxi)</small><input value={manualPrice} onChange={event => { setManualPrice(event.target.value.replace(/[^\d.,\s]/g, "")); setResult(null); }} inputMode="decimal" placeholder="kelishiladi"/></label>
+        </div>}
         {parts.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid #EEF1F6", paddingTop: 16 }}>
           {parts.map(part => {
             const changed = part.value !== part.standard, delta = changed && part.table[part.value] !== undefined && part.table[part.standard] !== undefined ? part.table[part.value] - part.table[part.standard] : 0;
             return <div key={part.key} style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
               <label className="sx-field" style={{ flex: "1 1 240px" }}>{part.label}
-                <select className={`is-big ${changed ? "is-changed" : ""}`} value={part.value} disabled={!!part.disabledNote} onChange={event => part.set(event.target.value)}>{part.options.map(option => <option key={option.value} value={option.value}>{option.label}{option.value === part.standard ? "  · standart" : ""}</option>)}</select>
+                <select className={`is-big ${changed ? "is-changed" : ""}`} value={part.value} disabled={!!part.disabledNote} onChange={event => part.set(event.target.value)}>{part.options.map(option => <option key={option.value || "standard"} value={option.value}>{option.label}{option.value && option.value === part.standard ? "  · standart" : ""}</option>)}</select>
               </label>
-              {part.disabledNote ? <span className="sx-pill is-grey" style={{ height: 46, borderRadius: 10, padding: "0 12px" }}>{part.disabledNote}</span>
+              {part.disabledNote ? <span className="sx-pill is-yellow" role="alert" style={{ minHeight: 46, borderRadius: 10, padding: "6px 12px", whiteSpace: "normal", fontSize: 12 }}>⚠️ {part.disabledNote}</span>
                 : changed ? <span className="sx-pill is-yellow" style={{ height: 46, borderRadius: 10, padding: "0 12px", fontSize: 13 }}>standart {part.format(part.standard)} · {formatSignedUsd(Math.round(delta))}</span>
                 : <span className="sx-pill is-green" style={{ height: 46, borderRadius: 10, padding: "0 12px", fontSize: 13 }}>standart</span>}
             </div>;
@@ -187,7 +204,7 @@ function AgregatForm({ userName, catalog, customers }: Props) {
         <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.3 }}>{quote?.ok ? quote.title : `${group.brand} ${model.model}`}</span>
         {quote?.ok && quote.lines.map(line => <div key={line.k} className="sx-summary-line"><span>{line.k}</span><b>{line.v}</b></div>)}
         <div className="sx-summary-line"><span>Soni</span><b>{qtyNumber || "—"}</b></div>
-        {price !== null && quote?.ok && <PriceBlock base={Math.round(price * Math.max(qtyNumber, 1) * 100) / 100} delta={quote.changes.length ? (quote.base - quote.standard) * Math.max(qtyNumber, 1) : null}/>}
+        {price !== null && quote?.ok && <PriceBlock base={Math.round(price * Math.max(qtyNumber, 1) * 100) / 100} delta={quote.changes.length ? (quote.base - quote.standard) * Math.max(qtyNumber, 1) : null} negotiated={quote.negotiated}/>}
         {quote && !quote.ok && <p className="sx-note is-error">{quote.error}</p>}
         {duplicate && <DuplicateQuestion text={duplicate} busy={pending} onYes={() => submit(true)} onNo={() => setDuplicate(null)}/>}
         {result && <SentNote result={result} onResent={setResult}/>}
@@ -216,7 +233,7 @@ function ZapchastForm({ userName, parts, customers }: Props) {
     startTransition(async () => {
       try {
         setResult(null); setDuplicate(null);
-        const response = await createZapchastOrderAction({ requestId, confirmDuplicate, items: items.map(item => ({ partId: item.partId, qty: Number(item.qty) })), purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, dueDate: dueDate || null, note: note.trim() || null });
+        const response = await createZapchastOrderAction({ requestId, confirmDuplicate, items: items.map(item => ({ productId: item.partId, qty: Number(item.qty) })), purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, dueDate: dueDate || null, note: note.trim() || null });
         if (!response.ok && response.duplicate) { setDuplicate(response.error); return; }
         setResult(sentResult(response, "Zayavka"));
         if (!response.ok) return;
@@ -226,12 +243,12 @@ function ZapchastForm({ userName, parts, customers }: Props) {
       } finally { submittingRef.current = false; }
     });
   };
-  if (!parts.length) return <div className="sx-card"><p className="sx-note">Seh zapchastlari hali kiritilmagan. Super Admin ularni Prays bo‘limida qo‘shadi.</p></div>;
+  if (!parts.length) return <div className="sx-card"><p className="sx-note">Sehdan olinadigan tovar yo‘q: Prays → Kategoriyalar’da “Sehdan alohida chiqadi” belgili kategoriya yo‘q. Super Admin belgilaydi.</p></div>;
   return <div className="sx-split">
     <div className="sx-main">
       <div className="sx-card">
         <div className="sx-card-head"><h2>Yangi zayavka</h2><span className="sx-muted">Sotuvchi: {userName}</span></div>
-        <PartRows parts={parts.map(part => ({ id: part.id, label: part.label }))} items={items} setItems={next => { setItems(next); setResult(null); }} priceOf={id => { const part = byId.get(id); return part?.basePriceUsd === null || part?.basePriceUsd === undefined ? null : `Prays: ${formatUsd(part.basePriceUsd)}`; }}/>
+        <PartRows parts={parts.map(part => ({ id: part.id, label: part.label, group: part.group }))} items={items} setItems={next => { setItems(next); setResult(null); }} priceOf={id => { const part = byId.get(id); return part?.basePriceUsd === null || part?.basePriceUsd === undefined ? null : `Prays: ${formatUsd(part.basePriceUsd)}`; }}/>
         <PurposePicker purpose={purpose} setPurpose={setPurpose} customer={customer} setCustomer={setCustomer} customers={customers}/>
         <div className="sx-fields">
           <DateField label={<>Kerak bo‘ladigan sana <small>(ixtiyoriy)</small></>} value={dueDate} onChange={setDueDate}/>
