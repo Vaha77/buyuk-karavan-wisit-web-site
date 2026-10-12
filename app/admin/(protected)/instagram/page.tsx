@@ -30,6 +30,7 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
     <Link className={`bk-chip${tab === "comments" ? " is-active" : ""}`} href="/admin/instagram">Kommentlar</Link>
     <Link className={`bk-chip${tab === "direct" ? " is-active" : ""}`} href="/admin/instagram?tab=direct">Direct</Link>
     <Link className={`bk-chip${tab === "stats" ? " is-active" : ""}`} href="/admin/instagram?tab=stats">Statistika</Link>
+    {user.role === "SUPER_ADMIN" && <Link className="bk-chip" href="/admin/instagram/stories">Storislar</Link>}
   </nav>;
   const subtitle = { comments: "Komment → avto-javoblar, jurnal va statistika", direct: "Direct xabarlari → adminning Telegram’i", stats: "Qamrov, auditoriya, voronka va postlar" }[tab];
   return <div className="bk">

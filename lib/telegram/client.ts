@@ -68,6 +68,9 @@ export function getMe(){return call<{id:number;username?:string}>("getMe",{});}
 export function sendMessage(chatId:string,text:string,replyMarkup?:InlineKeyboard){return call<SentMessage>("sendMessage",{chat_id:chatId,text,...(replyMarkup?{reply_markup:replyMarkup}:{})});}
 export function editMessageText(chatId:string,messageId:number,text:string,replyMarkup:InlineKeyboard={inline_keyboard:[]}){return call<SentMessage>("editMessageText",{chat_id:chatId,message_id:messageId,text,reply_markup:replyMarkup});}
 /** "BK Zborka sehi" group for workshop orders; null when TELEGRAM_WORKSHOP_CHAT_ID is not set (orders still work, nothing is posted). */
+/** A video by public URL (Telegram downloads it: ≤20 MB). */
+export function sendVideo(chatId:string,videoUrl:string,caption:string,replyMarkup?:InlineKeyboard){return call<SentMessage>("sendVideo",{chat_id:chatId,video:videoUrl,caption:caption.slice(0,1024),supports_streaming:true,...(replyMarkup?{reply_markup:replyMarkup}:{})});}
+export function editMessageCaption(chatId:string,messageId:number,caption:string,replyMarkup:InlineKeyboard={inline_keyboard:[]}){return call<SentMessage>("editMessageCaption",{chat_id:chatId,message_id:messageId,caption:caption.slice(0,1024),reply_markup:replyMarkup});}
 export function telegramWorkshopChatId(){return process.env.TELEGRAM_WORKSHOP_CHAT_ID?.trim()||null;}
 export function answerCallbackQuery(id:string,text:string,showAlert=false){
   const now=Date.now(),existing=callbackAcks.get(id);

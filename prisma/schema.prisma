@@ -1525,3 +1525,46 @@ model InstagramDataDeletion {
 
   @@index([userHash])
 }
+
+// ---- Instagram stories queue: API upload → Super Admin approves (Telegram / admin) → cron publishes -----------------
+enum StoryQueueStatus {
+  PENDING_APPROVAL
+  APPROVED
+  PUBLISHING
+  PUBLISHED
+  REJECTED
+  FAILED
+  // Not approved by 18:00 Tashkent of its day (or by its time, if later).
+  EXPIRED
+}
+
+model StoryQueueItem {
+  id               String           @id @default(cuid())
+  // Public URL in the site storage (Instagram fetches video_url itself).
+  videoUrl         String
+  videoKey         String?          @db.VarChar(200)
+  // Internal note (never published).
+  caption          String?          @db.VarChar(1000)
+  scheduledAt      DateTime
+  status           StoryQueueStatus @default(PENDING_APPROVAL)
+  sizeBytes        Int?
+  durationMs       Int?
+  width            Int?
+  height           Int?
+  // Publishing: the media container, publish attempts (3 = 1 + 2 retries), one cron at a time.
+  igContainerId    String?          @db.VarChar(64)
+  igMediaId        String?          @db.VarChar(64)
+  attempts         Int              @default(0)
+  lockedUntil      DateTime?
+  error            String?          @db.VarChar(500)
+  approvedAt       DateTime?
+  approvedBy       String?          @db.VarChar(120)
+  publishedAt      DateTime?
+  // Telegram approval messages: [{ chatId, messageId, kind: "video" | "text" }]
+  telegramMessages Json             @default("[]")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([scheduledAt])
+}

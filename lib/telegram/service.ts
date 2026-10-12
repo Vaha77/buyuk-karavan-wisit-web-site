@@ -6,6 +6,7 @@ import { contactedKeyboard,handleCrmCallback,handleCrmText,mainMenu } from "./cr
 import type { TelegramCallbackQuery,TelegramMessage,TelegramUpdate } from "./types";
 import { handleSehCallback,handleSehMessage } from "@/lib/sex/bot-handlers";
 import { handleInstagramCallback } from "@/lib/instagram/telegram";
+import { handleStoryCallback } from "@/lib/stories/telegram";
 import { SITE_URL } from "@/lib/site-url";
 import { pendingAgentText,profileMenuText,startDecision } from "./start-rules";
 
@@ -112,4 +113,4 @@ async function claimLead(callback:TelegramCallbackQuery,metrics?:WebhookPerforma
   await Promise.all([groupUpdate,privateMessage]);
   return true;
 }
-export async function handleTelegramUpdate(update:TelegramUpdate,metrics?:WebhookPerformance){if(update.message){if(await reportChatIdentity(update.message))return;if(await reportUserId(update.message))return;if(await handleSehMessage(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await handleInstagramCallback(update.callback_query))return;if(await handleSehCallback(update.callback_query))return;if(await claimLead(update.callback_query,metrics))return;await handleCrmCallback(update.callback_query);}}
+export async function handleTelegramUpdate(update:TelegramUpdate,metrics?:WebhookPerformance){if(update.message){if(await reportChatIdentity(update.message))return;if(await reportUserId(update.message))return;if(await handleSehMessage(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await handleStoryCallback(update.callback_query))return;if(await handleInstagramCallback(update.callback_query))return;if(await handleSehCallback(update.callback_query))return;if(await claimLead(update.callback_query,metrics))return;await handleCrmCallback(update.callback_query);}}

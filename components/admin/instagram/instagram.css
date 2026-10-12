@@ -137,3 +137,25 @@
 .ig-skeleton{min-height:96px;background:linear-gradient(90deg,#F1F4F9 25%,#E6EBF3 37%,#F1F4F9 63%);background-size:400% 100%;animation:ig-shimmer 1.4s ease infinite}
 @keyframes ig-shimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}
 @media (max-width:640px){.igs{padding:16px 12px 28px;border-radius:14px}.igs-card{padding:18px 16px}.igs .igs-title{font-size:24px}.igs-row{grid-template-columns:96px minmax(0,1fr) 48px}.igs-split.is-three{grid-template-columns:1fr 1fr}.igs-grow,.igs-side,.igs-map-box{flex-basis:100%}}
+
+/* Storislar (navbat) — /admin/instagram/stories */
+.ig-story-upload{display:grid;gap:12px}
+.ig-story-pick{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px;border:2px dashed #B7C7DD;border-radius:12px;color:var(--bk-primary);font-weight:700;cursor:pointer;background:#F7FAFE}
+.ig-story-pick input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.ig-story-drafts{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.ig-story-drafts li{display:grid;grid-template-columns:minmax(160px,1.2fr) minmax(180px,1fr) minmax(200px,1.4fr);gap:10px;align-items:end;padding:12px;border:1px solid var(--bk-border);border-radius:12px}
+.ig-story-drafts li.is-done{border-color:#9CC9AE;background:#F3FBF6}.ig-story-drafts li.is-error{border-color:#F3B8B2}
+.ig-story-file{display:grid;gap:2px;min-width:0}.ig-story-file b{overflow-wrap:anywhere;font-size:13px}.ig-story-file small{color:var(--bk-muted);font-size:12px}
+.ig-story-drafts input{min-height:44px;width:100%;padding:0 10px;border:1px solid #D3DCE8;border-radius:10px;font:inherit;font-size:14px}
+.ig-story-draft-foot{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.ig-story-h{font-size:16px;margin:4px 0 10px}
+.ig-stories{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin:0;padding:0;list-style:none}
+.ig-story{display:grid;grid-template-columns:112px minmax(0,1fr);gap:12px;align-items:start}
+.ig-story-video{width:112px;aspect-ratio:9/16;border-radius:10px;background:#0F1E33;object-fit:cover}
+.ig-story-body{display:grid;gap:6px;min-width:0}
+.ig-story-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;align-items:center}.ig-story-top strong{font-size:16px}
+.ig-story-caption{margin:0;font-size:13px;overflow-wrap:anywhere}
+.ig-story-meta{margin:0;font-size:12px}
+.ig-story-actions{display:flex;flex-wrap:wrap;gap:6px}.ig-story-actions .bk-btn{min-height:40px}
+.ig-story-edit{display:flex;flex-wrap:wrap;gap:6px}.ig-story-edit input{flex:1 1 170px;min-height:40px;padding:0 8px;border:1px solid #D3DCE8;border-radius:10px;font:inherit}
+@media (max-width:700px){.ig-story-drafts li{grid-template-columns:1fr}.ig-stories{grid-template-columns:1fr}.ig-story{grid-template-columns:96px minmax(0,1fr)}.ig-story-video{width:96px}}
