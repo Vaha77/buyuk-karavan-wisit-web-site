@@ -7,7 +7,7 @@ import { COUNTRY_NAMES, REGION_BY_CODE, type LeadCountry } from "@/lib/dashboard
 import { formatDayMonth, formatDuration, formatInt, formatPercent, formatRelative, formatUsd, percentOf } from "@/lib/dashboard/format";
 import { dayKey, periodQuery, resolvePeriod } from "@/lib/dashboard/period";
 import { getLinkDetail, getLinkVisitors, type VisitorFilter } from "@/lib/referrals/queries";
-import { OUTCOME_LABELS, SOURCE_LABELS, TARGETS } from "@/lib/referrals/rules";
+import { LEAD_PAGE_TARGET, OUTCOME_LABELS, parseLeadPagePath, PRICE_TIMING_LABELS, SOURCE_LABELS, TARGETS } from "@/lib/referrals/rules";
 import { SITE_URL } from "@/lib/site-url";
 import { CopyButton, RangeSelect, SourceIcon } from "@/components/admin/bklead/bits";
 import { DailyBars } from "@/components/admin/bklead/charts";
@@ -37,7 +37,8 @@ export default async function LinkDetailPage({ params, searchParams }: { params:
   const { link, row, avgDurationSec, days } = detail;
   const canEdit = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
   const url = `${SITE_URL}/r/${link.slug}`;
-  const target = TARGETS.find(item => item.path === link.targetPath)?.label ?? link.targetPath;
+  const leadPage = parseLeadPagePath(link.targetPath);
+  const target = TARGETS.find(item => item.path === link.targetPath)?.label ?? (leadPage ? `${LEAD_PAGE_TARGET.label}: ${link.targetPath.split("?")[0]} · narx ${PRICE_TIMING_LABELS[leadPage.timing].toLowerCase()}` : link.targetPath);
   const now = new Date();
   const query = (extra: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(periodQuery(period).replace(/^\?/, ""));

@@ -6,7 +6,7 @@ import { getDb } from "@/lib/db";
 import { getUsdUzsRate } from "@/lib/currency/cbu";
 import { toUsd } from "@/lib/dashboard/money";
 import { dayKey } from "@/lib/dashboard/period";
-import { conversion, costPerLead, linkSegments, OUTCOME_ORDER, type OutcomeCounts, type OutcomeKey, type ReferralSourceKey } from "./rules";
+import { conversion, costPerLead, linkFunnel, linkSegments, OUTCOME_ORDER, type OutcomeCounts, type OutcomeKey, type ReferralSourceKey } from "./rules";
 import { DASHBOARD_TAG } from "./tracking";
 
 export type LinkRow = {
@@ -39,11 +39,11 @@ async function loadLinkRows(fromIso: string, toIso: string): Promise<LinkRow[]> 
     const outcomes = emptyOutcomes();
     for (const row of outcomeCounts) if (row.referralLinkId === link.id) outcomes[row.outcome as OutcomeKey] = row._count._all;
     const linkSales = sales.filter(sale => sale.lead.visit?.referralLinkId === link.id);
-    const clicks = visits.get(link.id)?._count._all ?? 0, leadCount = outcomes.LEAD + outcomes.SALE;
+    const clicks = visits.get(link.id)?._count._all ?? 0, leadCount = linkFunnel(outcomes).leads;
     const costUsd = link.cost ? toUsd(link.cost, link.costCurrency, rate) : null;
     return {
       id: link.id, name: link.name, slug: link.slug, source: link.source, status: link.status, targetPath: link.targetPath, createdAt: link.createdAt.toISOString(),
-      clicks, outcomes, segments: linkSegments(outcomes), leads: leadCount, sales: outcomes.SALE, salesUsd: linkSales.reduce((sum, sale) => sum + toUsd(sale.saleAmount, sale.currency, rate), 0),
+      clicks, outcomes, segments: linkSegments(outcomes), leads: leadCount, sales: linkFunnel(outcomes).sales, salesUsd: linkSales.reduce((sum, sale) => sum + toUsd(sale.saleAmount, sale.currency, rate), 0),
       conversion: conversion(leadCount, clicks), costUsd, costPerLead: costPerLead(costUsd, leadCount), hasVisits: (visited.get(link.id)?._count._all ?? 0) > 0,
     };
   });
@@ -89,7 +89,7 @@ function pathSummary(events: Array<{ type: string; path: string }>, productNames
     let label = STEP_LABELS[event.type];
     if (!label && event.type === "PAGEVIEW") {
       const path = event.path.split("?")[0];
-      const product = path.match(/^\/products\/([^/]+)/)?.[1];
+      const product = path.match(/^\/(?:products|l)\/([^/]+)/)?.[1];
       label = path === "/" ? "Bosh" : path === "/products" ? "Mahsulotlar" : product ? productNames.get(product) || "Mahsulot" : path.startsWith("/projects") ? "Loyiha" : path;
     }
     if (label && steps.at(-1) !== label) steps.push(label);
@@ -103,7 +103,7 @@ export async function getLinkVisitors(id: string, range: Range, filter: VisitorF
     getDb().visit.count({ where }),
     getDb().visit.findMany({ where, orderBy: { firstSeenAt: "desc" }, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE, select: { id: true, visitorId: true, country: true, regionCode: true, device: true, durationSec: true, outcome: true, firstSeenAt: true, lead: { select: { id: true } }, events: { orderBy: { createdAt: "asc" }, take: 30, select: { type: true, path: true } } } }),
   ]);
-  const slugs = [...new Set(visits.flatMap(visit => visit.events.map(event => event.path.match(/^\/products\/([^/?]+)/)?.[1]).filter((slug): slug is string => !!slug)))];
+  const slugs = [...new Set(visits.flatMap(visit => visit.events.map(event => event.path.match(/^\/(?:products|l)\/([^/?]+)/)?.[1]).filter((slug): slug is string => !!slug)))];
   const products = slugs.length ? await getDb().product.findMany({ where: { slug: { in: slugs } }, select: { slug: true, model: true } }) : [];
   const names = new Map(products.map(product => [product.slug, product.model]));
   return {

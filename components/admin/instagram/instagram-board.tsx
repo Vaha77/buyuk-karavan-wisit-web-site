@@ -6,7 +6,7 @@ import { Camera, ExternalLink, Film, RefreshCw, Search, X } from "lucide-react";
 import { runInstagramQueueAction, saveInstagramGeneralAction, saveMediaRuleAction } from "@/app/admin/(protected)/instagram/actions";
 import { BusyLabel } from "@/components/admin/feedback";
 import type { BoardMedia, InstagramBoard as Board } from "@/lib/instagram/queries";
-import { COMMENT_KINDS, DEFAULT_DAILY_REPLY_LIMIT, DEFAULT_DM_TEMPLATE, DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY_VARIANTS, DEFAULT_QUESTION_DM, DEFAULT_QUESTION_REPLY, KIND_LABELS, PLACEHOLDERS, type CommentKind } from "@/lib/instagram/constants";
+import { COMMENT_KINDS, DEFAULT_DAILY_REPLY_LIMIT, DEFAULT_DM_TEMPLATE, DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY_VARIANTS, DEFAULT_QUESTION_DM, DEFAULT_QUESTION_REPLY, KIND_LABELS, PLACEHOLDERS, SECOND_PLACEHOLDERS, type CommentKind } from "@/lib/instagram/constants";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 type Product = Board["products"][number];
@@ -50,6 +50,7 @@ function ProductPicker({ products, value, onChange }: { products: Product[]; val
 
 function MediaCard({ media, rule, stats, products, canEdit }: { media: BoardMedia; rule: Board["rules"][string] | undefined; stats: Board["stats"][string] | undefined; products: Product[]; canEdit: boolean }) {
   const [productId, setProductId] = useState<string | null>(rule?.productId ?? null);
+  const [secondProductId, setSecondProductId] = useState<string | null>(rule?.secondProductId ?? null);
   const [isActive, setActive] = useState(rule?.isActive ?? true);
   const [keywords, setKeywords] = useState((rule?.keywords ?? DEFAULT_KEYWORDS).join(", "));
   const [dmTemplate, setTemplate] = useState(rule?.dmTemplate ?? DEFAULT_DM_TEMPLATE);
@@ -77,11 +78,12 @@ function MediaCard({ media, rule, stats, products, canEdit }: { media: BoardMedi
       </div>
     </div>
     {canEdit && <button type="button" className="bk-btn" onClick={() => setOpen(value => !value)} aria-expanded={open}>{open ? "Yopish" : "Sozlash"}</button>}
-    {canEdit && open && <form className="ig-rule" onSubmit={event => { event.preventDefault(); save(() => saveMediaRuleAction({ mediaId: media.id, productId, isActive, keywords, dmTemplate, publicReplyEnabled, publicReplyText: variants.split("\n").map(item => item.trim()).find(Boolean) ?? "", publicReplyVariants: variants, permalink: media.permalink, caption: media.caption || null, postedAt: media.postedAt })); }}>
+    {canEdit && open && <form className="ig-rule" onSubmit={event => { event.preventDefault(); save(() => saveMediaRuleAction({ mediaId: media.id, productId, secondProductId, isActive, keywords, dmTemplate, publicReplyEnabled, publicReplyText: variants.split("\n").map(item => item.trim()).find(Boolean) ?? "", publicReplyVariants: variants, permalink: media.permalink, caption: media.caption || null, postedAt: media.postedAt })); }}>
       <div className="bk-field"><span>Mahsulot</span><ProductPicker products={products} value={productId} onChange={change(setProductId)}/></div>
+      <div className="bk-field"><span>Qo‘shimcha mahsulot <small className="bk-muted">(ixtiyoriy; matnda {SECOND_PLACEHOLDERS.join(" ")} — yo‘q bo‘lsa shu qatorlar yuborilmaydi)</small></span><ProductPicker products={products.filter(item => item.id !== productId)} value={secondProductId} onChange={change(setSecondProductId)}/></div>
       <label className="ig-switch"><input type="checkbox" checked={isActive} onChange={event => change(setActive)(event.target.checked)}/><span>Avto-javoblar faol (shu post uchun barcha turlar)</span></label>
       <label className="bk-field"><span>Narx kalit so‘zlari <small className="bk-muted">(vergul bilan; “+” va “?” faqat komment shu belgilardan iborat bo‘lsa)</small></span><input value={keywords} onChange={event => change(setKeywords)(event.target.value)}/></label>
-      <label className="bk-field"><span>Direct matni <small className="bk-muted">erkin matn; ixtiyoriy: {PLACEHOLDERS.join(" ")}</small></span><textarea rows={5} value={dmTemplate} onChange={event => change(setTemplate)(event.target.value)}/></label>
+      <label className="bk-field"><span>Direct matni <small className="bk-muted">erkin matn; ixtiyoriy: {[...PLACEHOLDERS, ...SECOND_PLACEHOLDERS].join(" ")}</small></span><textarea rows={5} value={dmTemplate} onChange={event => change(setTemplate)(event.target.value)}/></label>
       <button type="button" className="ig-link-btn" onClick={() => change(setTemplate)(DEFAULT_DM_TEMPLATE)}>Standart matnni tiklash</button>
       <label className="ig-switch"><input type="checkbox" checked={publicReplyEnabled} onChange={event => change(setPublic)(event.target.checked)}/><span>Narx kommentiga ochiq javob</span></label>
       {publicReplyEnabled && <label className="bk-field"><span>Ochiq javob variantlari <small className="bk-muted">(har qatorda bittasi, tasodifiy tanlanadi)</small></span><textarea rows={3} value={variants} onChange={event => change(setVariants)(event.target.value)}/></label>}

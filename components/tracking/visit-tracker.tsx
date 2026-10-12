@@ -33,7 +33,7 @@ export function VisitTracker() {
       if (![visitId, visitorId, linkId].every(value => value && /^[A-Za-z0-9_-]{8,40}$/.test(value))) return;
       writeCookie(VISITOR_COOKIE, visitorId, YEAR); writeCookie(REF_COOKIE, linkId, MONTH); writeCookie(VISIT_COOKIE, visitId, MONTH);
       // When deferred, the page-view effect already ran before the cookie existed.
-      if (deferred) { send("PAGEVIEW", location.pathname); if (/^\/products\/[^/]+/.test(location.pathname)) send("PRODUCT_VIEW", location.pathname); }
+      if (deferred) { send("PAGEVIEW", location.pathname); if (/^\/(?:products|l)\/[^/]+/.test(location.pathname)) send("PRODUCT_VIEW", location.pathname); }
     };
     let frame = 0;
     if (readCookie(NOTICE_COOKIE) === "1") applyHandoff(false);
@@ -48,7 +48,7 @@ export function VisitTracker() {
   useEffect(() => {
     if (!isPublic) return;
     send("PAGEVIEW", pathname);
-    if (/^\/products\/[^/]+/.test(pathname)) send("PRODUCT_VIEW", pathname);
+    if (/^\/(?:products|l)\/[^/]+/.test(pathname)) send("PRODUCT_VIEW", pathname);
   }, [isPublic, pathname]);
 
   useEffect(() => {

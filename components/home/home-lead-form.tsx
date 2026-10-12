@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { submitLeadAction } from "@/app/lead-actions";
+import { newMetaEventId, trackMeta } from "@/components/tracking/meta-pixel";
 import type { HomeLeadOption } from "@/lib/home/lead-options";
 import { LocationFields } from "@/components/leads/location-fields";
 
@@ -43,7 +44,7 @@ export function HomeLeadForm({ compact = false, initialProduct = "", initialTemp
     }
     setStatus("submitting");
     setMessage("");
-    const idempotencyKey = crypto.randomUUID();
+    const idempotencyKey = crypto.randomUUID(), metaEventId = newMetaEventId();
     try {
       const result = await submitLeadAction({
         customerName: name,
@@ -59,12 +60,14 @@ export function HomeLeadForm({ compact = false, initialProduct = "", initialTemp
         source: "HOME_CTA",
         website: String(data.get("website") || ""),
         idempotencyKey,
+        metaEventId,
       });
       if (!result.ok) {
         setStatus("error");
         setMessage(result.error);
         return;
       }
+      if (!("duplicate" in result)) trackMeta("Lead", { content_name: product }, metaEventId);
       setStatus("success");
       setMessage("So‘rovingiz qabul qilindi. Mutaxassisimiz siz bilan bog‘lanadi.");
     } catch {

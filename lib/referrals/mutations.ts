@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { AdminUser } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { writeAudit } from "@/lib/audit/service";
-import { isValidSlug, REFERRAL_SOURCES, safeTargetPath } from "./rules";
+import { isValidSlug, parseLeadPagePath, REFERRAL_SOURCES, safeTargetPath } from "./rules";
 import { expireDashboard } from "./tracking";
 
 export class ReferralLinkError extends Error {}
@@ -27,6 +27,12 @@ export async function isSlugAvailable(slug: string, excludeId?: string) {
   return !found || found.id === excludeId;
 }
 
+/** A lead page (/l/<slug>) needs a product that is on the site. */
+async function checkLeadPage(targetPath: string) {
+  const leadPage = parseLeadPagePath(targetPath);
+  if (leadPage && !await getDb().product.findFirst({ where: { slug: leadPage.productSlug, isVisible: true, archivedAt: null }, select: { id: true } })) throw new ReferralLinkError("Lid sahifasi uchun mahsulot topilmadi (saytda ko‘rinadigan mahsulot tanlang).");
+}
+
 async function checkOwner(ownerAgentId: string | null) {
   if (ownerAgentId && !await getDb().salesAgent.findFirst({ where: { id: ownerAgentId, isApproved: true }, select: { id: true } })) throw new ReferralLinkError("Sotuvchi topilmadi.");
 }
@@ -35,6 +41,7 @@ export async function createReferralLink(raw: LinkInput, actor: Actor) {
   const input = linkInputSchema.parse(raw);
   if (!await isSlugAvailable(input.slug)) throw new ReferralLinkError("Bu qisqa nom band.");
   await checkOwner(input.ownerAgentId);
+  await checkLeadPage(input.targetPath);
   const link = await getDb().referralLink.create({ data: { name: input.name, source: input.source, slug: input.slug, targetPath: safeTargetPath(input.targetPath)!, cost: input.cost, costCurrency: input.cost ? input.costCurrency : null, ownerAgentId: input.ownerAgentId, createdByAdminId: actor.id } });
   await writeAudit(actor, { action: "CREATE", entityType: "REFERRAL_LINK", entityId: link.id, entityName: link.name, summary: "Referal link yaratdi", after: { slug: link.slug, source: link.source, targetPath: link.targetPath, cost: link.cost?.toString() ?? null, costCurrency: link.costCurrency } });
   expireDashboard();
@@ -49,6 +56,7 @@ export async function updateReferralLink(id: string, raw: LinkInput, actor: Acto
   // A slug that has already been shared must keep working: it can change only while the link has no visits.
   if (input.slug !== previous.slug && await getDb().visit.count({ where: { referralLinkId: id } })) throw new ReferralLinkError("Tashrif bo‘lgan linkning qisqa nomini o‘zgartirib bo‘lmaydi.");
   await checkOwner(input.ownerAgentId);
+  await checkLeadPage(input.targetPath);
   const link = await getDb().referralLink.update({ where: { id }, data: { name: input.name, source: input.source, slug: input.slug, targetPath: safeTargetPath(input.targetPath)!, cost: input.cost, costCurrency: input.cost ? input.costCurrency : null, ownerAgentId: input.ownerAgentId } });
   await writeAudit(actor, { action: "UPDATE", entityType: "REFERRAL_LINK", entityId: id, entityName: link.name, summary: "Referal linkni tahrirladi", before: { name: previous.name, slug: previous.slug, targetPath: previous.targetPath, cost: previous.cost?.toString() ?? null }, after: { name: link.name, slug: link.slug, targetPath: link.targetPath, cost: link.cost?.toString() ?? null } });
   expireDashboard();

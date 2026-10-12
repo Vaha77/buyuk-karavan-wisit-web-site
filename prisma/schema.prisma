@@ -192,7 +192,8 @@ model Product {
   asset360             Product360Asset?
   calculationLineItems CalculationLineItem[]
   workshopItems        WorkshopOrderItem[]
-  instagramRules       InstagramMediaRule[]
+  instagramRules       InstagramMediaRule[]  @relation("InstagramRuleProduct")
+  instagramSecondRules InstagramMediaRule[]  @relation("InstagramRuleSecondProduct")
 
   @@index([isVisible, order])
   @@index([isVisible, categoryId])
@@ -1285,7 +1286,10 @@ model InstagramAccount {
 model InstagramMediaRule {
   mediaId            String    @id @db.VarChar(64)
   productId          String?
-  product            Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  product            Product?  @relation("InstagramRuleProduct", fields: [productId], references: [id], onDelete: SetNull)
+  // Optional second product for {mahsulot2} {narx_som2} {havola2}; without it those lines are dropped from the DM.
+  secondProductId    String?
+  secondProduct      Product?  @relation("InstagramRuleSecondProduct", fields: [secondProductId], references: [id], onDelete: SetNull)
   isActive           Boolean   @default(true)
   keywords           String[]  @default([])
   dmTemplate         String
@@ -1301,6 +1305,7 @@ model InstagramMediaRule {
   updatedAt          DateTime  @updatedAt
 
   @@index([productId])
+  @@index([secondProductId])
 }
 
 // Every comment on our media (the journal); commentId is the idempotency key: one comment → at most one Private Reply.

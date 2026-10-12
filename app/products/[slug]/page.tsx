@@ -8,6 +8,8 @@ import "@/components/products/products.css";
 import "@/components/products/product-detail.css";
 import { getUsdUzsRate } from "@/lib/currency/cbu";
 import { SITE_URL } from "@/lib/site-url";
+import { MetaViewContent } from "@/components/tracking/meta-pixel";
+import { usdToSellingUzs } from "@/lib/pricing/money";
 
 type Props = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -27,5 +29,5 @@ export default async function ProductDetailPage({ params }: Props) {
   const [related,exchangeRate] = await Promise.all([getRelatedProducts(product.id, product.category),getUsdUzsRate()]);
   const url = `${SITE_URL}/products/${encodeURIComponent(product.slug)}`;
   const jsonLd = { "@context": "https://schema.org", "@type": "Product", name: product.name, sku: product.model, model: product.model, brand: { "@type": "Brand", name: product.brand }, description: product.seoDescription || product.shortDescription || product.description, image: product.images?.length ? product.images : product.image ? [product.image] : undefined, category: product.categoryName, url, ...(product.priceUsd ? { offers: { "@type": "Offer", priceCurrency: "USD", price: product.priceUsd, availability: product.availability === "available" ? "https://schema.org/InStock" : "https://schema.org/PreOrder", url } } : {}) };
-  return <div className="products-shell detail-shell"><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}/><Header onProducts/><ProductDetail product={product} related={related} exchangeRate={exchangeRate?.rate??null}/><Footer onProducts/></div>;
+  return <div className="products-shell detail-shell"><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}/><Header onProducts/><ProductDetail product={product} related={related} exchangeRate={exchangeRate?.rate??null}/><MetaViewContent id={product.id} name={`${product.name} ${product.model}`} value={product.priceUsd&&exchangeRate?Number(usdToSellingUzs(product.priceUsd,exchangeRate.rate)??0)||null:null}/><Footer onProducts/></div>;
 }

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { checkSlugAction, createLinkAction, updateLinkAction } from "@/app/admin/(protected)/links/actions";
-import { REFERRAL_SOURCES, SOURCE_LABELS, suggestSlug, TARGETS, type ReferralSourceKey } from "@/lib/referrals/rules";
+import { LEAD_PAGE_TARGET, leadPagePath, parseLeadPagePath, PRICE_TIMING_LABELS, REFERRAL_SOURCES, SOURCE_LABELS, suggestSlug, TARGETS, type PriceTiming, type ReferralSourceKey } from "@/lib/referrals/rules";
 import { CopyButton, SourceIcon } from "./bits";
 
 type Initial = { id: string; name: string; source: ReferralSourceKey; slug: string; targetPath: string; cost: string; costCurrency: "USD" | "UZS"; ownerAgentId: string };
@@ -15,14 +15,16 @@ export function LinkForm({ initial, siteHost, agents, products }: Props) {
   const router = useRouter();
   const [name, setName] = useState(initial?.name ?? ""), [source, setSource] = useState<ReferralSourceKey>(initial?.source ?? "YOUTUBE");
   const [slug, setSlug] = useState(initial?.slug ?? ""), [slugTouched, setSlugTouched] = useState(Boolean(initial));
-  const initialTarget = initial ? (TARGETS.find(target => target.path === initial.targetPath)?.key ?? (initial.targetPath.startsWith("/products/") ? "product" : "home")) : "form";
-  const [target, setTarget] = useState<string>(initialTarget), [productSlug, setProductSlug] = useState(initial?.targetPath.startsWith("/products/") ? initial.targetPath.slice(10) : "");
+  const initialLead = initial ? parseLeadPagePath(initial.targetPath) : null;
+  const initialTarget = initial ? (TARGETS.find(target => target.path === initial.targetPath)?.key ?? (initialLead ? LEAD_PAGE_TARGET.key : initial.targetPath.startsWith("/products/") ? "product" : "home")) : "form";
+  const [target, setTarget] = useState<string>(initialTarget), [productSlug, setProductSlug] = useState(initialLead?.productSlug ?? (initial?.targetPath.startsWith("/products/") ? initial.targetPath.slice(10) : ""));
+  const [priceTiming, setPriceTiming] = useState<PriceTiming>(initialLead?.timing ?? "after");
   const [cost, setCost] = useState(initial?.cost ?? ""), [currency, setCurrency] = useState<"USD" | "UZS">(initial?.costCurrency ?? "USD"), [owner, setOwner] = useState(initial?.ownerAgentId ?? "");
   const [available, setAvailable] = useState<boolean | null>(null), [error, setError] = useState(""), [qr, setQr] = useState("");
   const [pending, startTransition] = useTransition();
 
   const effectiveSlug = slugTouched ? slug : suggestSlug(name);
-  const targetPath = target === "product" ? (productSlug ? `/products/${productSlug}` : "") : TARGETS.find(item => item.key === target)?.path ?? "/";
+  const targetPath = target === "product" ? (productSlug ? `/products/${productSlug}` : "") : target === LEAD_PAGE_TARGET.key ? (productSlug ? leadPagePath(productSlug, priceTiming) : "") : TARGETS.find(item => item.key === target)?.path ?? "/";
   const url = `${siteHost}/r/${effectiveSlug || "…"}`;
   const valid = name.trim().length >= 3 && /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/.test(effectiveSlug) && !!targetPath && available !== false;
 
@@ -60,10 +62,12 @@ export function LinkForm({ initial, siteHost, agents, products }: Props) {
         {REFERRAL_SOURCES.map(key => <button type="button" key={key} aria-pressed={source === key} onClick={() => setSource(key)}><SourceIcon source={key}/>{SOURCE_LABELS[key]}</button>)}
       </div></div>
       <div className="bk-row">
-        <label className="bk-field"><span>Qaysi sahifaga olib boradi</span><select value={target} onChange={event => setTarget(event.target.value)}>{TARGETS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}<option value="product">Aniq mahsulot</option></select></label>
+        <label className="bk-field"><span>Qaysi sahifaga olib boradi</span><select value={target} onChange={event => setTarget(event.target.value)}>{TARGETS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}<option value="product">Aniq mahsulot</option><option value={LEAD_PAGE_TARGET.key}>{LEAD_PAGE_TARGET.label}</option></select></label>
         <label className="bk-field"><span>Qisqa nom</span><span className="bk-prefix"><span>/r/</span><input value={effectiveSlug} onChange={event => { setSlugTouched(true); setAvailable(null); setSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")); }} maxLength={40} aria-invalid={available === false} aria-describedby="bk-slug-status" required/></span><small id="bk-slug-status" className={`bk-status-line ${available === false || slugStatus.startsWith("3") ? "is-bad" : "is-ok"}`} aria-live="polite">{slugStatus}</small></label>
       </div>
-      {target === "product" && <label className="bk-field"><span>Mahsulot</span><select value={productSlug} onChange={event => setProductSlug(event.target.value)} required><option value="">Mahsulotni tanlang</option>{products.map(product => <option key={product.slug} value={product.slug}>{product.label}</option>)}</select></label>}
+      {target === LEAD_PAGE_TARGET.key && <p className="bk-note is-soft">Reklama uchun: ekranning eng tepasida mahsulot va qisqa forma (Ism, Viloyat, Telefon → “Narxini bilish”). Yuborilgach sahifa o‘zgarmaydi — rahmat, narx va aloqa tugmalari chiqadi.</p>}
+      {target === LEAD_PAGE_TARGET.key && <div className="bk-field"><span id="bk-price-label">Narxni ko‘rsatish</span><div className="bk-tiles-pick" role="group" aria-labelledby="bk-price-label">{(["after", "before"] as const).map(key => <button type="button" key={key} aria-pressed={priceTiming === key} onClick={() => setPriceTiming(key)}>{PRICE_TIMING_LABELS[key]}{key === "after" ? " (standart)" : ""}</button>)}</div></div>}
+      {(target === "product" || target === LEAD_PAGE_TARGET.key) && <label className="bk-field"><span>Mahsulot</span><select value={productSlug} onChange={event => setProductSlug(event.target.value)} required><option value="">Mahsulotni tanlang</option>{products.map(product => <option key={product.slug} value={product.slug}>{product.label}</option>)}</select></label>}
       <div className="bk-row">
         <label className="bk-field"><span>Xarajat (ixtiyoriy)</span><input inputMode="decimal" value={cost} onChange={event => setCost(event.target.value.replace(/[^\d.,]/g, ""))} placeholder="500"/></label>
         <label className="bk-field"><span>Valyuta</span><select value={currency} onChange={event => setCurrency(event.target.value as "USD" | "UZS")}><option value="USD">USD</option><option value="UZS">UZS</option></select></label>

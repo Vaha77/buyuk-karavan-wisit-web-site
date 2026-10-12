@@ -80,6 +80,7 @@ export async function resubscribeWebhookAction(): Promise<Result> {
 const ruleSchema = z.object({
   mediaId: z.string().trim().regex(/^\d{5,40}$/),
   productId: z.string().trim().min(1).max(100).nullable(),
+  secondProductId: z.string().trim().min(1).max(100).nullable().optional().default(null),
   isActive: z.boolean(),
   keywords: z.string().max(2000),
   dmTemplate: z.string().trim().min(5, "DM matni bo‘sh bo‘lmasin.").max(900, "DM matni 900 belgidan oshmasin."),
@@ -101,11 +102,14 @@ export async function saveMediaRuleAction(raw: unknown): Promise<Result> {
   const variants = parseVariants(value.publicReplyVariants);
   if (value.publicReplyEnabled && !variants.length && !value.publicReplyText) return { ok: false, error: "Ochiq javob matnini yozing yoki o‘chiring." };
   if (value.productId && !await getDb().product.findFirst({ where: { id: value.productId, archivedAt: null }, select: { id: true } })) return { ok: false, error: "Mahsulot topilmadi." };
+  // {mahsulot2} {narx_som2} {havola2} without a second product are fine: their lines are dropped when the DM is sent.
+  const secondProductId = value.secondProductId && value.secondProductId !== value.productId ? value.secondProductId : null;
+  if (secondProductId && !await getDb().product.findFirst({ where: { id: secondProductId, archivedAt: null }, select: { id: true } })) return { ok: false, error: "Qo‘shimcha mahsulot topilmadi." };
   const keywords = parseKeywords(value.keywords);
   const postedAt = value.postedAt ? new Date(value.postedAt) : null;
-  const data = { productId: value.productId, isActive: value.isActive, keywords: keywords.length ? keywords : DEFAULT_KEYWORDS, dmTemplate: value.dmTemplate, publicReplyEnabled: value.publicReplyEnabled, publicReplyText: variants[0] ?? (value.publicReplyText || DEFAULT_PUBLIC_REPLY), publicReplyVariants: variants, permalink: value.permalink, caption: value.caption?.slice(0, 500) ?? null, postedAt: postedAt && !Number.isNaN(postedAt.getTime()) ? postedAt : null, updatedById: actor.id };
+  const data = { productId: value.productId, secondProductId, isActive: value.isActive, keywords: keywords.length ? keywords : DEFAULT_KEYWORDS, dmTemplate: value.dmTemplate, publicReplyEnabled: value.publicReplyEnabled, publicReplyText: variants[0] ?? (value.publicReplyText || DEFAULT_PUBLIC_REPLY), publicReplyVariants: variants, permalink: value.permalink, caption: value.caption?.slice(0, 500) ?? null, postedAt: postedAt && !Number.isNaN(postedAt.getTime()) ? postedAt : null, updatedById: actor.id };
   await getDb().instagramMediaRule.upsert({ where: { mediaId: value.mediaId }, create: { mediaId: value.mediaId, ...data }, update: data });
-  await writeAudit(actor, { action: "UPDATE", entityType: "INSTAGRAM_MEDIA", entityId: value.mediaId, entityName: value.permalink ?? value.mediaId, summary: `Instagram post sozlamasini saqladi (${value.isActive ? "faol" : "o‘chiq"})`, after: { productId: value.productId, isActive: value.isActive, keywords: data.keywords, publicReplyEnabled: value.publicReplyEnabled } });
+  await writeAudit(actor, { action: "UPDATE", entityType: "INSTAGRAM_MEDIA", entityId: value.mediaId, entityName: value.permalink ?? value.mediaId, summary: `Instagram post sozlamasini saqladi (${value.isActive ? "faol" : "o‘chiq"})`, after: { productId: value.productId, secondProductId, isActive: value.isActive, keywords: data.keywords, publicReplyEnabled: value.publicReplyEnabled } });
   revalidatePath("/admin/instagram");
   return { ok: true, message: "Saqlandi ✓" };
 }

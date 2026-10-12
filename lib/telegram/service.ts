@@ -31,10 +31,20 @@ export async function publishLeadToTelegram(leadId:string){
   const reserved=await getDb().lead.updateMany({where:{id:leadId,telegramNotificationStatus:"PENDING"},data:{telegramNotificationStatus:"PUBLISHING"}});
   if(reserved.count!==1)return false;
   try{
-    const lead=await getDb().lead.findUnique({where:{id:leadId},select:{id:true,customerName:true,region:true,requestType:true,product:true,temperature:true,source:true}});
-    if(!lead)throw new Error("Lead missing");
-    const message=await sendMessage(telegramGroupChatId(),newLeadGroupText(lead),claimKeyboard(lead.id));
-    await getDb().lead.update({where:{id:lead.id},data:{telegramNotificationStatus:"PUBLISHED",telegramChatId:String(message.chat.id),telegramMessageId:message.message_id,telegramPublishedAt:new Date(),telegramPublishFailedAt:null}});
+    const db=getDb();
+    const row=await db.lead.findUnique({where:{id:leadId},select:{id:true,customerName:true,region:true,requestType:true,product:true,temperature:true,source:true,assignedAgentId:true,referralLink:{select:{name:true,ownerAgent:true}}}});
+    if(!row)throw new Error("Lead missing");
+    const lead={...row,referralName:row.referralLink?.name??null};
+    // The link's "Mas’ul sotuvchi": the lead goes straight to them (no claim button); otherwise the group claims it.
+    const owner=row.referralLink?.ownerAgent;
+    const assigned=!row.assignedAgentId&&owner?.isApproved&&owner.isActive?(await db.lead.updateMany({where:{id:leadId,assignedAgentId:null},data:{assignedAgentId:owner.id,claimedAt:new Date()}})).count===1:false;
+    const message=assigned?await sendMessage(telegramGroupChatId(),claimedLeadGroupText(lead,agentName(owner!))):await sendMessage(telegramGroupChatId(),newLeadGroupText(lead),claimKeyboard(lead.id));
+    await db.lead.update({where:{id:lead.id},data:{telegramNotificationStatus:"PUBLISHED",telegramChatId:String(message.chat.id),telegramMessageId:message.message_id,telegramPublishedAt:new Date(),telegramPublishFailedAt:null}});
+    if(assigned){
+      await db.leadActivity.create({data:{leadId,agentId:owner!.id,type:"CLAIMED",comment:"Referal link mas’ul sotuvchisiga avtomatik biriktirildi"}});
+      const full=await db.lead.findUnique({where:{id:leadId}});
+      if(full)await sendMessage(String(owner!.telegramUserId),privateLeadText({...full,referralName:lead.referralName}),contactedKeyboard(leadId)).then(()=>db.lead.update({where:{id:leadId},data:{telegramPrivateDeliveryFailedAt:null}})).catch(async error=>{await db.lead.update({where:{id:leadId},data:{telegramPrivateDeliveryFailedAt:new Date()}}).catch(()=>undefined);safeError("Telegram private delivery failed",error);});
+    }
     return true;
   }catch(error){await getDb().lead.updateMany({where:{id:leadId,telegramNotificationStatus:"PUBLISHING"},data:{telegramNotificationStatus:"FAILED",telegramPublishFailedAt:new Date()}}).catch(()=>undefined);safeError("Telegram lead publish failed",error);return false;}
 }
@@ -88,7 +98,8 @@ async function claimLead(callback:TelegramCallbackQuery,metrics?:WebhookPerforma
   if(!agent.isActive){await rejectClaim(callback,"Hisobingiz faol emas.",metrics?.callbackAcknowledged);return true;}
   const claimedAt=new Date(),result=await db.lead.updateMany({where:{id:match[1],assignedAgentId:null},data:{assignedAgentId:agent.id,claimedAt}});
   if(result.count!==1){await rejectClaim(callback,"Bu mijozni boshqa sotuvchi olib bo‘ldi.",metrics?.callbackAcknowledged);return true;}
-  const [,lead]=await Promise.all([db.leadActivity.create({data:{leadId:match[1],agentId:agent.id,type:"CLAIMED"}}),db.lead.findUnique({where:{id:match[1]}})]);
+  const [,row]=await Promise.all([db.leadActivity.create({data:{leadId:match[1],agentId:agent.id,type:"CLAIMED"}}),db.lead.findUnique({where:{id:match[1]},include:{referralLink:{select:{name:true}}}})]);
+  const lead=row&&{...row,referralName:row.referralLink?.name??null};
   if(metrics)metrics.timings.db_claim_ms=Math.round(performance.now()-dbStarted);
   if(!metrics?.callbackAcknowledged)await answerCallbackQuery(callback.id,"Mijoz sizga biriktirildi.");
   if(!lead)return true;

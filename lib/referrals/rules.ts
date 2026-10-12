@@ -10,6 +10,23 @@ export const TARGETS = [
   { key: "products", label: "Mahsulotlar katalogi", path: "/products" },
 ] as const;
 
+// ---- "Lid sahifasi (forma tepada)": /l/<product slug>, the short form above everything else -----------------
+export type PriceTiming = "before" | "after";
+export const LEAD_PAGE_TARGET = { key: "lead", label: "Lid sahifasi (forma tepada)" } as const;
+export const PRICE_TIMING_LABELS: Record<PriceTiming, string> = { after: "Formadan keyin", before: "Formadan oldin" };
+const PRODUCT_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,198}[a-z0-9])?$/i;
+/** Link target of a lead page: "/l/<slug>", plus "?narx=oldin" when the price is shown before the form (default: after). */
+export function leadPagePath(productSlug: string, timing: PriceTiming = "after") {
+  return `/l/${productSlug}${timing === "before" ? "?narx=oldin" : ""}`;
+}
+/** { productSlug, timing } of a lead page target path, else null. */
+export function parseLeadPagePath(path: string): { productSlug: string; timing: PriceTiming } | null {
+  const match = path.match(/^\/l\/([^/?#]+)(?:\?([^#]*))?$/);
+  if (!match || !PRODUCT_SLUG.test(match[1])) return null;
+  return { productSlug: match[1], timing: new URLSearchParams(match[2] ?? "").get("narx") === "oldin" ? "before" : "after" };
+}
+export const priceTimingOf = (value: string | string[] | undefined): PriceTiming => value === "oldin" ? "before" : "after";
+
 export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/;
 export function isValidSlug(slug: string) { return SLUG_PATTERN.test(slug) && !slug.includes("--"); }
 
@@ -71,6 +88,11 @@ export type OutcomeCounts = Record<OutcomeKey, number>;
 /** Stacked bar segments: every visitor counted once by their latest stage; sales are part of "zayavka". */
 export function linkSegments(counts: OutcomeCounts) {
   return { left: counts.LEFT, interested: counts.INTERESTED, contact: counts.CONTACT_ATTEMPT, lead: counts.LEAD + counts.SALE };
+}
+/** Klik → zayavka → sotuv of one link from its visits' outcomes (a sale is also a zayavka). */
+export function linkFunnel(counts: OutcomeCounts) {
+  const clicks = OUTCOME_ORDER.reduce((sum, key) => sum + counts[key], 0), leads = counts.LEAD + counts.SALE;
+  return { clicks, leads, sales: counts.SALE };
 }
 export function conversion(leads: number, clicks: number) { return clicks > 0 ? (leads / clicks) * 100 : 0; }
 export function costPerLead(costUsd: number | null, leads: number) { return costUsd && leads > 0 ? costUsd / leads : null; }

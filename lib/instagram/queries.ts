@@ -66,7 +66,7 @@ export async function getInstagramBoard() {
     repliesToday,
     media: list,
     mediaError,
-    rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { productId: rule.productId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText, publicReplyVariants: rule.publicReplyVariants }])),
+    rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { productId: rule.productId, secondProductId: rule.secondProductId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText, publicReplyVariants: rule.publicReplyVariants }])),
     stats: perMedia,
     journal: journal.map(row => ({ ...row, createdAt: row.createdAt.toISOString(), reviewedAt: row.reviewedAt?.toISOString() ?? null, aiCostUsd: row.aiCostUsd === null ? null : Number(row.aiCostUsd), permalink: permalinks.get(row.mediaId) ?? null })),
     products: products.map(item => ({ id: item.id, name: item.name, model: item.model, hasPrice: item.priceUsd !== null, isVisible: item.isVisible })),

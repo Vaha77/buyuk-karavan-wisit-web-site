@@ -85,7 +85,9 @@ async function sitePhone(account: InstagramAccount) {
   return footer && !footer.includes("[") ? footer : "";
 }
 
-type RuleWithProduct = InstagramMediaRule & { product: { id: string; name: string; slug: string; priceUsd: { toString(): string } | null; isVisible: boolean; archivedAt: Date | null } | null };
+type RuleProduct = { id: string; name: string; slug: string; priceUsd: { toString(): string } | null; isVisible: boolean; archivedAt: Date | null };
+type RuleWithProduct = InstagramMediaRule & { product: RuleProduct | null; secondProduct?: RuleProduct | null };
+const RULE_PRODUCT = { select: { id: true, name: true, slug: true, priceUsd: true, isVisible: true, archivedAt: true } } as const;
 type Context = { account: InstagramAccount; token: string; rate: string | null; phone: string; deadline: number };
 type Outcome = "sent" | "failed" | "skipped" | "notified" | "retry" | "rate-limited" | "wait";
 
@@ -109,7 +111,11 @@ function dmFor(template: string, rule: RuleWithProduct | null, comment: Instagra
     price = priceSom(product?.priceUsd?.toString(), context.rate) ?? "";
     if (!price) return { error: product?.priceUsd ? "CBU kursi olinmadi" : "Prays'da sotuv narxi yo‘q" };
   }
-  return { text: renderTemplate(template, { mahsulot: product?.name ?? "", narx_som: price, havola: product ? productLink(SITE_URL, product.slug, comment.mediaId) : "", telefon: context.phone, username: comment.username }) };
+  // Second product: used only when it is on the site and (if the text asks for it) has a price; otherwise its lines go.
+  const extra = rule?.secondProduct ?? null;
+  const extraPrice = extra && template.includes("{narx_som2}") ? priceSom(extra.priceUsd?.toString(), context.rate) : "";
+  const second = extra && extra.isVisible && !extra.archivedAt && extraPrice !== null ? { mahsulot: extra.name, narx_som: extraPrice, havola: productLink(SITE_URL, extra.slug, comment.mediaId) } : null;
+  return { text: renderTemplate(template, { mahsulot: product?.name ?? "", narx_som: price, havola: product ? productLink(SITE_URL, product.slug, comment.mediaId) : "", telefon: context.phone, username: comment.username, second }) };
 }
 
 /** BKLead lead; one per person + product (or + post when there is no product). Returns the lead id (new or existing). */
@@ -143,7 +149,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   const finish = async (status: "FAILED" | "SKIPPED" | "SENT" | "NOTIFIED", reason: string | null, extra: Parameters<typeof db.instagramComment.update>[0]["data"] = {}) => update({ status, reason, lockedUntil: null, ...extra });
   if (tooOld(comment.createdAt)) { await finish("SKIPPED", "7 kundan eski komment"); return "skipped"; }
 
-  const rule: RuleWithProduct | null = await db.instagramMediaRule.findUnique({ where: { mediaId: comment.mediaId }, include: { product: { select: { id: true, name: true, slug: true, priceUsd: true, isVisible: true, archivedAt: true } } } });
+  const rule: RuleWithProduct | null = await db.instagramMediaRule.findUnique({ where: { mediaId: comment.mediaId }, include: { product: RULE_PRODUCT, secondProduct: RULE_PRODUCT } });
   if (!comment.kind) {
     const result = await classify(comment, rule);
     await update({ kind: result.kind, classifiedBy: result.by, aiTokens: result.usage.tokens, aiCostUsd: result.usage.costUsd, productId: rule?.product?.id ?? null, productName: rule?.product?.name ?? null });

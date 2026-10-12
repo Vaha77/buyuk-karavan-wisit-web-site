@@ -8,6 +8,8 @@ export const DEFAULT_QUESTION_REPLY = "Batafsil ma'lumotni Direct'ga yubordik ðŸ
 export const DEFAULT_QUESTION_DM = "Assalomu alaykum! Savolingiz bo'yicha mutaxassisimiz yordam beradi: {telefon}";
 export const DEFAULT_DAILY_REPLY_LIMIT = 150;
 export const PLACEHOLDERS = ["{mahsulot}", "{narx_som}", "{havola}", "{telefon}", "{username}"] as const;
+/** Second product (optional): lines with these are dropped from the DM when the post has none. */
+export const SECOND_PLACEHOLDERS = ["{mahsulot2}", "{narx_som2}", "{havola2}"] as const;
 
 export const COMMENT_KINDS = ["PRICE", "POSITIVE", "QUESTION", "NEGATIVE", "SPAM", "UNKNOWN"] as const;
 export type CommentKind = (typeof COMMENT_KINDS)[number];

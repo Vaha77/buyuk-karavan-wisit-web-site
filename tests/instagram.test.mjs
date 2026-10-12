@@ -227,3 +227,21 @@ test("wiring: unique comment id, unique lead key, 401 on bad signature, token en
   const example = await read("../.env.example");
   for (const name of ["INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET", "INSTAGRAM_WEBHOOK_VERIFY_TOKEN"]) assert.match(example, new RegExp(`^${name}=\\r?$`, "m"));
 });
+
+test("second product: {mahsulot2} {narx_som2} {havola2} filled, or their lines dropped when the post has none", async () => {
+  const r = await import("../lib/instagram/rules.ts");
+  const template = "Assalomu alaykum! {mahsulot} — {narx_som} so'm\nYana: {mahsulot2} — {narx_som2} so'm ({havola2})\n\nTel: {telefon}";
+  const base = { mahsulot: "BR +20PG", narx_som: "12 000 000", havola: "https://buyukkaravan.com/products/br", telefon: "+998916377777" };
+  assert.equal(r.renderTemplate(template, { ...base, second: { mahsulot: "Kompressor", narx_som: "5 500 000", havola: "https://buyukkaravan.com/products/k" } }), "Assalomu alaykum! BR +20PG — 12 000 000 so'm\nYana: Kompressor — 5 500 000 so'm (https://buyukkaravan.com/products/k)\n\nTel: +998916377777");
+  assert.equal(r.renderTemplate(template, base), "Assalomu alaykum! BR +20PG — 12 000 000 so'm\n\nTel: +998916377777", "line with the second product removed");
+  assert.equal(r.renderTemplate(template, { ...base, second: null }), "Assalomu alaykum! BR +20PG — 12 000 000 so'm\n\nTel: +998916377777");
+  assert.equal(r.dropSecondProductLines("a\n{havola2}\n\n\nb"), "a\n\nb");
+  assert.equal(r.renderTemplate("{mahsulot} {narx_som}", base), "BR +20PG 12 000 000", "old templates unchanged");
+  const actions = await readFile(new URL("../app/admin/(protected)/instagram/actions.ts", import.meta.url), "utf8");
+  assert.match(actions, /secondProductId: z\.string\(\)\.trim\(\)\.min\(1\)\.max\(100\)\.nullable\(\)\.optional\(\)\.default\(null\)/, "saving without a second product is valid");
+  assert.doesNotMatch(actions, /mahsulot2[^\n]*error/, "no save error for {mahsulot2} without a product");
+  const service = await readFile(new URL("../lib/instagram/service.ts", import.meta.url), "utf8");
+  assert.match(service, /secondProduct: RULE_PRODUCT/);
+  const migration = await readFile(new URL("../prisma/migrations/20261020090000_add_instagram_second_product/migration.sql", import.meta.url), "utf8");
+  assert.doesNotMatch(migration.replace(/^--.*$/gm, ""), /\bDROP\b|DELETE FROM|\bTRUNCATE\b|ALTER COLUMN/i);
+});

@@ -86,12 +86,22 @@ export function productLink(siteUrl: string, slug: string, mediaId: string) {
   return url.toString();
 }
 
-export type TemplateValues = { mahsulot: string; narx_som: string; havola: string; telefon: string; username?: string | null };
+export type TemplateValues = { mahsulot: string; narx_som: string; havola: string; telefon: string; username?: string | null; second?: { mahsulot: string; narx_som: string; havola: string } | null };
 
-/** Fills {mahsulot} {narx_som} {havola} {telefon} {username}; unknown {words} stay as typed. Instagram's text limit is 1000 chars. */
+export const SECOND_PLACEHOLDER = /\{(mahsulot2|narx_som2|havola2)\}/;
+/** Without a second product, every line with {mahsulot2} {narx_som2} {havola2} is dropped (blank-line runs collapsed). */
+export function dropSecondProductLines(template: string) {
+  return template.split(/\r?\n/).filter(line => !SECOND_PLACEHOLDER.test(line)).join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+/**
+ * Fills {mahsulot} {narx_som} {havola} {telefon} {username} and, with `second`, {mahsulot2} {narx_som2} {havola2};
+ * without `second` their lines are removed. Unknown {words} stay as typed. Instagram's text limit is 1000 chars.
+ */
 export function renderTemplate(template: string, values: TemplateValues) {
-  const map: Record<string, string> = { mahsulot: values.mahsulot, narx_som: values.narx_som, havola: values.havola, telefon: values.telefon, username: values.username ? `@${values.username}` : "" };
-  return template.replace(/\{([a-z_]+)\}/g, (whole, key: string) => key in map ? map[key] : whole).trim().slice(0, 1000);
+  const map: Record<string, string> = { mahsulot: values.mahsulot, narx_som: values.narx_som, havola: values.havola, telefon: values.telefon, username: values.username ? `@${values.username}` : "", ...(values.second ? { mahsulot2: values.second.mahsulot, narx_som2: values.second.narx_som, havola2: values.second.havola } : {}) };
+  const text = values.second ? template : dropSecondProductLines(template);
+  return text.replace(/\{([a-z_0-9]+)\}/g, (whole, key: string) => key in map ? map[key] : whole).trim().slice(0, 1000);
 }
 
 // ---- Timing, retries -----------------------------------------------------------------------------------
