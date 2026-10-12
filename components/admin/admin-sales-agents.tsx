@@ -50,6 +50,16 @@ export function AdminSalesAgents({ agents }: { agents: AdminSalesAgent[] }) {
     );
   }
 
+  const marjaForm = (agent: AdminSalesAgent) => <form action={adjustMarjaAction} className="sales-agent-marja"><input type="hidden" name="agentId" value={agent.id}/><input name="amount" type="number" required placeholder="± Marja" aria-label={`${agent.name}: marja miqdori`}/><input name="reason" required minLength={3} placeholder="Sabab" aria-label={`${agent.name}: sabab`}/><button className="sales-agent-button is-primary">Kiritish</button></form>;
+  const actions = (agent: AdminSalesAgent) => {
+    const isCurrentPending = pendingAgentId === agent.id;
+    return <div className="admin-row-tools sales-agent-actions">
+      {!agent.isApproved && <button className="sales-agent-button is-primary" disabled={pendingAgentId !== null} onClick={() => run(approveSalesAgentAction, agent.id, "Sotuvchi tasdiqlandi.")}>{isCurrentPending ? "Kutilmoqda..." : "Tasdiqlash"}</button>}
+      <button className={`sales-agent-button ${agent.isActive ? "is-danger" : "is-primary"}`} disabled={pendingAgentId !== null} onClick={() => toggleAgent(agent)}>{isCurrentPending ? "Kutilmoqda..." : agent.isActive ? "Faolsizlantirish" : "Faollashtirish"}</button>
+    </div>;
+  };
+  const status = (agent: AdminSalesAgent) => <span className={`sales-agent-status ${agent.isActive ? "is-active" : "is-inactive"}`}>{agent.isActive ? "Faol" : "Faol emas"}</span>;
+
   return (
     <div className="admin-products-page" aria-busy={pending}>
       <div className="admin-page-heading">
@@ -68,7 +78,7 @@ export function AdminSalesAgents({ agents }: { agents: AdminSalesAgent[] }) {
           <h2>Ro‘yxatdan o‘tgan sotuvchilar</h2>
           <span>{agents.length} ta</span>
         </div>
-        {agents.length ? (
+        {agents.length ? (<>
           <div className="admin-table-wrap">
             <table className="admin-products-table">
               <thead>
@@ -78,48 +88,42 @@ export function AdminSalesAgents({ agents }: { agents: AdminSalesAgent[] }) {
                 </tr>
               </thead>
               <tbody>
-                {agents.map((agent) => {
-                  const isCurrentPending = pendingAgentId === agent.id;
-                  return (
-                    <tr key={agent.id}>
-                      <td><strong>{agent.name}</strong></td>
-                      <td>{agent.username}</td>
-                      <td>{agent.createdAt}</td>
-                      <td>{agent.isApproved ? "Tasdiqlangan" : "Kutilmoqda"}</td>
-                      <td>
-                        <span className={`sales-agent-status ${agent.isActive ? "is-active" : "is-inactive"}`}>
-                          {agent.isActive ? "Faol" : "Faol emas"}
-                        </span>
-                      </td>
-                      <td>{agent.sales}/{agent.claimed} savdo · {agent.conversion}% · {agent.overdue} kechikkan</td>
-                      <td><strong>{agent.marja}</strong> <small>({agent.earned} / -{agent.spent})</small><form action={adjustMarjaAction}><input type="hidden" name="agentId" value={agent.id}/><input name="amount" type="number" required placeholder="± Marja"/><input name="reason" required minLength={3} placeholder="Sabab"/><button className="sales-agent-button is-primary">Kiritish</button></form></td>
-                      <td>
-                        <div className="admin-row-tools sales-agent-actions">
-                          {!agent.isApproved && (
-                            <button
-                              className="sales-agent-button is-primary"
-                              disabled={pendingAgentId !== null}
-                              onClick={() => run(approveSalesAgentAction, agent.id, "Sotuvchi tasdiqlandi.")}
-                            >
-                              {isCurrentPending ? "Kutilmoqda..." : "Tasdiqlash"}
-                            </button>
-                          )}
-                          <button
-                            className={`sales-agent-button ${agent.isActive ? "is-danger" : "is-primary"}`}
-                            disabled={pendingAgentId !== null}
-                            onClick={() => toggleAgent(agent)}
-                          >
-                            {isCurrentPending ? "Kutilmoqda..." : agent.isActive ? "Faolsizlantirish" : "Faollashtirish"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {agents.map((agent) => (
+                  <tr key={agent.id}>
+                    <td><strong>{agent.name}</strong></td>
+                    <td>{agent.username}</td>
+                    <td>{agent.createdAt}</td>
+                    <td>{agent.isApproved ? "Tasdiqlangan" : "Kutilmoqda"}</td>
+                    <td>{status(agent)}</td>
+                    <td>{agent.sales}/{agent.claimed} savdo · {agent.conversion}% · {agent.overdue} kechikkan</td>
+                    <td><strong>{agent.marja}</strong> <small>({agent.earned} / -{agent.spent})</small>{marjaForm(agent)}</td>
+                    <td>{actions(agent)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        ) : (
+          {/* Phones: the table is hidden (≤650px), every seller is a card with the same data and actions. */}
+          <ul className="admin-mobile-cards" aria-label="Sotuvchilar">
+            {agents.map((agent) => (
+              <li key={agent.id} className="admin-mobile-card">
+                <div className="admin-mobile-card-head">
+                  <div><strong>{agent.name}</strong><small>{agent.username || "—"}</small></div>
+                  <span className={`admin-mobile-badge ${agent.isApproved ? "is-ok" : "is-wait"}`}>{agent.isApproved ? "Tasdiqlangan" : "Kutilmoqda"}</span>
+                </div>
+                <dl className="admin-mobile-facts">
+                  <div><dt>Ro‘yxatdan o‘tgan</dt><dd>{agent.createdAt}</dd></div>
+                  <div><dt>Faollik</dt><dd>{status(agent)}</dd></div>
+                  <div><dt>Savdo</dt><dd>{agent.sales}/{agent.claimed} · {agent.conversion}%</dd></div>
+                  <div><dt>Kechikkan</dt><dd>{agent.overdue}</dd></div>
+                  <div><dt>Marja</dt><dd><strong>{agent.marja}</strong> <small>({agent.earned} / -{agent.spent})</small></dd></div>
+                </dl>
+                {marjaForm(agent)}
+                {actions(agent)}
+              </li>
+            ))}
+          </ul>
+        </>        ) : (
           <p className="admin-empty">Hozircha sotuvchilar ro‘yxatdan o‘tmagan.</p>
         )}
       </section>

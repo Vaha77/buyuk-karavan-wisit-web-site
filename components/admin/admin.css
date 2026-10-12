@@ -116,3 +116,40 @@
 .admin-password-cell code{min-width:110px;padding:7px 10px;border:1px solid #d7e6f8;border-radius:8px;background:#f7fbff;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;letter-spacing:.08em}
 .admin-password-cell input{height:38px;min-width:200px;border:1px solid #bdd2e8;border-radius:8px;padding:0 10px;font:inherit}
 .admin-password-cell .is-muted{color:#8aa0b5;font-style:italic}.admin-password-cell .is-ok{color:#1B6B43;font-weight:700}.admin-password-cell .is-error{color:#B42318;font-weight:700}
+/* Phones: tables hidden at ≤650px are replaced by cards (.admin-mobile-cards); plain tables scroll sideways (.is-scroll). */
+.admin-mobile-cards{display:none}
+@media(max-width:650px){
+.admin-table-wrap.is-scroll{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.admin-table-wrap.is-scroll table{min-width:560px}
+.admin-mobile-cards{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.admin-mobile-card{display:grid;gap:10px;min-width:0;background:#fff;border:1px solid var(--admin-line);border-radius:14px;padding:13px;box-shadow:0 6px 18px #1b4a7608}
+.admin-mobile-card-head{display:flex;align-items:flex-start;gap:10px}
+.admin-mobile-card-head>div:not(.admin-row-tools){display:grid;gap:2px;min-width:0;flex:1}
+.admin-mobile-card-head strong{font-size:15px;overflow-wrap:anywhere}
+.admin-mobile-card-head small{color:#6b7f95;font-size:12px;overflow-wrap:anywhere}
+.admin-mobile-badge{flex:none;padding:3px 9px;border-radius:999px;background:#edf2f7;color:#40556c;font-size:12px;font-weight:700}
+.admin-mobile-badge.is-ok{background:#e3f4ea;color:#1b6b43}.admin-mobile-badge.is-wait{background:#fff6e5;color:#7a4b00}
+.admin-mobile-facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
+.admin-mobile-facts div{display:grid;gap:2px;min-width:0;padding:8px 10px;border-radius:10px;background:#f6f9fd}
+.admin-mobile-facts .is-wide{grid-column:1/-1}
+.admin-mobile-facts dt{color:#6b7f95;font-size:11px}.admin-mobile-facts dd{margin:0;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.admin-mobile-card .sales-agent-actions{display:flex;flex-wrap:wrap;gap:8px}
+.admin-mobile-card .sales-agent-actions form,.admin-mobile-card .sales-agent-marja{display:flex;flex-wrap:wrap;gap:8px;width:100%}
+.admin-mobile-card form input:not([type=hidden]){flex:1 1 120px;min-width:0;min-height:44px;padding:0 10px;border:1px solid var(--admin-line);border-radius:10px;font:inherit;font-size:14px}
+.admin-mobile-card .sales-agent-button{min-height:44px;flex:1 1 auto}
+.admin-mobile-card .admin-visibility{justify-self:start;min-height:44px}
+}
+.sales-agent-marja .sales-agent-button.is-primary{color:#fff;background:#245487;border-color:#245487}
+/* Mukofotlar katalogi: labelled fields (each reward is one form). */
+.reward-form{padding:14px 0;border-top:1px solid var(--admin-line)}
+.reward-form label{display:grid;gap:5px;font-size:12px;color:var(--admin-muted);font-weight:600}
+.reward-form input:not([type=checkbox]):not([type=hidden]){min-height:42px;padding:0 11px;border:1px solid var(--admin-line);border-radius:10px;font:inherit;font-size:14px;color:inherit;background:#fff}
+.reward-form .reward-form-check{display:flex;align-items:center;gap:8px;font-size:14px;color:inherit}
+.reward-form .admin-primary-button{grid-column:1/-1;justify-self:start}
+@media(max-width:650px){.reward-form .admin-primary-button{justify-self:stretch}}
+@media(max-width:650px){
+.admin-mobile-card .sales-agent-marja{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.admin-mobile-card .sales-agent-marja .sales-agent-button{grid-column:1/-1;border-radius:10px}
+}
+/* width:100% plus the 12px side margins pushed the shell 24px past a phone screen. */
+@media(max-width:650px){.admin-shell{width:auto}}
