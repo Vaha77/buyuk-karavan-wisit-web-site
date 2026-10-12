@@ -1495,3 +1495,20 @@ model InstagramAudienceSnapshot {
   engaged   Json     @default("{}")
   fetchedAt DateTime @default(now())
 }
+
+// Meta "Data Deletion Request" (signed_request) and its status page /data-deletion?code=… The Instagram user id is
+// kept only as a SHA-256 hash; the counts say what was removed (comments, messages) or anonymised (leads).
+model InstagramDataDeletion {
+  code          String    @id @db.VarChar(32)
+  userHash      String    @db.VarChar(64)
+  // "PENDING" | "COMPLETED"
+  status        String    @default("PENDING") @db.VarChar(20)
+  comments      Int       @default(0)
+  messages      Int       @default(0)
+  conversations Int       @default(0)
+  leads         Int       @default(0)
+  requestedAt   DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@index([userHash])
+}

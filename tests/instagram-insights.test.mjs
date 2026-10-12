@@ -140,3 +140,58 @@ test("wiring: insights scope, daily cron, map precomputed for the server, additi
   const insights = await read("../lib/instagram/insights.ts");
   assert.doesNotMatch(insights, /console\.\w+\([^\n]*token/i, "no tokens in logs");
 });
+
+test("comments come from Instagram (daily insight, else the period's posts), not the webhook journal", async () => {
+  assert.deepEqual(s.instagramComments([{ comments: 4 }, { comments: null }, { comments: 6 }], [{ comments: 99 }]), { value: 10, source: "account" });
+  assert.deepEqual(s.instagramComments([{ comments: null }], [{ comments: 7 }, { comments: 5 }, { comments: null }]), { value: 12, source: "media" }, "comments_count / media insights when the daily metric is empty");
+  assert.deepEqual(s.instagramComments([], []), { value: null, source: null });
+  const queries = await read("../lib/instagram/stats-queries.ts");
+  assert.match(queries, /instagramComments\(days, media\)/);
+  assert.doesNotMatch(queries, /kpi\("comments", "Kommentlar", comments\.length/, "KPI not from the webhook journal");
+  assert.match(queries, /comments: statsByDay\.get\(day\)\?\.comments/, "daily chart from Instagram");
+  assert.match(queries, /groupBy\(\{ by: \["kind"\], _count/, "kinds: the whole journal");
+  const graph = await read("../lib/instagram/graph.ts");
+  assert.match(graph, /listMediaSince[\s\S]*comments_count/);
+  const board = await read("../components/admin/instagram/stats-board.tsx");
+  assert.match(board, /Avto-javob tizimi ishga tushgandan beri/);
+});
+
+test("follower growth: follows_and_unfollows (FOLLOWER = followed) against the followers_count history", () => {
+  assert.deepEqual(s.followsFrom({ FOLLOWER: 25, NON_FOLLOWER: 6, UNKNOWN: 2 }), { follows: 25, unfollows: 6 }, "UNKNOWN is not counted");
+  const day = (date, followersCount, follows, unfollows) => ({ date, followersCount, follows, unfollows });
+  // Count on the 10th = 1000, on the 13th = 1012: the follows of the 10th–12th (13th not yet in the count).
+  const ok = s.followerGrowthCheck([day("2026-10-10", 1000, 5, 1), day("2026-10-11", null, 6, 2), day("2026-10-12", null, 4, 0), day("2026-10-13", 1012, 30, 0)]);
+  assert.deepEqual(ok, { countNet: 12, reportedNet: 12, from: "2026-10-10", to: "2026-10-13", mismatch: false, swapped: false });
+  const swapped = s.followerGrowthCheck([day("2026-10-10", 1000, 1, 20), day("2026-10-11", 1019, 0, 0)]);
+  assert.equal(swapped.mismatch, true);
+  assert.equal(swapped.swapped, true, "FOLLOWER / NON_FOLLOWER read the wrong way round");
+  const off = s.followerGrowthCheck([day("2026-10-10", 1000, 10, 0), day("2026-10-11", 1100, null, null)]);
+  assert.equal(off.mismatch, true);
+  assert.equal(off.swapped, false);
+  assert.equal(s.followerGrowthCheck([day("2026-10-10", 1000, 10, 0), day("2026-10-11", 1009, 0, 0)]).mismatch, false, "small lag is tolerated");
+  assert.equal(s.followerGrowthCheck([day("2026-10-10", 1000, null, null), day("2026-10-11", 1010, 3, 0)]).reportedNet, null, "a day without follows → no comparison");
+  assert.equal(s.followerGrowthCheck([day("2026-10-10", 1000, 5, 0)]).countNet, null, "one count is not a history");
+  assert.equal(s.growthPercent(1040, 90550), 1.2);
+  assert.equal(s.growthPercent(null, 100), null);
+  assert.equal(s.growthPercent(-5, 0), null);
+});
+
+test("Statistika design: block order, colours, map scale and audience switch as in the design file", async () => {
+  const board = await read("../components/admin/instagram/stats-board.tsx");
+  const css = await read("../components/admin/instagram/instagram.css");
+  await read("../docs/design/instagram/instagram-statistika.dc.html");
+  const order = ["<Kpis", "<Funnel", "<DailyChart", "<Kinds", "<CountryMap", "<Demographics", "<Heatmap", "<ContentTypes", "<TopPosts", "<Growth"].map(tag => board.indexOf(`${tag} `) >= 0 ? board.indexOf(`${tag} `) : board.indexOf(`${tag}/`));
+  assert.ok(order.every(index => index > 0), "every block rendered");
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "design order");
+  assert.match(board, /#1E4E8C/);
+  assert.match(board, /#E8792B/);
+  assert.match(board, /rgba\(30,78,140,/, "dark-blue map scale");
+  assert.match(board, /Davlatlar bo‘yicha auditoriya/);
+  assert.match(board, /igs-map-name/, "country name and % on the map");
+  const client = await read("../components/admin/instagram/stats-client.tsx");
+  assert.match(client, />Obunachilar</);
+  assert.match(client, />Reaksiya beruvchilar</);
+  assert.match(css, /--igs-navy:#1E4E8C/);
+  assert.match(board, /\["today", "7", "30", "90"\]/, "Bugun first");
+  assert.doesNotMatch(board, /Namuna ma/, "real data, no sample badge");
+});

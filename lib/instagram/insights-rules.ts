@@ -49,8 +49,10 @@ export function linkTaps(breakdown: Record<string, number>) {
 }
 
 /**
- * follows_and_unfollows by follow_type. Meta's reference does not spell the values out; in the responses FOLLOWER is
- * new follows and NON_FOLLOWER the accounts that unfollowed (or left Instagram).
+ * follows_and_unfollows by follow_type (period=day, total_value). Meta's reference: "the number of accounts that followed
+ * you and the number of accounts that unfollowed you or left Instagram", values FOLLOWER / NON_FOLLOWER / UNKNOWN, without
+ * saying which is which. FOLLOWER = followed, NON_FOLLOWER = unfollowed (also how third-party connectors document it);
+ * UNKNOWN is not counted. Checked on every page view against the followers_count history (followerGrowthCheck).
  */
 export const followsFrom = (breakdown: Record<string, number>) => ({ follows: breakdown.FOLLOWER ?? null, unfollows: breakdown.NON_FOLLOWER ?? null });
 
@@ -159,3 +161,46 @@ export function contentTypes(media: MediaRow[]) {
   });
 }
 export const TYPE_LABELS: Record<string, string> = { REELS: "Reels", POST: "Post", STORY: "Storis" };
+
+// ---- Comments (Instagram's own count, not our webhook journal) ------------------------------------------
+
+/**
+ * Comments in a period from Instagram itself, so the number is right even when webhooks were missed: the account's
+ * daily "comments" insight; when Meta gives no daily value (the metric is "in development"), the comments of the
+ * period's posts (media insights "comments" / comments_count). Our webhook journal is used only for comment kinds.
+ */
+export function instagramComments(days: Array<{ comments: number | null }>, media: Array<{ comments: number | null }>) {
+  const daily = sumKey(days, "comments");
+  if (daily !== null) return { value: daily, source: "account" as const };
+  const posts = sumKey(media, "comments");
+  return posts !== null ? { value: posts, source: "media" as const } : { value: null, source: null };
+}
+
+// ---- Follower growth check -------------------------------------------------------------------------------
+
+export type FollowerDay = { date: string; followersCount: number | null; follows: number | null; unfollows: number | null };
+
+/**
+ * Net growth two ways: followers_count history (last known − first known count in the window) and follows_and_unfollows
+ * (FOLLOWER = followed, NON_FOLLOWER = unfollowed / left Instagram) over the same days. followers_count is stored when
+ * the day's refresh runs, so the count of day A … day B covers the follows of days A … B−1. When the two disagree by
+ * more than max(3, 20 % of all follows + unfollows), `mismatch` is set; `swapped` when they agree with the sign flipped
+ * (FOLLOWER / NON_FOLLOWER read the wrong way round).
+ */
+export function followerGrowthCheck(rows: FollowerDay[]) {
+  const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+  const counted = sorted.filter(row => row.followersCount !== null);
+  if (counted.length < 2) return { countNet: null, reportedNet: null, from: null, to: null, mismatch: false, swapped: false };
+  const first = counted[0], last = counted[counted.length - 1];
+  const countNet = last.followersCount! - first.followersCount!;
+  const between = sorted.filter(row => row.date >= first.date && row.date < last.date);
+  const complete = between.length > 0 && between.every(row => row.follows !== null && row.unfollows !== null);
+  if (!complete) return { countNet, reportedNet: null, from: first.date, to: last.date, mismatch: false, swapped: false };
+  const follows = between.reduce((sum, row) => sum + row.follows!, 0), unfollows = between.reduce((sum, row) => sum + row.unfollows!, 0);
+  const reportedNet = follows - unfollows, tolerance = Math.max(3, 0.2 * (follows + unfollows));
+  const mismatch = Math.abs(countNet - reportedNet) > tolerance;
+  return { countNet, reportedNet, from: first.date, to: last.date, mismatch, swapped: mismatch && reportedNet !== 0 && Math.abs(countNet + reportedNet) <= tolerance };
+}
+
+/** Net growth as % of the followers at the start: +1 040 on 90 550 → 1,2 %. */
+export const growthPercent = (net: number | null, followersNow: number | null) => net === null || !followersNow || followersNow - net <= 0 ? null : Math.round((net / (followersNow - net)) * 1000) / 10;

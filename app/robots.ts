@@ -5,7 +5,8 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
-      allow: "/",
+      // /privacy and /data-deletion must stay reachable (Meta checks them for the Instagram app).
+      allow: ["/", "/privacy", "/data-deletion"],
       disallow: ["/admin", "/admin/", "/api/"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,

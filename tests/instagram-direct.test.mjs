@@ -170,3 +170,17 @@ test("wiring: echo before card, private-reply text saved before sending, Telegra
   assert.match(schema, /directAutoAckEnabled Boolean\s+@default\(false\)/, "auto message off by default");
   assert.match(schema, /igsid\s+String\s+@unique/);
 });
+
+test("cron: GitHub Actions calls the Direct tick every 5 minutes with CRON_SECRET; the endpoint checks it", async () => {
+  const workflow = await read("../.github/workflows/instagram-direct-cron.yml");
+  assert.match(workflow, /cron: "\*\/5 \* \* \* \*"/);
+  assert.match(workflow, /https:\/\/buyukkaravan\.com\/api\/cron\/instagram-direct/);
+  assert.match(workflow, /\$\{\{ secrets\.CRON_SECRET \}\}/);
+  assert.match(workflow, /Authorization: Bearer \$CRON_SECRET/);
+  assert.match(workflow, /exit 1/, "a non-2xx answer fails the run");
+  assert.doesNotMatch(workflow, /echo[^\n]*\$CRON_SECRET/, "the secret is never printed");
+  const route = await read("../app/api/cron/instagram-direct/route.ts");
+  assert.match(route, /process\.env\.CRON_SECRET/);
+  assert.match(route, /timingSafeEqual/);
+  assert.match(route, /status: 401/);
+});

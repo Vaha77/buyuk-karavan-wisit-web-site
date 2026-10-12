@@ -42,7 +42,7 @@ async function mediaTotals(token: string, media: IgMedia, kind: "POST" | "REELS"
   }
   const activity = kind === "REELS" ? {} : await mediaInsights(token, media.id, ["profile_activity"], "action_type").then(parseBreakdown).catch(() => ({} as Record<string, number>));
   return {
-    views: totals.views ?? null, reach: totals.reach ?? null, likes: totals.likes ?? null, comments: totals.comments ?? null, saved: totals.saved ?? null, shares: totals.shares ?? null,
+    views: totals.views ?? null, reach: totals.reach ?? null, likes: totals.likes ?? null, comments: totals.comments ?? media.comments_count ?? null, saved: totals.saved ?? null, shares: totals.shares ?? null,
     totalInteractions: totals.total_interactions ?? null, profileVisits: totals.profile_visits ?? null, follows: totals.follows ?? null,
     websiteClicks: activity.BIO_LINK_CLICKED ?? null, callClicks: activity.CALL ?? null, directionClicks: activity.DIRECTION ?? null,
     avgWatchMs: totals.ig_reels_avg_watch_time ?? null,

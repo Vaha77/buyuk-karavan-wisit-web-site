@@ -8,7 +8,8 @@ export const maxDuration = 60;
 /**
  * Instagram Direct tick: 30 min / 2 h reminders, the 09:00 digest and the 20:00 report — whatever is due (idempotent).
  * Vercel Cron calls it at 09:00 and 20:00 Tashkent (Hobby: daily only, ±59 min). For on-time reminders call it every
- * 5 minutes from an external scheduler with "Authorization: Bearer $CRON_SECRET" (or use `*\/5 * * * *` on Vercel Pro).
+ * 5 minutes from an external scheduler with "Authorization: Bearer $CRON_SECRET": GitHub Actions does it
+ * (.github/workflows/instagram-direct-cron.yml, secret CRON_SECRET). Wrong / missing secret → 401, error → 500.
  */
 function authorized(header: string | null) {
   const secret = process.env.CRON_SECRET;

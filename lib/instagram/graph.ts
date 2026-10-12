@@ -96,7 +96,7 @@ export async function followersCount(token: string) {
 }
 /** Media newer than `since` (all pages), newest first. */
 export async function listMediaSince(token: string, igUserId: string, since: Date) {
-  const fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp";
+  const fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,comments_count";
   const out: IgMedia[] = [];
   let after: string | undefined;
   for (let page = 0; page < 20; page++) {

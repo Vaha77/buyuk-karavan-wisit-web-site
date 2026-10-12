@@ -171,9 +171,11 @@ Madina Direct'da javob bermaydi. Mijoz yozsa (shu jumladan "So'rovlar" papkasi) 
 - Telefon raqam yozilsa — BKLead'da lid (manba "Instagram DM"), bir odamga bitta.
 
 **Vercel Hobby** cron'i kuniga 1 marta (±59 daqiqa) ishlaydi: ertalabki ro'yxat va hisobot shu bilan keladi, eslatmalar esa
-Instagram/Telegram'dan har hodisa kelganda tekshiriladi. Eslatmalar aniq vaqtda kelishi uchun tashqi cron
-(masalan cron-job.org) har 5 daqiqada `GET https://buyukkaravan.com/api/cron/instagram-direct` ni
-`Authorization: Bearer <CRON_SECRET>` sarlavhasi bilan chaqirsin (Pro tarifda `*/5 * * * *` qo'yish mumkin).
+Instagram/Telegram'dan har hodisa kelganda tekshiriladi. Eslatmalar aniq vaqtda kelishi uchun GitHub Actions
+(`.github/workflows/instagram-direct-cron.yml`) har 5 daqiqada `GET https://buyukkaravan.com/api/cron/instagram-direct` ni
+`Authorization: Bearer <CRON_SECRET>` bilan chaqiradi. Buning uchun GitHub → repo → **Settings → Secrets and variables →
+Actions → New repository secret**: nomi `CRON_SECRET`, qiymati — Vercel'dagi `CRON_SECRET` bilan aynan bir xil.
+Xato (401/500) bo'lsa workflow qizil bo'ladi (Actions tab). GitHub jadvali bir necha daqiqa kechikishi mumkin.
 
 ## 13. Statistika
 
@@ -183,6 +185,26 @@ yoki "Hozir yangilash" bilan olinadi. Avval ulangan akkauntlar uchun Sozlamalar 
 
 Meta cheklovlari: ma'lumot 48 soatgacha kechikishi mumkin; demografiya oxirgi 30 kun bo'yicha, eng ko'pi 45 guruh,
 100 dan kam obunachi/reaksiya bo'lsa berilmaydi; storis statistikasi faqat 24 soat.
+
+Kommentlar soni (KPI, kunlik grafik, voronka) Instagram'ning o'zidan olinadi: akkauntning kunlik `comments` metrikasi,
+u bo'lmasa — davrdagi postlarning `comments` / `comments_count`. Webhook jurnali faqat "Kommentlar turi" blokida
+(avto-javob tizimi ishga tushgandan beri). Obunachilar o'sishi `follows_and_unfollows` (FOLLOWER = obuna bo'lgan,
+NON_FOLLOWER = chiqqan) va kunlik `followers_count` farqi bilan solishtiriladi; mos kelmasa sahifada ogohlantirish chiqadi.
+
+## 14. Maxfiylik siyosati va ma'lumotni o'chirish (ilovani nashr qilish uchun)
+
+Meta App Dashboard → **App settings → Basic**:
+
+| Maydon | Qiymat |
+|---|---|
+| Privacy Policy URL | `https://buyukkaravan.com/privacy` |
+| Terms of Service URL (so'ralsa) | `https://buyukkaravan.com/privacy` |
+| User data deletion → *Data deletion callback URL* | `https://buyukkaravan.com/api/instagram/data-deletion` |
+
+Instagram → **API setup with Instagram login → Business login settings** da ham *Data deletion request URL* bo'lsa —
+xuddi shu callback. Meta `signed_request` yuboradi (imzo `INSTAGRAM_APP_SECRET` bilan tekshiriladi): foydalanuvchining
+komment va Direct yozuvlari o'chiriladi, lidlar anonimlashtiriladi, javobda `{ url, confirmation_code }` qaytadi;
+holat: `https://buyukkaravan.com/data-deletion?code=…`. Qo'lda so'rov (telefon/Telegram) kelsa — 30 kun ichida.
 
 ## Nosozliklar
 
