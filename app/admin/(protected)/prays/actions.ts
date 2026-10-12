@@ -123,8 +123,8 @@ export async function applyMarkupAction(raw: unknown): Promise<ActionResult> {
   return { ok: true, message: `Ustama +${markup}% · ${count} ta sotuv narxi yangilandi` };
 }
 
-const flagsSchema = z.object({ id: z.string().min(1).max(40), workshopAssembly: z.boolean(), workshopRole: z.enum(["COMPRESSOR", "CONDENSER"]).nullable(), workshopIssue: z.boolean() });
-/** Prays → Kategoriyalar: "Zborkada ishlatiladi" (+ turi) and "Sehdan alohida chiqadi" of one category (Super Admin only). */
+const flagsSchema = z.object({ id: z.string().min(1).max(40), workshopAssembly: z.boolean(), workshopIssue: z.boolean() });
+/** Prays → Kategoriyalar: "Zborkada ishlatiladi" and "Sehdan alohida chiqadi" of one category (Super Admin only). */
 export async function updateCategoryFlagsAction(raw: unknown): Promise<ActionResult> {
   const actor = await requireRole("SUPER_ADMIN");
   const parsed = flagsSchema.safeParse(raw);

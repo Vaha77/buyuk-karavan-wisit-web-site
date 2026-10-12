@@ -1,7 +1,8 @@
 // Seh category flags (Prays → Kategoriyalar): which categories the workshop uses. Pure, for the tests and the browser.
-//   "Zborkada ishlatiladi" + role COMPRESSOR → compressor brand / model list of the zborka form
-//   "Zborkada ishlatiladi" + role CONDENSER  → condenser list of the vazdushniy agregat (FN/FNV)
-//   "Sehdan alohida chiqadi"                 → goods of the zapchast zayavkasi
+//   "Zborkada ishlatiladi", name with "kondensator" → condenser list of the vazdushniy agregat (FN/FNV)
+//   "Zborkada ishlatiladi", any other name         → compressor brand / model list of the zborka form
+//   "Sehdan alohida chiqadi"                         → goods of the zapchast zayavkasi
+// The role is read from the category name every time (a renamed category moves lists by itself).
 // A flag is on the category, so it applies to all its products, including ones added later. Nothing is set automatically.
 import { extractCondenserCode } from "../ai-office/product-agent-rules";
 
@@ -9,24 +10,25 @@ export const WORKSHOP_ROLES = ["COMPRESSOR", "CONDENSER"] as const;
 export type WorkshopRole = (typeof WORKSHOP_ROLES)[number];
 export const ROLE_LABELS: Record<WorkshopRole, string> = { COMPRESSOR: "Kompressor", CONDENSER: "Kondensator (FN/FNV)" };
 
-export type CategoryFlags = { id: string; name: string; workshopAssembly: boolean; workshopRole: string | null; workshopIssue: boolean };
-export const roleOf = (category: Pick<CategoryFlags, "workshopAssembly" | "workshopRole"> | null | undefined): WorkshopRole | null =>
-  category?.workshopAssembly && (WORKSHOP_ROLES as readonly string[]).includes(category.workshopRole ?? "") ? category.workshopRole as WorkshopRole : null;
+/** workshopRole is only a record of the role at save time; roleOf() always reads it from the name. */
+export type CategoryFlags = { id: string; name: string; workshopAssembly: boolean; workshopRole?: string | null; workshopIssue: boolean };
+/** "FN/FNV kondensator Xitoy" → CONDENSER; every other name → COMPRESSOR. */
+export const roleFromName = (name: string): WorkshopRole => /kondensator|конденсатор/i.test(name) ? "CONDENSER" : "COMPRESSOR";
+export const roleOf = (category: Pick<CategoryFlags, "workshopAssembly" | "name"> | null | undefined): WorkshopRole | null =>
+  category?.workshopAssembly ? roleFromName(category.name) : null;
 export const isCompressorCategory = (category: Parameters<typeof roleOf>[0]) => roleOf(category) === "COMPRESSOR";
 export const isCondenserCategory = (category: Parameters<typeof roleOf>[0]) => roleOf(category) === "CONDENSER";
 export const isIssueCategory = (category: Pick<CategoryFlags, "workshopIssue"> | null | undefined) => !!category?.workshopIssue;
 export const isWorkshopCategory = (category: (Pick<CategoryFlags, "workshopAssembly" | "workshopIssue">) | null | undefined) => !!category && (category.workshopAssembly || category.workshopIssue);
 
-/** Normalized flags as saved: a role only together with "Zborkada ishlatiladi" (and then required). */
-export function normalizeFlags(input: { workshopAssembly: boolean; workshopRole: string | null; workshopIssue: boolean }): { ok: true; value: { workshopAssembly: boolean; workshopRole: WorkshopRole | null; workshopIssue: boolean } } | { ok: false; error: string } {
-  if (!input.workshopAssembly) return { ok: true, value: { workshopAssembly: false, workshopRole: null, workshopIssue: input.workshopIssue } };
-  if (!(WORKSHOP_ROLES as readonly string[]).includes(input.workshopRole ?? "")) return { ok: false, error: "Zborkada ishlatiladigan kategoriya uchun turini tanlang: Kompressor yoki Kondensator." };
-  return { ok: true, value: { workshopAssembly: true, workshopRole: input.workshopRole as WorkshopRole, workshopIssue: input.workshopIssue } };
+/** The values saved for a category: the role comes from its name (recorded only while "Zborkada ishlatiladi" is on). */
+export function normalizeFlags(name: string, input: { workshopAssembly: boolean; workshopIssue: boolean }) {
+  return { workshopAssembly: input.workshopAssembly, workshopRole: input.workshopAssembly ? roleFromName(name) : null, workshopIssue: input.workshopIssue };
 }
 
 /** "Zborkada ishlatiladi (Kompressor) · Sehdan alohida chiqadi" — the activity-history wording of a category's flags. */
-export function flagsText(flags: { workshopAssembly: boolean; workshopRole: string | null; workshopIssue: boolean }) {
-  const role = roleOf(flags);
+export function flagsText(name: string, flags: { workshopAssembly: boolean; workshopIssue: boolean }) {
+  const role = roleOf({ name, workshopAssembly: flags.workshopAssembly });
   const parts = [flags.workshopAssembly && `Zborkada ishlatiladi${role ? ` (${ROLE_LABELS[role]})` : ""}`, flags.workshopIssue && "Sehdan alohida chiqadi"].filter(Boolean);
   return parts.length ? parts.join(" · ") : "Seh belgisi yo‘q";
 }
@@ -52,7 +54,8 @@ export type Condenser = { id: string; code: string; label: string; source: strin
 
 /** "FN/FNV Xitoy" → "Xitoy", "FN/FNV UCS" → "UCS"; a category without the FN prefix keeps its name. */
 export function categoryShortName(name: string) {
-  return name.replace(/^\s*FNV?(?:\s*\/\s*FNV?)?\s*[-–—:·]?\s*/i, "").trim() || name.trim();
+  const short = name.replace(/^\s*FNV?(?:\s*\/\s*FNV?)?\s*[-–—:·]?\s*/i, "").replace(/\b(?:vazdushniy\s+)?kondensator(?:lar|i)?\b/gi, "").replace(/\s{2,}/g, " ").replace(/^[\s\-–—:·]+|[\s\-–—:·]+$/g, "").trim();
+  return short || name.trim();
 }
 
 /** Priced products of the condenser categories, each with its FN/FNV code: "FN160 · Xitoy". Without a code a product is skipped. */

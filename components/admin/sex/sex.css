@@ -221,14 +221,14 @@
 .sx-cat-standard{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:12px;border-radius:12px;background:#F6F8FB}
 .sx-cat-standard .sx-field{flex:1 1 280px}
 .sx-cat-list{display:grid;gap:8px;margin:0;padding:0;list-style:none}
-.sx-cat-row{display:grid;grid-template-columns:minmax(180px,1.4fr) auto minmax(210px,1fr) auto;gap:10px 16px;align-items:center;padding:12px 14px;border:1px solid #E3E8F0;border-radius:12px;background:#fff}
+.sx-cat-row{display:grid;grid-template-columns:minmax(180px,1fr) auto auto minmax(110px,auto);gap:10px 16px;align-items:center;padding:12px 14px;border:1px solid #E3E8F0;border-radius:12px;background:#fff}
 .sx-cat-row.is-on{border-color:#9DB7DD;background:#F5F9FF}
 .sx-cat-name{display:grid;gap:2px;min-width:0}.sx-cat-name b{overflow-wrap:anywhere}.sx-cat-name small{color:#4F5A70;font-size:12px}
 .sx-cat-check{display:flex;align-items:center;gap:8px;min-height:44px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
 .sx-cat-check input{width:20px;height:20px;accent-color:#1E4E8C}
-.sx-cat-role{display:grid;gap:3px;font-size:11px;font-weight:700;color:#4F5A70}
-.sx-cat-role select{min-height:40px;border:1px solid #C9D3E6;border-radius:10px;padding:0 8px;font:inherit;font-size:13px;background:#fff}
-.sx-cat-role select[aria-invalid="true"]{border-color:#A41F15}
-.sx-cat-role select:disabled{background:#F1F3F7;color:#8A94A6}
-@media(max-width:760px){.sx-cat-row{grid-template-columns:1fr 1fr}.sx-cat-name{grid-column:1/-1}.sx-cat-role{grid-column:1/-1}}
+@media(max-width:760px){.sx-cat-row{grid-template-columns:1fr;gap:4px}.sx-cat-check{white-space:normal}.sx-cat-saved{min-height:0}.sx-cat-saved:empty{display:none}}
 .sx .sx-cat-check input[type="checkbox"]{appearance:auto;-webkit-appearance:checkbox;flex:none;width:20px;height:20px;min-height:0;padding:0;margin:0;border:0}
+
+/* Per-row save state: Saqlanmoqda… → Saqlandi ✓ (or the error). */
+.sx-cat-saved{min-height:20px;font-size:13px;font-weight:800;text-align:right}.sx-cat-saved.is-saving{color:#4F5A70}.sx-cat-saved.is-saved{color:#1B6B43}.sx-cat-saved.is-error{color:#A41F15}
+@media(max-width:760px){.sx-cat-saved{text-align:left}}

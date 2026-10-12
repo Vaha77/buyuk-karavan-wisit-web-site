@@ -111,27 +111,27 @@ function revalidateWorkshop() {
 }
 
 /** Saves one category's Seh flags (they apply to all its products, present and future) and writes it to the activity history. */
-export async function updateCategoryFlags(actor: Actor, id: string, input: { workshopAssembly: boolean; workshopRole: string | null; workshopIssue: boolean }) {
-  const flags = normalizeFlags(input);
-  if (!flags.ok) return flags;
+export async function updateCategoryFlags(actor: Actor, id: string, input: { workshopAssembly: boolean; workshopIssue: boolean }) {
   const db = getDb();
   const before = await db.productCategory.findUnique({ where: { id }, select: { name: true, workshopAssembly: true, workshopRole: true, workshopIssue: true } });
   if (!before) return { ok: false as const, error: "Kategoriya topilmadi." };
-  const same = before.workshopAssembly === flags.value.workshopAssembly && before.workshopRole === flags.value.workshopRole && before.workshopIssue === flags.value.workshopIssue;
-  if (same) return { ok: true as const, message: "O‘zgarish yo‘q" };
-  await db.productCategory.update({ where: { id }, data: flags.value });
+  // The role (Kompressor / Kondensator) is not chosen: it comes from the name ("kondensator" → Kondensator).
+  const flags = normalizeFlags(before.name, input);
+  const same = before.workshopAssembly === flags.workshopAssembly && before.workshopRole === flags.workshopRole && before.workshopIssue === flags.workshopIssue;
+  if (same) return { ok: true as const, message: "Saqlandi ✓" };
+  await db.productCategory.update({ where: { id }, data: flags });
   // A condenser category that stops being one cannot stay the standard one.
-  if (flags.value.workshopRole !== "CONDENSER") await db.siteSettings.updateMany({ where: { id: "global", standardCondenserCategoryId: id }, data: { standardCondenserCategoryId: null } });
-  await writeAudit(actor, { action: "UPDATE", entityType: "PRODUCT_CATEGORY", entityId: id, entityName: before.name, summary: `Seh belgisi: ${before.name} — ${flagsText(flags.value)}`, before: { workshopAssembly: before.workshopAssembly, workshopRole: before.workshopRole, workshopIssue: before.workshopIssue }, after: flags.value });
+  if (flags.workshopRole !== "CONDENSER") await db.siteSettings.updateMany({ where: { id: "global", standardCondenserCategoryId: id }, data: { standardCondenserCategoryId: null } });
+  await writeAudit(actor, { action: "UPDATE", entityType: "PRODUCT_CATEGORY", entityId: id, entityName: before.name, summary: `Seh belgisi: ${before.name} — ${flagsText(before.name, flags)}`, before: { workshopAssembly: before.workshopAssembly, workshopRole: before.workshopRole, workshopIssue: before.workshopIssue }, after: flags });
   revalidateWorkshop();
-  return { ok: true as const, message: `${before.name}: ${flagsText(flags.value)}` };
+  return { ok: true as const, message: "Saqlandi ✓" };
 }
 
 /** Zborka: the condenser category whose prices are the "standart" ones; null clears it. */
 export async function setStandardCondenserCategory(actor: Actor, id: string | null) {
   const db = getDb();
-  const category = id ? await db.productCategory.findUnique({ where: { id }, select: { name: true, workshopAssembly: true, workshopRole: true } }) : null;
-  if (id && (!category || !isCondenserCategory(category))) return { ok: false as const, error: "Avval kategoriyani “Zborkada ishlatiladi · Kondensator” deb belgilang." };
+  const category = id ? await db.productCategory.findUnique({ where: { id }, select: { name: true, workshopAssembly: true } }) : null;
+  if (id && (!category || !isCondenserCategory(category))) return { ok: false as const, error: "Nomida “kondensator” bo‘lgan va “Zborkada ishlatiladi” belgili kategoriyani tanlang." };
   const previous = await db.siteSettings.findUnique({ where: { id: "global" }, select: { standardCondenserCategoryId: true } });
   await db.siteSettings.upsert({ where: { id: "global" }, create: { id: "global", standardCondenserCategoryId: id }, update: { standardCondenserCategoryId: id } });
   await writeAudit(actor, { action: "UPDATE", entityType: "SITE_SETTINGS", entityId: "global", entityName: "Standart kondensator", summary: `Standart kondensator kategoriyasi: ${category?.name ?? "tanlanmagan"}`, before: { standardCondenserCategoryId: previous?.standardCondenserCategoryId ?? null }, after: { standardCondenserCategoryId: id } });

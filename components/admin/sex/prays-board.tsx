@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Trash2 } from "lucide-react";
 import { applyMarkupAction, confirmPreviewAction, createPartAction, previewExcelAction, previewImageAction, previewPercentAction, removeEntryAction, setStandardCondenserAction, updateBaseAction, updateCategoryFlagsAction, type PreviewResult } from "@/app/admin/(protected)/prays/actions";
 import type { HistoryEntry, PraysCategory, PraysPart, PraysProduct } from "@/lib/prays/queries";
-import { ROLE_LABELS, WORKSHOP_FILTERS, isCondenserCategory, matchesWorkshopFilter, type WorkshopFilter } from "@/lib/sex/categories";
+import { ROLE_LABELS, WORKSHOP_FILTERS, isCondenserCategory, matchesWorkshopFilter, roleFromName, type WorkshopFilter } from "@/lib/sex/categories";
 import { BusyLabel, DownloadButton, PendingArea } from "@/components/admin/feedback";
 import { CHANGE_LABEL, MARKUP_MAX, MARKUP_MIN, STALE_PRICE_LIST_DAYS, daysSince, formatShortDate, formatUsd, sellPrice, type ChangeStatus } from "@/lib/prays/rules";
 
@@ -236,23 +236,32 @@ function AddPartForm({ groups, busy, onSubmit }: { groups: string[]; busy: boole
 }
 
 type Runner = (task: () => Promise<{ ok: true; message?: string } | { ok: false; error: string }>, after?: () => void) => void;
+type RowState = { state: "saving" | "saved" | "error"; text: string };
 
 /**
- * Prays → Kategoriyalar (Super Admin): two Seh flags per category, saved at once. "Zborkada ishlatiladi" needs a role
- * (Kompressor / Kondensator) so the zborka form knows which list it belongs to. Flags apply to every product of the
- * category, including ones added later; nothing is ticked automatically.
+ * Prays → Kategoriyalar (Super Admin): two Seh flags per category, saved as soon as one is clicked; the row shows
+ * "Saqlanmoqda…" → "Saqlandi ✓". The zborka list is read from the name: "kondensator" in it → Kondensator, else Kompressor.
+ * Flags apply to every product of the category, including ones added later; nothing is ticked automatically.
  */
 function CategoryFlagsPanel({ categories, standardCondenserCategoryId, busy, run }: { categories: PraysCategory[]; standardCondenserCategoryId: string | null; busy: boolean; run: Runner }) {
-  const [drafts, setDrafts] = useState<Record<string, { workshopAssembly: boolean; workshopRole: string | null; workshopIssue: boolean }>>({});
+  const router = useRouter();
+  const [drafts, setDrafts] = useState<Record<string, { workshopAssembly: boolean; workshopIssue: boolean }>>({});
+  const [rows, setRows] = useState<Record<string, RowState>>({});
   const condensers = categories.filter(isCondenserCategory);
-  const save = (category: PraysCategory, next: { workshopAssembly: boolean; workshopRole: string | null; workshopIssue: boolean }) => {
+  const save = async (category: PraysCategory, next: { workshopAssembly: boolean; workshopIssue: boolean }) => {
     setDrafts(current => ({ ...current, [category.id]: next }));
-    // "Zborkada" without a role waits until the role is chosen.
-    if (next.workshopAssembly && !next.workshopRole) return;
-    run(() => updateCategoryFlagsAction({ id: category.id, ...next, workshopRole: next.workshopAssembly ? next.workshopRole as "COMPRESSOR" | "CONDENSER" : null }), () => setDrafts(current => { const { [category.id]: _done, ...rest } = current; void _done; return rest; }));
+    setRows(current => ({ ...current, [category.id]: { state: "saving", text: "Saqlanmoqda…" } }));
+    const result = await updateCategoryFlagsAction({ id: category.id, ...next }).catch(() => ({ ok: false as const, error: "Saqlab bo‘lmadi. Qayta urinib ko‘ring." }));
+    if (!result.ok) {
+      setDrafts(current => { const { [category.id]: _failed, ...rest } = current; void _failed; return rest; });
+      setRows(current => ({ ...current, [category.id]: { state: "error", text: result.error } }));
+      return;
+    }
+    setRows(current => ({ ...current, [category.id]: { state: "saved", text: "Saqlandi ✓" } }));
+    router.refresh();
   };
   return <div style={{ display: "grid", gap: 12 }}>
-    <p className="sx-muted" style={{ margin: 0 }}>Belgi kategoriyadagi barcha mahsulotlarga (keyin qo‘shiladiganlarga ham) amal qiladi. <b>Zborkada ishlatiladi</b> — seh agregat yig‘ishda ishlatadi (turi: kompressor yoki kondensator). <b>Sehdan alohida chiqadi</b> — o‘zini sotish uchun sehdan olinadi (zapchast zayavkasi). O‘zgarishlar faoliyat tarixiga yoziladi.</p>
+    <p className="sx-muted" style={{ margin: 0 }}>Belgi kategoriyadagi barcha mahsulotlarga (keyin qo‘shiladiganlarga ham) amal qiladi. <b>Zborkada ishlatiladi</b> — seh agregat yig‘ishda ishlatadi: nomida “kondensator” bo‘lsa kondensator ro‘yxatiga, qolganlari kompressor ro‘yxatiga tushadi. <b>Sehdan alohida chiqadi</b> — o‘zini sotish uchun sehdan olinadi (zapchast zayavkasi). Belgi bosilishi bilan saqlanadi va faoliyat tarixiga yoziladi.</p>
     <div className="sx-cat-standard">
       <label className="sx-field">Standart kondensator kategoriyasi <small>· zborkada narx farqi shu kategoriya narxidan hisoblanadi</small>
         <select value={standardCondenserCategoryId ?? ""} disabled={busy} onChange={event => run(() => setStandardCondenserAction(event.target.value || null))}>
@@ -260,20 +269,16 @@ function CategoryFlagsPanel({ categories, standardCondenserCategoryId, busy, run
           {condensers.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
         </select>
       </label>
-      {!condensers.length && <span className="sx-muted">Avval kondensator kategoriyalarini “Zborkada · Kondensator” deb belgilang.</span>}
+      {!condensers.length && <span className="sx-muted">Nomida “kondensator” bo‘lgan kategoriyani “Zborkada ishlatiladi” deb belgilang.</span>}
     </div>
     <ul className="sx-cat-list" aria-label="Kategoriyalar">{categories.map(category => {
-      const value = drafts[category.id] ?? { workshopAssembly: category.workshopAssembly, workshopRole: category.workshopRole, workshopIssue: category.workshopIssue };
+      const value = drafts[category.id] ?? { workshopAssembly: category.workshopAssembly, workshopIssue: category.workshopIssue };
+      const row = rows[category.id], saving = row?.state === "saving";
       return <li key={category.id} className={`sx-cat-row${value.workshopAssembly || value.workshopIssue ? " is-on" : ""}`}>
-        <div className="sx-cat-name"><b>{category.name}</b><small>{category.productCount} ta mahsulot{category.isActive ? "" : " · saytda o‘chiq"}{category.id === standardCondenserCategoryId ? " · standart kondensator" : ""}</small></div>
-        <label className="sx-cat-check"><input type="checkbox" checked={value.workshopAssembly} disabled={busy} onChange={event => save(category, { ...value, workshopAssembly: event.target.checked, workshopRole: event.target.checked ? value.workshopRole : null })}/>Zborkada ishlatiladi</label>
-        <label className="sx-cat-role">Turi
-          <select value={value.workshopRole ?? ""} disabled={busy || !value.workshopAssembly} onChange={event => save(category, { ...value, workshopRole: event.target.value || null })} aria-invalid={value.workshopAssembly && !value.workshopRole}>
-            <option value="">{value.workshopAssembly ? "Tanlang" : "—"}</option>
-            {(Object.keys(ROLE_LABELS) as Array<keyof typeof ROLE_LABELS>).map(role => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
-          </select>
-        </label>
-        <label className="sx-cat-check"><input type="checkbox" checked={value.workshopIssue} disabled={busy} onChange={event => save(category, { ...value, workshopIssue: event.target.checked })}/>Sehdan alohida chiqadi</label>
+        <div className="sx-cat-name"><b>{category.name}</b><small>{category.productCount} ta mahsulot{category.isActive ? "" : " · saytda o‘chiq"}{value.workshopAssembly ? ` · zborkada: ${ROLE_LABELS[roleFromName(category.name)].toLowerCase()}` : ""}{category.id === standardCondenserCategoryId ? " · standart kondensator" : ""}</small></div>
+        <label className="sx-cat-check"><input type="checkbox" checked={value.workshopAssembly} disabled={saving} onChange={event => void save(category, { ...value, workshopAssembly: event.target.checked })}/>Zborkada ishlatiladi</label>
+        <label className="sx-cat-check"><input type="checkbox" checked={value.workshopIssue} disabled={saving} onChange={event => void save(category, { ...value, workshopIssue: event.target.checked })}/>Sehdan alohida chiqadi</label>
+        <span className={`sx-cat-saved is-${row?.state ?? "idle"}`} role={row?.state === "error" ? "alert" : "status"} aria-live="polite">{row?.text ?? ""}</span>
       </li>;
     })}</ul>
   </div>;

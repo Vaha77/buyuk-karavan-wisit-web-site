@@ -13,16 +13,16 @@ const rules = await import("../lib/sex/rules.ts");
 const CATEGORIES = [
   { id: "c-k", name: "Bitzer R22", workshopAssembly: true, workshopRole: "COMPRESSOR", workshopIssue: false },
   { id: "c-ag", name: "Agregatlar", workshopAssembly: false, workshopRole: null, workshopIssue: false },
-  { id: "c-x", name: "FN/FNV Xitoy", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: true },
-  { id: "c-u", name: "FN/FNV UCS", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: false },
+  { id: "c-x", name: "FN/FNV kondensator Xitoy", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: true },
+  { id: "c-u", name: "FN/FNV kondensator UCS", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: false },
   { id: "c-dd", name: "Xitoy DD/DJ havo sovutgichlar", workshopAssembly: false, workshopRole: null, workshopIssue: false },
 ];
 /** Condensers in the price list: FN160 / FNV200 from two sources (Xitoy is the standard category). */
 const CONDENSERS = [
-  { id: "x-fn160", name: "FN160 vazdushniy kondensator", brand: "Xitoy", model: "FN160", categoryName: "FN/FNV Xitoy", categoryId: "c-x", basePriceUsd: 1228 },
-  { id: "x-fnv200", name: "FNV200 vazdushniy kondensator", brand: "Xitoy", model: "FNV200", categoryName: "FN/FNV Xitoy", categoryId: "c-x", basePriceUsd: 1646 },
-  { id: "u-fn160", name: "FN160 vazdushniy kondensator UCS", brand: "UCS", model: "FN160", categoryName: "FN/FNV UCS", categoryId: "c-u", basePriceUsd: 1400 },
-  { id: "u-fnv200", name: "FNV200 vazdushniy kondensator UCS", brand: "UCS", model: "FNV200", categoryName: "FN/FNV UCS", categoryId: "c-u", basePriceUsd: 1900 },
+  { id: "x-fn160", name: "FN160 vazdushniy kondensator", brand: "Xitoy", model: "FN160", categoryName: "FN/FNV kondensator Xitoy", categoryId: "c-x", basePriceUsd: 1228 },
+  { id: "x-fnv200", name: "FNV200 vazdushniy kondensator", brand: "Xitoy", model: "FNV200", categoryName: "FN/FNV kondensator Xitoy", categoryId: "c-x", basePriceUsd: 1646 },
+  { id: "u-fn160", name: "FN160 vazdushniy kondensator UCS", brand: "UCS", model: "FN160", categoryName: "FN/FNV kondensator UCS", categoryId: "c-u", basePriceUsd: 1400 },
+  { id: "u-fnv200", name: "FNV200 vazdushniy kondensator UCS", brand: "UCS", model: "FNV200", categoryName: "FN/FNV kondensator UCS", categoryId: "c-u", basePriceUsd: 1900 },
 ];
 /** Air coolers that used to show up as "compressors" in the zborka form. */
 const AIR_COOLERS = [

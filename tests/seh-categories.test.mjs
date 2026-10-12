@@ -9,21 +9,28 @@ const read = path => readFile(new URL(path, import.meta.url), "utf8");
 
 const CATEGORIES = [
   { id: "k", name: "Bitzer R22", workshopAssembly: true, workshopRole: "COMPRESSOR", workshopIssue: true },
-  { id: "x", name: "FN/FNV Xitoy", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: false },
+  { id: "x", name: "FN/FNV kondensator Xitoy", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: false },
   { id: "v", name: "Klapanlar", workshopAssembly: false, workshopRole: null, workshopIssue: true },
   { id: "dd", name: "Xitoy DD/DJ", workshopAssembly: false, workshopRole: null, workshopIssue: false },
 ];
 
-test("flags: 'Zborkada ishlatiladi' needs a role (Kompressor / Kondensator); both flags may be on", () => {
-  assert.deepEqual(c.normalizeFlags({ workshopAssembly: true, workshopRole: "COMPRESSOR", workshopIssue: true }), { ok: true, value: { workshopAssembly: true, workshopRole: "COMPRESSOR", workshopIssue: true } });
-  assert.equal(c.normalizeFlags({ workshopAssembly: true, workshopRole: null, workshopIssue: false }).ok, false);
-  assert.equal(c.normalizeFlags({ workshopAssembly: true, workshopRole: "OTHER", workshopIssue: false }).ok, false);
-  assert.deepEqual(c.normalizeFlags({ workshopAssembly: false, workshopRole: "CONDENSER", workshopIssue: true }).value, { workshopAssembly: false, workshopRole: null, workshopIssue: true }, "no role without the assembly flag");
-  assert.equal(c.flagsText({ workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: true }), "Zborkada ishlatiladi (Kondensator (FN/FNV)) · Sehdan alohida chiqadi");
-  assert.equal(c.flagsText({ workshopAssembly: false, workshopRole: null, workshopIssue: false }), "Seh belgisi yo‘q");
+test("role from the name: 'kondensator' → Kondensator list, every other category → Kompressor list (no 'Turi' choice)", () => {
+  assert.equal(c.roleFromName("FN/FNV kondensator Xitoy"), "CONDENSER");
+  assert.equal(c.roleFromName("Vazdushniy KONDENSATORLAR UCS"), "CONDENSER");
+  assert.equal(c.roleFromName("Конденсаторы"), "CONDENSER");
+  assert.equal(c.roleFromName("Bitzer R22"), "COMPRESSOR");
+  assert.equal(c.roleFromName("FN/FNV Xitoy"), "COMPRESSOR", "only the word decides");
+  assert.deepEqual(c.normalizeFlags("FN/FNV kondensator Xitoy", { workshopAssembly: true, workshopIssue: true }), { workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: true });
+  assert.deepEqual(c.normalizeFlags("Bitzer R22", { workshopAssembly: true, workshopIssue: false }), { workshopAssembly: true, workshopRole: "COMPRESSOR", workshopIssue: false });
+  assert.deepEqual(c.normalizeFlags("Klapanlar", { workshopAssembly: false, workshopIssue: true }), { workshopAssembly: false, workshopRole: null, workshopIssue: true }, "no role without the assembly flag");
+  assert.equal(c.flagsText("FN/FNV kondensator Xitoy", { workshopAssembly: true, workshopIssue: true }), "Zborkada ishlatiladi (Kondensator (FN/FNV)) · Sehdan alohida chiqadi");
+  assert.equal(c.flagsText("Klapanlar", { workshopAssembly: false, workshopIssue: false }), "Seh belgisi yo‘q");
   assert.equal(c.isCompressorCategory(CATEGORIES[0]), true);
   assert.equal(c.isCondenserCategory(CATEGORIES[1]), true);
-  assert.equal(c.isCompressorCategory({ workshopAssembly: false, workshopRole: "COMPRESSOR" }), false, "a role without the flag does nothing");
+  assert.equal(c.isCompressorCategory({ name: "Bitzer", workshopAssembly: false }), false, "nothing without the flag");
+  assert.equal(c.isCondenserCategory({ name: "Bitzer R22", workshopAssembly: true, workshopRole: "CONDENSER" }), false, "a stored role is not used; the name decides");
+  assert.equal(c.categoryShortName("FN/FNV kondensator Xitoy"), "Xitoy");
+  assert.equal(c.categoryShortName("Vazdushniy kondensatorlar UCS"), "UCS");
 });
 
 test("Prays filter: Hammasi / Seh tovarlari / Zborkada / Alohida chiqadi", () => {
@@ -54,7 +61,7 @@ test("zapchast zayavkasi: only 'Sehdan alohida chiqadi' goods, grouped by catego
 });
 
 test("condensers: 'FN160 · Xitoy' / 'FN160 · UCS' from the condenser categories; the standard one from the setting", () => {
-  const categories = [...CATEGORIES, { id: "u", name: "FN/FNV UCS", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: false }];
+  const categories = [...CATEGORIES, { id: "u", name: "FN/FNV kondensator UCS", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: false }];
   const list = c.condenserList([
     { id: "a", name: "FN160 kondensator", brand: "X", model: "FN160", basePriceUsd: 1228, categoryId: "x" },
     { id: "b", name: "FN 160 kondensator", brand: "UCS", model: "", basePriceUsd: 1400, categoryId: "u" },
@@ -66,8 +73,8 @@ test("condensers: 'FN160 · Xitoy' / 'FN160 · UCS' from the condenser categorie
   assert.equal(c.standardCondenser(list, "FN160", null), null);
   assert.equal(c.standardCondenser(list, "FN200", "x"), null);
   assert.equal(c.categoryShortName("FN/FNV Xitoy"), "Xitoy");
+  assert.equal(c.categoryShortName("Kondensatorlar"), "Kondensatorlar", "nothing left → the full name");
   assert.equal(c.categoryShortName("FNV UCS"), "UCS");
-  assert.equal(c.categoryShortName("Kondensatorlar"), "Kondensatorlar");
 });
 
 test("wiring: Prays categories panel (Super Admin), activity history, zayavka from flags, old list archived, additive migration", async () => {
@@ -78,6 +85,9 @@ test("wiring: Prays categories panel (Super Admin), activity history, zayavka fr
   assert.match(board, /\{category\.productCount\} ta mahsulot/, "product count per row");
   assert.match(board, /Eski ro‘yxat \(arxiv\)/, "the old part list is renamed, not removed");
   assert.match(board, /Standart kondensator kategoriyasi/);
+  assert.doesNotMatch(board, /sx-cat-role|Turis*</, "no 'Turi' column");
+  assert.match(board, /text: "Saqlandi ✓"/, "each row shows that it was saved");
+  assert.match(board, /text: "Saqlanmoqda…"/);
   const actions = await read("../app/admin/(protected)/prays/actions.ts");
   assert.match(actions, /export async function updateCategoryFlagsAction[\s\S]*?requireRole\("SUPER_ADMIN"\)/);
   assert.match(actions, /export async function setStandardCondenserAction[\s\S]*?requireRole\("SUPER_ADMIN"\)/);
@@ -98,7 +108,7 @@ test("wiring: Prays categories panel (Super Admin), activity history, zayavka fr
   assert.match(rows, /<optgroup key=\{group\} label=\{group\}>/, "goods grouped by category");
   assert.match(rows, /Seh mahsulotini qidirish/);
   const css = await read("../components/admin/sex/sex.css");
-  assert.match(css, /@media\(max-width:760px\)\{\.sx-cat-row\{grid-template-columns:1fr 1fr\}/, "category rows wrap on phones");
+  assert.match(css, /@media\(max-width:760px\)\{\.sx-cat-row\{grid-template-columns:1fr;gap:4px\}/, "category rows stack on phones");
   const migration = await read("../prisma/migrations/20261021090000_add_workshop_category_flags/migration.sql");
   assert.doesNotMatch(migration.replace(/^--.*$/gm, ""), /\bDROP\b|DELETE FROM|\bTRUNCATE\b|ALTER COLUMN|UPDATE /i);
   assert.match(migration, /DEFAULT false/, "nothing is flagged automatically");
