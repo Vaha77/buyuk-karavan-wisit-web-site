@@ -17,7 +17,7 @@ export type TtsResult =
   | { ok: false; status: number; error: string };
 
 const env = () => process.env as Record<string, string | undefined>;
-export const providersInfo = () => describeProviders(env());
+export const providersInfo = (options: { legacy?: boolean } = {}) => describeProviders(env(), undefined, options);
 
 export async function usageSummary() {
   const db = getDb(), limits = limitsFromEnv(env());
@@ -38,7 +38,7 @@ async function resolve(request: TtsRequest) {
   const provider = getProvider(request.provider);
   if (!provider) return { ok: false as const, status: 400, error: "Bunday provayder yo‘q." };
   if (!provider.configured(env())) return { ok: false as const, status: 400, error: `${provider.name}: kalit kiritilmagan (${provider.envKey}).` };
-  if (!provider.languages(env()).includes(request.lang)) return { ok: false as const, status: 400, error: `${provider.name} bu tilni qo‘llamaydi (${request.lang}).` };
+  if (!(await provider.languages(env())).includes(request.lang)) return { ok: false as const, status: 400, error: `${provider.name} bu tilni qo‘llamaydi (${request.lang}).` };
   const voice = voicesFor(await provider.voices(env()), request.lang).find(item => item.id === request.voice);
   if (!voice) return { ok: false as const, status: 400, error: `${provider.name}: “${request.voice}” ovozi bu til uchun yo‘q.` };
   const format: AudioFormat = request.format && provider.formats.includes(request.format) ? request.format : provider.formats[0];

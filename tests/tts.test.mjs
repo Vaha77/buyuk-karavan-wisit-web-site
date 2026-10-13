@@ -11,6 +11,7 @@ const { aishaProvider, customVoices } = await import("../lib/tts/providers/aisha
 const { elevenlabsProvider } = await import("../lib/tts/providers/elevenlabs.ts");
 const { describeProviders, voicesFor, getProvider } = await import("../lib/tts/providers/index.ts");
 const { TtsProviderError } = await import("../lib/tts/providers/types.ts");
+const vl = await import("../lib/tts/providers/voicelab.ts");
 const { bearerMatches } = await import("../lib/stories/auth.ts");
 const read = path => readFile(new URL(path, import.meta.url), "utf8");
 
@@ -80,7 +81,7 @@ test("request parsing: text, lang, provider, voice, speed, format", () => {
   assert.equal(r.parseTtsRequest({ text: "x", lang: "uz", provider: "openai", voice: "nova", speed: "1.25", format: "wav" }).value.speed, 1.25);
   assert.match(r.parseTtsRequest({ text: "", lang: "uz", provider: "aisha", voice: "g" }).error, /bo‘sh/);
   assert.match(r.parseTtsRequest({ text: "x".repeat(r.MAX_TEXT_CHARS + 1), lang: "uz", provider: "aisha", voice: "g" }).error, /20000/);
-  assert.match(r.parseTtsRequest({ text: "x", lang: "xx", provider: "aisha", voice: "g" }).error, /lang/);
+  assert.match(r.parseTtsRequest({ text: "x", lang: "x1!", provider: "aisha", voice: "g" }).error, /lang/);
   assert.match(r.parseTtsRequest({ text: "x", lang: "uz", provider: "../etc", voice: "g" }).error, /provider/);
   assert.match(r.parseTtsRequest({ text: "x", lang: "uz", provider: "aisha", voice: "" }).error, /voice/);
   assert.match(r.parseTtsRequest({ text: "x", lang: "uz", provider: "aisha", voice: "g", speed: 9 }).error, /speed/);
@@ -132,7 +133,7 @@ test("WAV: PCM joined under one header, streamed size handled, mismatched format
 });
 
 // ---- Providers (mocked fetch) -------------------------------------------------------------------------------------
-const ENV = { OPENAI_API_KEY: "sk-test-openai", AISHA_API_KEY: "aisha-test-key", ELEVENLABS_API_KEY: "el-test-key" };
+const ENV = { OPENAI_API_KEY: "sk-test-openai", AISHA_API_KEY: "aisha-test-key", ELEVENLABS_API_KEY: "el-test-key", VOICELAB_API_KEY: "vlk_test_secret_key" };
 
 test("OpenAI adapter: /v1/audio/speech, Bearer key in the header only, model from env, speed per model", async () => {
   const { fetcher, calls } = mockFetch([["api.openai.com/v1/audio/speech", () => audioResponse(mp3(3))]]);
@@ -214,18 +215,23 @@ test("ElevenLabs adapter: account voices (fallback premade), xi-api-key header, 
   assert.ok(elevenlabsProvider.languages({ ELEVENLABS_MODEL: "eleven_v3" }).includes("uz"));
 });
 
-test("registry: provider without a key is listed as 'kalit kiritilmagan', keys never in the output", async () => {
-  const { fetcher } = mockFetch([["/v1/voices", () => new Response(JSON.stringify({ voices: [] }))]]);
+test("registry: VoiceLab first, Aisha hidden as legacy, 'kalit kiritilmagan' without a key, keys never in the output", async () => {
+  vl.clearVoicelabCache();
+  const { fetcher } = mockFetch([...voicelabCatalog(), ["/v1/voices", () => new Response(JSON.stringify({ voices: [] }))]]);
   const none = await describeProviders({}, fetcher);
-  assert.deepEqual(none.map(p => [p.id, p.configured, p.status]), [["aisha", false, "kalit kiritilmagan (AISHA_API_KEY)"], ["openai", false, "kalit kiritilmagan (OPENAI_API_KEY)"], ["elevenlabs", false, "kalit kiritilmagan (ELEVENLABS_API_KEY)"]]);
+  assert.deepEqual(none.map(p => [p.id, p.configured, p.status]), [["voicelab", false, "kalit kiritilmagan (VOICELAB_API_KEY)"], ["openai", false, "kalit kiritilmagan (OPENAI_API_KEY)"], ["elevenlabs", false, "kalit kiritilmagan (ELEVENLABS_API_KEY)"]], "the old Aisha adapter is not listed");
+  const withLegacy = await describeProviders({}, fetcher, { legacy: true });
+  assert.deepEqual(withLegacy.filter(p => p.legacy).map(p => [p.id, p.name]), [["aisha", "Aisha (eski)"]]);
   const all = await describeProviders(ENV, fetcher);
   assert.ok(all.every(p => p.configured));
-  const json = JSON.stringify(all);
+  const json = JSON.stringify(await describeProviders(ENV, fetcher, { legacy: true }));
   for (const secret of Object.values(ENV)) assert.ok(!json.includes(secret), "no key in the voices list");
-  assert.equal(getProvider("aisha").id, "aisha");
+  assert.equal(getProvider("aisha").id, "aisha", "legacy adapter still callable");
   assert.equal(getProvider("nope"), null);
   for (const lang of r.MAIN_LANGUAGES) assert.ok(all.some(p => p.languages.includes(lang)), `${lang} is spoken by some provider`);
   for (const p of all) assert.ok(p.maxChars >= 500 && p.formats.length > 0);
+  const uz = voicesFor(all.find(p => p.id === "voicelab").voices, "uz");
+  assert.deepEqual(uz.map(v => v.id), ["voice_UZ_DILNOZA", "voice_UZ_JASUR"], "Uzbek gallery comes from the VoiceLab catalog");
 });
 
 // ---- API auth and wiring ------------------------------------------------------------------------------------------
@@ -281,4 +287,152 @@ test("missing table: Prisma P2021 for TtsGeneration → 'migratsiya kerak' on th
   assert.match(page, /\{MIGRATION_NEEDED\}/);
   assert.match(await read("../app/admin/(protected)/instagram/voice/actions.ts"), /if \(isMissingTable\(error\)\) return \{ ok: false, error: MIGRATION_NEEDED \}/);
   assert.match(await read("../app/api/tts/route.ts"), /if \(isMissingTable\(error\)\) return NextResponse\.json\(\{ error: MIGRATION_NEEDED \}, \{ status: 503 \}\)/);
+});
+
+// ---- VoiceLab (mocked API) ----------------------------------------------------------------------------------------
+const VL_VOICES = {
+  uz: [{ id: "voice_UZ_DILNOZA", display_name: "Dilnoza", short_description: "Iliq, reklama", language: "uz", kind: "system" }, { id: "voice_UZ_JASUR", display_name: "Jasur", language: "uz", kind: "custom", can_manage: true }],
+  ru: [{ id: "voice_RU_ANNA", display_name: "Анна", language: "ru", kind: "system" }],
+  en: [{ id: "voice_EN_SAM", display_name: "Sam", language: "en", kind: "system" }],
+};
+/** Routes for the catalog: GET /v1/tts/languages and GET /v1/voices?language=… */
+function voicelabCatalog() {
+  return [
+    ["api.voicelab.uz/v1/tts/languages", () => new Response(JSON.stringify({ provider: "Lison-VoiceLab", sample_rate: 24000, data: [{ code: "en" }, { code: "uz" }, { code: "ru" }], models: [{ id: "lison", languages: ["en", "uz", "ru"] }] }))],
+    ["api.voicelab.uz/v1/voices?language=", url => new Response(JSON.stringify({ data: VL_VOICES[new URL(url).searchParams.get("language")] ?? [], request_id: "req_1" }))],
+  ];
+}
+/** 24 kHz mono 16-bit WAV, as VoiceLab sends it. */
+const vlWav = samples => wav(samples, { rate: 24000 });
+const VL_INPUT = { text: "Assalomu alaykum!", lang: "uz", voice: "voice_UZ_DILNOZA", speed: 1.1, format: "wav" };
+function fastTiming() {
+  const sleeps = [];
+  const saved = { ...vl.voicelabTiming };
+  Object.assign(vl.voicelabTiming, { sleep: async ms => { sleeps.push(ms); }, pollDeadlineMs: 60_000 });
+  return { sleeps, restore: () => Object.assign(vl.voicelabTiming, saved) };
+}
+
+test("VoiceLab catalog: languages + voices per language from the API (not hard-coded), Bearer key, cached", async () => {
+  vl.clearVoicelabCache();
+  const { fetcher, calls } = mockFetch(voicelabCatalog());
+  assert.deepEqual(await vl.voicelabProvider.languages(ENV, fetcher), ["en", "uz", "ru"]);
+  const voices = await vl.voicelabProvider.voices(ENV, fetcher);
+  assert.deepEqual(voicesFor(voices, "uz").map(v => [v.id, v.name, v.note]), [["voice_UZ_DILNOZA", "Dilnoza", "Iliq, reklama"], ["voice_UZ_JASUR", "Jasur", "o‘z ovoz"]]);
+  assert.deepEqual(voicesFor(voices, "ru").map(v => v.id), ["voice_RU_ANNA"]);
+  assert.ok(calls.some(c => c.url === "https://api.voicelab.uz/v1/voices?language=uz"));
+  for (const call of calls) assert.equal(call.init.headers.Authorization, "Bearer vlk_test_secret_key");
+  assert.ok(calls.every(call => !call.url.includes("vlk_")), "key never in a URL");
+  const count = calls.length;
+  await vl.voicelabProvider.voices(ENV, fetcher);
+  await vl.voicelabProvider.languages(ENV, fetcher);
+  assert.equal(calls.length, count, "second look comes from the cache");
+  await vl.voicelabProvider.languages({ VOICELAB_API_KEY: "vlk_other_key_9999" }, fetcher);
+  assert.equal(calls.length, count + 1, "another key → fresh catalog");
+  vl.clearVoicelabCache();
+  assert.deepEqual(await vl.voicelabProvider.voices({}, fetcher), [], "no key → no voices");
+  assert.deepEqual(await vl.voicelabProvider.languages({}, fetcher), ["uz", "ru", "en"], "no key → still listed for uz/ru/en");
+  const down = mockFetch([["languages", () => new Response("{}", { status: 503 })]]);
+  vl.clearVoicelabCache();
+  assert.deepEqual(await vl.voicelabProvider.languages(ENV, down.fetcher), ["uz", "ru", "en"], "catalog down → fallback list");
+});
+
+test("VoiceLab TTS: 200 WAV, documented JSON body, Idempotency-Key header", async () => {
+  const { fetcher, calls } = mockFetch([["api.voicelab.uz/v1/tts", () => new Response(vlWav(2400), { status: 200, headers: { "content-type": "audio/wav" } })]]);
+  const bytes = await vl.voicelabProvider.synthesize({ ...VL_INPUT, speed: 7 }, ENV, fetcher);
+  assert.equal(audio.parseWav(bytes).sampleRate, 24000);
+  const [call] = calls;
+  assert.equal(call.url, "https://api.voicelab.uz/v1/tts");
+  assert.equal(call.init.method, "POST");
+  assert.equal(call.init.headers.Authorization, "Bearer vlk_test_secret_key");
+  assert.match(call.init.headers["Idempotency-Key"], /^[A-Za-z0-9._-]{8,128}$/);
+  assert.deepEqual(JSON.parse(call.init.body), { text: "Assalomu alaykum!", language: "uz", voice_id: "voice_UZ_DILNOZA", speed: 2 }, "speed clamped to 0.5–2");
+  assert.ok(!call.init.body.includes("vlk_"));
+  await vl.voicelabProvider.synthesize(VL_INPUT, ENV, fetcher);
+  assert.notEqual(calls[1].init.headers["Idempotency-Key"], call.init.headers["Idempotency-Key"], "a new key for each new generation");
+  await assert.rejects(vl.voicelabProvider.synthesize({ ...VL_INPUT, voice: "Dilnoza" }, ENV, fetcher), /voice_id/);
+  assert.equal(vl.voicelabProvider.maxChars <= 5000, true, "under the documented 5000-character limit");
+});
+
+test("VoiceLab retries: 503 / 429 (Retry-After) / timeout → same Idempotency-Key; 4xx not retried", async () => {
+  const timing = fastTiming();
+  try {
+    let n = 0;
+    const flaky = mockFetch([["/v1/tts", () => ++n === 1 ? new Response(JSON.stringify({ message: "busy", error: { code: "service_unavailable" } }), { status: 503 }) : n === 2 ? new Response("{}", { status: 429, headers: { "retry-after": "3" } }) : new Response(vlWav(100))]]);
+    await vl.voicelabProvider.synthesize(VL_INPUT, ENV, flaky.fetcher);
+    assert.equal(flaky.calls.length, 3);
+    assert.equal(new Set(flaky.calls.map(c => c.init.headers["Idempotency-Key"])).size, 1, "every retry reuses the key");
+    assert.equal(new Set(flaky.calls.map(c => c.init.body)).size, 1, "…with the identical body");
+    assert.deepEqual(timing.sleeps, [1000, 3000], "backoff, then Retry-After");
+
+    let t = 0;
+    const slow = mockFetch([["/v1/tts", () => { if (++t === 1) throw new DOMException("The operation timed out.", "TimeoutError"); return new Response(vlWav(100)); }]]);
+    await vl.voicelabProvider.synthesize(VL_INPUT, ENV, slow.fetcher);
+    assert.equal(slow.calls.length, 2);
+    assert.equal(slow.calls[0].init.headers["Idempotency-Key"], slow.calls[1].init.headers["Idempotency-Key"], "timeout → same key");
+
+    for (const [status, code, pattern] of [[402, "insufficient_credits", /kredit yetarli emas/], [401, "invalid_api_key", /VOICELAB_API_KEY/], [404, "voice_unavailable", /katalogni yangilang/], [422, "validation_error", /speed: must be/]]) {
+      const once = mockFetch([["/v1/tts", () => new Response(JSON.stringify({ message: "Invalid request.", error: { code, fields: { speed: "must be 0.5–2.0" } }, request_id: "req_x" }), { status })]]);
+      await assert.rejects(vl.voicelabProvider.synthesize(VL_INPUT, ENV, once.fetcher), error => error instanceof TtsProviderError && error.status === status && pattern.test(error.message));
+      assert.equal(once.calls.length, 1, `${status} is not retried`);
+    }
+    const always = mockFetch([["/v1/tts", () => new Response("{}", { status: 500 })]]);
+    await assert.rejects(vl.voicelabProvider.synthesize(VL_INPUT, ENV, always.fetcher), error => error.status === 500);
+    assert.equal(always.calls.length, vl.voicelabTiming.attempts, "gives up after a few attempts");
+  } finally { timing.restore(); }
+});
+
+test("VoiceLab 202: poll status_url until completed, download the signed audio_url without the key", async () => {
+  const timing = fastTiming();
+  try {
+    let polls = 0;
+    const { fetcher, calls } = mockFetch([
+      ["/v1/tts/generations/gen_1", () => new Response(JSON.stringify(++polls < 3 ? { id: "gen_1", status: polls === 1 ? "queued" : "processing" } : { id: "gen_1", status: "completed", audio_url: "https://storage.voicelab.example/signed/gen_1.wav?sig=abc" }))],
+      ["storage.voicelab.example", () => new Response(vlWav(4800))],
+      ["api.voicelab.uz/v1/tts", () => new Response(JSON.stringify({ id: "gen_1", status: "queued", status_url: "/v1/tts/generations/gen_1", request_id: "req_1" }), { status: 202 })],
+    ]);
+    const bytes = await vl.voicelabProvider.synthesize(VL_INPUT, ENV, fetcher);
+    assert.equal(audio.parseWav(bytes).data.length, 4800 * 2);
+    assert.equal(polls, 3);
+    assert.equal(calls.filter(c => c.url === "https://api.voicelab.uz/v1/tts/generations/gen_1").length, 3);
+    for (const poll of calls.filter(c => c.url.includes("/generations/"))) assert.equal(poll.init.headers.Authorization, "Bearer vlk_test_secret_key");
+    const download = calls.find(c => c.url.includes("storage.voicelab.example"));
+    assert.equal(download.init.headers, undefined, "signed URL fetched without Authorization");
+
+    const failing = mockFetch([
+      ["/v1/tts/generations/", () => new Response(JSON.stringify({ status: "failed", error: { code: "generation_failed", message: "Model error" }, credits_used: 0 }))],
+      ["/v1/tts", () => new Response(JSON.stringify({ id: "gen_2", status_url: "/v1/tts/generations/gen_2" }), { status: 202 })],
+    ]);
+    await assert.rejects(vl.voicelabProvider.synthesize(VL_INPUT, ENV, failing.fetcher), /muvaffaqiyatsiz — Model error/);
+    const foreign = mockFetch([["/v1/tts", () => new Response(JSON.stringify({ id: "x", status_url: "https://evil.example/steal" }), { status: 202 })]]);
+    await assert.rejects(vl.voicelabProvider.synthesize(VL_INPUT, ENV, foreign.fetcher), /status_url noto‘g‘ri/, "the key is never sent to another host");
+    Object.assign(vl.voicelabTiming, { pollDeadlineMs: 2_500 });
+    const stuck = mockFetch([["/v1/tts/generations/", () => new Response(JSON.stringify({ status: "processing" }))], ["/v1/tts", () => new Response(JSON.stringify({ id: "gen_3" }), { status: 202 })]]);
+    await assert.rejects(vl.voicelabProvider.synthesize(VL_INPUT, ENV, stuck.fetcher), /vaqtida tugamadi/);
+  } finally { timing.restore(); }
+});
+
+test("VoiceLab long text: split under 5000, one request per part, WAV parts merged into one file", async () => {
+  const text = Array.from({ length: 400 }, (_, i) => `Bu ssenariyning ${i + 1}-gapi, sovutish uskunalari haqida.`).join(" ");
+  const chunks = r.splitText(text, vl.voicelabProvider.maxChars);
+  assert.ok(chunks.length >= 3 && chunks.every(chunk => chunk.length <= 5000));
+  const { fetcher, calls } = mockFetch([["/v1/tts", (_, init) => new Response(vlWav(JSON.parse(init.body).text.length * 10))]]);
+  const parts = [];
+  for (const chunk of chunks) parts.push(await vl.voicelabProvider.synthesize({ ...VL_INPUT, text: chunk }, ENV, fetcher));
+  const merged = audio.mergeAudio(parts, "wav");
+  assert.equal(calls.length, chunks.length);
+  assert.equal(new Set(calls.map(c => c.init.headers["Idempotency-Key"])).size, chunks.length, "each part is its own generation");
+  assert.equal(audio.parseWav(merged.bytes).data.length, chunks.join("").length * 10 * 2);
+  assert.equal(merged.durationMs, Math.round(chunks.join("").length * 10 / 24000 * 1000));
+});
+
+test("VoiceLab wiring: studio and voices API hide the legacy Aisha adapter; key only from env", async () => {
+  const source = await read("../lib/tts/providers/voicelab.ts");
+  assert.match(source, /Authorization: `Bearer \$\{key\(env, "VOICELAB_API_KEY"\)\}`/);
+  assert.doesNotMatch(source, /console\.\w+\(/, "nothing logged from the adapter");
+  assert.doesNotMatch(source, /voice_[A-Z0-9]{10,}/, "no hard-coded voice ids");
+  const aisha = await read("../lib/tts/providers/aisha.ts");
+  assert.match(aisha, /legacy: true/);
+  const route = await read("../app/api/tts/voices/route.ts");
+  assert.match(route, /providersInfo\(\{ legacy \}\)/);
+  assert.match(await read("../lib/tts/providers/index.ts"), /PROVIDERS: TtsProvider\[\] = \[voicelabProvider, openaiProvider/);
 });

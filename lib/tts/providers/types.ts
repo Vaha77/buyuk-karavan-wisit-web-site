@@ -17,13 +17,16 @@ export type TtsProvider = {
   name: string;
   /** The env variable that holds the key (shown in the UI as "kalit kiritilmagan: …"). Never the value. */
   envKey: string;
+  /** Superseded (kept working for old history / API callers, hidden in the studio). */
+  legacy?: boolean;
   configured(env: Env): boolean;
   model(env: Env): string;
   /** Longest text for one request; longer text is split by sentences and the parts joined. */
   maxChars: number;
   formats: AudioFormat[];
   speed: { min: number; max: number; /** Only these languages honour speed (others: always 1). */ langs?: string[] };
-  languages(env: Env): string[];
+  /** Language codes; a provider with an online catalog (VoiceLab) answers asynchronously. */
+  languages(env: Env, fetcher?: typeof fetch): string[] | Promise<string[]>;
   voices(env: Env, fetcher?: typeof fetch): Promise<TtsVoice[]>;
   synthesize(input: SynthesisInput, env: Env, fetcher?: typeof fetch): Promise<Uint8Array>;
   /** Estimated USD for this many characters (the rates are env-overridable). */

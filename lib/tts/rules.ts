@@ -99,7 +99,8 @@ export function parseTtsRequest(body: TtsRequestInput): { ok: true; value: TtsRe
   if (!text) return { ok: false, error: "text bo‘sh." };
   if (text.length > MAX_TEXT_CHARS) return { ok: false, error: `Matn ${MAX_TEXT_CHARS} belgidan oshmasin.` };
   const lang = typeof body.lang === "string" ? body.lang.trim().toLowerCase() : "";
-  if (!(lang in LANGUAGES)) return { ok: false, error: "lang noto‘g‘ri (masalan: uz, ru, en)." };
+  // Any well-formed code: the chosen provider (its catalog) decides whether it speaks it.
+  if (!(lang in LANGUAGES) && !/^[a-z]{2,3}(-[a-z0-9]{2,8})?$/.test(lang)) return { ok: false, error: "lang noto‘g‘ri (masalan: uz, ru, en)." };
   const provider = typeof body.provider === "string" ? body.provider.trim().toLowerCase() : "";
   if (!/^[a-z0-9-]{2,30}$/.test(provider)) return { ok: false, error: "provider noto‘g‘ri." };
   const voice = typeof body.voice === "string" ? body.voice.trim() : "";

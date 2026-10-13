@@ -8,7 +8,7 @@ import { Download, Headphones, Mic, Play, Square, Trash2 } from "lucide-react";
 import { deleteVoiceAction, generateVoiceAction, previewVoiceAction, sampleVoiceAction, type VoiceActionResult } from "@/app/admin/(protected)/instagram/voice/actions";
 import { BusyLabel } from "@/components/admin/feedback";
 import type { ProviderInfo } from "@/lib/tts/providers";
-import { voicesFor } from "@/lib/tts/providers";
+import { providerName, voicesFor } from "@/lib/tts/providers";
 import { LANGUAGES, MAIN_LANGUAGES, PREVIEW_CHARS, formatDuration, languageName, splitText } from "@/lib/tts/rules";
 
 export type VoiceHistoryRow = { id: string; text: string; chars: number; lang: string; provider: string; voice: string; source: string; createdAt: string; durationMs: number | null; format: string; costUsd: number; audioUrl: string | null };
@@ -56,7 +56,7 @@ export function VoiceStudio({ providers, history, usage, apiReady, storageReady 
   const router = useRouter();
   const languages = useMemo(() => {
     const spoken = new Set(providers.flatMap(provider => provider.languages));
-    return [...MAIN_LANGUAGES.filter(code => spoken.has(code)), ...Object.keys(LANGUAGES).filter(code => spoken.has(code) && !MAIN_LANGUAGES.includes(code))];
+    return [...MAIN_LANGUAGES.filter(code => spoken.has(code)), ...Object.keys(LANGUAGES).filter(code => spoken.has(code) && !MAIN_LANGUAGES.includes(code)), ...[...spoken].filter(code => !(code in LANGUAGES)).sort()];
   }, [providers]);
   const [text, setText] = useState("");
   const [lang, setLang] = useState("uz");
@@ -225,7 +225,7 @@ export function VoiceStudio({ providers, history, usage, apiReady, storageReady 
       <h2 id="voice-history" className="ig-story-h">Tarix · {history.length}</h2>
       {history.length ? <ul className="ig-voice-history">{history.map(row => <li key={row.id} className="bk-card">
         <p className="ig-voice-head">{row.text}{row.chars > row.text.length ? "…" : ""}</p>
-        <p className="bk-muted ig-voice-meta">{[languageName(row.lang), row.voice, providers.find(item => item.id === row.provider)?.name ?? row.provider, dateTime(row.createdAt), formatDuration(row.durationMs), row.format.toUpperCase(), `${row.chars} belgi`, `≈ ${usd(row.costUsd)}`, row.source === "api" ? "API" : null].filter(Boolean).join(" · ")}</p>
+        <p className="bk-muted ig-voice-meta">{[languageName(row.lang), row.voice, providerName(row.provider), dateTime(row.createdAt), formatDuration(row.durationMs), row.format.toUpperCase(), `${row.chars} belgi`, `≈ ${usd(row.costUsd)}`, row.source === "api" ? "API" : null].filter(Boolean).join(" · ")}</p>
         {row.audioUrl && <audio src={row.audioUrl} controls preload="none" className="ig-voice-audio"/>}
         <div className="ig-voice-row-actions">
           {row.audioUrl && <button type="button" className="bk-btn" onClick={() => void download(row.audioUrl!, `bk-ovoz-${row.id.slice(-8)}.${row.format}`)}><Download size={15}/>Yuklab olish</button>}

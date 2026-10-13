@@ -1,4 +1,5 @@
-// Aisha (aisha.group) — Uzbek / Russian / English TTS. Docs: https://aisha.group/en/api-documentation/text-to-speech
+// ESKI (legacy): Aisha (aisha.group) — superseded by VoiceLab (./voicelab.ts); kept so old API callers and history keep
+// working, hidden in the studio. Uzbek / Russian / English TTS. Docs: https://aisha.group/en/api-documentation/text-to-speech
 // POST https://back.aisha.group/api/v1/tts/post/ (multipart form, X-Api-Key) → 201 { audio_path } → the WAV is downloaded.
 // Uzbek: model "Gulnoza" with a mood (Neutral / Cheerful / Happy / Sad) and speed 0.5–2.0; en / ru: the default voice.
 // Own cloned voices: AISHA_VOICE_IDS="Ism:123,Boshqa:456" (READY voice_id's of the account; Uzbek).
@@ -32,7 +33,8 @@ const SPEED = { min: 0.5, max: 2, langs: ["uz"] };
 
 export const aishaProvider: TtsProvider = {
   id: "aisha",
-  name: "Aisha",
+  name: "Aisha (eski)",
+  legacy: true,
   envKey: "AISHA_API_KEY",
   configured: env => !!key(env, "AISHA_API_KEY"),
   model: () => "Gulnoza",
