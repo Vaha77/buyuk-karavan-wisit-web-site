@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { bearerMatches } from "@/lib/stories/auth";
-import { parseTtsRequest } from "@/lib/tts/rules";
+import { MIGRATION_NEEDED, isMissingTable, parseTtsRequest } from "@/lib/tts/rules";
 import { generateFull } from "@/lib/tts/service";
 
 export const runtime = "nodejs";
@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json({ id: result.id, url: result.url, durationMs: result.durationMs, durationSec: Math.round(result.durationMs / 100) / 10, format: result.format, chars: result.chars, chunks: result.chunks, costUsd: result.costUsd, warning: result.warning }, { status: 201 });
   } catch (error) {
+    if (isMissingTable(error)) return NextResponse.json({ error: MIGRATION_NEEDED }, { status: 503 });
     console.error("TTS API failed", { type: error instanceof Error ? error.name : "UnknownError" });
     return NextResponse.json({ error: "Ovoz yasab bo‘lmadi." }, { status: 500 });
   }

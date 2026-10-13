@@ -266,3 +266,19 @@ test("wiring: Super Admin only, keys only from env and never logged, additive mi
   assert.doesNotMatch(migration.replace(/^--.*$/gm, ""), /\bDROP\b|DELETE FROM|\bTRUNCATE\b|ALTER COLUMN/i);
   assert.match(migration, /CREATE TABLE "TtsGeneration"/);
 });
+
+test("missing table: Prisma P2021 for TtsGeneration → 'migratsiya kerak' on the page, actions and API", async () => {
+  // The exact shape Prisma 7 + adapter-pg throws when the table is missing.
+  const prisma = Object.assign(new Error("Invalid `prisma.ttsGeneration.count()` invocation:\n\nThe table `public.TtsGeneration` does not exist in the current database."), { code: "P2021", meta: { modelName: "TtsGeneration", driverAdapterError: { cause: { originalCode: "42P01", kind: "TableDoesNotExist", table: "public.TtsGeneration" } } } });
+  assert.equal(r.isMissingTable(prisma), true);
+  assert.equal(r.isMissingTable(Object.assign(new Error("x"), { code: "P2021", meta: { modelName: "StoryQueueItem" } })), false, "another table is not ours to excuse");
+  assert.equal(r.isMissingTable(new Error("Connection refused")), false);
+  assert.equal(r.isMissingTable(Object.assign(new Error("wrapped"), { cause: prisma })), true);
+  assert.equal(r.isMissingTable(null), false);
+  assert.match(r.MIGRATION_NEEDED, /migratsiya kerak/);
+  const page = await read("../app/admin/(protected)/instagram/voice/page.tsx");
+  assert.match(page, /catch \(error\) \{ if \(isMissingTable\(error\)\) return null; throw error; \}/);
+  assert.match(page, /\{MIGRATION_NEEDED\}/);
+  assert.match(await read("../app/admin/(protected)/instagram/voice/actions.ts"), /if \(isMissingTable\(error\)\) return \{ ok: false, error: MIGRATION_NEEDED \}/);
+  assert.match(await read("../app/api/tts/route.ts"), /if \(isMissingTable\(error\)\) return NextResponse\.json\(\{ error: MIGRATION_NEEDED \}, \{ status: 503 \}\)/);
+});

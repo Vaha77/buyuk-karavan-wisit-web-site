@@ -155,3 +155,15 @@ export const formatDuration = (ms: number | null | undefined) => {
   const seconds = Math.round(ms / 1000);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
+
+// ---- Missing table ----------------------------------------------------------------------------------------------
+export const MIGRATION_NEEDED = "Ovoz studiyasi jadvali (TtsGeneration) bazada yo‘q — migratsiya kerak: npx prisma migrate deploy";
+/** Prisma P2021 ("The table … does not exist") or Postgres 42P01 for the TTS table — the migration has not been applied. */
+export function isMissingTable(error: unknown): boolean {
+  const item = error as { code?: unknown; message?: unknown; meta?: { table?: unknown; modelName?: unknown }; cause?: unknown } | null;
+  if (!item || typeof item !== "object") return false;
+  const text = `${typeof item.message === "string" ? item.message : ""} ${String(item.meta?.table ?? "")} ${String(item.meta?.modelName ?? "")}`;
+  if ((item.code === "P2021" || item.code === "42P01") && (/TtsGeneration/i.test(text) || !text.trim())) return true;
+  if (/TtsGeneration/i.test(text) && /does not exist/i.test(text)) return true;
+  return item.cause !== undefined && item.cause !== error ? isMissingTable(item.cause) : false;
+}

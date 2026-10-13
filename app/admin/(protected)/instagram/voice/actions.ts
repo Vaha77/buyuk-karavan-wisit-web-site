@@ -1,13 +1,14 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/require-admin";
-import { parseTtsRequest, type TtsRequestInput } from "@/lib/tts/rules";
+import { MIGRATION_NEEDED, isMissingTable, parseTtsRequest, type TtsRequestInput } from "@/lib/tts/rules";
 import { deleteGeneration, generateFull, generatePreview, generateSample, type TtsResult } from "@/lib/tts/service";
 
 export type VoiceActionResult = Extract<TtsResult, { ok: true }> | { ok: false; error: string };
 const actor = async () => (await requireRole("SUPER_ADMIN")).name;
 const failed = (error: unknown): VoiceActionResult => {
   console.error("Voice studio action failed", { type: error instanceof Error ? error.name : "UnknownError" });
+  if (isMissingTable(error)) return { ok: false, error: MIGRATION_NEEDED };
   return { ok: false, error: error instanceof Error && /storage is not configured/i.test(error.message) ? "Storage sozlanmagan." : "Ovoz yasab bo‘lmadi." };
 };
 const answer = (result: TtsResult): VoiceActionResult => result.ok ? result : { ok: false, error: result.error };
@@ -43,7 +44,7 @@ export async function sampleVoiceAction(input: Omit<TtsRequestInput, "text">): P
 
 export async function deleteVoiceAction(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
   await actor();
-  const result = await deleteGeneration(String(id));
+  const result = await deleteGeneration(String(id)).catch(error => { if (isMissingTable(error)) return { ok: false as const, error: MIGRATION_NEEDED }; throw error; });
   revalidatePath("/admin/instagram/voice");
   return result;
 }
