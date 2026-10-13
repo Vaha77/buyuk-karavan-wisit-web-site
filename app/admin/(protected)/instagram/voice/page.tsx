@@ -3,7 +3,7 @@ import Link from "next/link";
 import { VoiceStudio } from "@/components/admin/instagram/voice-studio";
 import "@/components/admin/instagram/instagram.css";
 import { requireRole } from "@/lib/auth/require-admin";
-import { MIGRATION_NEEDED, isMissingTable } from "@/lib/tts/rules";
+import { MIGRATION_NEEDED, creditsPerChar, estimateCredits, isCreditProvider, isMissingTable } from "@/lib/tts/rules";
 import { listHistory, providersInfo, usageSummary } from "@/lib/tts/service";
 import { storageReady } from "@/lib/tts/storage";
 
@@ -32,7 +32,7 @@ export default async function VoicePage() {
     </nav>
     {data ? <VoiceStudio
       providers={providers}
-      history={data[0].map(row => ({ id: row.id, text: row.text.slice(0, 160), chars: row.chars, lang: row.lang, provider: row.provider, voice: row.voiceName ?? row.voice, source: row.source, createdAt: row.createdAt.toISOString(), durationMs: row.durationMs, format: row.format, costUsd: row.costUsd, audioUrl: row.audioUrl }))}
+      history={data[0].map(row => ({ id: row.id, text: row.text.slice(0, 160), chars: row.chars, lang: row.lang, provider: row.provider, voice: row.voiceName ?? row.voice, source: row.source, createdAt: row.createdAt.toISOString(), durationMs: row.durationMs, format: row.format, costUsd: row.costUsd, credits: row.credits ?? (isCreditProvider(row.provider) ? estimateCredits(row.chars, creditsPerChar(process.env)) : null), creditsExact: row.creditsExact && row.credits !== null, audioUrl: row.audioUrl }))}
       usage={data[1]} apiReady={!!process.env.TTS_API_TOKEN?.trim()} storageReady={storageReady()}
     /> : <p className="ig-warn" role="alert">⚠️ {MIGRATION_NEEDED}</p>}
   </div>;

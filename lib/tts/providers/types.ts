@@ -10,7 +10,11 @@ export type TtsVoice = {
   note?: string;
 };
 
-export type SynthesisInput = { text: string; lang: string; voice: string; speed: number; format: AudioFormat };
+export type SynthesisInput = {
+  text: string; lang: string; voice: string; speed: number; format: AudioFormat;
+  /** The provider's own usage numbers for this request, when its answer carries them (VoiceLab: credits_used). */
+  onUsage?: (usage: { credits: number }) => void;
+};
 
 export type TtsProvider = {
   id: string;

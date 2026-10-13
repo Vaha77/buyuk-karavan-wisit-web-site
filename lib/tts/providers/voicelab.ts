@@ -104,7 +104,7 @@ async function catalogVoices(lang: string, env: Env, fetcher: typeof fetch): Pro
 const isTimeout = (error: unknown) => error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
 
 /** 202: poll the generation (status_url) until completed, then download the signed audio_url without the key. */
-async function waitForJob(job: { id?: unknown; status_url?: unknown }, env: Env, fetcher: typeof fetch): Promise<Uint8Array> {
+async function waitForJob(job: { id?: unknown; status_url?: unknown }, env: Env, fetcher: typeof fetch, onUsage?: (usage: { credits: number }) => void): Promise<Uint8Array> {
   const path = typeof job.status_url === "string" && job.status_url ? job.status_url : typeof job.id === "string" ? `/v1/tts/generations/${encodeURIComponent(job.id)}` : null;
   if (!path) throw new TtsProviderError("voicelab", 502, "VoiceLab: 202 javobida status_url yo‘q.");
   const url = new URL(path, VOICELAB_ORIGIN);
@@ -115,8 +115,10 @@ async function waitForJob(job: { id?: unknown; status_url?: unknown }, env: Env,
     const response = await fetcher(url, { headers: auth(env), signal: AbortSignal.timeout(15_000) }).catch(error => { if (isTimeout(error)) return null; throw error; });
     if (response && !response.ok && !RETRYABLE.has(response.status)) { const error = await voicelabError(response); throw new TtsProviderError("voicelab", response.status, UZ_MESSAGES[error.code] ?? error.message); }
     if (response?.ok) {
-      const generation = await response.json() as { status?: unknown; audio_url?: unknown; error?: unknown };
+      const generation = await response.json() as { status?: unknown; audio_url?: unknown; error?: unknown; credits_used?: unknown };
       if (generation.status === "completed") {
+        const credits = Number(generation.credits_used);
+        if (generation.credits_used !== undefined && generation.credits_used !== null && Number.isFinite(credits) && credits >= 0) onUsage?.({ credits });
         if (typeof generation.audio_url !== "string" || !/^https:\/\//.test(generation.audio_url)) throw new TtsProviderError("voicelab", 502, "VoiceLab: audio_url yo‘q.");
         const audio = await fetcher(generation.audio_url, { signal: AbortSignal.timeout(60_000) });
         if (!audio.ok) throw new TtsProviderError("voicelab", audio.status, `VoiceLab: audio yuklab bo‘lmadi (HTTP ${audio.status}).`);
@@ -173,8 +175,13 @@ export const voicelabProvider: TtsProvider = {
         if (attempt < voicelabTiming.attempts) await voicelabTiming.sleep(1000 * 2 ** (attempt - 1));
         continue;
       }
-      if (response.status === 200) return new Uint8Array(await response.arrayBuffer());
-      if (response.status === 202) return waitForJob(await response.json().catch(() => ({})) as { id?: unknown; status_url?: unknown }, env, fetcher);
+      if (response.status === 200) {
+        // Not documented for 200 (only X-VoiceLab-Characters-Used), but taken when VoiceLab sends it.
+        const credits = Number(response.headers.get("x-voicelab-credits-used") ?? NaN);
+        if (Number.isFinite(credits) && credits >= 0) input.onUsage?.({ credits });
+        return new Uint8Array(await response.arrayBuffer());
+      }
+      if (response.status === 202) return waitForJob(await response.json().catch(() => ({})) as { id?: unknown; status_url?: unknown }, env, fetcher, input.onUsage);
       const error = await voicelabError(response);
       last = new TtsProviderError("voicelab", response.status, UZ_MESSAGES[error.code] ?? error.message);
       if (!RETRYABLE.has(response.status)) throw last;

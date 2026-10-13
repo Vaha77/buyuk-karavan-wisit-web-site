@@ -1589,6 +1589,9 @@ model TtsGeneration {
   chars      Int
   chunks     Int       @default(1)
   costUsd    Float     @default(0)
+  // VoiceLab credits: the provider's own number when it returned one (creditsExact), else ≈ characters × 0.5.
+  credits      Int?
+  creditsExact Boolean   @default(false)
   durationMs Int?
   sizeBytes  Int?
   audioUrl   String?

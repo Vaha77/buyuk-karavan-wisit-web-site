@@ -11,13 +11,31 @@ import type { ProviderInfo } from "@/lib/tts/providers";
 import { providerName, voicesFor } from "@/lib/tts/providers";
 import { LANGUAGES, MAIN_LANGUAGES, PREVIEW_CHARS, formatDuration, languageName, splitText } from "@/lib/tts/rules";
 
-export type VoiceHistoryRow = { id: string; text: string; chars: number; lang: string; provider: string; voice: string; source: string; createdAt: string; durationMs: number | null; format: string; costUsd: number; audioUrl: string | null };
-type Usage = { monthUsd: number; monthChars: number; monthCount: number; todayCount: number; limits: { monthlyUsd: number | null; monthlyChars: number | null; dailyWarn: number | null }; warning: string | null };
+export type VoiceHistoryRow = { id: string; text: string; chars: number; lang: string; provider: string; voice: string; source: string; createdAt: string; durationMs: number | null; format: string; costUsd: number; credits: number | null; creditsExact: boolean; audioUrl: string | null };
+type ProviderUsage = { id: string; name: string; monthUsd: number; monthChars: number; monthCount: number; todayCount: number; credits: { used: number; exact: boolean; base: number; balance: number | null } | null };
+type Usage = { providers: ProviderUsage[]; monthUsd: number; monthChars: number; monthCount: number; todayCount: number; limits: { monthlyUsd: number | null; monthlyChars: number | null; dailyWarn: number | null }; warning: string | null };
 type Done = Extract<VoiceActionResult, { ok: true }>;
 type GalleryState = Record<string, { state: "loading" | "playing" | "done" | "error"; url?: string; error?: string }>;
 
 const dateTime = (iso: string) => new Intl.DateTimeFormat("uz-UZ", { timeZone: "Asia/Tashkent", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 const usd = (value: number) => `$${value < 0.01 && value > 0 ? value.toFixed(4) : value.toFixed(2)}`;
+const num = (value: number) => new Intl.NumberFormat("ru-RU").format(value);
+/** "717 kredit" (VoiceLab's own number) or "≈ 717 kredit" (estimated from characters). */
+const creditText = (credits: number, exact: boolean) => `${exact ? "" : "≈ "}${num(credits)} kredit`;
+const BADGE: Record<string, string> = { openai: "OpenAI", voicelab: "VoiceLab", elevenlabs: "ElevenLabs", aisha: "Aisha (eski)" };
+
+/** One provider line of the "Bu oy / So‘rovlar" card with its progress bar. */
+function UsageLine({ item, limitUsd }: { item: ProviderUsage; limitUsd: number | null }) {
+  const credits = item.credits;
+  const share = credits ? Math.min(100, credits.used / Math.max(1, credits.base) * 100) : limitUsd ? Math.min(100, item.monthUsd / limitUsd * 100) : 0;
+  const main = credits ? `${creditText(credits.used, credits.exact)} / ${num(credits.base)}` : `≈ ${usd(item.monthUsd)}${limitUsd !== null ? ` / $${limitUsd}` : ""}`;
+  const rest = credits ? (credits.balance !== null ? `Qoldiq: ${num(credits.balance)} kredit` : `Qoldiq ≈ ${num(Math.max(0, credits.base - credits.used))} (taxminiy — VoiceLab API balans bermaydi)`) : null;
+  return <div className="ig-voice-line">
+    <div className="ig-voice-line-head"><b>{item.name}</b><span>{main}</span></div>
+    <div className="ig-voice-meter" role="progressbar" aria-label={`${item.name}: oylik sarf`} aria-valuenow={Math.round(share)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${share}%` }} className={share >= 90 ? "is-bad" : ""}/></div>
+    <p className="bk-muted">{[`${num(item.monthChars)} belgi`, `${item.monthCount} so‘rov`, `bugun ${item.todayCount}`, rest].filter(Boolean).join(" · ")}</p>
+  </div>;
+}
 
 /** Saves the file (fetch → blob, so the name sticks across origins); falls back to opening it. */
 async function download(url: string, name: string) {
@@ -45,7 +63,7 @@ function playToEnd(audio: HTMLAudioElement, url: string) {
 function Result({ result, title }: { result: Done; title: string }) {
   const name = `bk-ovoz-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.${result.format}`;
   return <div className="ig-voice-result" role="status">
-    <div className="ig-voice-result-head"><b>{title}</b><span className="bk-muted">{[result.durationMs ? formatDuration(result.durationMs) : null, result.format.toUpperCase(), `${result.chars} belgi`, result.chunks > 1 ? `${result.chunks} qism` : null, `≈ ${usd(result.costUsd)}`].filter(Boolean).join(" · ")}</span></div>
+    <div className="ig-voice-result-head"><b>{title}</b><span className="bk-muted">{[result.durationMs ? formatDuration(result.durationMs) : null, result.format.toUpperCase(), `${result.chars} belgi`, result.chunks > 1 ? `${result.chunks} qism` : null, result.credits !== null ? creditText(result.credits, result.creditsExact) : `≈ ${usd(result.costUsd)}`].filter(Boolean).join(" · ")}</span></div>
     <audio src={result.url} controls autoPlay preload="auto" className="ig-voice-audio"/>
     {result.id && <button type="button" className="bk-btn" onClick={() => void download(result.url, name)}><Download size={15}/>Yuklab olish</button>}
     {result.warning && <p className="ig-warn">{result.warning}</p>}
@@ -150,16 +168,14 @@ export function VoiceStudio({ providers, history, usage, apiReady, storageReady 
     });
   };
 
-  const limitText = [usage.limits.monthlyUsd !== null ? `${usd(usage.monthUsd)} / $${usage.limits.monthlyUsd}` : usd(usage.monthUsd), usage.limits.monthlyChars !== null ? `${usage.monthChars} / ${usage.limits.monthlyChars} belgi` : `${usage.monthChars} belgi`].join(" · ");
-  const share = usage.limits.monthlyUsd ? Math.min(100, usage.monthUsd / usage.limits.monthlyUsd * 100) : 0;
+  const lines = usage.providers.filter(item => item.id === "openai" || item.id === "voicelab" || item.monthCount > 0);
 
   return <div className="ig ig-voice">
     {!storageReady && <p className="ig-warn" role="alert">Storage sozlanmagan — “Ovoz yasash” fayl saqlay olmaydi (sinab eshitish ishlaydi).</p>}
     {usage.warning && <p className="ig-warn" role="alert">⚠️ {usage.warning}</p>}
-    <section className="bk-card ig-voice-usage" aria-label="Xarajat">
-      <div><span className="bk-muted">Bu oy (taxminiy)</span><b>{limitText}</b></div>
-      <div><span className="bk-muted">So‘rovlar</span><b>{usage.monthCount} · bugun {usage.todayCount}{usage.limits.dailyWarn !== null ? ` / ${usage.limits.dailyWarn}` : ""}</b></div>
-      {usage.limits.monthlyUsd !== null && <div className="ig-voice-meter" aria-hidden><i style={{ width: `${share}%` }} className={share >= 90 ? "is-bad" : ""}/></div>}
+    <section className="bk-card ig-voice-usage" aria-label="Bu oy / So‘rovlar">
+      {lines.map(item => <UsageLine key={item.id} item={item} limitUsd={item.credits ? null : usage.limits.monthlyUsd}/>)}
+      <p className="bk-muted ig-voice-note">Bugun jami {usage.todayCount}{usage.limits.dailyWarn !== null ? ` / ${usage.limits.dailyWarn}` : ""} so‘rov · $ limiti OpenAI / ElevenLabs uchun; VoiceLab kreditda (asos: VOICELAB_MONTHLY_CREDITS).</p>
     </section>
 
     <section className="bk-card ig-voice-form" aria-labelledby="voice-form">
@@ -224,8 +240,8 @@ export function VoiceStudio({ providers, history, usage, apiReady, storageReady 
     <section aria-labelledby="voice-history">
       <h2 id="voice-history" className="ig-story-h">Tarix · {history.length}</h2>
       {history.length ? <ul className="ig-voice-history">{history.map(row => <li key={row.id} className="bk-card">
-        <p className="ig-voice-head">{row.text}{row.chars > row.text.length ? "…" : ""}</p>
-        <p className="bk-muted ig-voice-meta">{[languageName(row.lang), row.voice, providerName(row.provider), dateTime(row.createdAt), formatDuration(row.durationMs), row.format.toUpperCase(), `${row.chars} belgi`, `≈ ${usd(row.costUsd)}`, row.source === "api" ? "API" : null].filter(Boolean).join(" · ")}</p>
+        <p className="ig-voice-head"><span className={`ig-tag ig-provider is-${row.provider}`}>{BADGE[row.provider] ?? providerName(row.provider)}</span>{row.text}{row.chars > row.text.length ? "…" : ""}</p>
+        <p className="bk-muted ig-voice-meta">{[languageName(row.lang), row.voice, dateTime(row.createdAt), formatDuration(row.durationMs), row.format.toUpperCase(), `${row.chars} belgi`, row.credits !== null ? creditText(row.credits, row.creditsExact) : `≈ ${usd(row.costUsd)}`, row.source === "api" ? "API" : null].filter(Boolean).join(" · ")}</p>
         {row.audioUrl && <audio src={row.audioUrl} controls preload="none" className="ig-voice-audio"/>}
         <div className="ig-voice-row-actions">
           {row.audioUrl && <button type="button" className="bk-btn" onClick={() => void download(row.audioUrl!, `bk-ovoz-${row.id.slice(-8)}.${row.format}`)}><Download size={15}/>Yuklab olish</button>}

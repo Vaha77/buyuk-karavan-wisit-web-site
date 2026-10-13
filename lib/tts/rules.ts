@@ -158,13 +158,41 @@ export const formatDuration = (ms: number | null | undefined) => {
 };
 
 // ---- Missing table ----------------------------------------------------------------------------------------------
-export const MIGRATION_NEEDED = "Ovoz studiyasi jadvali (TtsGeneration) bazada yo‘q — migratsiya kerak: npx prisma migrate deploy";
+export const MIGRATION_NEEDED = "Ovoz studiyasi jadvali yoki ustuni (TtsGeneration) bazada yo‘q — migratsiya kerak: npx prisma migrate deploy";
 /** Prisma P2021 ("The table … does not exist") or Postgres 42P01 for the TTS table — the migration has not been applied. */
 export function isMissingTable(error: unknown): boolean {
   const item = error as { code?: unknown; message?: unknown; meta?: { table?: unknown; modelName?: unknown }; cause?: unknown } | null;
   if (!item || typeof item !== "object") return false;
   const text = `${typeof item.message === "string" ? item.message : ""} ${String(item.meta?.table ?? "")} ${String(item.meta?.modelName ?? "")}`;
-  if ((item.code === "P2021" || item.code === "42P01") && (/TtsGeneration/i.test(text) || !text.trim())) return true;
+  // P2021 / 42P01: table missing; P2022 / 42703: column missing (a newer TTS migration not applied yet).
+  if (["P2021", "42P01", "P2022", "42703"].includes(String(item.code)) && (/TtsGeneration/i.test(text) || !text.trim())) return true;
   if (/TtsGeneration/i.test(text) && /does not exist/i.test(text)) return true;
+  const column = String((item.meta as { column?: unknown } | undefined)?.column ?? "");
+  if (item.code === "P2022" && /^(public\.)?TtsGeneration\.|"TtsGeneration"\./i.test(column)) return true;
   return item.cause !== undefined && item.cause !== error ? isMissingTable(item.cause) : false;
+}
+
+// ---- VoiceLab credits -------------------------------------------------------------------------------------------
+/** Providers billed in their own credits (not USD): the $ limit and the OpenAI line leave them out. */
+export const CREDIT_PROVIDERS = ["voicelab"];
+export const isCreditProvider = (provider: string) => CREDIT_PROVIDERS.includes(provider);
+export const DEFAULT_VOICELAB_MONTHLY_CREDITS = 252_000;
+/** Observed on VoiceLab: 1 433 characters = 717 credits → 0.5 credit per character (VOICELAB_CREDITS_PER_CHAR overrides). */
+export const DEFAULT_CREDITS_PER_CHAR = 0.5;
+export const creditsPerChar = (env: Record<string, string | undefined>) => envNumber(env.VOICELAB_CREDITS_PER_CHAR, DEFAULT_CREDITS_PER_CHAR) ?? DEFAULT_CREDITS_PER_CHAR;
+export const monthlyCredits = (env: Record<string, string | undefined>) => envNumber(env.VOICELAB_MONTHLY_CREDITS, DEFAULT_VOICELAB_MONTHLY_CREDITS) ?? DEFAULT_VOICELAB_MONTHLY_CREDITS;
+export const estimateCredits = (chars: number, perChar = DEFAULT_CREDITS_PER_CHAR) => Math.ceil(chars * perChar);
+
+/** One generation's credits: the provider's own numbers when every part reported one, else the estimate. */
+export function generationCredits(chars: number, reported: Array<number | null>, perChar = DEFAULT_CREDITS_PER_CHAR) {
+  const exact = reported.length > 0 && reported.every(value => typeof value === "number" && Number.isFinite(value) && value >= 0);
+  return exact ? { credits: Math.round((reported as number[]).reduce((sum, value) => sum + value, 0)), exact: true } : { credits: estimateCredits(chars, perChar), exact: false };
+}
+
+/** The month's credits over its rows (rows from before the credits column: estimated from characters). */
+export function creditsUsed(rows: Array<{ chars: number; credits: number | null; creditsExact: boolean }>, perChar = DEFAULT_CREDITS_PER_CHAR) {
+  return {
+    used: rows.reduce((sum, row) => sum + (row.credits ?? estimateCredits(row.chars, perChar)), 0),
+    exact: rows.every(row => row.creditsExact && row.credits !== null),
+  };
 }

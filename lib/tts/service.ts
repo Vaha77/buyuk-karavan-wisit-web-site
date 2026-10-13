@@ -5,27 +5,52 @@ import { createHash } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { sendMessage, telegramErrorDetails } from "@/lib/telegram/client";
 import { detectFormat, mergeAudio, MIME, type AudioFormat } from "./audio";
-import { describeProviders, getProvider, voicesFor } from "./providers";
+import { describeProviders, getProvider, providerName, voicesFor } from "./providers";
 import { TtsProviderError } from "./providers/types";
-import { dailyWarning, limitError, limitsFromEnv, previewText, sampleSentence, splitText, tashkentDayStart, tashkentMonthStart, type TtsRequest } from "./rules";
+import { CREDIT_PROVIDERS, creditsPerChar, creditsUsed, dailyWarning, generationCredits, isCreditProvider, limitError, limitsFromEnv, monthlyCredits, previewText, sampleSentence, splitText, tashkentDayStart, tashkentMonthStart, type TtsRequest } from "./rules";
 import { deleteTtsAudio, existingSample, putSample, putTtsAudio, sampleKey } from "./storage";
 
 export type TtsKind = "FULL" | "PREVIEW" | "SAMPLE";
 type Options = { kind: TtsKind; source: "admin" | "api"; actor?: string | null };
 export type TtsResult =
-  | { ok: true; id: string | null; url: string; durationMs: number; format: AudioFormat; chars: number; chunks: number; costUsd: number; cached?: boolean; warning: string | null }
+  | { ok: true; id: string | null; url: string; durationMs: number; format: AudioFormat; chars: number; chunks: number; costUsd: number; credits: number | null; creditsExact: boolean; cached?: boolean; warning: string | null }
   | { ok: false; status: number; error: string };
 
 const env = () => process.env as Record<string, string | undefined>;
 export const providersInfo = (options: { legacy?: boolean } = {}) => describeProviders(env(), undefined, options);
 
+export type ProviderUsage = {
+  id: string; name: string; monthUsd: number; monthChars: number; monthCount: number; todayCount: number;
+  /** Credit-billed providers (VoiceLab): credits this month against the monthly base; exact = every row has VoiceLab's own number. */
+  credits: { used: number; exact: boolean; base: number; balance: number | null } | null;
+};
+
+/** "Bu oy / So‘rovlar" card: one line per provider used this month (OpenAI and VoiceLab always shown). */
 export async function usageSummary() {
-  const db = getDb(), limits = limitsFromEnv(env());
-  const [month, today] = await Promise.all([
-    db.ttsGeneration.aggregate({ where: { createdAt: { gte: tashkentMonthStart() } }, _sum: { costUsd: true, chars: true }, _count: true }),
-    db.ttsGeneration.count({ where: { createdAt: { gte: tashkentDayStart() } } }),
+  const db = getDb(), limits = limitsFromEnv(env()), month = tashkentMonthStart(), day = tashkentDayStart();
+  const [byProvider, todayByProvider, creditRows] = await Promise.all([
+    db.ttsGeneration.groupBy({ by: ["provider"], where: { createdAt: { gte: month } }, _sum: { costUsd: true, chars: true }, _count: { _all: true } }),
+    db.ttsGeneration.groupBy({ by: ["provider"], where: { createdAt: { gte: day } }, _count: { _all: true } }),
+    db.ttsGeneration.findMany({ where: { createdAt: { gte: month }, provider: { in: CREDIT_PROVIDERS } }, select: { provider: true, chars: true, credits: true, creditsExact: true } }),
   ]);
-  return { monthUsd: Math.round((month._sum.costUsd ?? 0) * 1e4) / 1e4, monthChars: month._sum.chars ?? 0, monthCount: month._count, todayCount: today, limits, warning: dailyWarning(today, limits) };
+  const ids = [...new Set(["openai", "voicelab", ...byProvider.map(row => row.provider)])];
+  const providers: ProviderUsage[] = ids.map(id => {
+    const row = byProvider.find(item => item.provider === id);
+    const credits = isCreditProvider(id) ? { ...creditsUsed(creditRows.filter(item => item.provider === id), creditsPerChar(env())), base: monthlyCredits(env()), balance: null } : null;
+    return {
+      id, name: id === "voicelab" ? "VoiceLab (Aisha)" : providerName(id),
+      monthUsd: Math.round((row?._sum.costUsd ?? 0) * 1e4) / 1e4, monthChars: row?._sum.chars ?? 0, monthCount: row?._count._all ?? 0,
+      todayCount: todayByProvider.find(item => item.provider === id)?._count._all ?? 0, credits,
+    };
+  });
+  const usd = providers.filter(item => !item.credits).reduce((sum, item) => sum + item.monthUsd, 0);
+  const todayCount = providers.reduce((sum, item) => sum + item.todayCount, 0);
+  return {
+    providers,
+    // The $ limit covers USD-billed providers (OpenAI, ElevenLabs); VoiceLab is billed in its credits.
+    monthUsd: Math.round(usd * 1e4) / 1e4, monthChars: providers.reduce((sum, item) => sum + item.monthChars, 0), monthCount: providers.reduce((sum, item) => sum + item.monthCount, 0),
+    todayCount, limits, warning: dailyWarning(todayCount, limits),
+  };
 }
 
 async function warnSuperAdmins(text: string) {
@@ -54,14 +79,23 @@ async function produce(request: TtsRequest, options: Options, store: (bytes: Uin
   const chunks = splitText(request.text, provider.maxChars);
   const chars = chunks.reduce((sum, chunk) => sum + chunk.length, 0), costUsd = provider.costUsd(chars, env());
 
-  const month = await db.ttsGeneration.aggregate({ where: { createdAt: { gte: tashkentMonthStart() } }, _sum: { costUsd: true, chars: true } });
-  const blocked = limitError({ usd: month._sum.costUsd ?? 0, chars: month._sum.chars ?? 0 }, { usd: costUsd, chars }, limits);
+  // The $ limit sums USD-billed providers only; the character limit (if set) covers all of them.
+  const [monthUsd, monthChars] = await Promise.all([
+    db.ttsGeneration.aggregate({ where: { createdAt: { gte: tashkentMonthStart() }, provider: { notIn: CREDIT_PROVIDERS } }, _sum: { costUsd: true } }),
+    db.ttsGeneration.aggregate({ where: { createdAt: { gte: tashkentMonthStart() } }, _sum: { chars: true } }),
+  ]);
+  const blocked = limitError({ usd: monthUsd._sum.costUsd ?? 0, chars: monthChars._sum.chars ?? 0 }, { usd: isCreditProvider(provider.id) ? 0 : costUsd, chars }, limits);
   if (blocked) return { ok: false, status: 429, error: blocked };
 
   let merged: { bytes: Uint8Array; durationMs: number }, format: AudioFormat;
+  const reported: Array<number | null> = [];
   try {
     const parts: Uint8Array[] = [];
-    for (const chunk of chunks) parts.push(await provider.synthesize({ text: chunk, lang: request.lang, voice: voice.id, speed: request.speed, format: resolved.format }, env()));
+    for (const chunk of chunks) {
+      let credits: number | null = null;
+      parts.push(await provider.synthesize({ text: chunk, lang: request.lang, voice: voice.id, speed: request.speed, format: resolved.format, onUsage: usage => { credits = usage.credits; } }, env()));
+      reported.push(credits);
+    }
     // What actually came back decides (e.g. a provider that answers MP3 when WAV was asked).
     format = detectFormat(parts[0]) ?? resolved.format;
     merged = mergeAudio(parts, format);
@@ -72,16 +106,17 @@ async function produce(request: TtsRequest, options: Options, store: (bytes: Uin
   }
 
   const saved = await store(merged.bytes, format);
+  const credit = isCreditProvider(provider.id) ? generationCredits(chars, reported, creditsPerChar(env())) : null;
   const row = await db.ttsGeneration.create({ data: {
     kind: options.kind, source: options.source, provider: provider.id, model: provider.model(env()), voice: voice.id, voiceName: voice.name, lang: request.lang,
-    speed: request.speed, format, text: request.text, chars, chunks: chunks.length, costUsd, durationMs: merged.durationMs, sizeBytes: merged.bytes.length,
+    speed: request.speed, format, text: request.text, chars, chunks: chunks.length, costUsd, credits: credit?.credits ?? null, creditsExact: credit?.exact ?? false, durationMs: merged.durationMs, sizeBytes: merged.bytes.length,
     audioUrl: saved.key ? saved.url : null, audioKey: saved.key, createdBy: options.actor ?? null,
   } });
 
   const today = await db.ttsGeneration.count({ where: { createdAt: { gte: tashkentDayStart() } } });
   const warning = dailyWarning(today, limits);
   if (warning && limits.dailyWarn !== null && today === Math.floor(limits.dailyWarn) + 1) await warnSuperAdmins(warning);
-  return { ok: true, id: options.kind === "FULL" ? row.id : null, url: saved.url, durationMs: merged.durationMs, format, chars, chunks: chunks.length, costUsd, warning };
+  return { ok: true, id: options.kind === "FULL" ? row.id : null, url: saved.url, durationMs: merged.durationMs, format, chars, chunks: chunks.length, costUsd, credits: credit?.credits ?? null, creditsExact: credit?.exact ?? false, warning };
 }
 
 /** "Ovoz yasash" and POST /api/tts: the full text → a public file. */
@@ -102,7 +137,7 @@ export async function generateSample(request: Omit<TtsRequest, "text">, actor: s
   const hash = createHash("sha1").update([request.provider, resolved.provider.model(env()), request.voice, request.lang, request.speed, resolved.format, text].join("|")).digest("hex");
   const key = sampleKey(request.provider, hash, resolved.format);
   const cached = await existingSample(key).catch(() => null);
-  if (cached) return { ok: true, id: null, url: cached, durationMs: 0, format: resolved.format, chars: 0, chunks: 0, costUsd: 0, cached: true, warning: null };
+  if (cached) return { ok: true, id: null, url: cached, durationMs: 0, format: resolved.format, chars: 0, chunks: 0, costUsd: 0, credits: null, creditsExact: false, cached: true, warning: null };
   // A provider that answers another format than asked would be stored under the asked one's key: harmless (the
   // browser sniffs the audio), and the key still matches the next time.
   return produce({ ...request, text }, { kind: "SAMPLE", source: "admin", actor }, (bytes, format) => putSample(key, bytes, format));

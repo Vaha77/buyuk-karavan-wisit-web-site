@@ -10,7 +10,7 @@ export const maxDuration = 300;
 /**
  * Text → voice-over. Authorization: Bearer TTS_API_TOKEN.
  * JSON body: { text, lang ("uz"…), provider ("aisha" | "openai" | "elevenlabs"), voice (id from GET /api/tts/voices), speed? (1), format? ("mp3" | "wav") }
- * Answers 201 { id, url (public), durationMs, durationSec, format, chars, chunks, costUsd, warning }.
+ * Answers 201 { id, url (public), durationMs, durationSec, format, chars, chunks, costUsd, credits (VoiceLab, else null), creditsExact, warning }.
  * 400 bad input / provider without a key · 401 · 429 monthly limit · 502 provider error.
  */
 export async function POST(request: Request) {
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const result = await generateFull(parsed.value, { source: "api", actor: "API" });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-    return NextResponse.json({ id: result.id, url: result.url, durationMs: result.durationMs, durationSec: Math.round(result.durationMs / 100) / 10, format: result.format, chars: result.chars, chunks: result.chunks, costUsd: result.costUsd, warning: result.warning }, { status: 201 });
+    return NextResponse.json({ id: result.id, url: result.url, durationMs: result.durationMs, durationSec: Math.round(result.durationMs / 100) / 10, format: result.format, chars: result.chars, chunks: result.chunks, costUsd: result.costUsd, credits: result.credits, creditsExact: result.creditsExact, warning: result.warning }, { status: 201 });
   } catch (error) {
     if (isMissingTable(error)) return NextResponse.json({ error: MIGRATION_NEEDED }, { status: 503 });
     console.error("TTS API failed", { type: error instanceof Error ? error.name : "UnknownError" });

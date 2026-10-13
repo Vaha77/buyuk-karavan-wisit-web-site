@@ -264,7 +264,7 @@ test("wiring: Super Admin only, keys only from env and never logged, additive mi
   const service = await read("../lib/tts/service.ts");
   assert.match(service, /limitError\(/, "monthly limit checked before calling the provider");
   assert.ok(service.indexOf("limitError(") < service.indexOf("provider.synthesize("));
-  assert.match(service, /costUsd, durationMs/, "cost written to the history row");
+  assert.match(service, /chunks: chunks\.length, costUsd, credits:/, "cost (and credits) written to the history row");
   const board = await read("../components/admin/instagram/voice-studio.tsx");
   for (const label of ["Sinab eshitish", "Ovoz yasash", "Yuklab olish", "Ovozlar galereyasi", "O‘chirish"]) assert.ok(board.includes(label), label);
   assert.doesNotMatch(board, /className="admin-table-wrap"/, "cards, no hidden table on phones");
@@ -435,4 +435,70 @@ test("VoiceLab wiring: studio and voices API hide the legacy Aisha adapter; key 
   const route = await read("../app/api/tts/voices/route.ts");
   assert.match(route, /providersInfo\(\{ legacy \}\)/);
   assert.match(await read("../lib/tts/providers/index.ts"), /PROVIDERS: TtsProvider\[\] = \[voicelabProvider, openaiProvider/);
+});
+
+// ---- VoiceLab credits and the usage card ---------------------------------------------------------------------------
+test("credits: ≈ characters × 0.5 (1 433 → 717), VoiceLab's own number when every part reported one; monthly base", () => {
+  assert.equal(r.estimateCredits(1433), 717, "the observed VoiceLab ratio");
+  assert.deepEqual(r.generationCredits(1433, [null]), { credits: 717, exact: false });
+  assert.deepEqual(r.generationCredits(1433, []), { credits: 717, exact: false });
+  assert.deepEqual(r.generationCredits(9000, [2400, 2100]), { credits: 4500, exact: true });
+  assert.deepEqual(r.generationCredits(9000, [2400, null]), { credits: 4500, exact: false }, "one part unknown → the whole estimate");
+  assert.deepEqual(r.generationCredits(100, [null], 1), { credits: 100, exact: false }, "VOICELAB_CREDITS_PER_CHAR=1");
+  assert.deepEqual(r.creditsUsed([{ chars: 1433, credits: 717, creditsExact: true }, { chars: 200, credits: null, creditsExact: false }]), { used: 817, exact: false }, "old rows without credits → estimated");
+  assert.deepEqual(r.creditsUsed([{ chars: 10, credits: 6, creditsExact: true }]), { used: 6, exact: true });
+  assert.deepEqual(r.creditsUsed([]), { used: 0, exact: true });
+  assert.equal(r.monthlyCredits({}), 252000);
+  assert.equal(r.monthlyCredits({ VOICELAB_MONTHLY_CREDITS: "500000" }), 500000);
+  assert.equal(r.monthlyCredits({ VOICELAB_MONTHLY_CREDITS: "abc" }), 252000);
+  assert.equal(r.creditsPerChar({}), 0.5);
+  assert.equal(r.creditsPerChar({ VOICELAB_CREDITS_PER_CHAR: "1" }), 1);
+  assert.equal(r.isCreditProvider("voicelab"), true);
+  assert.equal(r.isCreditProvider("openai"), false);
+});
+
+test("VoiceLab reports credits: 202 credits_used and a 200 credits header go to onUsage; none → nothing", async () => {
+  const timing = fastTiming();
+  try {
+    const seen = [];
+    const job = mockFetch([
+      ["/v1/tts/generations/gen_9", () => new Response(JSON.stringify({ status: "completed", audio_url: "https://storage.voicelab.example/9.wav", credits_used: 717, credits_status: "charged" }))],
+      ["storage.voicelab.example", () => new Response(vlWav(10))],
+      ["/v1/tts", () => new Response(JSON.stringify({ id: "gen_9", status_url: "/v1/tts/generations/gen_9" }), { status: 202 })],
+    ]);
+    await vl.voicelabProvider.synthesize({ ...VL_INPUT, onUsage: usage => seen.push(usage) }, ENV, job.fetcher);
+    assert.deepEqual(seen, [{ credits: 717 }]);
+    const sync = mockFetch([["/v1/tts", () => new Response(vlWav(10), { headers: { "x-voicelab-credits-used": "12", "x-voicelab-characters-used": "24" } })]]);
+    await vl.voicelabProvider.synthesize({ ...VL_INPUT, onUsage: usage => seen.push(usage) }, ENV, sync.fetcher);
+    assert.deepEqual(seen.at(-1), { credits: 12 });
+    const plain = mockFetch([["/v1/tts", () => new Response(vlWav(10), { headers: { "x-voicelab-characters-used": "24" } })]]);
+    await vl.voicelabProvider.synthesize({ ...VL_INPUT, onUsage: usage => seen.push(usage) }, ENV, plain.fetcher);
+    assert.equal(seen.length, 2, "characters header is not taken as credits");
+    assert.ok(!JSON.parse(job.calls[0].init.body).onUsage, "the callback is not sent to VoiceLab");
+  } finally { timing.restore(); }
+});
+
+test("missing column: Prisma P2022 for TtsGeneration.credits → 'migratsiya kerak' (real error shape)", () => {
+  const prisma = Object.assign(new Error("Invalid `prisma.ttsGeneration.findFirst()` invocation:\n\nThe column `TtsGeneration.credits` does not exist in the current database."), { code: "P2022", meta: { modelName: "TtsGeneration", driverAdapterError: { name: "DriverAdapterError", cause: { originalCode: "42703", kind: "ColumnNotFound", column: "TtsGeneration.credits" } } } });
+  assert.equal(r.isMissingTable(prisma), true);
+  assert.equal(r.isMissingTable(Object.assign(new Error("The column `Product.x` does not exist in the current database."), { code: "P2022", meta: { modelName: "Product" } })), false, "another model's column is not ours");
+});
+
+test("usage card wiring: per-provider lines with bars, VoiceLab credits, badges in the history; key stays on the server", async () => {
+  const board = await read("../components/admin/instagram/voice-studio.tsx");
+  assert.match(board, /function UsageLine/);
+  assert.match(board, /role="progressbar"/);
+  assert.match(board, /taxminiy — VoiceLab API balans bermaydi/);
+  assert.match(board, /item\.id === "openai" \|\| item\.id === "voicelab"/, "OpenAI and VoiceLab lines always shown");
+  assert.match(board, /className=\{`ig-tag ig-provider is-\$\{row\.provider\}`\}/, "provider badge on every history row");
+  assert.match(board, /row\.credits !== null \? creditText\(row\.credits, row\.creditsExact\)/);
+  assert.doesNotMatch(board, /VOICELAB_API_KEY|process\.env/, "no key or env in the client component");
+  const service = await read("../lib/tts/service.ts");
+  assert.match(service, /name: id === "voicelab" \? "VoiceLab \(Aisha\)"/);
+  assert.match(service, /provider: \{ notIn: CREDIT_PROVIDERS \}/, "the $ limit leaves VoiceLab out");
+  assert.match(service, /credits: credit\?\.credits \?\? null, creditsExact: credit\?\.exact \?\? false/, "credits saved on the row");
+  const migration = await read("../prisma/migrations/20261024090000_add_tts_credits/migration.sql");
+  assert.doesNotMatch(migration.replace(/^--.*$/gm, ""), /\bDROP\b|DELETE FROM|\bTRUNCATE\b|ALTER COLUMN/i);
+  assert.match(migration, /ADD COLUMN "credits" INTEGER/);
+  assert.match(migration, /ADD COLUMN "creditsExact" BOOLEAN NOT NULL DEFAULT false/);
 });
