@@ -159,3 +159,30 @@
 .ig-story-actions{display:flex;flex-wrap:wrap;gap:6px}.ig-story-actions .bk-btn{min-height:40px}
 .ig-story-edit{display:flex;flex-wrap:wrap;gap:6px}.ig-story-edit input{flex:1 1 170px;min-height:40px;padding:0 8px;border:1px solid #D3DCE8;border-radius:10px;font:inherit}
 @media (max-width:700px){.ig-story-drafts li{grid-template-columns:1fr}.ig-stories{grid-template-columns:1fr}.ig-story{grid-template-columns:96px minmax(0,1fr)}.ig-story-video{width:96px}}
+
+/* Ovoz studiyasi (TTS) — /admin/instagram/voice */
+.ig-voice-usage{display:flex;flex-wrap:wrap;gap:10px 24px;align-items:center}
+.ig-voice-usage>div:not(.ig-voice-meter){display:grid;gap:2px}.ig-voice-usage span{font-size:12px}.ig-voice-usage b{font-size:15px}
+.ig-voice-meter{flex:1 1 100%;height:6px;border-radius:999px;background:#EEF1F5;overflow:hidden}.ig-voice-meter i{display:block;height:100%;background:var(--bk-primary)}.ig-voice-meter i.is-bad{background:#B42318}
+.ig-voice-form,.ig-voice-gallery{display:grid;gap:12px;min-width:0}
+.ig-voice-text textarea{width:100%;min-height:160px;padding:10px 12px;border:1px solid #D3DCE8;border-radius:10px;font:inherit;font-size:15px;line-height:1.5;resize:vertical;box-sizing:border-box}
+.ig-voice-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:10px}
+.ig-voice-grid select{width:100%;min-height:44px;padding:0 10px;border:1px solid #D3DCE8;border-radius:10px;font:inherit;font-size:14px;background:#fff;min-width:0}
+.ig-voice-grid input[type=range]{width:100%;min-height:44px}
+.ig-voice-actions{display:flex;flex-wrap:wrap;gap:8px}.ig-voice-actions .bk-btn{min-height:44px}
+.ig-voice-result{display:grid;gap:8px;padding:12px;border:1px solid #9CC9AE;border-radius:12px;background:#F3FBF6}
+.ig-voice-result-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 10px;font-size:13px}
+.ig-voice-result .bk-btn{justify-self:start}
+.ig-voice-audio{width:100%;max-width:100%;height:40px}
+.ig-voice-hidden{display:none}
+.ig-voice-note{margin:0;font-size:12px;overflow-wrap:anywhere}
+.ig-voice-list{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.ig-voice-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--bk-border);border-radius:10px;min-width:0}
+.ig-voice-list li.is-playing{border-color:var(--bk-primary);background:#F3F7FE}.ig-voice-list li.is-picked{border-color:#9CC9AE}
+.ig-voice-name{display:grid;gap:2px;min-width:0}.ig-voice-name small{font-size:12px;overflow-wrap:anywhere}
+.ig-voice-row-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.ig-voice-row-actions .bk-btn{min-height:40px}
+.ig-voice-history{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:12px;margin:0;padding:0;list-style:none}
+.ig-voice-history li{display:grid;gap:8px;min-width:0}
+.ig-voice-head{margin:0;font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.ig-voice-meta{margin:0;font-size:12px;overflow-wrap:anywhere}
+@media (max-width:480px){.ig-voice-actions .bk-btn{flex:1 1 100%;justify-content:center}.ig-voice-list li{flex-wrap:wrap}}

@@ -1568,3 +1568,35 @@ model StoryQueueItem {
   @@index([status, scheduledAt])
   @@index([scheduledAt])
 }
+
+// Ovoz studiyasi (TTS): every generation — full files (history), "Sinab eshitish" previews and gallery samples — with
+// its characters and estimated cost (the monthly limit sums these). Deleting from the history removes the file and
+// sets deletedAt; the row stays for the cost totals.
+model TtsGeneration {
+  id         String    @id @default(cuid())
+  // "FULL" | "PREVIEW" | "SAMPLE"
+  kind       String    @default("FULL") @db.VarChar(10)
+  // "admin" | "api"
+  source     String    @db.VarChar(10)
+  provider   String    @db.VarChar(30)
+  model      String?   @db.VarChar(80)
+  voice      String    @db.VarChar(120)
+  voiceName  String?   @db.VarChar(120)
+  lang       String    @db.VarChar(10)
+  speed      Float     @default(1)
+  format     String    @db.VarChar(8)
+  text       String
+  chars      Int
+  chunks     Int       @default(1)
+  costUsd    Float     @default(0)
+  durationMs Int?
+  sizeBytes  Int?
+  audioUrl   String?
+  audioKey   String?   @db.VarChar(200)
+  createdBy  String?   @db.VarChar(120)
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([kind, createdAt])
+}

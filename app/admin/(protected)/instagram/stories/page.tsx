@@ -25,6 +25,7 @@ export default async function StoriesPage() {
       <Link className="bk-chip" href="/admin/instagram?tab=direct">Direct</Link>
       <Link className="bk-chip" href="/admin/instagram?tab=stats">Statistika</Link>
       <Link className="bk-chip is-active" href="/admin/instagram/stories">Storislar</Link>
+      <Link className="bk-chip" href="/admin/instagram/voice">Ovoz</Link>
     </nav>
     <StoriesBoard
       items={items.map(item => ({ id: item.id, videoUrl: item.videoUrl, caption: item.caption, scheduledAt: item.scheduledAt.toISOString(), status: item.status, error: item.error, attempts: item.attempts, publishedAt: item.publishedAt?.toISOString() ?? null, durationMs: item.durationMs, width: item.width, height: item.height, approvedBy: item.approvedBy }))}
