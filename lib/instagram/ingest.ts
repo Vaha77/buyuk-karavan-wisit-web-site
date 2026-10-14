@@ -54,13 +54,13 @@ export async function ingestFetchedComments(media: MediaComments[], account: Ing
     for (const comment of comments) {
       const time = graphTime(comment.timestamp), fromId = comment.from?.id ? String(comment.from.id) : null;
       if (!comment.id || !fromId || !time || now.getTime() - time.getTime() > windowMs) continue;
-      const event = { commentId: String(comment.id), mediaId, fromId, username: comment.from?.username ?? comment.username ?? null, text: typeof comment.text === "string" ? comment.text.slice(0, 2000) : "", parentId: comment.parent_id ? String(comment.parent_id) : null, time };
-      const decision = decideIngest(event, account, now);
+      const fields = { commentId: String(comment.id), mediaId, fromId, username: comment.from?.username ?? comment.username ?? null, text: typeof comment.text === "string" ? comment.text.slice(0, 2000) : "", parentId: comment.parent_id ? String(comment.parent_id) : null };
+      const decision = decideIngest({ ...fields, time }, account, now);
       if (decision.action === "ignore") continue;
       found++;
-      const inserted = await store.insertComment({ ...event, status: decision.action === "queue" ? "PENDING" : "SKIPPED", reason: decision.action === "skip" ? decision.reason : null, createdAt: time, nextAttemptAt: now });
+      const inserted = await store.insertComment({ ...fields, status: decision.action === "queue" ? "PENDING" : "SKIPPED", reason: decision.action === "skip" ? decision.reason : null, createdAt: time, nextAttemptAt: now });
       if (!inserted) { duplicates++; continue; }
-      if (decision.action === "queue") queued.push(event.commentId); else skipped++;
+      if (decision.action === "queue") queued.push(fields.commentId); else skipped++;
     }
   }
   return { found, queued, skipped, duplicates };

@@ -195,6 +195,10 @@ test("catch-up: Graph API comments use the webhook rules — duplicates, replies
   assert.equal(store.comments.get("c-new").status, "PENDING");
   assert.equal(store.comments.get("c-new").createdAt.toISOString(), new Date(now.getTime() - 2 * 3_600_000).toISOString(), "comment time, not sync time");
   assert.equal(store.comments.get("c-reply").status, "SKIPPED");
+  // Same columns as a webhook row (an extra key such as `time` makes Prisma reject the insert).
+  const hookStore = memoryStore();
+  await ingestWebhook(commentPayload("c-cols", "narx"), ACCOUNT, hookStore, now);
+  assert.deepEqual(Object.keys(store.comments.get("c-new")).sort(), Object.keys(hookStore.comments.get("c-cols")).sort());
   assert.equal(store.comments.has("c-old"), false, "older than 7 days: no row");
   assert.equal(store.comments.has("c-own"), false);
   const second = await ingestFetchedComments(media, ACCOUNT, store, { days: 7, now });
