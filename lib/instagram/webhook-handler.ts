@@ -1,5 +1,5 @@
 // Instagram webhook POST, with its dependencies passed in (tests/instagram-webhook.test.mjs runs it without Next / DB).
-// Meta gets its answer as soon as the rows are written; classification, replies with their 20–90 s pauses, Telegram
+// Meta gets its answer as soon as the rows are written; classification, replies with their 8–25 s pauses, Telegram
 // cards etc. are handed to `schedule` (next/server `after`) and never awaited here.
 import { validSignature } from "./rules";
 

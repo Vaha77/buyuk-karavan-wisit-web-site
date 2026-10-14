@@ -83,6 +83,9 @@ URL harfma-harf mos bo'lishi shart (https, oxirida `/` yo'q).
 2. **Instagram'ni ulash** → Instagram'ga kiring → ruxsatlarni tasdiqlang.
 3. Qaytgach kartada: `@akkaunt`, token muddati (60 kun), webhook holati ko'rinadi.
    Token har kuni tekshiriladi va 20 kun qolganda avtomatik yangilanadi (Vercel Cron, `/api/cron/instagram`).
+   GitHub Actions: `instagram-comments-cron.yml` har soatda `/api/cron/instagram` (token + o'tkazib yuborilgan
+   kommentlar), `instagram-queue-cron.yml` har 10 daqiqada `/api/cron/instagram-queue` (faqat javoblar navbati) ni
+   `CRON_SECRET` bilan chaqiradi.
 4. Admin panel → **Instagram** bo'limi → postni **Sozlash** → mahsulot tanlang → **Saqlash**.
 
 ## 7. Development rejimida sinash (App Review'gacha)
@@ -153,7 +156,7 @@ Har komment avval **kalit so'zlar** bilan turlanadi, noaniq bo'lsa **Madina AI**
 
 Admin panel → Instagram → "Avto-javob sozlamalari"da har tur alohida yoqiladi (Ijobiy va Savol standart o'chiq),
 kunlik ochiq javob limiti (standart 150) o'rnatiladi. Qoidalar: bitta odamga bitta postda 1 javob; o'z kommentlarimiz
-va javob-kommentlarga (reply) javob yo'q; javoblar orasida tasodifiy 20–90 soniya.
+va javob-kommentlarga (reply) javob yo'q; javoblar orasida tasodifiy 8–25 soniya.
 
 Salbiy xabar kelishi uchun Super Admin Telegram'ni ulagan bo'lishi kerak (Sozlamalar → "Seh Telegram boti" → ulash).
 Like qo'yish API'da yo'q.

@@ -320,9 +320,9 @@ export const tooSimilar = (reply: string, recent: readonly string[]) => recent.s
 
 // ---- Pacing, daily limit, AI cost ----------------------------------------------------------------------
 
-export const MIN_GAP_MS = 20_000;
-export const MAX_GAP_MS = 90_000;
-/** Random 20–90 s pause between two outgoing replies (looks human, stays under Meta's spam radar). */
+export const MIN_GAP_MS = 8_000;
+export const MAX_GAP_MS = 25_000;
+/** Random 8–25 s pause between two outgoing replies (looks human, stays under Meta's spam radar). */
 export const randomGapMs = (random = Math.random) => MIN_GAP_MS + Math.floor(random() * (MAX_GAP_MS - MIN_GAP_MS + 1));
 
 /** Start of the current day in Tashkent (UTC+5, no DST) as a UTC Date. */

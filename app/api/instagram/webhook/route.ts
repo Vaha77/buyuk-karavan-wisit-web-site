@@ -5,7 +5,7 @@ import { handleWebhookPost } from "@/lib/instagram/webhook-handler";
 import { afterNotification, ingestNotification } from "@/lib/instagram/service";
 
 export const runtime = "nodejs";
-// Replies are sent after the 200 (next/server `after`), 20–90 s apart, within this route's duration.
+// Replies are sent after the 200 (next/server `after`), 8–25 s apart, within this route's duration.
 export const maxDuration = 300;
 
 /** Meta's subscription check: echo hub.challenge when hub.verify_token matches INSTAGRAM_WEBHOOK_VERIFY_TOKEN. */

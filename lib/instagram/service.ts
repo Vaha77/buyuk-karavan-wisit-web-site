@@ -69,7 +69,7 @@ async function claim(commentId: string) {
 
 /**
  * Pacing: reserves the next outgoing reply slot atomically. Returns 0 when this run may reply now (the following slot is
- * then 20–90 s later), else how many ms to wait.
+ * then 8–25 s later), else how many ms to wait.
  */
 async function reserveSlot() {
   const now = new Date();
@@ -138,7 +138,7 @@ async function createInstagramLead(comment: InstagramComment, rule: RuleWithProd
 // ---- One comment -----------------------------------------------------------------------------------------
 
 /**
- * Classifies one claimed comment and does what its kind needs. Replies wait for a pacing slot (20–90 s apart). A Graph
+ * Classifies one claimed comment and does what its kind needs. Replies wait for a pacing slot (8–25 s apart). A Graph
  * failure is retried with backoff (rate limit, server / network error) or recorded with its reason; it never throws.
  */
 async function processComment(commentId: string, context: Context): Promise<Outcome> {
@@ -275,10 +275,13 @@ async function processComment(commentId: string, context: Context): Promise<Outc
  * others return at once — the running one picks up their comments. Stops at a rate-limit answer. Never throws.
  */
 export async function processQueue(options: { budgetMs?: number; limit?: number } = {}) {
-  const totals = { sent: 0, failed: 0, skipped: 0, notified: 0, retry: 0, waiting: 0, busy: false };
+  const totals = { sent: 0, failed: 0, skipped: 0, notified: 0, retry: 0, waiting: 0, busy: false, idle: false };
   const db = getDb();
   const started = Date.now(), budget = options.budgetMs ?? 45_000, deadline = started + budget;
   try {
+    // Nothing due within this run: return before the lock, the CBU rate and the phone lookup.
+    const due = await db.instagramComment.findFirst({ where: { status: "PENDING", nextAttemptAt: { lte: new Date(deadline - 20_000) } }, select: { commentId: true } });
+    if (!due) { totals.idle = true; return totals; }
     const lock = await db.instagramAccount.updateMany({ where: { id: ACCOUNT_ID, OR: [{ runnerUntil: null }, { runnerUntil: { lt: new Date() } }] }, data: { runnerUntil: new Date(deadline + 30_000) } });
     if (lock.count !== 1) { totals.busy = true; return totals; }
     try {

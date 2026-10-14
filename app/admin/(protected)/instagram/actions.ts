@@ -81,7 +81,7 @@ export async function syncMissedCommentsAction(): Promise<Result> {
   await requireRole("SUPER_ADMIN");
   const result = await syncMissedComments({ days: 7, mediaLimit: 25 });
   if (!result.ok) return { ok: false, error: result.reason === "not-connected" ? "Akkaunt ulanmagan." : result.reason === "unreadable" ? "Tokenni o‘qib bo‘lmadi — qayta ulang." : result.error ?? "Instagram’dan olib bo‘lmadi." };
-  // Replies keep their 20–90 s pauses; a runner that is already working picks these up itself.
+  // Replies keep their 8–25 s pauses; a runner that is already working picks these up itself.
   if (result.queued) after(() => processQueue({ budgetMs: 40_000 }));
   revalidate();
   return { ok: true, message: `Topildi: ${result.found} · Navbatga qo‘shildi: ${result.queued}${result.errors ? ` · ${result.errors} ta post o‘qilmadi` : ""}` };
@@ -152,7 +152,8 @@ export async function runInstagramQueueAction(): Promise<Result> {
   await requireRole("SUPER_ADMIN", "ADMIN");
   const totals = await processQueue({ budgetMs: 40_000 });
   revalidatePath("/admin/instagram");
-  if (totals.busy) return { ok: true, message: "Navbat hozir ishlayapti — javoblar 20–90 soniya oralig‘ida ketadi." };
+  if (totals.idle) return { ok: true, message: "Navbat bo‘sh — yuboriladigan komment yo‘q." };
+  if (totals.busy) return { ok: true, message: "Navbat hozir ishlayapti — javoblar 8–25 soniya oralig‘ida ketadi." };
   return { ok: true, message: `Yuborildi: ${totals.sent} · adminga: ${totals.notified} · o‘tkazildi: ${totals.skipped} · xato: ${totals.failed} · navbatda: ${totals.retry + totals.waiting}` };
 }
 

@@ -146,9 +146,11 @@ test("variants, pacing, Tashkent day, AI cost", () => {
   assert.equal(rules.pickVariant(["A", "B"], "X", () => 0.99), "B");
   assert.equal(rules.pickVariant([], "X"), "X");
   assert.deepEqual(rules.parseVariants("Bir\n\n Ikki \nBir"), ["Bir", "Ikki"]);
-  assert.equal(rules.randomGapMs(() => 0), 20_000);
-  assert.equal(rules.randomGapMs(() => 0.9999999), 90_000);
-  for (let i = 0; i < 200; i++) { const gap = rules.randomGapMs(); assert.ok(gap >= 20_000 && gap <= 90_000); }
+  assert.equal(rules.MIN_GAP_MS, 8_000);
+  assert.equal(rules.MAX_GAP_MS, 25_000);
+  assert.equal(rules.randomGapMs(() => 0), 8_000);
+  assert.equal(rules.randomGapMs(() => 0.9999999), 25_000);
+  for (let i = 0; i < 200; i++) { const gap = rules.randomGapMs(); assert.ok(gap >= 8_000 && gap <= 25_000); }
   assert.equal(rules.tashkentDayStart(new Date("2026-10-11T18:59:00Z")).toISOString(), "2026-10-10T19:00:00.000Z");
   assert.equal(rules.tashkentDayStart(new Date("2026-10-11T19:00:00Z")).toISOString(), "2026-10-11T19:00:00.000Z");
   assert.equal(rules.aiCostUsd("gpt-4.1-mini", 1_000_000, 0), 0.4);
@@ -238,6 +240,35 @@ test("catch-up paging: every page filtered by timestamp (any order); the next pa
   assert.deepEqual(mixed.requested, [0, 1, 2], "page 3 had nothing recent → page 4 is not read");
   const allOld = await run([[{ id: "old", timestamp: at(8) }], [{ id: "x", timestamp: at(1) }]]);
   assert.deepEqual(allOld, { ids: [], requested: [0] });
+});
+
+test("queue cron: CRON_SECRET required (constant-time), the queue runs only when authorized, errors → 500", async () => {
+  const { handleQueueCron, cronAuthorized } = await import("../lib/instagram/queue-cron.ts");
+  let runs = 0;
+  const run = async () => { runs++; return { sent: 1, idle: false }; };
+  for (const [header, secret] of [[null, "s3cret"], ["s3cret", "s3cret"], ["Bearer wrong", "s3cret"], ["Bearer s3cret-x", "s3cret"], ["Bearer ", ""], ["Bearer s3cret", undefined]]) {
+    assert.deepEqual(await handleQueueCron(header, secret, run), { status: 401, body: { ok: false } }, `${header} / ${secret}`);
+  }
+  assert.equal(runs, 0, "nothing runs without the right secret");
+  assert.deepEqual(await handleQueueCron("Bearer s3cret", "s3cret", run), { status: 200, body: { ok: true, queue: { sent: 1, idle: false } } });
+  assert.equal(runs, 1);
+  const originalError = console.error;
+  console.error = () => {};
+  try { assert.deepEqual(await handleQueueCron("Bearer s3cret", "s3cret", async () => { throw new Error("db"); }), { status: 500, body: { ok: false } }); }
+  finally { console.error = originalError; }
+  assert.equal(cronAuthorized("Bearer s3cret", "s3cret"), true);
+
+  const route = await read("../app/api/cron/instagram-queue/route.ts");
+  assert.match(route, /handleQueueCron\(request\.headers\.get\("authorization"\), process\.env\.CRON_SECRET, \(\) => processQueue\(\{ budgetMs: 50_000 \}\)\)/);
+  assert.doesNotMatch(route, /refreshTokenIfDue|syncMissedComments/, "light: the queue only");
+  const service = await read("../lib/instagram/service.ts");
+  const queue = service.slice(service.indexOf("export async function processQueue"));
+  assert.ok(queue.indexOf("totals.idle = true") < queue.indexOf("runnerUntil") && queue.indexOf("totals.idle = true") < queue.indexOf("getUsdUzsRate"), "empty queue returns before the lock and the CBU rate");
+  const workflow = await read("../.github/workflows/instagram-queue-cron.yml");
+  assert.match(workflow, /cron: "\*\/10 \* \* \* \*"/);
+  assert.match(workflow, /Authorization: Bearer \$CRON_SECRET/);
+  assert.match(workflow, /https:\/\/buyukkaravan\.com\/api\/cron\/instagram-queue"/);
+  assert.doesNotMatch(workflow, /echo[^\n]*\$CRON_SECRET/, "the secret is never printed");
 });
 
 test("catch-up wiring: hourly (GitHub Actions; Vercel Hobby is daily) cron runs it after the token refresh; settings button calls it", async () => {

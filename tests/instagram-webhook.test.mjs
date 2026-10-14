@@ -10,13 +10,13 @@ const SECRET = "app-secret";
 const body = Buffer.from(JSON.stringify({ object: "instagram", entry: [] }));
 const signature = `sha256=${createHmac("sha256", SECRET).update(body).digest("hex")}`;
 
-test("webhook answers 200 at once; the slow work (20–90 s pauses) runs after the response", async () => {
+test("webhook answers 200 at once; the slow work (8–25 s pauses) runs after the response", async () => {
   const scheduled = [];
   let backgroundDone = false;
   const deps = {
     appSecret: SECRET,
     ingest: async () => ({ queued: ["c-1"] }),
-    // The real background part paces replies 20–90 s apart; here: 90 s.
+    // The real background part paces replies 8–25 s apart; here: 90 s.
     background: () => new Promise(resolve => { const timer = setTimeout(() => { backgroundDone = true; resolve(); }, 90_000); scheduled.push(timer); }),
     schedule: task => { scheduled.push(task); },
   };
