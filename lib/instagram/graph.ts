@@ -1,10 +1,12 @@
 import "server-only";
 // Instagram API with Instagram Login (graph.instagram.com). The access token goes in the Authorization header (or, where
 // Meta requires it, the query string of a request that is never logged); errors carry only status / code / message.
+import { graphTime, type ApiComment } from "./ingest";
 import { GRAPH_HOST, GRAPH_VERSION, OAUTH_TOKEN_URL, type GraphErrorInfo } from "./rules";
 
 export class GraphError extends Error {
-  constructor(public info: GraphErrorInfo) { super(`Instagram API error ${info.code ?? info.status}`); this.name = "GraphError"; }
+  info: GraphErrorInfo;
+  constructor(info: GraphErrorInfo) { super(`Instagram API error ${info.code ?? info.status}`); this.name = "GraphError"; this.info = info; }
 }
 
 export function appConfig() {
@@ -82,6 +84,23 @@ export async function listMedia(token: string, igUserId: string, limit = 24) {
     if (!(error instanceof GraphError) || error.info.code !== 100) throw error;
     return (await call<{ data: IgMedia[] }>(graph(`${igUserId}/media`, { fields: base, limit: String(limit) }), { token })).data ?? [];
   }
+}
+
+/**
+ * Comments of one post newer than `since` (up to 10 pages of 50). Each page is filtered by timestamp, whatever its order;
+ * the next page is read only while this one still had a comment inside the window.
+ */
+export async function listComments(token: string, mediaId: string, since: Date) {
+  const out: ApiComment[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < 10; page++) {
+    const result = await call<{ data?: ApiComment[]; paging?: { cursors?: { after?: string }; next?: string } }>(graph(`${mediaId}/comments`, { fields: "id,text,timestamp,from,username,parent_id", limit: "50", ...(after ? { after } : {}) }), { token });
+    const recent = (result.data ?? []).filter(row => (graphTime(row.timestamp)?.getTime() ?? -Infinity) >= since.getTime());
+    out.push(...recent);
+    if (!recent.length || !result.paging?.next || !result.paging.cursors?.after) break;
+    after = result.paging.cursors.after;
+  }
+  return out;
 }
 
 // ---- Insights (instagram_business_manage_insights) --------------------------------------------------------

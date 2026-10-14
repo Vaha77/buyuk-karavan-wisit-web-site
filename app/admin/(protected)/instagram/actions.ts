@@ -2,6 +2,7 @@
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { writeAudit } from "@/lib/audit/service";
@@ -15,7 +16,7 @@ import { dismissConversation } from "@/lib/instagram/direct";
 import { refreshInsights } from "@/lib/instagram/insights";
 import { parseMinute } from "@/lib/instagram/direct-rules";
 import { DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY, errorReason, parseKeywords, parseVariants } from "@/lib/instagram/rules";
-import { accountToken, getInstagramAccount, processQueue, refreshTokenIfDue } from "@/lib/instagram/service";
+import { accountToken, getInstagramAccount, processQueue, refreshTokenIfDue, syncMissedComments } from "@/lib/instagram/service";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 const graphReason = (error: unknown) => error instanceof GraphError ? errorReason(error.info) : "Tarmoq xatosi";
@@ -73,6 +74,17 @@ export async function resubscribeWebhookAction(): Promise<Result> {
     revalidate();
     return { ok: false, error: reason };
   }
+}
+
+/** "O‘tkazib yuborilgan kommentlarni tekshirish": the hourly catch-up now; new comments are answered right after. */
+export async function syncMissedCommentsAction(): Promise<Result> {
+  await requireRole("SUPER_ADMIN");
+  const result = await syncMissedComments({ days: 7, mediaLimit: 25 });
+  if (!result.ok) return { ok: false, error: result.reason === "not-connected" ? "Akkaunt ulanmagan." : result.reason === "unreadable" ? "Tokenni o‘qib bo‘lmadi — qayta ulang." : result.error ?? "Instagram’dan olib bo‘lmadi." };
+  // Replies keep their 20–90 s pauses; a runner that is already working picks these up itself.
+  if (result.queued) after(() => processQueue({ budgetMs: 40_000 }));
+  revalidate();
+  return { ok: true, message: `Topildi: ${result.found} · Navbatga qo‘shildi: ${result.queued}${result.errors ? ` · ${result.errors} ta post o‘qilmadi` : ""}` };
 }
 
 // ---- Instagram section (Super Admin, Admin) -------------------------------------------------------------

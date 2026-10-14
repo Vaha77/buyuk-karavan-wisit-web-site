@@ -15,6 +15,8 @@ import { DEFAULT_WORKSHOP_DAILY_LIMIT } from "@/lib/sex/rules";
 import { InstagramConnectionCard } from "@/components/admin/instagram/connection-card";
 import "@/components/admin/instagram/instagram.css";
 import { getInstagramStatus } from "@/lib/instagram/queries";
+// Instagram catch-up action: reads up to 25 posts' comments, then answers new ones in `after`.
+export const maxDuration = 60;
 export const metadata:Metadata={title:"Sozlamalar — Admin | BUYUK KARAVAN"};
 export default async function Page({ searchParams }: { searchParams: Promise<{ instagram?: string }> }){
   const user = await requireAdmin();

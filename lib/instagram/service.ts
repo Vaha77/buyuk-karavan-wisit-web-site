@@ -10,8 +10,8 @@ import { SITE_URL } from "@/lib/site-url";
 import { publishLeadToTelegram } from "@/lib/telegram/service";
 import { addUsage, classifyWithAi, writePositiveReply, type AiUsage } from "./ai";
 import { DEFAULT_PUBLIC_REPLY, type CommentKind } from "./constants";
-import { GraphError, getMediaPermalink, refreshLongLived, replyToComment, sendPrivateReply } from "./graph";
-import { ingestWebhook, type IngestStore } from "./ingest";
+import { GraphError, getMediaPermalink, listComments, listMedia, refreshLongLived, replyToComment, sendPrivateReply } from "./graph";
+import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComments } from "./ingest";
 import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { notifyNegative } from "./telegram";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, leadKey, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
@@ -316,6 +316,33 @@ export async function processQueue(options: { budgetMs?: number; limit?: number 
     console.error("Instagram queue failed", { type: safeType(error) });
   }
   return totals;
+}
+
+// ---- Catch-up --------------------------------------------------------------------------------------------
+
+export type SyncResult = { ok: true; media: number; found: number; queued: number; skipped: number; duplicates: number; errors: number } | { ok: false; reason: "not-connected" | "unreadable" | "error"; error?: string };
+
+/**
+ * Comments the webhook missed: the latest `mediaLimit` posts, their comments of the last `days` days, ingested with the
+ * webhook's rules (existing comment ids do nothing). New ones are PENDING and answered by processQueue as usual.
+ */
+export async function syncMissedComments(options: { days?: number; mediaLimit?: number } = {}): Promise<SyncResult> {
+  const days = options.days ?? 7, mediaLimit = options.mediaLimit ?? 25;
+  const account = await getInstagramAccount();
+  if (!account) return { ok: false, reason: "not-connected" };
+  const token = accountToken(account);
+  if (!token) return { ok: false, reason: "unreadable" };
+  const since = new Date(Date.now() - days * 86_400_000);
+  let media;
+  try { media = (await listMedia(token, account.igUserId, mediaLimit)).filter(item => item.comments_count !== 0); }
+  catch (error) { console.error("Instagram catch-up failed", { type: safeType(error) }); return { ok: false, reason: "error", error: errorReason(errorInfo(error)) }; }
+  const batches: MediaComments[] = [];
+  let errors = 0;
+  for (let index = 0; index < media.length; index += 5) {
+    await Promise.all(media.slice(index, index + 5).map(item => listComments(token, item.id, since).then(comments => { batches.push({ mediaId: item.id, comments }); }).catch(error => { errors++; console.error("Instagram comments fetch failed", { type: safeType(error) }); })));
+  }
+  const result = await ingestFetchedComments(batches, account, prismaStore, { days });
+  return { ok: true, media: media.length, found: result.found, queued: result.queued.length, skipped: result.skipped, duplicates: result.duplicates, errors };
 }
 
 // ---- Token -----------------------------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Camera } from "lucide-react";
-import { connectInstagramAction, disconnectInstagramAction, refreshInstagramTokenAction, resubscribeWebhookAction } from "@/app/admin/(protected)/instagram/actions";
+import { connectInstagramAction, disconnectInstagramAction, refreshInstagramTokenAction, resubscribeWebhookAction, syncMissedCommentsAction } from "@/app/admin/(protected)/instagram/actions";
 import { BusyLabel } from "@/components/admin/feedback";
 import type { InstagramStatus } from "@/lib/instagram/queries";
 
@@ -54,10 +54,11 @@ export function InstagramConnectionCard({ status, result }: { status: InstagramS
       {account && <>
         <button type="button" className="bk-btn" disabled={!!busy} onClick={() => run("refresh", refreshInstagramTokenAction)}><BusyLabel busy={busy === "refresh"} busyText="Yangilanmoqda…">Tokenni yangilash</BusyLabel></button>
         <button type="button" className="bk-btn" disabled={!!busy} onClick={() => run("webhook", resubscribeWebhookAction)}><BusyLabel busy={busy === "webhook"} busyText="Ulanmoqda…">Webhookni qayta ulash</BusyLabel></button>
+        <button type="button" className="bk-btn" disabled={!!busy} onClick={() => run("sync", syncMissedCommentsAction)}><BusyLabel busy={busy === "sync"} busyText="Tekshirilmoqda…">O‘tkazib yuborilgan kommentlarni tekshirish</BusyLabel></button>
         <button type="button" className="bk-btn is-danger-ghost" disabled={!!busy} onClick={() => run("disconnect", disconnectInstagramAction, `@${account.username} uzilsinmi? Avto-javoblar to‘xtaydi (post sozlamalari va jurnal saqlanadi).`)}><BusyLabel busy={busy === "disconnect"} busyText="Uzilmoqda…">Uzish</BusyLabel></button>
       </>}
     </div>
-    <p className="bk-muted">Token har kuni tekshiriladi va muddati tugashiga 20 kun qolganda avtomatik yangilanadi.</p>
+    <p className="bk-muted">Har soatda: token tekshiriladi (muddati tugashiga 20 kun qolganda yangilanadi) va so‘nggi 25 ta postning 7 kunlik kommentlaridan webhook o‘tkazib yuborganlari navbatga qo‘shiladi.</p>
     {message && <p className={message.ok ? "ig-ok" : "ig-error"} role={message.ok ? "status" : "alert"}>{message.text}</p>}
   </section>;
 }

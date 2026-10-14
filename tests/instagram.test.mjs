@@ -176,6 +176,78 @@ test("idempotency: the same comment delivered twice is stored and queued once", 
   assert.equal(store.comments.get("c-1").status, "PENDING");
 });
 
+test("catch-up: Graph API comments use the webhook rules — duplicates, replies, old and own comments never queued", async () => {
+  const { ingestFetchedComments, graphTime } = await import("../lib/instagram/ingest.ts");
+  const store = memoryStore();
+  const at = hoursAgo => new Date(now.getTime() - hoursAgo * 3_600_000).toISOString().replace(/\.\d+Z$/, "+0000");
+  const from = { id: "9001", username: "mijoz_1" };
+  const media = [{ mediaId: "m-1", comments: [
+    { id: "c-new", text: "Narxi qancha?", timestamp: at(2), from },
+    { id: "c-reply", text: "rahmat", timestamp: at(1), from, parent_id: "c-new" },
+    { id: "c-old", text: "narx?", timestamp: at(8 * 24), from },
+    { id: "c-own", text: "Direct’ga yozdik", timestamp: at(1), from: { id: ACCOUNT.igUserId, username: ACCOUNT.username } },
+    { id: "c-nofrom", text: "narx", timestamp: at(1) },
+  ] }];
+  assert.equal(graphTime("2026-10-11T10:00:00+0000").toISOString(), "2026-10-11T10:00:00.000Z");
+  const first = await ingestFetchedComments(media, ACCOUNT, store, { days: 7, now });
+  assert.deepEqual(first.queued, ["c-new"]);
+  assert.equal(first.found, 2, "the new comment and the reply; old / own / malformed not counted");
+  assert.equal(store.comments.get("c-new").status, "PENDING");
+  assert.equal(store.comments.get("c-new").createdAt.toISOString(), new Date(now.getTime() - 2 * 3_600_000).toISOString(), "comment time, not sync time");
+  assert.equal(store.comments.get("c-reply").status, "SKIPPED");
+  assert.equal(store.comments.has("c-old"), false, "older than 7 days: no row");
+  assert.equal(store.comments.has("c-own"), false);
+  const second = await ingestFetchedComments(media, ACCOUNT, store, { days: 7, now });
+  assert.deepEqual(second.queued, [], "second sync queues nothing");
+  assert.equal(second.duplicates, 2);
+  assert.equal(store.comments.size, 2);
+  // A comment the webhook already stored is not queued again by the catch-up.
+  const webhookStore = memoryStore();
+  await ingestWebhook(commentPayload("c-hook", "narx"), ACCOUNT, webhookStore, now);
+  const sync = await ingestFetchedComments([{ mediaId: "18000000000000001", comments: [{ id: "c-hook", text: "narx", timestamp: at(0), from }] }], ACCOUNT, webhookStore, { now });
+  assert.deepEqual(sync.queued, []);
+  assert.equal(sync.duplicates, 1);
+});
+
+test("catch-up paging: every page filtered by timestamp (any order); the next page only while a page had a recent comment", async () => {
+  const { listComments } = await import("../lib/instagram/graph.ts");
+  const since = new Date(now.getTime() - 7 * 86_400_000);
+  const at = days => new Date(now.getTime() - days * 86_400_000).toISOString().replace(/\.\d+Z$/, "+0000");
+  const run = async pages => {
+    const requested = [], original = globalThis.fetch;
+    globalThis.fetch = async url => {
+      const after = new URL(url).searchParams.get("after"), index = after ? Number(after) : 0;
+      requested.push(index);
+      const last = index === pages.length - 1;
+      return new Response(JSON.stringify({ data: pages[index], paging: last ? {} : { next: "next-url", cursors: { after: String(index + 1) } } }), { status: 200 });
+    };
+    try { return { ids: (await listComments("token", "m-1", since)).map(row => row.id), requested }; } finally { globalThis.fetch = original; }
+  };
+  // An old comment in the middle of a page no longer stops the read: the page is filtered and the next one is read.
+  const mixed = await run([
+    [{ id: "a", timestamp: at(1) }, { id: "old-1", timestamp: at(9) }, { id: "b", timestamp: at(2) }],
+    [{ id: "old-2", timestamp: at(10) }, { id: "c", timestamp: at(6) }, { id: "no-time" }],
+    [{ id: "old-3", timestamp: at(20) }],
+    [{ id: "d", timestamp: at(1) }],
+  ]);
+  assert.deepEqual(mixed.ids, ["a", "b", "c"], "old and timestamp-less comments filtered out");
+  assert.deepEqual(mixed.requested, [0, 1, 2], "page 3 had nothing recent → page 4 is not read");
+  const allOld = await run([[{ id: "old", timestamp: at(8) }], [{ id: "x", timestamp: at(1) }]]);
+  assert.deepEqual(allOld, { ids: [], requested: [0] });
+});
+
+test("catch-up wiring: hourly (GitHub Actions; Vercel Hobby is daily) cron runs it after the token refresh; settings button calls it", async () => {
+  const cron = await read("../app/api/cron/instagram/route.ts");
+  assert.ok(cron.indexOf("refreshTokenIfDue()") < cron.indexOf("syncMissedComments(") && cron.indexOf("syncMissedComments(") < cron.indexOf("processQueue("));
+  const vercel = JSON.parse(await read("../vercel.json"));
+  assert.ok(vercel.crons.some(item => item.path === "/api/cron/instagram"), "daily Vercel fallback");
+  const workflow = await read("../.github/workflows/instagram-comments-cron.yml");
+  assert.match(workflow, /cron: "0 \* \* \* \*"/);
+  assert.match(workflow, /Authorization: Bearer \$CRON_SECRET/);
+  assert.match(workflow, /https:\/\/buyukkaravan\.com\/api\/cron\/instagram"/);
+  assert.match(await read("../components/admin/instagram/connection-card.tsx"), /syncMissedCommentsAction/);
+});
+
 test("ingest: other accounts and our own comments ignored; reply-comments logged as skipped; Direct events handed over", async () => {
   const store = memoryStore();
   const own = commentPayload("c-own", "narx", { from: { id: ACCOUNT.igUserId, username: ACCOUNT.username } });
