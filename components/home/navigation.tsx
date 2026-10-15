@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowRight, Menu, Phone, X } from "lucide-react";
+import { scrollToY } from "@/lib/motion/scroll";
 
 const links = [["Bosh sahifa", "#top"], ["Mahsulotlar", "/products"], ["Sovutish kameralari", "#yechimlar"], ["Loyihalar", "#loyihalar"], ["Biz haqimizda", "#biz-haqimizda"], ["Aloqa", "#aloqa"]] as const;
 function Brand({ light = false }: { light?: boolean }) { return <span className={`brand ${light ? "light" : ""}`}><span className="brand-mark" aria-hidden="true">✳</span> BUYUK KARAVAN</span>; }
@@ -11,7 +12,7 @@ function BrandHomeLink({ light = false, onNavigate }: { light?: boolean; onNavig
   const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     onNavigate?.();
-    if (pathname === "/") { event.preventDefault(); history.pushState(null, "", "#top"); window.scrollTo({ top: 0, behavior: "smooth" }); }
+    if (pathname === "/") { event.preventDefault(); history.pushState(null, "", "#top"); scrollToY(0); }
   };
   return <Link href="/#top" scroll aria-label="Bosh sahifaga qaytish" onClick={handleClick}><Brand light={light}/></Link>;
 }

@@ -9,6 +9,7 @@ import type { ProductCategoryRecord } from "@/lib/product-categories/types";
 import { Header } from "./navigation";
 import { Selector } from "./selector";
 import { HomeMotion } from "./motion";
+import { SmoothScroll } from "@/components/motion/smooth-scroll";
 import { ContactSection } from "./home-lead-form";
 import { visibleLeadOptions } from "@/lib/home/lead-options";
 
@@ -62,5 +63,5 @@ function Footer({ onProducts = false, content = initialHomeContent.footer, categ
     <div className="container footer-bottom"><span>© 2026 Buyuk Karavan MChJ. Barcha huquqlar himoyalangan.</span><nav className="footer-legal" aria-label="Hujjatlar"><Link href="/privacy">Maxfiylik siyosati</Link><Link href="/data-deletion">Ma’lumotni o‘chirish</Link></nav><span>{content.location}</span></div>
   </footer>;
 }
-export function HomePage({content=initialHomeContent,products=[],projects=[],categories=[]}:{content?:HomeContent;products?:Product[];projects?:Project[];categories?:ProductCategoryRecord[]}) { const leadOptions=visibleLeadOptions(content.selector.items);return <><Header/><main>{content.hero.isVisible&&<Hero content={content.hero}/>} {content.selector.isVisible&&<Selector content={content.selector}/>} {content.solutions.isVisible&&<Solutions content={content.solutions}/>} {content.featuredProducts.isVisible&&<Equipment content={content.featuredProducts} products={products}/>} {content.temperature.isVisible&&<Temperature content={content.temperature}/>} {content.projects.isVisible&&<Projects content={content.projects} projects={projects}/>} {content.reasons.isVisible&&<Reasons content={content.reasons}/>}<SeoInfo/><ContactSection options={leadOptions}/></main>{content.footer.isVisible&&<Footer content={content.footer} categories={categories}/>}<HomeMotion/></>; }
+export function HomePage({content=initialHomeContent,products=[],projects=[],categories=[]}:{content?:HomeContent;products?:Product[];projects?:Project[];categories?:ProductCategoryRecord[]}) { const leadOptions=visibleLeadOptions(content.selector.items);return <><Header/><main>{content.hero.isVisible&&<Hero content={content.hero}/>} {content.selector.isVisible&&<Selector content={content.selector}/>} {content.solutions.isVisible&&<Solutions content={content.solutions}/>} {content.featuredProducts.isVisible&&<Equipment content={content.featuredProducts} products={products}/>} {content.temperature.isVisible&&<Temperature content={content.temperature}/>} {content.projects.isVisible&&<Projects content={content.projects} projects={projects}/>} {content.reasons.isVisible&&<Reasons content={content.reasons}/>}<SeoInfo/><ContactSection options={leadOptions}/></main>{content.footer.isVisible&&<Footer content={content.footer} categories={categories}/>}<HomeMotion/><SmoothScroll/></>; }
 export { Footer };

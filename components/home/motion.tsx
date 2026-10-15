@@ -1,11 +1,12 @@
 "use client";
 import { useEffect } from "react";
+import { scrollToY } from "@/lib/motion/scroll";
 
 export function HomeMotion() {
   useEffect(() => {
     const scrollToHash = (hash: string, behavior: ScrollBehavior = "smooth") => {
       if (hash === "#top") {
-        window.scrollTo({ top: 0, left: 0, behavior });
+        scrollToY(0, behavior === "smooth");
         return;
       }
       const target = document.getElementById(decodeURIComponent(hash.replace(/^#/, "")));
@@ -16,7 +17,7 @@ export function HomeMotion() {
       const offset = Math.max(headerBottom + 12, 16);
       const paddingTop = parseFloat(getComputedStyle(target).paddingTop) || 0;
       const top = target.getBoundingClientRect().top + window.scrollY + paddingTop - offset;
-      window.scrollTo({ top: Math.max(0, top), left: 0, behavior });
+      scrollToY(Math.max(0, top), behavior === "smooth");
     };
     const onClick = (event: MouseEvent) => {
       const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>('a[href^="#"]');

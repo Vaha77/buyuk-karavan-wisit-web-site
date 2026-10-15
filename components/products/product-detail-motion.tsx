@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { gsap, ScrollTrigger } from "@/lib/motion/gsap";
 
 export function ProductDetailMotion() {
   useEffect(() => {
     const root = document.querySelector<HTMLElement>(".detail-page");
     if (!root) return;
-    gsap.registerPlugin(ScrollTrigger);
     const media = gsap.matchMedia();
     media.add("(prefers-reduced-motion: no-preference)", () => {
       const context = gsap.context(() => {
