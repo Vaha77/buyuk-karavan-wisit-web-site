@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, Building2, Camera as Instagram, CircuitBoard, DoorClosed, Grid2X2, Mouse, PanelsTopLeft, Send, Snowflake, Waves } from "lucide-react";
+import { ArrowRight, Building2, Camera as Instagram, CircuitBoard, DoorClosed, Grid2X2, PanelsTopLeft, Send, Snowflake, Waves } from "lucide-react";
 import { temperatureRanges } from "@/lib/home/temperature-scale";
 import Image from "next/image";
 import Link from "next/link";
@@ -9,6 +9,7 @@ import type { ProductCategoryRecord } from "@/lib/product-categories/types";
 import { Header } from "./navigation";
 import { Selector } from "./selector";
 import { HomeMotion } from "./motion";
+import { Hero } from "./hero";
 import { Preloader } from "./preloader";
 import { SmoothScroll } from "@/components/motion/smooth-scroll";
 import { ContactSection } from "./home-lead-form";
@@ -20,22 +21,6 @@ function Heading({ eyebrow, children, light = false }: { eyebrow: string; childr
 const iconMap = { room: PanelsTopLeft, compressor: CircuitBoard, snow: Snowflake, building: Building2, pulse: Waves, condenser: PanelsTopLeft, panel: Grid2X2, door: DoorClosed, pipe: Waves };
 function IndustrialIcon({ icon, size = 38 }: { icon: keyof typeof iconMap; size?: number }) { const Icon = iconMap[icon]; return <Icon size={size} strokeWidth={1.7} aria-hidden="true" />; }
 
-function HeroContourLight() {
-  return <>
-    <svg className="hero-contour-light hero-contour-desktop" viewBox="0 0 580 580" aria-hidden="true">
-      <defs><radialGradient id="hero-ice-glow"><stop stopColor="#d9f8ff" stopOpacity=".8"/><stop offset=".28" stopColor="#99e9ff" stopOpacity=".38"/><stop offset="1" stopColor="#99e9ff" stopOpacity="0"/></radialGradient></defs>
-      <path id="hero-contour-desktop-path" d="M155 120 H425 Q460 120 460 155 V425 Q460 460 425 460 H155 Q120 460 120 425 V155 Q120 120 155 120 Z" fill="none"/>
-      <g className="hero-contour-trail"><circle r="19" fill="url(#hero-ice-glow)"/></g>
-      <g className="hero-contour-beacon"><circle r="30" fill="url(#hero-ice-glow)"/><circle r="3" fill="#d9f8ff"/></g>
-    </svg>
-    <svg className="hero-contour-light hero-contour-mobile" viewBox="0 0 350 300" aria-hidden="true">
-      <defs><radialGradient id="hero-ice-glow-mobile"><stop stopColor="#d9f8ff" stopOpacity=".7"/><stop offset=".32" stopColor="#99e9ff" stopOpacity=".3"/><stop offset="1" stopColor="#99e9ff" stopOpacity="0"/></radialGradient></defs>
-      <path id="hero-contour-mobile-path" d="M35 1 H315 Q349 1 349 35 V265 Q349 299 315 299 H35 Q1 299 1 265 V35 Q1 1 35 1 Z" fill="none"/>
-      <g className="hero-contour-beacon"><circle r="22" fill="url(#hero-ice-glow-mobile)"/><circle r="2.5" fill="#d9f8ff"/></g>
-    </svg>
-  </>;
-}
-function Hero({content}:{content:HomeContent["hero"]}) { const lines=content.headline.split("\n"); return <section className="hero" style={content.image?{backgroundImage:`linear-gradient(#092741c7,#092741c7),url(${content.image})`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}><div className="hero-grid" aria-hidden="true"/><div className="hero-room room-back" aria-hidden="true"/><div className="hero-room room-front" aria-hidden="true"><HeroContourLight/></div><div className="container hero-content"><div className="hero-copy"><p className="eyebrow hero-eyebrow">{content.eyebrow}</p><h1><span className="hero-title-desktop">{lines.map((line,index)=><span key={index}>{line}{index<lines.length-1&&<br/>}</span>)}</span><span className="hero-title-mobile">{lines.map((line,index)=><span className="hero-title-line" key={index}>{line}</span>)}</span></h1><p className="hero-subtitle">{content.subtitle}</p><div className="hero-actions"><Link href="/products" className="button button-white">{content.primaryButton} <ArrowRight size={16} aria-hidden="true"/></Link><Button href="#loyihalar" variant="outline-light">{content.secondaryButton}</Button></div></div><div className="hero-temp"><small>Harorat diapazoni</small><strong>{content.minimum} <span>→</span> {content.maximum}</strong><i/></div><div className="hero-scroll"><Mouse size={19}/><span>Pastga aylantiring</span><ArrowDown size={13}/></div></div></section>; }
 function Solutions({content}:{content:HomeContent["solutions"]}) { return <section className="solutions-section" id="yechimlar"><div className="container"><Heading eyebrow={content.eyebrow}>{content.title}</Heading><div className="solutions-list">{content.items.filter(s => s.isVisible).sort((a,b)=>a.order-b.order).map(item => <article className="solution-row" key={item.id}><span className="solution-number">{String(item.order).padStart(2,"0")}</span><div className="solution-copy"><h3>{item.title}</h3><p>{item.description}</p></div><div className="solution-image">{item.image?<Image unoptimized src={item.image} alt="" fill sizes="240px"/>:<IndustrialIcon icon={(item.icon in iconMap?item.icon:"room") as keyof typeof iconMap} size={54}/>}</div></article>)}</div></div></section>; }
 const productIcons:Record<string,keyof typeof iconMap>={compressors:"compressor",evaporators:"pulse",condensers:"condenser",chillers:"snow",panels:"panel",doors:"door",pipes:"pipe",accessories:"compressor"};
 function Equipment({content,products}:{content:HomeContent["featuredProducts"];products:Product[]}) { const ids=content.items.filter(item=>item.isVisible).sort((a,b)=>a.order-b.order).map(item=>item.productId);const selected=ids.map(id=>products.find(product=>product.id===id)).filter((item):item is Product=>Boolean(item));const shown=selected.length?selected:products.slice(0,7);return <section className="equipment-section" id="mahsulotlar"><div className="container"><div className="section-top"><Heading eyebrow={content.eyebrow} light>{content.title}</Heading><Button href="/products" variant="outline-light" arrow className="desktop-only">Barcha mahsulotlarni ko‘rish</Button></div>{content.description&&<p>{content.description}</p>}<div className="equipment-grid">{shown.map(item => <Link href={`/products/${item.slug}`} className={`equipment-card equipment-${item.category}`} key={item.id}><IndustrialIcon icon={productIcons[item.category]??"compressor"} size={32}/><div><h3>{item.name}</h3><p>{item.model}</p></div></Link>)}</div><Button href="/products" variant="outline-light" className="mobile-only equipment-all">Barcha mahsulotlarni ko‘rish</Button></div></section>; }

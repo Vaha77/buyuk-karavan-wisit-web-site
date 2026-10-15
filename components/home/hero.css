@@ -1,0 +1,14 @@
+/* ── Hero ── */
+/* Returning visitors skip the preloader: hold the hero back until its own intro runs (failsafe after 3 s). */
+.bk-preloader[data-mode="direct"]~main .hero :is(.hero-copy>*,.hero-temp,.hero-room,.hero-crates,.hero-fog){visibility:hidden;animation:bk-reveal-failsafe 0s 3s forwards}
+@keyframes bk-reveal-failsafe{to{visibility:visible}}
+/* Word masks clip the rising words; the padding keeps descenders (g, y, q) from being cut. */
+.hero-word-mask{padding-bottom:.12em;margin-bottom:-.12em}
+.hero-fog{position:absolute;pointer-events:none;will-change:transform}
+.hero-fog-back{left:-10%;right:-10%;top:28%;height:62%;background:radial-gradient(55% 50% at 72% 50%,#9fe3ff1c,#9fe3ff00 70%)}
+.hero-fog-front{left:-15%;right:-15%;bottom:-120px;height:340px;background:radial-gradient(45% 60% at 30% 72%,#e6f8ff26,#e6f8ff00 70%),radial-gradient(40% 55% at 76% 76%,#c4ecff22,#c4ecff00 70%)}
+.hero-crates{position:absolute;right:420px;bottom:150px;width:300px;height:188px;overflow:visible;pointer-events:none;fill:#0d274166;stroke:#b9dcf3;stroke-opacity:.42;stroke-width:1.3}
+.hero-crates circle{fill:#9fe3ff14}
+.hero-crate-handle{fill:#0d2741}
+@media(max-width:1000px){.hero-crates{display:none}}
+@media(max-width:700px){.hero-fog-front{bottom:-80px;height:240px}}
