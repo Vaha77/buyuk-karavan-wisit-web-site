@@ -310,6 +310,8 @@ model Lead {
   visitId                         String?                     @unique
   notes                           String?
   source                          LeadSource                  @default(OTHER)
+  // INSTAGRAM / INSTAGRAM_DM: which account (InstagramAccount.id) — "Instagram · @eshikmaster".
+  instagramAccountId              String?                     @db.VarChar(64)
   status                          LeadStatus                  @default(NEW)
   aiSummary                       String?
   chatHistory                     Json                        @default("[]")
@@ -1241,13 +1243,44 @@ enum InstagramCommentKind {
   NEGATIVE
   SPAM
   UNKNOWN
+  // Contact questions (accounts with contactRepliesEnabled): phone, address, working hours.
+  PHONE
+  ADDRESS
+  HOURS
 }
 
-// The connected professional account (one row, id "global"). The token is AES-256-GCM (lib/auth/password-vault.ts).
+// Connected professional accounts (the first one, from before multi-account, has id "global"). The token is AES-256-GCM
+// (lib/auth/password-vault.ts).
 model InstagramAccount {
-  id                  String    @id @default("global")
+  id                  String    @id @default(cuid())
   // Instagram professional account id (= "user_id" of GET /me, = entry.id in webhooks).
-  igUserId            String    @db.VarChar(64)
+  igUserId            String    @unique @db.VarChar(64)
+  // Admin name ("Eshik Master"); empty = @username.
+  label               String?
+  // Who the AI writes as ("BUYUK KARAVAN (sanoat sovutish uskunalari, Namangan)"); empty = @username.
+  brandName           String?
+  // {manzil} {moljal} {xarita} {ishVaqti} in templates.
+  address             String?
+  landmark            String?
+  mapLink             String?
+  workHours           String?
+  // PHONE / ADDRESS / HOURS comment kinds: Direct with these templates + the question public reply.
+  contactRepliesEnabled Boolean @default(false)
+  phoneDmTemplate     String    @default("Assalomu alaykum! Telefon: {telefon}")
+  addressDmTemplate   String    @default("Assalomu alaykum! Manzil: {manzil}. Mo'ljal: {moljal}. Xarita: {xarita}")
+  hoursDmTemplate     String    @default("Assalomu alaykum! Ish vaqtimiz: {ishVaqti}. Telefon: {telefon}")
+  // Price comment on a post without a product and without its own price text: this DM (empty = old behaviour).
+  noPriceDmTemplate   String?
+  // Telegram groups: Direct cards (empty = admins with "Instagram so‘rovlarini oladi"); negative comments (in addition
+  // to the Super Admins).
+  directChatId        String?   @db.VarChar(32)
+  negativeChatId      String?   @db.VarChar(32)
+  // AI reply to every comment that is not spam / negative / a contact or price question (1–2 sentences); prompt: own
+  // text (empty = built-in). Leads and Direct → Telegram can be switched off per account.
+  aiReplyAll          Boolean   @default(false)
+  aiPrompt            String?
+  leadsEnabled        Boolean   @default(true)
+  directEnabled       Boolean   @default(true)
   username            String
   tokenEncrypted      String
   tokenExpiresAt      DateTime
@@ -1293,6 +1326,9 @@ model InstagramAccount {
 // A Reels / post with its product and reply settings.
 model InstagramMediaRule {
   mediaId            String    @id @db.VarChar(64)
+  accountId          String    @default("global") @db.VarChar(64)
+  // Price text for a post without a product ("2 500 000 so‘mdan"); sent as the PRICE DM ({telefon} etc. allowed).
+  priceText          String?
   productId          String?
   product            Product?  @relation("InstagramRuleProduct", fields: [productId], references: [id], onDelete: SetNull)
   // Optional second product for {mahsulot2} {narx_som2} {havola2}; without it those lines are dropped from the DM.
@@ -1314,11 +1350,13 @@ model InstagramMediaRule {
 
   @@index([productId])
   @@index([secondProductId])
+  @@index([accountId])
 }
 
 // Every comment on our media (the journal); commentId is the idempotency key: one comment → at most one Private Reply.
 model InstagramComment {
   commentId        String               @id @db.VarChar(64)
+  accountId        String               @default("global") @db.VarChar(64)
   mediaId          String               @db.VarChar(64)
   fromId           String               @db.VarChar(64)
   username         String?
@@ -1352,6 +1390,7 @@ model InstagramComment {
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 
+  @@index([accountId, status, nextAttemptAt])
   @@index([status, nextAttemptAt])
   @@index([mediaId, createdAt])
   @@index([createdAt])
@@ -1363,6 +1402,7 @@ model InstagramComment {
 // Direct messages: incoming (IN) and our own (OUT, from the is_echo webhook). Madina never answers in Direct.
 model InstagramMessage {
   mid            String                     @id @db.VarChar(255)
+  accountId      String                     @default("global") @db.VarChar(64)
   fromId         String                     @db.VarChar(64)
   text           String?
   hasAttachments Boolean                    @default(false)
@@ -1383,6 +1423,7 @@ model InstagramMessage {
   @@index([fromId])
   @@index([conversationId, sentAt])
   @@index([direction, sentAt])
+  @@index([accountId, direction, sentAt])
 }
 
 enum InstagramMessageDirection {
@@ -1401,8 +1442,9 @@ enum InstagramConversationStatus {
 
 model InstagramConversation {
   id             String                      @id @default(cuid())
-  // Instagram-scoped id of the customer.
-  igsid          String                      @unique @db.VarChar(64)
+  accountId      String                      @default("global") @db.VarChar(64)
+  // Instagram-scoped id of the customer (per account).
+  igsid          String                      @db.VarChar(64)
   username       String?
   name           String?
   profileFetchedAt DateTime?
@@ -1437,6 +1479,8 @@ model InstagramConversation {
   updatedAt      DateTime                    @updatedAt
   messages       InstagramMessage[]
 
+  @@unique([accountId, igsid])
+  @@index([igsid])
   @@index([status, waitingSince])
   @@index([lastIncomingAt])
 }
@@ -1444,7 +1488,8 @@ model InstagramConversation {
 // ---- Instagram statistics (Insights API, daily cron + "Hozir yangilash") -------------------------------
 // Account totals for one Tashkent day (Meta may revise the last 2 days, so they are fetched again).
 model InstagramDailyStat {
-  date              String   @id @db.VarChar(10)
+  accountId         String   @default("global") @db.VarChar(64)
+  date              String   @db.VarChar(10)
   followersCount    Int?
   reach             Int?
   views             Int?
@@ -1466,11 +1511,14 @@ model InstagramDailyStat {
   textTaps          Int?
   fetchedAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  @@id([accountId, date])
 }
 
 // One post / Reels / story with its lifetime insights (posts of the last 90 days are refreshed daily).
 model InstagramMediaStat {
   mediaId           String   @id @db.VarChar(64)
+  accountId         String   @default("global") @db.VarChar(64)
   // REELS | POST | STORY
   type              String   @db.VarChar(10)
   mediaType         String?  @db.VarChar(20)
@@ -1497,16 +1545,20 @@ model InstagramMediaStat {
   updatedAt         DateTime @updatedAt
 
   @@index([postedAt])
+  @@index([accountId, postedAt])
 }
 
 // Follower / engaged audience by country, city, age, gender: one snapshot per day, with Meta's timeframe.
 model InstagramAudienceSnapshot {
-  date      String   @id @db.VarChar(10)
+  accountId String   @default("global") @db.VarChar(64)
+  date      String   @db.VarChar(10)
   timeframe String   @db.VarChar(20)
   // { country: { UZ: 1234, … }, city: {…}, age: {…}, gender: {…} }
   follower  Json     @default("{}")
   engaged   Json     @default("{}")
   fetchedAt DateTime @default(now())
+
+  @@id([accountId, date])
 }
 
 // Meta "Data Deletion Request" (signed_request) and its status page /data-deletion?code=… The Instagram user id is
@@ -1540,6 +1592,7 @@ enum StoryQueueStatus {
 
 model StoryQueueItem {
   id               String           @id @default(cuid())
+  accountId        String           @default("global") @db.VarChar(64)
   // Public URL in the site storage (Instagram fetches video_url itself).
   videoUrl         String
   videoKey         String?          @db.VarChar(200)
@@ -1574,6 +1627,7 @@ model StoryQueueItem {
 // sets deletedAt; the row stays for the cost totals.
 model TtsGeneration {
   id         String    @id @default(cuid())
+  accountId  String    @default("global") @db.VarChar(64)
   // "FULL" | "PREVIEW" | "SAMPLE"
   kind       String    @default("FULL") @db.VarChar(10)
   // "admin" | "api"

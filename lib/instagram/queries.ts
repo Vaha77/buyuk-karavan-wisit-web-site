@@ -4,26 +4,34 @@ import { getDb } from "@/lib/db";
 import { appConfig, GraphError, listMedia, type IgMedia } from "./graph";
 import { needsInsightsReconnect } from "./insights-rules";
 import { errorReason, isReel, tashkentDayStart } from "./rules";
-import { accountToken, getInstagramAccount } from "./service";
+import { accountName, accountToken, getInstagramAccount, listInstagramAccounts } from "./service";
 
-/** Sozlamalar card: connection state without the token. */
+/** The account switcher: every connected account, the first connected first. */
+export async function getAccountOptions() {
+  const accounts = await listInstagramAccounts().catch(() => []);
+  return accounts.map(account => ({ id: account.id, username: account.username, name: accountName(account) }));
+}
+export type AccountOption = Awaited<ReturnType<typeof getAccountOptions>>[number];
+
+/** Sozlamalar cards: each account's connection state without the token. */
 export async function getInstagramStatus() {
-  const account = await getInstagramAccount().catch(() => null);
+  const accounts = await listInstagramAccounts(true).catch(() => []);
   const config = appConfig();
   return {
     missingEnv: config.missing,
     vault: isVaultEnabled(),
-    account: account && { username: account.username, tokenExpiresAt: account.tokenExpiresAt.toISOString(), tokenDaysLeft: Math.floor((account.tokenExpiresAt.getTime() - Date.now()) / 86_400_000), webhookSubscribedAt: account.webhookSubscribedAt?.toISOString() ?? null, webhookError: account.webhookError, lastWebhookAt: account.lastWebhookAt?.toISOString() ?? null, tokenReadable: accountToken(account) !== null, insightsReconnect: needsInsightsReconnect(account.grantedScopes, account.insightsError) },
+    accounts: accounts.map(account => ({ id: account.id, name: accountName(account), username: account.username, tokenExpiresAt: account.tokenExpiresAt.toISOString(), tokenDaysLeft: Math.floor((account.tokenExpiresAt.getTime() - Date.now()) / 86_400_000), webhookSubscribedAt: account.webhookSubscribedAt?.toISOString() ?? null, webhookError: account.webhookError, lastWebhookAt: account.lastWebhookAt?.toISOString() ?? null, tokenReadable: accountToken(account) !== null, disconnected: !account.tokenEncrypted, insightsReconnect: needsInsightsReconnect(account.grantedScopes, account.insightsError) })),
   };
 }
 export type InstagramStatus = Awaited<ReturnType<typeof getInstagramStatus>>;
 
 export type BoardMedia = { id: string; caption: string; isReel: boolean; thumbnail: string | null; permalink: string | null; postedAt: string | null; commentsCount: number | null; fromApi: boolean };
 
-/** "Instagram" section: latest media (API) + saved rules, per-media stats and the comment journal. */
-export async function getInstagramBoard() {
+/** "Instagram" section of one account: latest media (API) + saved rules, per-media stats and the comment journal. */
+export async function getInstagramBoard(accountId: string) {
   const db = getDb();
-  const account = await getInstagramAccount();
+  const account = await getInstagramAccount(accountId);
+  const own = { accountId: account?.id ?? accountId };
   let media: IgMedia[] = [], mediaError: string | null = null;
   if (account) {
     const token = accountToken(account);
@@ -34,14 +42,14 @@ export async function getInstagramBoard() {
     }
   }
   const [rules, stats, leads, journal, products, kinds, cost, repliesToday] = await Promise.all([
-    db.instagramMediaRule.findMany({ orderBy: { updatedAt: "desc" } }),
-    db.instagramComment.groupBy({ by: ["mediaId", "status"], _count: { _all: true } }),
-    db.instagramComment.groupBy({ by: ["mediaId"], where: { leadId: { not: null } }, _count: { _all: true } }),
-    db.instagramComment.findMany({ orderBy: { createdAt: "desc" }, take: 150, select: { commentId: true, mediaId: true, username: true, text: true, status: true, reason: true, productName: true, createdAt: true, leadId: true, publicReplyError: true, kind: true, classifiedBy: true, aiCostUsd: true, aiTokens: true, dmText: true, publicReplyText: true, reviewedAt: true, reviewedBy: true } }),
+    db.instagramMediaRule.findMany({ where: own, orderBy: { updatedAt: "desc" } }),
+    db.instagramComment.groupBy({ by: ["mediaId", "status"], where: own, _count: { _all: true } }),
+    db.instagramComment.groupBy({ by: ["mediaId"], where: { ...own, leadId: { not: null } }, _count: { _all: true } }),
+    db.instagramComment.findMany({ where: own, orderBy: { createdAt: "desc" }, take: 150, select: { commentId: true, mediaId: true, username: true, text: true, status: true, reason: true, productName: true, createdAt: true, leadId: true, publicReplyError: true, kind: true, classifiedBy: true, aiCostUsd: true, aiTokens: true, dmText: true, publicReplyText: true, reviewedAt: true, reviewedBy: true } }),
     db.product.findMany({ where: { archivedAt: null }, orderBy: [{ name: "asc" }], select: { id: true, name: true, model: true, priceUsd: true, isVisible: true } }),
-    db.instagramComment.groupBy({ by: ["kind"], _count: { _all: true } }),
-    db.instagramComment.aggregate({ _sum: { aiCostUsd: true, aiTokens: true } }),
-    db.instagramComment.count({ where: { publicReplyAt: { gte: tashkentDayStart() } } }),
+    db.instagramComment.groupBy({ by: ["kind"], where: own, _count: { _all: true } }),
+    db.instagramComment.aggregate({ where: own, _sum: { aiCostUsd: true, aiTokens: true } }),
+    db.instagramComment.count({ where: { ...own, publicReplyAt: { gte: tashkentDayStart() } } }),
   ]);
   const perMedia: Record<string, { comments: number; sent: number; failed: number; leads: number }> = {};
   for (const row of stats) {
@@ -59,14 +67,14 @@ export async function getInstagramBoard() {
   const permalinks = new Map(list.map(item => [item.id, item.permalink]));
 
   return {
-    account: account && { username: account.username, generalReplyEnabled: account.generalReplyEnabled, generalReplyText: account.generalReplyText, phone: account.phone ?? "", priceEnabled: account.priceEnabled, positiveEnabled: account.positiveEnabled, questionEnabled: account.questionEnabled, negativeNotify: account.negativeNotify, dailyReplyLimit: account.dailyReplyLimit, questionReplyText: account.questionReplyText, questionDmTemplate: account.questionDmTemplate },
+    account: account && { id: account.id, username: account.username, label: account.label ?? "", brandName: account.brandName ?? "", address: account.address ?? "", landmark: account.landmark ?? "", mapLink: account.mapLink ?? "", workHours: account.workHours ?? "", contactRepliesEnabled: account.contactRepliesEnabled, phoneDmTemplate: account.phoneDmTemplate, addressDmTemplate: account.addressDmTemplate, hoursDmTemplate: account.hoursDmTemplate, noPriceDmTemplate: account.noPriceDmTemplate ?? "", directChatId: account.directChatId ?? "", negativeChatId: account.negativeChatId ?? "", aiReplyAll: account.aiReplyAll, aiPrompt: account.aiPrompt ?? "", leadsEnabled: account.leadsEnabled, directEnabled: account.directEnabled, generalReplyEnabled: account.generalReplyEnabled, generalReplyText: account.generalReplyText, phone: account.phone ?? "", priceEnabled: account.priceEnabled, positiveEnabled: account.positiveEnabled, questionEnabled: account.questionEnabled, negativeNotify: account.negativeNotify, dailyReplyLimit: account.dailyReplyLimit, questionReplyText: account.questionReplyText, questionDmTemplate: account.questionDmTemplate },
     kinds: Object.fromEntries(kinds.map(row => [row.kind ?? "PENDING", row._count._all])) as Record<string, number>,
     aiCostUsd: Number(cost._sum.aiCostUsd ?? 0),
     aiTokens: cost._sum.aiTokens ?? 0,
     repliesToday,
     media: list,
     mediaError,
-    rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { productId: rule.productId, secondProductId: rule.secondProductId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText, publicReplyVariants: rule.publicReplyVariants }])),
+    rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { productId: rule.productId, secondProductId: rule.secondProductId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText, publicReplyVariants: rule.publicReplyVariants, priceText: rule.priceText ?? "" }])),
     stats: perMedia,
     journal: journal.map(row => ({ ...row, createdAt: row.createdAt.toISOString(), reviewedAt: row.reviewedAt?.toISOString() ?? null, aiCostUsd: row.aiCostUsd === null ? null : Number(row.aiCostUsd), permalink: permalinks.get(row.mediaId) ?? null })),
     products: products.map(item => ({ id: item.id, name: item.name, model: item.model, hasPrice: item.priceUsd !== null, isVisible: item.isVisible })),

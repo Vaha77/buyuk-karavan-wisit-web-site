@@ -6,6 +6,7 @@ import { Download } from "lucide-react";
 import { AGE_ORDER, GENDER_LABELS, MAP_COUNTRIES, PERIOD_LABELS, TYPE_LABELS, WEEKDAYS, cityName, formatDayUz, formatDurationMs, formatNumber, shares, type Period } from "@/lib/instagram/insights-rules";
 import type { StatsBoard as Board } from "@/lib/instagram/stats-queries";
 import worldMap from "@/lib/instagram/world-map.json";
+import { withAccount } from "@/lib/instagram/constants";
 import { AudienceMode, AudienceToggle, RefreshButton, TopPosts } from "./stats-client";
 
 const NAVY = "#1E4E8C", ORANGE = "#E8792B", SKY = "#7FA4D6", GREY = "#9AA8BC", NONE = "#EEF2F8";
@@ -233,7 +234,7 @@ function Growth({ board }: { board: Board }) {
   </section>;
 }
 
-export function StatsBoard({ board }: { board: Board }) {
+export function StatsBoard({ board, accountId }: { board: Board; accountId: string }) {
   const period = board.period;
   if (!board.status.connected) return <div className="bk-empty"><strong>Instagram ulanmagan</strong><span>Sozlamalar → Instagram</span></div>;
   const fetched = board.status.fetchedAt ? `Oxirgi yangilanish: ${formatDayUz(board.status.fetchedAt.slice(0, 10), true)} ${tashkentTime(board.status.fetchedAt)}` : "Hali yangilanmagan";
@@ -245,9 +246,9 @@ export function StatsBoard({ board }: { board: Board }) {
         {board.status.error && <p className="igs-sub is-bad">Oxirgi xato: {board.status.error}</p>}
       </div>
       <div className="igs-actions">
-        <nav className="igs-periods" aria-label="Davr">{(["today", "7", "30", "90"] as const satisfies readonly Period[]).map(key => <Link key={key} className="igs-period" aria-current={key === period ? "page" : undefined} href={`/admin/instagram?tab=stats&period=${key}`}>{PERIOD_LABELS[key]}</Link>)}</nav>
-        <RefreshButton/>
-        <a className="igs-btn" href={`/admin/instagram/stats/export?period=${period}`}><Download size={14}/>Excel yuklab olish</a>
+        <nav className="igs-periods" aria-label="Davr">{(["today", "7", "30", "90"] as const satisfies readonly Period[]).map(key => <Link key={key} className="igs-period" aria-current={key === period ? "page" : undefined} href={withAccount(`/admin/instagram?tab=stats&period=${key}`, accountId)}>{PERIOD_LABELS[key]}</Link>)}</nav>
+        <RefreshButton accountId={accountId}/>
+        <a className="igs-btn" href={withAccount(`/admin/instagram/stats/export?period=${period}`, accountId)}><Download size={14}/>Excel yuklab olish</a>
       </div>
     </div>
     {board.status.reconnect && <p className="ig-warn" role="alert">Statistika uchun qayta ulash kerak: Sozlamalar → Instagram → “Qayta ulash” (instagram_business_manage_insights ruxsati).</p>}

@@ -168,7 +168,7 @@ test("wiring: echo before card, private-reply text saved before sending, Telegra
   assert.doesNotMatch(migration.replace(/^--.*$/gm, ""), /\bDROP\b|DELETE FROM|\bTRUNCATE\b|ALTER COLUMN/i);
   const schema = await read("../prisma/schema.prisma");
   assert.match(schema, /directAutoAckEnabled Boolean\s+@default\(false\)/, "auto message off by default");
-  assert.match(schema, /igsid\s+String\s+@unique/);
+  assert.match(schema, /@@unique\(\[accountId, igsid\]\)/, "one conversation per customer per account");
 });
 
 test("cron: GitHub Actions calls the Direct tick every 5 minutes with CRON_SECRET; the endpoint checks it", async () => {

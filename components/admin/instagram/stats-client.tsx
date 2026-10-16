@@ -9,14 +9,14 @@ import { TYPE_LABELS, formatDayUz, formatDurationMs, formatNumber } from "@/lib/
 import type { StatsBoard } from "@/lib/instagram/stats-queries";
 
 /** "Hozir yangilash": fetches Insights now (can take up to a minute), then reloads the data. */
-export function RefreshButton() {
+export function RefreshButton({ accountId }: { accountId: string }) {
   const router = useRouter();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
   return <span className="igs-refresh">
     <button type="button" className="igs-btn" disabled={pending} onClick={() => startTransition(async () => {
       setMessage(null);
-      const result = await refreshInsightsAction();
+      const result = await refreshInsightsAction(accountId);
       setMessage(result.ok ? { ok: true, text: result.message ?? "Yangilandi ✓" } : { ok: false, text: result.error });
       router.refresh();
     })}><RefreshCw size={14}/><BusyLabel busy={pending} busyText="Yangilanmoqda…">Hozir yangilash</BusyLabel></button>

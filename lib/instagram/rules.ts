@@ -10,7 +10,7 @@ export const OAUTH_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 export const SCOPES = ["instagram_business_basic", "instagram_business_manage_comments", "instagram_business_manage_messages", "instagram_business_manage_insights"] as const;
 
 export { DEFAULT_DM_TEMPLATE, DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY, PLACEHOLDERS } from "./constants";
-import { DEFAULT_KEYWORDS, type CommentKind } from "./constants";
+import { DEFAULT_KEYWORDS, type CommentKind, type ContactKind } from "./constants";
 export type { CommentKind } from "./constants";
 
 /** Meta allows a Private Reply only within 7 days of the comment. */
@@ -86,7 +86,7 @@ export function productLink(siteUrl: string, slug: string, mediaId: string) {
   return url.toString();
 }
 
-export type TemplateValues = { mahsulot: string; narx_som: string; havola: string; telefon: string; username?: string | null; second?: { mahsulot: string; narx_som: string; havola: string } | null };
+export type TemplateValues = { mahsulot: string; narx_som: string; havola: string; telefon: string; username?: string | null; second?: { mahsulot: string; narx_som: string; havola: string } | null; contact?: { manzil?: string | null; moljal?: string | null; xarita?: string | null; ishVaqti?: string | null } };
 
 export const SECOND_PLACEHOLDER = /\{(mahsulot2|narx_som2|havola2)\}/;
 /** Without a second product, every line with {mahsulot2} {narx_som2} {havola2} is dropped (blank-line runs collapsed). */
@@ -95,13 +95,15 @@ export function dropSecondProductLines(template: string) {
 }
 
 /**
- * Fills {mahsulot} {narx_som} {havola} {telefon} {username} and, with `second`, {mahsulot2} {narx_som2} {havola2};
- * without `second` their lines are removed. Unknown {words} stay as typed. Instagram's text limit is 1000 chars.
+ * Fills {mahsulot} {narx_som} {havola} {telefon} {username}, the account's {manzil} {moljal} {xarita} {ishVaqti} and, with
+ * `second`, {mahsulot2} {narx_som2} {havola2}; without `second` their lines are removed. Unknown {words} stay as typed.
+ * Instagram's text limit is 1000 chars.
  */
 export function renderTemplate(template: string, values: TemplateValues) {
-  const map: Record<string, string> = { mahsulot: values.mahsulot, narx_som: values.narx_som, havola: values.havola, telefon: values.telefon, username: values.username ? `@${values.username}` : "", ...(values.second ? { mahsulot2: values.second.mahsulot, narx_som2: values.second.narx_som, havola2: values.second.havola } : {}) };
+  const contact = values.contact ?? {};
+  const map: Record<string, string> = { mahsulot: values.mahsulot, narx_som: values.narx_som, havola: values.havola, telefon: values.telefon, username: values.username ? `@${values.username}` : "", manzil: contact.manzil ?? "", moljal: contact.moljal ?? "", xarita: contact.xarita ?? "", ishVaqti: contact.ishVaqti ?? "", ...(values.second ? { mahsulot2: values.second.mahsulot, narx_som2: values.second.narx_som, havola2: values.second.havola } : {}) };
   const text = values.second ? template : dropSecondProductLines(template);
-  return text.replace(/\{([a-z_0-9]+)\}/g, (whole, key: string) => key in map ? map[key] : whole).trim().slice(0, 1000);
+  return text.replace(/\{([A-Za-z_0-9]+)\}/g, (whole, key: string) => key in map ? map[key] : whole).trim().slice(0, 1000);
 }
 
 // ---- Timing, retries -----------------------------------------------------------------------------------
@@ -133,6 +135,11 @@ export function errorReason(error: GraphErrorInfo) {
   const message = (error.message ?? "").replace(/access_token=[^&\s]+/gi, "access_token=***").replace(/\b(IG|EA)[A-Za-z0-9]{20,}\b/g, "***").slice(0, 200);
   return [error.code ? `#${error.code}${error.subcode ? `/${error.subcode}` : ""}` : `HTTP ${error.status || "—"}`, message].filter(Boolean).join(" ");
 }
+
+/** "Eshik Master" or "@eshikmaster" (admin, Telegram). */
+export const accountName = (account: { label?: string | null; username: string }) => account.label?.trim() || `@${account.username}`;
+/** Who the AI writes as ("BUYUK KARAVAN (…)"), never another account's brand. */
+export const accountBrand = (account: { brandName?: string | null; username: string }) => account.brandName?.trim() || `@${account.username}`;
 
 /** One person + one product = one lead (Lead.submissionKey is unique). */
 export const leadKey = (fromId: string, productId: string) => `ig:${fromId}:${productId}`.slice(0, 100);
@@ -212,6 +219,12 @@ const NEGATIVE_EMOJI = /[👎😡🤬🤮💩😠😤🖕]/u;
 const QUESTION = ["qayer", "qaer", "қаер", "каер", "manzil", "манзил", "adres", "адрес", "yetkaz", "етказ", "dostav", "доставк", "kafolat", "кафолат", "garant", "гарант", "qachon", "қачон", "когда", "где", "bormi", "bor mi", "mumkinmi", "qanday", "қандай", "как ", "zakaz", "заказ", "buyurtma", "ulgurji", "оптом", "rassrochka", "рассрочк", "nasiya", "кредит", "kredit", "ish vaqti", "telefon raqam", "номер"];
 const POSITIVE = ["zo'r", "зўр", "зур", "qoyil", "қойил", "gap yo'q", "гап йўқ", "ajoyib", "ажойиб", "rahmat", "raxmat", "раҳмат", "рахмат", "barakalla", "mashalloh", "mashaalloh", "omad", "super", "супер", "класс", "klass", "отлично", "молодц", "круто", "красиво", "спасибо", "yaxshi", "яхши", "chiroyli", "чиройли", "zo'r ekan", "nice", "cool", "wow", "great", "amazing", "love", "👍"];
 const POSITIVE_EMOJI = /[🔥😍👍❤️❤💯👏🤩😊🙂😁😀🥰💪✅⭐🌟🙏💙💚💛🧡💜🤍]/u;
+// Contact questions (accounts with contactRepliesEnabled). Short words only at a word start ("tel", not "kotel").
+const CONTACT: Record<ContactKind, RegExp> = {
+  PHONE: /(?:^|[^\p{L}])(?:telefon|tel(?!egram)|nomer|raqam|aloqa|номер|телефон|тел)/u,
+  ADDRESS: /(?:^|[^\p{L}])(?:adres|manzil|qayerda|qaerda|lokatsiya|lokatsa|адрес|манзил|где|локац|қаерда|каерда)/u,
+  HOURS: /ish vaqt|ish grafik|soat nechada|nechada ochil|nechagacha|qachon kel|kelsak|kelsam|режим работы|график работы|часы работы|во сколько|когда (?:можно )?(?:прийти|приехать|подойти)/u,
+};
 const hasLetters = (value: string) => /\p{L}/u.test(value);
 const hasEmoji = (value: string) => /\p{Extended_Pictographic}/u.test(value);
 const containsWord = (text: string, words: readonly string[]) => words.some(word => text.includes(word));
@@ -220,11 +233,20 @@ const containsWord = (text: string, words: readonly string[]) => words.some(word
  * Fast keyword pass. `definite` when exactly one kind matched; otherwise (none or several) the AI decides, and if the AI is
  * unavailable `fallback` is used: the most cautious of the matches (SPAM > NEGATIVE > PRICE > QUESTION > POSITIVE), or
  * null (= no reply). A price match hides the generic "?" question signal, so "narxi qancha?" is just PRICE.
+ * With `contact` (the account answers contact questions), a phone / address / working-hours question that is not also
+ * price, spam or negative is that contact kind.
  */
-export function classifyByKeywords(comment: string, priceKeywords: readonly string[] = []) {
+export function classifyByKeywords(comment: string, priceKeywords: readonly string[] = [], options: { contact?: boolean } = {}) {
   const text = normalizeText(comment);
   const matched = new Set<ClassKind>();
   if (!text) return { definite: null, fallback: null, matched: [] as ClassKind[] };
+  if (options.contact) {
+    const contact = (Object.keys(CONTACT) as ContactKind[]).filter(kind => CONTACT[kind].test(text));
+    // "?" alone is a price signal for symbol-only comments, never for "telefon?".
+    const price = matchesKeywords(text, (priceKeywords.length ? priceKeywords : DEFAULT_KEYWORDS).filter(keyword => keyword !== "?"));
+    const blocked = price || SPAM.some(pattern => pattern.test(text)) || containsWord(text, NEGATIVE) || NEGATIVE_EMOJI.test(text);
+    if (contact.length === 1 && !blocked) return { definite: contact[0] as CommentKind, fallback: contact[0] as CommentKind, matched: [] as ClassKind[] };
+  }
   if (SPAM.some(pattern => pattern.test(text))) matched.add("SPAM");
   if (containsWord(text, NEGATIVE) || NEGATIVE_EMOJI.test(text)) matched.add("NEGATIVE");
   const price = matchesKeywords(text, priceKeywords.length ? priceKeywords : [...DEFAULT_KEYWORDS]);
@@ -239,9 +261,9 @@ export function classifyByKeywords(comment: string, priceKeywords: readonly stri
 
 // ---- Choosing the action -------------------------------------------------------------------------------
 
-export type ActionSettings = { priceEnabled: boolean; positiveEnabled: boolean; questionEnabled: boolean; negativeNotify: boolean; dailyReplyLimit: number };
+export type ActionSettings = { priceEnabled: boolean; positiveEnabled: boolean; questionEnabled: boolean; negativeNotify: boolean; dailyReplyLimit: number; contactRepliesEnabled?: boolean; noPriceDmTemplate?: string | null; aiReplyAll?: boolean };
 export type ActionContext = {
-  rule: { isActive: boolean; productId: string | null } | null;
+  rule: { isActive: boolean; productId: string | null; priceText?: string | null } | null;
   /** This person already got a reply (DM or public) on this post. */
   alreadyAnswered: boolean;
   /** Public replies sent today (Tashkent day). */
@@ -254,14 +276,18 @@ export type Action =
   | { type: "price"; publicReply: boolean }
   | { type: "general" }
   | { type: "positive" }
-  | { type: "question"; publicReply: boolean };
+  | { type: "question"; publicReply: boolean }
+  | { type: "contact"; kind: ContactKind; publicReply: boolean };
 
 /**
  * What to do for a classified comment. NEGATIVE is never answered (Telegram notice only), SPAM / UNKNOWN never; one reply
  * per person per post; a post with "Avto-javoblar faol" off gets no replies; over the daily limit no public reply goes out
- * (a PRICE / QUESTION DM still does, POSITIVE is skipped since it is a public reply only).
+ * (a PRICE / QUESTION DM still does, POSITIVE is skipped since it is a public reply only). A PRICE comment on a post without
+ * a product gets the post's price text, else the account's "no price" DM, else the general reply (or nothing).
  */
 export function chooseAction(kind: CommentKind, settings: ActionSettings, context: ActionContext): Action {
+  // aiReplyAll: every other comment (a question too) gets the AI reply.
+  if (settings.aiReplyAll && (kind === "QUESTION" || kind === "UNKNOWN")) kind = "POSITIVE";
   if (kind === "SPAM") return { type: "skip", reason: "Spam — javobsiz" };
   if (kind === "UNKNOWN") return { type: "skip", reason: "Turi aniqlanmadi — javobsiz" };
   if (kind === "NEGATIVE") return settings.negativeNotify ? { type: "notify" } : { type: "skip", reason: "Salbiy — xabarnoma o‘chirilgan" };
@@ -270,6 +296,7 @@ export function chooseAction(kind: CommentKind, settings: ActionSettings, contex
   const underLimit = context.repliesToday < settings.dailyReplyLimit;
   if (kind === "PRICE") {
     if (!settings.priceEnabled) return { type: "skip", reason: "Narx javoblari o‘chirilgan" };
+    if (!context.rule?.productId && (context.rule?.priceText?.trim() || settings.noPriceDmTemplate?.trim())) return { type: "price", publicReply: underLimit };
     if (!context.rule?.productId) return context.generalReplyEnabled && underLimit ? { type: "general" } : { type: "skip", reason: context.generalReplyEnabled ? "Kunlik javob limiti tugadi" : "Postga mahsulot biriktirilmagan" };
     return { type: "price", publicReply: underLimit };
   }
@@ -277,6 +304,7 @@ export function chooseAction(kind: CommentKind, settings: ActionSettings, contex
     if (!settings.positiveEnabled) return { type: "skip", reason: "Ijobiy kommentlarga javob o‘chirilgan" };
     return underLimit ? { type: "positive" } : { type: "skip", reason: "Kunlik javob limiti tugadi" };
   }
+  if (kind === "PHONE" || kind === "ADDRESS" || kind === "HOURS") return settings.contactRepliesEnabled ? { type: "contact", kind, publicReply: underLimit } : { type: "skip", reason: "Aloqa savollariga javob o‘chirilgan" };
   if (!settings.questionEnabled) return { type: "skip", reason: "Savollarga javob o‘chirilgan" };
   return { type: "question", publicReply: underLimit };
 }
@@ -294,13 +322,13 @@ export const parseVariants = (input: string | string[]) => [...new Set((Array.is
 const emojiCount = (value: string) => [...value.matchAll(/\p{Extended_Pictographic}/gu)].length;
 const FORBIDDEN = /\d|narx|нарх|цен|price|so['‘’ʻ]?m|сўм|сум|\$|chegirma|чегирма|skidka|скидк|aksiya|акци|bepul|бесплат|tekin|va'?da|обеща|kafolat|гарант|%/i;
 
-/** A POSITIVE reply from the AI: one sentence, 3–12 words, no price / promise / discount, at most one emoji (exactly one if the comment had emoji). */
-export function validPositiveReply(reply: string, comment: string) {
+/** A POSITIVE reply from the AI: `sentences` (1–2) sentence(s), 3–12 words each at most, no price / promise / discount, at most one emoji (exactly one if the comment had emoji). */
+export function validPositiveReply(reply: string, comment: string, sentences = 1) {
   const text = reply.trim();
-  if (!text || text.length > 160 || /\n/.test(text)) return false;
+  if (!text || text.length > 160 * sentences || /\n/.test(text)) return false;
   const words = text.replace(/\p{Extended_Pictographic}|️|‍/gu, " ").split(/\s+/).filter(word => /[\p{L}]/u.test(word));
-  if (words.length < 3 || words.length > 12) return false;
-  if ((text.replace(/[.!?…]+$/u, "").match(/[.!?…]\s+\S/gu) ?? []).length > 0) return false;
+  if (words.length < 3 || words.length > 12 * sentences) return false;
+  if ((text.replace(/[.!?…]+$/u, "").match(/[.!?…]\s+\S/gu) ?? []).length > sentences - 1) return false;
   if (FORBIDDEN.test(text) || /https?:|www\.|@\w/.test(text)) return false;
   const emoji = emojiCount(text);
   return hasEmoji(comment) ? emoji === 1 : emoji <= 1;

@@ -273,7 +273,7 @@ test("queue cron: CRON_SECRET required (constant-time), the queue runs only when
 
 test("catch-up wiring: hourly (GitHub Actions; Vercel Hobby is daily) cron runs it after the token refresh; settings button calls it", async () => {
   const cron = await read("../app/api/cron/instagram/route.ts");
-  assert.ok(cron.indexOf("refreshTokenIfDue()") < cron.indexOf("syncMissedComments(") && cron.indexOf("syncMissedComments(") < cron.indexOf("processQueue("));
+  assert.ok(cron.indexOf("refreshAllTokens()") < cron.indexOf("syncAllMissedComments(") && cron.indexOf("syncAllMissedComments(") < cron.indexOf("processQueue("));
   const vercel = JSON.parse(await read("../vercel.json"));
   assert.ok(vercel.crons.some(item => item.path === "/api/cron/instagram"), "daily Vercel fallback");
   const workflow = await read("../.github/workflows/instagram-comments-cron.yml");

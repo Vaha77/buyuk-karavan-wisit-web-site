@@ -4,7 +4,9 @@ import type { Prisma, StoryQueueItem } from "@/generated/prisma/client";
 import { writeAudit } from "@/lib/audit/service";
 import { getDb } from "@/lib/db";
 import { editMessageCaption, editMessageText, sendMessage, sendVideo, telegramErrorDetails } from "@/lib/telegram/client";
-import { StoryGraphError, containerStatus, createStoryContainer, publishContainer } from "./graph";
+import { accountTag } from "@/lib/instagram/direct";
+import { FIRST_ACCOUNT_ID, accountToken, getInstagramAccount } from "@/lib/instagram/service";
+import { StoryGraphError, containerStatus, createStoryContainer, publishContainer, type PublishTarget } from "./graph";
 import { TELEGRAM_URL_VIDEO_LIMIT, approvalKeyboard, approvalText, containerStep, dayBounds, failedText, isDue, needsContainerCheck, nextStatus, publishedText, shouldExpire, type StoryAction, type StoryStatus, type VideoInfo } from "./rules";
 
 type Actor = { id: string; name: string };
@@ -18,6 +20,25 @@ export async function superAdminChats() {
   return rows.map(row => ({ id: row.id, name: row.name, chatId: row.telegramChatId! }));
 }
 
+/** Which account a story is for: its id or @username; empty = the first connected. null = unknown. */
+export async function resolveStoryAccount(value: unknown) {
+  const key = typeof value === "string" ? value.trim().replace(/^@/, "") : "";
+  if (!key) return (await getInstagramAccount())?.id ?? FIRST_ACCOUNT_ID;
+  const account = await getDb().instagramAccount.findFirst({ where: { OR: [{ id: key }, { username: { equals: key, mode: "insensitive" } }] }, select: { id: true } });
+  return account?.id ?? null;
+}
+
+/** Env token for the first account, the account's own token for the others. */
+async function targetFor(accountId: string): Promise<PublishTarget | null> {
+  if (accountId === FIRST_ACCOUNT_ID) return null;
+  const account = await getDb().instagramAccount.findUnique({ where: { id: accountId } });
+  const token = account && accountToken(account);
+  if (!account || !token) throw new StoryGraphError(0, undefined, "Instagram akkaunt ulanmagan yoki tokeni o‘qilmadi — Sozlamalarda qayta ulang");
+  return { igUserId: account.igUserId, token };
+}
+
+const storyText = async (item: StoryQueueItem) => (await accountTag(item.accountId)) + approvalText(item);
+
 async function broadcast(text: string) {
   for (const admin of await superAdminChats()) await sendMessage(admin.chatId, text).catch(error => console.error("Story notice failed", telegramErrorDetails(error)));
 }
@@ -25,7 +46,7 @@ async function broadcast(text: string) {
 /** New item → each Super Admin gets the video (or a link when >20 MB) with time, note and the approval buttons. */
 async function sendApproval(item: StoryQueueItem) {
   const refs: TelegramRef[] = [];
-  const text = approvalText(item), keyboard = approvalKeyboard(item.id, item.scheduledAt);
+  const text = await storyText(item), keyboard = approvalKeyboard(item.id, item.scheduledAt, item.accountId);
   for (const admin of await superAdminChats()) {
     try {
       if ((item.sizeBytes ?? 0) <= TELEGRAM_URL_VIDEO_LIMIT) {
@@ -45,16 +66,16 @@ async function sendApproval(item: StoryQueueItem) {
 /** After a decision: the approval messages show the status and lose their buttons. */
 async function refreshApprovalMessages(item: StoryQueueItem) {
   const refs = Array.isArray(item.telegramMessages) ? item.telegramMessages as unknown as TelegramRef[] : [];
-  const text = approvalText(item);
-  const keyboard = item.status === "PENDING_APPROVAL" ? approvalKeyboard(item.id, item.scheduledAt) : { inline_keyboard: [] };
+  const text = await storyText(item);
+  const keyboard = item.status === "PENDING_APPROVAL" ? approvalKeyboard(item.id, item.scheduledAt, item.accountId) : { inline_keyboard: [] };
   for (const ref of refs) {
     const edit = ref.kind === "video" ? editMessageCaption(ref.chatId, ref.messageId, text, keyboard) : editMessageText(ref.chatId, ref.messageId, `${text}\n\n🎬 ${item.videoUrl}`, keyboard);
     await edit.catch(() => undefined);
   }
 }
 
-export async function enqueueStory(input: { videoUrl: string; videoKey: string; scheduledAt: Date; caption: string | null; sizeBytes: number; info: VideoInfo }) {
-  const item = await getDb().storyQueueItem.create({ data: { videoUrl: input.videoUrl, videoKey: input.videoKey, scheduledAt: input.scheduledAt, caption: input.caption, sizeBytes: input.sizeBytes, durationMs: input.info.durationMs, width: input.info.width, height: input.info.height } });
+export async function enqueueStory(input: { accountId: string; videoUrl: string; videoKey: string; scheduledAt: Date; caption: string | null; sizeBytes: number; info: VideoInfo }) {
+  const item = await getDb().storyQueueItem.create({ data: { accountId: input.accountId, videoUrl: input.videoUrl, videoKey: input.videoKey, scheduledAt: input.scheduledAt, caption: input.caption, sizeBytes: input.sizeBytes, durationMs: input.info.durationMs, width: input.info.width, height: input.info.height } });
   await sendApproval(item).catch(error => console.error("Story approval failed", { type: safeType(error) }));
   return item;
 }
@@ -79,10 +100,10 @@ export const approveStory = (id: string, who: Actor | { name: string }) => chang
 export const rejectStory = (id: string, who: Actor | { name: string }) => change(id, "reject", {}, who);
 export const rescheduleStory = (id: string, scheduledAt: Date, actor: Actor) => change(id, "reschedule", { scheduledAt, attempts: 0, error: null, igContainerId: null, lockedUntil: null }, actor);
 
-/** "✅ Hammasini tasdiqlash": every story of that Tashkent day still waiting for approval. */
-export async function approveDay(day: string, who: Actor | { name: string }) {
+/** "✅ Hammasini tasdiqlash": every story of that Tashkent day (of that account, if given) still waiting for approval. */
+export async function approveDay(day: string, who: Actor | { name: string }, accountId?: string) {
   const { start, end } = dayBounds(day);
-  const items = await getDb().storyQueueItem.findMany({ where: { status: "PENDING_APPROVAL", scheduledAt: { gte: start, lt: end } }, select: { id: true } });
+  const items = await getDb().storyQueueItem.findMany({ where: { ...(accountId ? { accountId } : {}), status: "PENDING_APPROVAL", scheduledAt: { gte: start, lt: end } }, select: { id: true } });
   let approved = 0;
   for (const item of items) if ((await approveStory(item.id, who)).ok) approved++;
   return approved;
@@ -101,26 +122,26 @@ async function fail(item: StoryQueueItem, error: unknown) {
   const message = error instanceof StoryGraphError ? error.message : error instanceof Error ? error.name : "Xato";
   const attempts = item.attempts + 1, to = nextStatus("PUBLISHING", "failed", attempts)!;
   await getDb().storyQueueItem.update({ where: { id: item.id }, data: { status: to, attempts, error: message.slice(0, 500), igContainerId: null, lockedUntil: null } });
-  if (to === "FAILED") await broadcast(failedText(message));
+  if (to === "FAILED") await broadcast((await accountTag(item.accountId)) + failedText(message));
   return to;
 }
 
-async function publish(item: StoryQueueItem, containerId: string) {
-  const mediaId = await publishContainer(containerId);
+async function publish(item: StoryQueueItem, containerId: string, target: PublishTarget | null) {
+  const mediaId = await publishContainer(containerId, target);
   const publishedAt = new Date();
   await getDb().storyQueueItem.update({ where: { id: item.id }, data: { status: "PUBLISHED", igMediaId: mediaId, publishedAt, lockedUntil: null, error: null } });
-  await broadcast(publishedText(publishedAt));
+  await broadcast((await accountTag(item.accountId)) + publishedText(publishedAt));
 }
 
 /**
  * Waits for one container (polling) until it is FINISHED, fails, or the run's time is up (the next run checks it again;
  * a container never finished turns EXPIRED on Instagram's side and then counts as a failed attempt).
  */
-async function settle(item: StoryQueueItem, containerId: string, deadline: number) {
+async function settle(item: StoryQueueItem, containerId: string, deadline: number, target: PublishTarget | null) {
   for (;;) {
-    const { statusCode, status } = await containerStatus(containerId);
+    const { statusCode, status } = await containerStatus(containerId, target);
     const step = containerStep(statusCode);
-    if (step === "publish") { await publish(item, containerId); return "published"; }
+    if (step === "publish") { await publish(item, containerId, target); return "published"; }
     if (step === "fail") { await fail(item, new StoryGraphError(200, undefined, `Container: ${statusCode}${status ? ` (${status})` : ""}`)); return "failed"; }
     if (Date.now() + 8_000 > deadline) { await getDb().storyQueueItem.update({ where: { id: item.id }, data: { lockedUntil: null } }); return "waiting"; }
     await new Promise(resolve => setTimeout(resolve, 6_000));
@@ -152,12 +173,13 @@ async function processItem(item: StoryQueueItem, deadline: number): Promise<"pub
   if (!await claim(item.id, item.status as "APPROVED" | "PUBLISHING")) return "busy";
   let containerId = item.igContainerId;
   try {
+    const target = await targetFor(item.accountId);
     if (!containerId) {
-      containerId = await createStoryContainer(item.videoUrl);
+      containerId = await createStoryContainer(item.videoUrl, target);
       await db.storyQueueItem.update({ where: { id: item.id }, data: { igContainerId: containerId } });
     }
     const fresh = (await db.storyQueueItem.findUnique({ where: { id: item.id } }))!;
-    return await settle(fresh, containerId, deadline);
+    return await settle(fresh, containerId, deadline, target);
   } catch (error) {
     console.error("Story publish failed", { type: safeType(error), code: error instanceof StoryGraphError ? error.code : undefined });
     const status = await fail(item, error).catch(() => "FAILED");

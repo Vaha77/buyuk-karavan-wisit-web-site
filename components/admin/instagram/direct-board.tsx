@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { dismissDirectAction, saveDirectSettingsAction } from "@/app/admin/(protected)/instagram/actions";
 import { BusyLabel } from "@/components/admin/feedback";
+import { withAccount } from "@/lib/instagram/constants";
 import { STATUS_LABELS, directLink, duration, messagePreview, personLabel, type DirectStatus } from "@/lib/instagram/direct-rules";
 import type { DirectBoard as Board } from "@/lib/instagram/direct-queries";
 
@@ -19,11 +20,11 @@ function useAction() {
   return { pending, run, note: message && <span className={message.ok ? "ig-ok" : "ig-error"} role={message.ok ? "status" : "alert"}>{message.text}</span>, clear: () => setMessage(null) };
 }
 
-function Settings({ settings, recipients }: { settings: NonNullable<Board["settings"]>; recipients: Board["recipients"] }) {
+function Settings({ accountId, groupChatId, settings, recipients }: { accountId: string; groupChatId: string | null; settings: NonNullable<Board["settings"]>; recipients: Board["recipients"] }) {
   const [form, setForm] = useState(settings);
   const { pending, run, note, clear } = useAction();
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => { setForm(current => ({ ...current, [key]: value })); clear(); };
-  return <form className="bk-card ig-general" onSubmit={event => { event.preventDefault(); run(() => saveDirectSettingsAction(form)); }}>
+  return <form className="bk-card ig-general" onSubmit={event => { event.preventDefault(); run(() => saveDirectSettingsAction({ ...form, accountId })); }}>
     <div><h2>Direct → Telegram</h2><p className="bk-muted">Madina Direct’da javob bermaydi. Har yangi yozishma Telegram’ga keladi; 30 daqiqada javob bo‘lmasa eslatma, 2 soatda Super Admin’ga ham. Ish vaqtidan tashqari kelganlar ertalab bitta ro‘yxat bo‘lib keladi, kechqurun hisobot.</p></div>
     <div className="bk-actions">
       <label className="bk-field" style={{ width: 120 }}><span>Ish boshlanishi</span><input value={form.workStart} onChange={event => set("workStart", event.target.value)} placeholder="09:00"/></label>
@@ -31,7 +32,7 @@ function Settings({ settings, recipients }: { settings: NonNullable<Board["setti
     </div>
     <label className="ig-switch"><input type="checkbox" checked={form.autoAckEnabled} onChange={event => set("autoAckEnabled", event.target.checked)}/><span>Birinchi yozganda bir martalik avto-xabar</span></label>
     {form.autoAckEnabled && <label className="bk-field"><span>Avto-xabar <small className="bk-muted">(narx yoki boshqa ma’lumot yozmang)</small></span><textarea rows={2} value={form.autoAckText} onChange={event => set("autoAckText", event.target.value)} maxLength={600}/></label>}
-    <p className="bk-muted">Telegram’da oladi: {recipients.length ? recipients.map(person => `${person.name}${person.linked ? "" : " (Telegram ulanmagan)"}`).join(", ") : "hech kim — Foydalanuvchilar sahifasida “Instagram so‘rovlarini oladi”ni belgilang"}.</p>
+    <p className="bk-muted">Telegram’da oladi: {groupChatId ? `guruh ${groupChatId} (Kommentlar → Akkaunt va aloqa)` : recipients.length ? recipients.map(person => `${person.name}${person.linked ? "" : " (Telegram ulanmagan)"}`).join(", ") : "hech kim — Foydalanuvchilar sahifasida “Instagram so‘rovlarini oladi”ni belgilang"}.</p>
     <div className="bk-actions"><button type="submit" className="bk-btn is-primary" disabled={pending}><BusyLabel busy={pending}>Saqlash</BusyLabel></button>{note}</div>
   </form>;
 }
@@ -52,12 +53,12 @@ export function DirectBoard({ board, status }: { board: Board; status: DirectSta
   if (!board.connected || !board.settings) return <div className="bk-empty"><strong>Instagram ulanmagan</strong><span>Sozlamalar → Instagram</span></div>;
   const total = Object.values(board.counts).reduce((sum, value) => sum + (value ?? 0), 0);
   return <div className="ig">
-    <Settings settings={board.settings} recipients={board.recipients}/>
+    <Settings accountId={board.accountId} groupChatId={board.groupChatId} settings={board.settings} recipients={board.recipients}/>
     <section className="bk-card" aria-labelledby="ig-direct">
       <div className="bk-card-head"><div><h2 id="ig-direct">Yozishmalar</h2><p className="bk-muted">“Javob berildi” faqat Instagram’dan javob yozilganda (avto-xabarlar hisobga olinmaydi)</p></div></div>
       <nav className="bk-chips" aria-label="Holat">
-        <Link className={`bk-chip${status ? "" : " is-active"}`} href="/admin/instagram?tab=direct">Hammasi<small>{total}</small></Link>
-        {(Object.keys(STATUS_LABELS) as DirectStatus[]).map(key => <Link key={key} className={`bk-chip${status === key ? " is-active" : ""}`} href={`/admin/instagram?tab=direct&status=${key}`}>{STATUS_LABELS[key]}<small>{board.counts[key] ?? 0}</small></Link>)}
+        <Link className={`bk-chip${status ? "" : " is-active"}`} href={withAccount("/admin/instagram?tab=direct", board.accountId)}>Hammasi<small>{total}</small></Link>
+        {(Object.keys(STATUS_LABELS) as DirectStatus[]).map(key => <Link key={key} className={`bk-chip${status === key ? " is-active" : ""}`} href={withAccount(`/admin/instagram?tab=direct&status=${key}`, board.accountId)}>{STATUS_LABELS[key]}<small>{board.counts[key] ?? 0}</small></Link>)}
       </nav>
       {board.conversations.length ? <div className="bk-table-wrap"><table className="bk-table ig-table"><thead><tr><th className="is-left">Kim</th><th className="is-left">Oxirgi xabar</th><th className="is-left">Holat</th><th>Kutish / javob</th><th className="is-left">Mas’ul</th><th className="is-left">Amal</th></tr></thead><tbody>
         {board.conversations.map(row => <tr key={row.id}>

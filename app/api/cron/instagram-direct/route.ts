@@ -21,7 +21,7 @@ function authorized(header: string | null) {
 export async function GET(request: Request) {
   if (!authorized(request.headers.get("authorization"))) return NextResponse.json({ ok: false }, { status: 401 });
   try {
-    return NextResponse.json({ ok: true, ...(await directTick({ force: true })) });
+    return NextResponse.json({ ok: true, accounts: await directTick({ force: true }) });
   } catch (error) {
     console.error("Instagram Direct cron failed", { type: error instanceof Error ? error.name : "UnknownError" });
     return NextResponse.json({ ok: false }, { status: 500 });

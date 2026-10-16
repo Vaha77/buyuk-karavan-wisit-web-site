@@ -149,7 +149,7 @@ test("comments come from Instagram (daily insight, else the period's posts), not
   assert.match(queries, /instagramComments\(days, media\)/);
   assert.doesNotMatch(queries, /kpi\("comments", "Kommentlar", comments\.length/, "KPI not from the webhook journal");
   assert.match(queries, /comments: statsByDay\.get\(day\)\?\.comments/, "daily chart from Instagram");
-  assert.match(queries, /groupBy\(\{ by: \["kind"\], _count/, "kinds: the whole journal");
+  assert.match(queries, /groupBy\(\{ by: \["kind"\], where: own, _count/, "kinds: the accounts whole journal");
   const graph = await read("../lib/instagram/graph.ts");
   assert.match(graph, /listMediaSince[\s\S]*comments_count/);
   const board = await read("../components/admin/instagram/stats-board.tsx");

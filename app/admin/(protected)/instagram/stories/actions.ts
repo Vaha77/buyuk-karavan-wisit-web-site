@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/require-admin";
 import { intakeKey } from "@/lib/stories/intake";
 import { MAX_VIDEO_BYTES, parseScheduledAt, scheduleError } from "@/lib/stories/rules";
-import { approveStory, publishNow, rejectStory, rescheduleStory } from "@/lib/stories/service";
+import { approveStory, publishNow, rejectStory, rescheduleStory, resolveStoryAccount } from "@/lib/stories/service";
 import { createStoryUpload } from "@/lib/stories/storage";
 
 export type StoryActionResult = { ok: true; message?: string; id?: string } | { ok: false; error: string };
@@ -20,9 +20,11 @@ export async function createStoryUploadAction(size: number) {
 }
 
 /** Step 2: check the uploaded MP4 and queue it as PENDING_APPROVAL (it goes to the BK bot for approval). */
-export async function registerStoryAction(input: { key: string; scheduledAt: string; caption: string }): Promise<StoryActionResult> {
+export async function registerStoryAction(input: { key: string; scheduledAt: string; caption: string; accountId: string }): Promise<StoryActionResult> {
   await actor();
-  const added = await intakeKey(input.key, input.scheduledAt, input.caption).catch(() => ({ ok: false as const, status: 500, error: "Saqlab bo‘lmadi." }));
+  const accountId = await resolveStoryAccount(input.accountId);
+  if (!accountId) return { ok: false, error: "Akkaunt topilmadi." };
+  const added = await intakeKey(input.key, input.scheduledAt, input.caption, accountId).catch(() => ({ ok: false as const, status: 500, error: "Saqlab bo‘lmadi." }));
   refresh();
   return added.ok ? { ok: true, id: added.id, message: "Navbatga qo‘shildi · botga tasdiqlashga ketdi" } : { ok: false, error: added.error };
 }

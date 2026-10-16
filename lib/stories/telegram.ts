@@ -14,7 +14,7 @@ export async function handleStoryCallback(callback: TelegramCallbackQuery) {
   const admin = await getDb().adminUser.findFirst({ where: { telegramChatId: String(callback.from.id), role: "SUPER_ADMIN", isActive: true, archivedAt: null }, select: { id: true, name: true } });
   if (!admin) { await answer("Ruxsat yo‘q — faqat Super Admin", true); return true; }
   if (action.kind === "day") {
-    const count = await approveDay(action.day, admin);
+    const count = await approveDay(action.day, admin, action.accountId);
     await answer(count ? `${count} ta storis tasdiqlandi ✓` : "Tasdiqlanadigan storis qolmadi");
     return true;
   }

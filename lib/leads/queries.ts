@@ -34,7 +34,7 @@ export async function getAdminLeads(filter:{region?:string}={}) {
   await requireAdmin();
   const region=filter.region?.trim().toUpperCase()||"";
   const where=region==="NONE"?{regionCode:null}:/^[A-Z]{2}$/.test(region)?{country:region}:/^[A-Z]{2}-[A-Z0-9]{1,3}$/.test(region)?{regionCode:region}:{};
-  const rows = await getDb().lead.findMany({
+  const [rows, instagram] = await Promise.all([getDb().lead.findMany({
     where,
     orderBy:{createdAt:"desc"},
     include:{
@@ -43,7 +43,9 @@ export async function getAdminLeads(filter:{region?:string}={}) {
       activities:{ orderBy:{createdAt:"asc"}, include:{agent:true} },
       followUps:{ where:{status:{in:["SCHEDULED","REMINDER_RESERVED","REMINDER_SENT"]}}, orderBy:{scheduledFor:"asc"}, take:1 },
     },
-  });
+  }), getDb().instagramAccount.findMany({ select:{ id:true, username:true } })]);
+  // "Instagram · @eshikmaster": which Instagram account the lead came from.
+  const igHandle = new Map(instagram.map(account => [account.id, `@${account.username}`]));
   return rows.map((row): Lead => {
     const now = new Date(), date = new Date(row.createdAt);
     const formatDay = (value:Date) => new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tashkent"}).format(value);
@@ -63,6 +65,7 @@ export async function getAdminLeads(filter:{region?:string}={}) {
       isUnread:row.status==="NEW", additional:row.notes||"", summary:row.aiSummary||"", conversation:conversation(row.chatHistory), managerNote:row.managerNote||"", createdAt:row.createdAt.toISOString(),
       assignedAgentName:seller(row.assignedAgent), claimedAt:row.claimedAt?row.claimedAt.toISOString():"", privateDeliveryFailed:Boolean(row.telegramPrivateDeliveryFailedAt),
       lastContact:contact?.createdAt.toISOString()||"", nextFollowUp:next?.scheduledFor.toISOString()||"", followUpOverdue:Boolean(next&&next.scheduledFor.getTime()<now.getTime()), timeline:activities, referralSource:row.referralLink?.name||"", regionCode:row.regionCode||"",
+      sourceLabel:row.instagramAccountId&&igHandle.has(row.instagramAccountId)?`${row.source==="INSTAGRAM_DM"?"Instagram DM":"Instagram"} · ${igHandle.get(row.instagramAccountId)}`:"",
     };
   });
 }

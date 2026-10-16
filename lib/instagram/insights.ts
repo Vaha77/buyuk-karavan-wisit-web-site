@@ -7,7 +7,7 @@ import { getDb } from "@/lib/db";
 import { GraphError, accountInsights, followersCount, listMediaSince, listStories, mediaInsights, type IgMedia } from "./graph";
 import { ACCOUNT_METRICS, DEMOGRAPHIC_BREAKDOWNS, DEMOGRAPHIC_TIMEFRAME, MEDIA_METRICS, dayStartUtc, followsFrom, linkTaps, mediaKind, parseBreakdown, parseTotals, tashkentDay } from "./insights-rules";
 import { errorReason } from "./rules";
-import { accountToken, getInstagramAccount } from "./service";
+import { accountToken, getInstagramAccount, listInstagramAccounts } from "./service";
 
 const DAY_MS = 86_400_000;
 const reason = (error: unknown) => error instanceof GraphError ? errorReason(error.info) : error instanceof Error ? error.name : "Xato";
@@ -51,28 +51,36 @@ async function mediaTotals(token: string, media: IgMedia, kind: "POST" | "REELS"
 
 export type RefreshResult = { ok: boolean; days: number; media: number; audience: boolean; errors: string[] };
 
-/** Fetches what Meta has and stores it. Never throws; the first error (token-free) is kept on the account. */
-export async function refreshInsights(options: { backfillDays?: number } = {}): Promise<RefreshResult> {
+/** Daily cron: every account, one after another. */
+export async function refreshAllInsights() {
+  const results: Array<RefreshResult & { account: string }> = [];
+  for (const account of await listInstagramAccounts()) results.push({ account: account.username, ...await refreshInsights({ accountId: account.id }) });
+  return results;
+}
+
+/** Fetches what Meta has for one account and stores it. Never throws; the first error (token-free) is kept on the account. */
+export async function refreshInsights(options: { accountId?: string; backfillDays?: number } = {}): Promise<RefreshResult> {
   const db = getDb(), result: RefreshResult = { ok: false, days: 0, media: 0, audience: false, errors: [] };
-  const account = await getInstagramAccount();
+  const account = await getInstagramAccount(options.accountId);
   const token = account && accountToken(account);
   if (!account || !token) { result.errors.push("Instagram ulanmagan yoki token o‘qilmadi"); return result; }
   const today = tashkentDay(new Date());
 
   // Account totals: the last 3 days, or 30 when there is nothing yet.
-  const known = await db.instagramDailyStat.count();
+  const accountId = account.id;
+  const known = await db.instagramDailyStat.count({ where: { accountId } });
   const span = options.backfillDays ?? (known ? 3 : 30);
   for (let index = span - 1; index >= 0; index--) {
     const day = shift(today, -index);
     try {
       const data = await dailyTotals(token, account.igUserId, day);
-      await db.instagramDailyStat.upsert({ where: { date: day }, create: { date: day, ...data }, update: data });
+      await db.instagramDailyStat.upsert({ where: { accountId_date: { accountId, date: day } }, create: { accountId, date: day, ...data }, update: data });
       result.days++;
     } catch (error) { result.errors.push(`${day}: ${reason(error)}`); if (error instanceof GraphError && [10, 190, 200].includes(error.info.code ?? 0)) break; }
   }
   try {
     const followers = await followersCount(token);
-    if (followers !== null) await db.instagramDailyStat.upsert({ where: { date: today }, create: { date: today, followersCount: followers }, update: { followersCount: followers } });
+    if (followers !== null) await db.instagramDailyStat.upsert({ where: { accountId_date: { accountId, date: today } }, create: { accountId, date: today, followersCount: followers }, update: { followersCount: followers } });
   } catch (error) { result.errors.push(`followers_count: ${reason(error)}`); }
 
   // Posts of the last 90 days + live stories.
@@ -83,7 +91,7 @@ export async function refreshInsights(options: { backfillDays?: number } = {}): 
     await pool(items, 4, async ({ media, kind }) => {
       try {
         const stats = await mediaTotals(token, media, kind);
-        const base = { type: kind, mediaType: media.media_type ?? null, postedAt: new Date(media.timestamp ?? Date.now()), caption: media.caption?.slice(0, 1000) ?? null, permalink: media.permalink ?? null, thumbnail: media.thumbnail_url ?? (media.media_type === "VIDEO" ? null : media.media_url ?? null) };
+        const base = { accountId, type: kind, mediaType: media.media_type ?? null, postedAt: new Date(media.timestamp ?? Date.now()), caption: media.caption?.slice(0, 1000) ?? null, permalink: media.permalink ?? null, thumbnail: media.thumbnail_url ?? (media.media_type === "VIDEO" ? null : media.media_url ?? null) };
         await db.instagramMediaStat.upsert({ where: { mediaId: media.id }, create: { mediaId: media.id, ...base, ...stats }, update: { ...base, ...stats } });
         result.media++;
       } catch (error) { if (result.errors.length < 20) result.errors.push(`media ${media.id}: ${reason(error)}`); }
@@ -100,12 +108,12 @@ export async function refreshInsights(options: { backfillDays?: number } = {}): 
     }
     if (Object.values(audience.follower).some(item => Object.keys(item).length) || Object.values(audience.engaged).some(item => Object.keys(item).length)) {
       const data = { timeframe: DEMOGRAPHIC_TIMEFRAME, follower: audience.follower as Prisma.InputJsonValue, engaged: audience.engaged as Prisma.InputJsonValue, fetchedAt: new Date() };
-      await db.instagramAudienceSnapshot.upsert({ where: { date: today }, create: { date: today, ...data }, update: data });
+      await db.instagramAudienceSnapshot.upsert({ where: { accountId_date: { accountId, date: today } }, create: { accountId, date: today, ...data }, update: data });
       result.audience = true;
     }
   } catch (error) { result.errors.push(`audience: ${reason(error)}`); }
 
   result.ok = result.days > 0 || result.media > 0 || result.audience;
-  await db.instagramAccount.update({ where: { id: "global" }, data: { insightsFetchedAt: new Date(), insightsError: result.errors[0]?.slice(0, 300) ?? null } }).catch(() => undefined);
+  await db.instagramAccount.update({ where: { id: accountId }, data: { insightsFetchedAt: new Date(), insightsError: result.errors[0]?.slice(0, 300) ?? null } }).catch(() => undefined);
   return result;
 }

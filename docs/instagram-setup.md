@@ -209,6 +209,17 @@ xuddi shu callback. Meta `signed_request` yuboradi (imzo `INSTAGRAM_APP_SECRET` 
 komment va Direct yozuvlari o'chiriladi, lidlar anonimlashtiriladi, javobda `{ url, confirmation_code }` qaytadi;
 holat: `https://buyukkaravan.com/data-deletion?code=…`. Qo'lda so'rov (telefon/Telegram) kelsa — 30 kun ichida.
 
+## 15. Bir nechta akkaunt (@buyuk_karavan, @eshikmaster…)
+
+- **Ulash:** Sozlamalar → Instagram → **Yangi akkaunt ulash** (avval Instagram'da kerakli akkauntga kiring). Har akkaunt o'z kartasida: token muddati, webhook, catch-up, qayta ulash / uzish. "Uzish" tokenni o'chiradi, sozlamalar va jurnal saqlanadi.
+- **Bir Meta app, bir webhook URL:** hodisa `entry.id` (akkaunt id) bo'yicha o'z akkauntiga tushadi; navbat, 8–25 s pauza, kunlik limit, catch-up har akkauntda alohida.
+- **Instagram sahifasi** tepasida akkaunt tanlagich (`?account=`): Kommentlar, Direct, Statistika, Storislar, Ovoz — tanlangan akkaunt uchun.
+- **Kommentlar → Akkaunt va aloqa:** nomi, brend (AI shu nomdan yozadi), telefon, manzil, mo'ljal, xarita, ish vaqti, Telegram guruh ID'lari (Direct; salbiy kommentlar — Super Admin'larga ham boradi). Botni guruhga qo'shing; ID `-100…` ko'rinishida.
+- **Telefon / manzil / ish vaqti** kommentlari (yangi akkauntlarda yoqilgan): Direct'ga shablon (`{telefon} {manzil} {moljal} {xarita} {ishVaqti}`) + ochiq javob.
+- **@eshikmaster** birinchi ulanganda tayyor sozlama oladi: AI har kommentga 1–2 gap javob (prompt — Kommentlar → sozlamalarda), telefon/manzil/lokatsiya/narx/kelish vaqti → "Ma'lumotni Direct'ga yubordik" + bitta Direct matni; lid, Direct → Telegram, salbiy → Telegram o'chiq.
+- **Mahsulotsiz post:** narx so'ralsa — post uchun yozilgan "Narx matni", bo'lmasa akkauntning "narx telefonda" matni.
+- **Storislar API / TTS API:** `account` maydoni (`eshikmaster` yoki id); bo'sh — birinchi akkaunt. Birinchi akkaunt storisni `IG_USER_ID` / `IG_PUBLISH_TOKEN` bilan, boshqalari o'z tokeni bilan joylaydi — buning uchun Meta app'da `instagram_business_content_publish` ruxsati va `SCOPES`ga qo'shish kerak.
+
 ## Nosozliklar
 
 | Belgi | Sabab / yechim |

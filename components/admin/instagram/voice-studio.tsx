@@ -70,7 +70,7 @@ function Result({ result, title }: { result: Done; title: string }) {
   </div>;
 }
 
-export function VoiceStudio({ providers, history, usage, apiReady, storageReady }: { providers: ProviderInfo[]; history: VoiceHistoryRow[]; usage: Usage; apiReady: boolean; storageReady: boolean }) {
+export function VoiceStudio({ accountId, providers, history, usage, apiReady, storageReady }: { accountId: string; providers: ProviderInfo[]; history: VoiceHistoryRow[]; usage: Usage; apiReady: boolean; storageReady: boolean }) {
   const router = useRouter();
   const languages = useMemo(() => {
     const spoken = new Set(providers.flatMap(provider => provider.languages));
@@ -123,7 +123,7 @@ export function VoiceStudio({ providers, history, usage, apiReady, storageReady 
   const run = async (kind: "preview" | "full") => {
     if (!text.trim()) { setError("Matnni kiriting."); return; }
     setBusy(kind); setError(null);
-    const result = kind === "preview" ? await previewVoiceAction(request) : await generateVoiceAction(request);
+    const result = kind === "preview" ? await previewVoiceAction(request) : await generateVoiceAction(request, accountId);
     setBusy(null);
     if (!result.ok) { setError(result.error); return; }
     if (kind === "preview") setPreview(result); else { setFull(result); router.refresh(); }

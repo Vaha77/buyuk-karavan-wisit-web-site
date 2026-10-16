@@ -5,34 +5,35 @@ import { activityHeatmap, changePercent, contentTypes, dayStartUtc, engagementRa
 type Audience = Record<string, Record<string, number>>;
 const asAudience = (value: unknown): Audience => value && typeof value === "object" ? value as Audience : {};
 
-/** Everything the "Statistika" tab shows for a period, plus the previous period for the % changes. */
-export async function getStatsBoard(period: Period) {
+/** Everything the "Statistika" tab shows for one account and a period, plus the previous period for the % changes. */
+export async function getStatsBoard(period: Period, accountId: string) {
   const db = getDb(), now = new Date();
   const range = periodRange(period, now);
   const from = dayStartUtc(range.from), prevFrom = dayStartUtc(range.prevFrom), to = now;
-  const leadSources = { source: { in: ["INSTAGRAM", "INSTAGRAM_DM"] as Array<"INSTAGRAM" | "INSTAGRAM_DM"> } };
+  const leadSources = { source: { in: ["INSTAGRAM", "INSTAGRAM_DM"] as Array<"INSTAGRAM" | "INSTAGRAM_DM"> }, instagramAccountId: accountId };
+  const own = { accountId };
 
   const [account, days, prevDays, latestFollowers, media, audience, comments, kinds, firstComment, dmIn, prevDmIn, dmAnswers, waiting, conversations, leads, activity] = await Promise.all([
-    db.instagramAccount.findUnique({ where: { id: "global" }, select: { username: true, grantedScopes: true, insightsFetchedAt: true, insightsError: true } }),
-    db.instagramDailyStat.findMany({ where: { date: { gte: range.from, lte: range.to } }, orderBy: { date: "asc" } }),
-    db.instagramDailyStat.findMany({ where: { date: { gte: range.prevFrom, lte: range.prevTo } } }),
-    db.instagramDailyStat.findFirst({ where: { followersCount: { not: null } }, orderBy: { date: "desc" }, select: { followersCount: true, date: true } }),
-    db.instagramMediaStat.findMany({ where: { postedAt: { gte: from } }, orderBy: { postedAt: "desc" } }),
-    db.instagramAudienceSnapshot.findFirst({ orderBy: { date: "desc" } }),
-    db.instagramComment.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { createdAt: true, kind: true, mediaId: true, dmSentAt: true, leadId: true } }),
+    db.instagramAccount.findUnique({ where: { id: accountId }, select: { username: true, grantedScopes: true, insightsFetchedAt: true, insightsError: true } }),
+    db.instagramDailyStat.findMany({ where: { ...own, date: { gte: range.from, lte: range.to } }, orderBy: { date: "asc" } }),
+    db.instagramDailyStat.findMany({ where: { ...own, date: { gte: range.prevFrom, lte: range.prevTo } } }),
+    db.instagramDailyStat.findFirst({ where: { ...own, followersCount: { not: null } }, orderBy: { date: "desc" }, select: { followersCount: true, date: true } }),
+    db.instagramMediaStat.findMany({ where: { ...own, postedAt: { gte: from } }, orderBy: { postedAt: "desc" } }),
+    db.instagramAudienceSnapshot.findFirst({ where: own, orderBy: { date: "desc" } }),
+    db.instagramComment.findMany({ where: { ...own, createdAt: { gte: from, lte: to } }, select: { createdAt: true, kind: true, mediaId: true, dmSentAt: true, leadId: true } }),
     // Comment kinds: our webhook journal, all of it (since the auto-reply system started), not the period.
-    db.instagramComment.groupBy({ by: ["kind"], _count: { _all: true } }),
-    db.instagramComment.findFirst({ orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
-    db.instagramMessage.findMany({ where: { direction: "IN", sentAt: { gte: from, lte: to } }, select: { sentAt: true, conversationId: true } }),
-    db.instagramMessage.count({ where: { direction: "IN", sentAt: { gte: prevFrom, lt: from } } }),
-    db.instagramMessage.findMany({ where: { direction: "OUT", isAuto: false, responseMs: { not: null }, sentAt: { gte: from, lte: to } }, select: { responseMs: true } }),
-    db.instagramConversation.count({ where: { status: { in: ["UNREAD", "OPENED"] } } }),
-    db.instagramConversation.count({ where: { lastIncomingAt: { gte: from } } }),
+    db.instagramComment.groupBy({ by: ["kind"], where: own, _count: { _all: true } }),
+    db.instagramComment.findFirst({ where: own, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    db.instagramMessage.findMany({ where: { ...own, direction: "IN", sentAt: { gte: from, lte: to } }, select: { sentAt: true, conversationId: true } }),
+    db.instagramMessage.count({ where: { ...own, direction: "IN", sentAt: { gte: prevFrom, lt: from } } }),
+    db.instagramMessage.findMany({ where: { ...own, direction: "OUT", isAuto: false, responseMs: { not: null }, sentAt: { gte: from, lte: to } }, select: { responseMs: true } }),
+    db.instagramConversation.count({ where: { ...own, status: { in: ["UNREAD", "OPENED"] } } }),
+    db.instagramConversation.count({ where: { ...own, lastIncomingAt: { gte: from } } }),
     db.lead.findMany({ where: { ...leadSources, createdAt: { gte: from, lte: to } }, select: { id: true, sale: { select: { status: true, saleAmount: true, currency: true } } } }),
     // Best time: our comments and Direct messages of the last 90 days.
     Promise.all([
-      db.instagramComment.findMany({ where: { createdAt: { gte: new Date(now.getTime() - 90 * 86_400_000) } }, select: { createdAt: true } }),
-      db.instagramMessage.findMany({ where: { direction: "IN", sentAt: { gte: new Date(now.getTime() - 90 * 86_400_000) } }, select: { sentAt: true } }),
+      db.instagramComment.findMany({ where: { ...own, createdAt: { gte: new Date(now.getTime() - 90 * 86_400_000) } }, select: { createdAt: true } }),
+      db.instagramMessage.findMany({ where: { ...own, direction: "IN", sentAt: { gte: new Date(now.getTime() - 90 * 86_400_000) } }, select: { sentAt: true } }),
     ]),
   ]);
 
@@ -94,7 +95,7 @@ export async function getStatsBoard(period: Period) {
     kpis, funnel: steps, daily,
     commentsSource: commentTotal.source,
     kindsSince: firstComment?.createdAt.toISOString() ?? null,
-    kinds: { PRICE: kindCount.PRICE ?? 0, POSITIVE: kindCount.POSITIVE ?? 0, QUESTION: kindCount.QUESTION ?? 0, NEGATIVE: kindCount.NEGATIVE ?? 0, SPAM: kindCount.SPAM ?? 0 },
+    kinds: { PRICE: kindCount.PRICE ?? 0, POSITIVE: kindCount.POSITIVE ?? 0, QUESTION: (kindCount.QUESTION ?? 0) + (kindCount.PHONE ?? 0) + (kindCount.ADDRESS ?? 0) + (kindCount.HOURS ?? 0), NEGATIVE: kindCount.NEGATIVE ?? 0, SPAM: kindCount.SPAM ?? 0 },
     direct: { avgResponseMs: responses.length ? Math.round(responses.reduce((a, b) => a + b, 0) / responses.length) : null, answered: responses.length, waiting },
     audience: audience ? { date: audience.date, timeframe: audience.timeframe, follower: asAudience(audience.follower), engaged: asAudience(audience.engaged) } : null,
     heatmap: heat,

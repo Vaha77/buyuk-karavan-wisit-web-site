@@ -153,19 +153,20 @@ export function containerStep(statusCode: string | null | undefined): "publish" 
 }
 
 // ---- Telegram --------------------------------------------------------------------------------------------
-export type StoryCallback = { kind: "ok" | "no"; id: string } | { kind: "day"; day: string };
-/** story:ok:<id> · story:no:<id> · story:day:2026-10-12 (≤ 64 bytes). */
+export type StoryCallback = { kind: "ok" | "no"; id: string } | { kind: "day"; day: string; accountId?: string };
+/** story:ok:<id> · story:no:<id> · story:day:2026-10-12[:<accountId>] (≤ 64 bytes). */
 export function parseStoryCallback(data: string | null | undefined): StoryCallback | null {
   const match = data?.match(/^story:(ok|no):([a-z0-9]{8,40})$/i);
   if (match) return { kind: match[1] as "ok" | "no", id: match[2] };
-  const day = data?.match(/^story:day:(\d{4}-\d{2}-\d{2})$/);
-  return day ? { kind: "day", day: day[1] } : null;
+  const day = data?.match(/^story:day:(\d{4}-\d{2}-\d{2})(?::([a-z0-9]{1,40}))?$/i);
+  return day ? { kind: "day", day: day[1], ...(day[2] ? { accountId: day[2] } : {}) } : null;
 }
-export function approvalKeyboard(id: string, scheduledAt: Date) {
+/** With `accountId` the day button approves only that account's stories. */
+export function approvalKeyboard(id: string, scheduledAt: Date, accountId?: string) {
   const day = tashkentDay(scheduledAt);
   return { inline_keyboard: [
     [{ text: "✅ Tasdiqlash", callback_data: `story:ok:${id}` }, { text: "❌ Rad etish", callback_data: `story:no:${id}` }],
-    [{ text: `✅ Hammasini tasdiqlash (${day.slice(8, 10)}.${day.slice(5, 7)})`, callback_data: `story:day:${day}` }],
+    [{ text: `✅ Hammasini tasdiqlash (${day.slice(8, 10)}.${day.slice(5, 7)})`, callback_data: `story:day:${day}${accountId ? `:${accountId}` : ""}` }],
   ] };
 }
 export function approvalText(item: { scheduledAt: Date; caption: string | null; durationMs: number | null; status?: StoryStatus }) {

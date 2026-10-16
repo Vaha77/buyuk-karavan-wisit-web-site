@@ -16,24 +16,24 @@ function when(raw: unknown): { ok: true; at: Date } | { ok: false; status: numbe
 }
 
 /** The file came in the request body. */
-export async function intakeBytes(bytes: Uint8Array, scheduledAt: unknown, caption: unknown): Promise<IntakeResult> {
+export async function intakeBytes(bytes: Uint8Array, scheduledAt: unknown, caption: unknown, accountId: string): Promise<IntakeResult> {
   const time = when(scheduledAt);
   if (!time.ok) return time;
   const check = checkStoryVideo(bytes);
   if (!check.ok) return { ok: false, status: 400, error: check.error };
   const stored = await putStoryVideo(bytes);
-  const item = await enqueueStory({ videoUrl: stored.url, videoKey: stored.key, scheduledAt: time.at, caption: cleanCaption(caption), sizeBytes: bytes.byteLength, info: check.info });
+  const item = await enqueueStory({ accountId, videoUrl: stored.url, videoKey: stored.key, scheduledAt: time.at, caption: cleanCaption(caption), sizeBytes: bytes.byteLength, info: check.info });
   return { ok: true, id: item.id };
 }
 
 /** The file was uploaded to a presigned URL first; a bad file is deleted from the storage. */
-export async function intakeKey(key: unknown, scheduledAt: unknown, caption: unknown): Promise<IntakeResult> {
+export async function intakeKey(key: unknown, scheduledAt: unknown, caption: unknown, accountId: string): Promise<IntakeResult> {
   const time = when(scheduledAt);
   if (!time.ok) return time;
   const object = typeof key === "string" ? await readStoryVideo(key) : null;
   if (!object) return { ok: false, status: 400, error: "Yuklangan video topilmadi (videoKey)." };
   const check = checkStoryVideo(object.bytes, object.size);
   if (!check.ok) { await deleteStoryVideo(key as string); return { ok: false, status: 400, error: check.error }; }
-  const item = await enqueueStory({ videoUrl: object.url, videoKey: key as string, scheduledAt: time.at, caption: cleanCaption(caption), sizeBytes: object.size, info: check.info });
+  const item = await enqueueStory({ accountId, videoUrl: object.url, videoKey: key as string, scheduledAt: time.at, caption: cleanCaption(caption), sizeBytes: object.size, info: check.info });
   return { ok: true, id: item.id };
 }

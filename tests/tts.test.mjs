@@ -254,8 +254,9 @@ test("wiring: Super Admin only, keys only from env and never logged, additive mi
   const actions = await read("../app/admin/(protected)/instagram/voice/actions.ts");
   assert.match(actions, /requireRole\("SUPER_ADMIN"\)/);
   for (const name of ["previewVoiceAction", "generateVoiceAction", "sampleVoiceAction", "deleteVoiceAction"]) assert.match(actions, new RegExp(`export async function ${name}[\\s\\S]*?await actor\\(\\)`), `${name} checks the role`);
-  const nav = await read("../app/admin/(protected)/instagram/page.tsx");
-  assert.match(nav, /user\.role === "SUPER_ADMIN" && <Link className="bk-chip" href="\/admin\/instagram\/voice">Ovoz<\/Link>/);
+  const nav = await read("../components/admin/instagram/account-nav.tsx");
+  assert.match(nav, /\{ key: "voice", label: "Ovoz", href: "\/admin\/instagram\/voice", superOnly: true \}/);
+  assert.match(await read("../app/admin/(protected)/instagram/page.tsx"), /isSuper=\{user\.role === "SUPER_ADMIN"\}/);
   for (const path of ["../lib/tts/service.ts", "../lib/tts/providers/openai.ts", "../lib/tts/providers/aisha.ts", "../lib/tts/providers/elevenlabs.ts", "../lib/tts/storage.ts", "../app/api/tts/route.ts"]) {
     const source = await read(path);
     assert.doesNotMatch(source, /console\.\w+\([^)]*(apiKey|API_KEY|key\(env)/, `${path}: no key in a log`);

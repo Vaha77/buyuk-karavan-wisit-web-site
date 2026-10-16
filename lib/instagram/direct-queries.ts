@@ -4,18 +4,20 @@ import { formatMinute, type DirectStatus } from "./direct-rules";
 
 export const DIRECT_FILTERS = ["UNREAD", "OPENED", "ANSWERED", "DISMISSED"] as const;
 
-/** Instagram → "Direct" tab: conversations (by status), counts, settings and who receives the Telegram cards. */
-export async function getDirectBoard(status: DirectStatus | null) {
+/** Instagram → "Direct" tab of one account: conversations (by status), counts, settings and who receives the Telegram cards. */
+export async function getDirectBoard(status: DirectStatus | null, accountId: string) {
   const db = getDb();
   const [rows, counts, account, people] = await Promise.all([
-    db.instagramConversation.findMany({ where: status ? { status } : {}, orderBy: [{ lastIncomingAt: "desc" }], take: 200, include: { messages: { where: { direction: "IN" }, orderBy: { sentAt: "desc" }, take: 1, select: { text: true, kind: true, sentAt: true } } } }),
-    db.instagramConversation.groupBy({ by: ["status"], _count: { _all: true } }),
-    db.instagramAccount.findUnique({ where: { id: "global" }, select: { directWorkStart: true, directWorkEnd: true, directAutoAckEnabled: true, directAutoAckText: true } }),
+    db.instagramConversation.findMany({ where: status ? { accountId, status } : { accountId }, orderBy: [{ lastIncomingAt: "desc" }], take: 200, include: { messages: { where: { direction: "IN" }, orderBy: { sentAt: "desc" }, take: 1, select: { text: true, kind: true, sentAt: true } } } }),
+    db.instagramConversation.groupBy({ by: ["status"], where: { accountId }, _count: { _all: true } }),
+    db.instagramAccount.findUnique({ where: { id: accountId }, select: { id: true, directWorkStart: true, directWorkEnd: true, directAutoAckEnabled: true, directAutoAckText: true, directChatId: true } }),
     db.adminUser.findMany({ where: { receivesInstagramDirect: true, isActive: true, archivedAt: null }, select: { name: true, telegramChatId: true }, orderBy: { name: "asc" } }),
   ]);
   return {
     now: Date.now(),
+    accountId,
     connected: !!account,
+    groupChatId: account?.directChatId ?? null,
     conversations: rows.map(row => ({
       id: row.id, username: row.username, name: row.name, status: row.status as DirectStatus,
       waitingSince: row.waitingSince?.toISOString() ?? null, lastIncomingAt: row.lastIncomingAt?.toISOString() ?? null,

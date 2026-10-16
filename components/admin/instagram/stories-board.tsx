@@ -33,7 +33,7 @@ function probe(file: File): Promise<string | null> {
   });
 }
 
-function Uploader({ onDone }: { onDone: () => void }) {
+function Uploader({ accountId, onDone }: { accountId: string; onDone: () => void }) {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [busy, setBusy] = useState(false);
   const patch = (key: string, value: Partial<Draft>) => setDrafts(rows => rows.map(row => row.key === key ? { ...row, ...value } : row));
@@ -49,7 +49,7 @@ function Uploader({ onDone }: { onDone: () => void }) {
       if (!presign.ok) throw new Error(presign.error);
       const put = await fetch(presign.uploadUrl, { method: "PUT", headers: presign.headers, body: row.file });
       if (!put.ok) throw new Error(`Storage HTTP ${put.status}`);
-      const saved = await registerStoryAction({ key: presign.key, scheduledAt: row.scheduledAt, caption: row.caption });
+      const saved = await registerStoryAction({ key: presign.key, scheduledAt: row.scheduledAt, caption: row.caption, accountId });
       if (!saved.ok) throw new Error(saved.error);
       patch(row.key, { state: "done", note: saved.message ?? "Navbatga qo‘shildi ✓" });
     } catch (error) {
@@ -100,7 +100,7 @@ function StoryCard({ item, run, pending }: { item: StoryRow; run: (task: () => P
   </li>;
 }
 
-export function StoriesBoard({ items, telegramLinked, publishReady, apiReady }: { items: StoryRow[]; telegramLinked: boolean; publishReady: boolean; apiReady: boolean }) {
+export function StoriesBoard({ accountId, items, telegramLinked, publishReady, apiReady }: { accountId: string; items: StoryRow[]; telegramLinked: boolean; publishReady: boolean; apiReady: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -116,7 +116,7 @@ export function StoriesBoard({ items, telegramLinked, publishReady, apiReady }: 
     {!telegramLinked && <p className="ig-warn" role="alert">Super Admin Telegram’i ulanmagan — tasdiqlash xabarlari botga bormaydi (Foydalanuvchilar → Telegram bog‘lash). Bu yerda tasdiqlash mumkin.</p>}
     {!publishReady && <p className="ig-warn" role="alert">IG_USER_ID / IG_PUBLISH_TOKEN sozlanmagan — storislar joylanmaydi.</p>}
     {!apiReady && <p className="bk-muted" style={{ margin: 0 }}>API (POST /api/stories/queue) uchun STORY_QUEUE_TOKEN sozlanmagan — hozircha faqat shu yerdan yuklash mumkin.</p>}
-    <Uploader onDone={() => router.refresh()}/>
+    <Uploader accountId={accountId} onDone={() => router.refresh()}/>
     {message && <p className={message.ok ? "ig-ok" : "ig-error"} role={message.ok ? "status" : "alert"}>{message.text}</p>}
     <section aria-labelledby="story-open"><h2 id="story-open" className="ig-story-h">Navbatda · {open.length}</h2>
       {open.length ? <ul className="ig-stories">{open.map(item => <StoryCard key={item.id} item={item} run={run} pending={pending}/>)}</ul> : <div className="bk-empty">Navbat bo‘sh</div>}

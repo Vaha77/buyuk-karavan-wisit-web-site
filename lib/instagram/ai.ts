@@ -4,7 +4,7 @@ import "server-only";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
-import { COMMENT_KINDS, type CommentKind } from "./constants";
+import type { CommentKind } from "./constants";
 import { aiCostUsd, tooSimilar, validPositiveReply } from "./rules";
 
 const DEFAULT_MODEL = "gpt-4.1-mini";
@@ -20,9 +20,10 @@ function usageOf(response: { usage?: { input_tokens?: number; output_tokens?: nu
 }
 const safe = (error: unknown) => ({ type: error instanceof Error ? error.name : "UnknownError", status: (error as { status?: number })?.status });
 
-const classification = z.object({ kind: z.enum(COMMENT_KINDS.filter(kind => kind !== "UNKNOWN") as ["PRICE", "POSITIVE", "QUESTION", "NEGATIVE", "SPAM"]) });
+const classification = z.object({ kind: z.enum(["PRICE", "POSITIVE", "QUESTION", "NEGATIVE", "SPAM"]) });
 
-const CLASSIFY_PROMPT = `Sen BUYUK KARAVAN (sanoat sovutish uskunalari, Namangan) Instagram sahifasidagi kommentlarni turlarga ajratasan.
+/** The account's brand (InstagramAccount.brandName, else @username): the prompts speak for it and never mention another one. */
+const classifyPrompt = (brand: string) => `Sen ${brand} Instagram sahifasidagi kommentlarni turlarga ajratasan.
 Kommentlar o'zbek (lotin yoki kirill), rus yoki ingliz tilida, emoji bilan bo'lishi mumkin.
 Turlar:
 - PRICE: narx so'rash ("narxi?", "qancha", "nech pul", "цена", "+", "?").
@@ -34,11 +35,11 @@ Ham narx, ham boshqa savol bo'lsa — PRICE. Shubhada salbiyroq turni tanla (NEG
 Faqat JSON qaytar.`;
 
 /** AI comment kind, or null (no key / error / timeout). */
-export async function classifyWithAi(comment: string): Promise<{ kind: Exclude<CommentKind, "UNKNOWN">; usage: AiUsage } | null> {
+export async function classifyWithAi(comment: string, brand: string): Promise<{ kind: Exclude<CommentKind, "UNKNOWN" | "PHONE" | "ADDRESS" | "HOURS">; usage: AiUsage } | null> {
   const openai = client();
   if (!openai) return null;
   try {
-    const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 40, input: [{ role: "system", content: CLASSIFY_PROMPT }, { role: "user", content: `Komment: ${JSON.stringify(comment.slice(0, 600))}` }], text: { format: zodTextFormat(classification, "comment_kind") } });
+    const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 40, input: [{ role: "system", content: classifyPrompt(brand) }, { role: "user", content: `Komment: ${JSON.stringify(comment.slice(0, 600))}` }], text: { format: zodTextFormat(classification, "comment_kind") } });
     const kind = response.output_parsed?.kind;
     return kind ? { kind, usage: usageOf(response) } : null;
   } catch (error) {
@@ -49,7 +50,8 @@ export async function classifyWithAi(comment: string): Promise<{ kind: Exclude<C
 
 const positiveReply = z.object({ reply: z.string() });
 
-const REPLY_PROMPT = `Sen BUYUK KARAVAN (sanoat sovutish uskunalari) Instagram sahifasi nomidan ijobiy kommentga qisqa, samimiy ochiq javob yozasan.
+const replyPrompt = (brand: string) => `Sen ${brand} Instagram sahifasi nomidan ijobiy kommentga qisqa, samimiy ochiq javob yozasan.
+Faqat shu brend nomidan yoz, boshqa kompaniya yoki brend nomini tilga olma.
 Qoidalar:
 - Faqat 1 jumla, 3–12 so'z.
 - Kommentning tilida va yozuvida yoz: o'zbek lotin → o'zbek lotin, o'zbek kirill → o'zbek kirill, rus → rus, ingliz → ingliz.
@@ -63,17 +65,17 @@ Faqat JSON qaytar: {"reply": "..."}`;
  * A fresh public reply for a POSITIVE comment; rewritten (up to 3 tries) when invalid or similar to one of the last 20
  * replies. null when the AI is unavailable or never produced a usable reply — then no reply goes out.
  */
-export async function writePositiveReply(comment: string, recent: string[]): Promise<{ reply: string | null; usage: AiUsage } | null> {
+export async function writePositiveReply(comment: string, recent: string[], brand: string, options: { prompt?: string | null; sentences?: number } = {}): Promise<{ reply: string | null; usage: AiUsage } | null> {
   const openai = client();
   if (!openai) return null;
   let usage = ZERO;
   const avoid = [...recent];
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 80, temperature: 1, input: [{ role: "system", content: REPLY_PROMPT }, { role: "user", content: `Oldingi javoblar: ${JSON.stringify(avoid.slice(-20))}\nKomment: ${JSON.stringify(comment.slice(0, 600))}` }], text: { format: zodTextFormat(positiveReply, "positive_reply") } });
+      const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 120, temperature: 1, input: [{ role: "system", content: options.prompt?.trim() || replyPrompt(brand) }, { role: "user", content: `Oldingi javoblar: ${JSON.stringify(avoid.slice(-20))}\nKomment: ${JSON.stringify(comment.slice(0, 600))}` }], text: { format: zodTextFormat(positiveReply, "positive_reply") } });
       usage = addUsage(usage, usageOf(response));
       const reply = response.output_parsed?.reply?.trim() ?? "";
-      if (validPositiveReply(reply, comment) && !tooSimilar(reply, recent)) return { reply, usage };
+      if (validPositiveReply(reply, comment, options.sentences) && !tooSimilar(reply, recent)) return { reply, usage };
       if (reply) avoid.push(reply);
     } catch (error) {
       console.warn("Instagram AI reply failed", safe(error));

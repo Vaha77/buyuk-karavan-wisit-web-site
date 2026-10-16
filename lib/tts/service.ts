@@ -11,7 +11,7 @@ import { CREDIT_PROVIDERS, creditsPerChar, creditsUsed, dailyWarning, generation
 import { deleteTtsAudio, existingSample, putSample, putTtsAudio, sampleKey } from "./storage";
 
 export type TtsKind = "FULL" | "PREVIEW" | "SAMPLE";
-type Options = { kind: TtsKind; source: "admin" | "api"; actor?: string | null };
+type Options = { kind: TtsKind; source: "admin" | "api"; actor?: string | null; accountId?: string };
 export type TtsResult =
   | { ok: true; id: string | null; url: string; durationMs: number; format: AudioFormat; chars: number; chunks: number; costUsd: number; credits: number | null; creditsExact: boolean; cached?: boolean; warning: string | null }
   | { ok: false; status: number; error: string };
@@ -110,7 +110,7 @@ async function produce(request: TtsRequest, options: Options, store: (bytes: Uin
   const row = await db.ttsGeneration.create({ data: {
     kind: options.kind, source: options.source, provider: provider.id, model: provider.model(env()), voice: voice.id, voiceName: voice.name, lang: request.lang,
     speed: request.speed, format, text: request.text, chars, chunks: chunks.length, costUsd, credits: credit?.credits ?? null, creditsExact: credit?.exact ?? false, durationMs: merged.durationMs, sizeBytes: merged.bytes.length,
-    audioUrl: saved.key ? saved.url : null, audioKey: saved.key, createdBy: options.actor ?? null,
+    audioUrl: saved.key ? saved.url : null, audioKey: saved.key, createdBy: options.actor ?? null, ...(options.accountId ? { accountId: options.accountId } : {}),
   } });
 
   const today = await db.ttsGeneration.count({ where: { createdAt: { gte: tashkentDayStart() } } });
@@ -143,9 +143,9 @@ export async function generateSample(request: Omit<TtsRequest, "text">, actor: s
   return produce({ ...request, text }, { kind: "SAMPLE", source: "admin", actor }, (bytes, format) => putSample(key, bytes, format));
 }
 
-/** History (FULL, not deleted). */
-export function listHistory(take = 100) {
-  return getDb().ttsGeneration.findMany({ where: { kind: "FULL", deletedAt: null }, orderBy: { createdAt: "desc" }, take });
+/** One account's history (FULL, not deleted). */
+export function listHistory(accountId: string, take = 100) {
+  return getDb().ttsGeneration.findMany({ where: { accountId, kind: "FULL", deletedAt: null }, orderBy: { createdAt: "desc" }, take });
 }
 
 /** "O‘chirish": the file goes; the row stays (deletedAt) so the month's cost total is unchanged. */

@@ -2,6 +2,9 @@ import "server-only";
 import { OAUTH_AUTHORIZE_URL, SCOPES } from "./rules";
 
 export const STATE_COOKIE = "bk_ig_oauth_state";
+/** state = "<random>.<target>": "add" (a new account) or the id of the account being reconnected. */
+export const ADD_ACCOUNT = "add";
+export const stateTarget = (state: string) => state.split(".")[1] || ADD_ACCOUNT;
 export const CALLBACK_PATH = "/api/instagram/oauth/callback";
 
 /** Must match a "Valid OAuth Redirect URI" in the Meta app exactly (https://buyukkaravan.com/api/instagram/oauth/callback). */

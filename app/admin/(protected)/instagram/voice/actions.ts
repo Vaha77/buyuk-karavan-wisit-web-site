@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/require-admin";
+import { resolveStoryAccount } from "@/lib/stories/service";
 import { MIGRATION_NEEDED, isMissingTable, parseTtsRequest, type TtsRequestInput } from "@/lib/tts/rules";
 import { deleteGeneration, generateFull, generatePreview, generateSample, type TtsResult } from "@/lib/tts/service";
 
@@ -21,13 +22,15 @@ export async function previewVoiceAction(input: TtsRequestInput): Promise<VoiceA
   try { return answer(await generatePreview(parsed.value, name)); } catch (error) { return failed(error); }
 }
 
-/** "Ovoz yasash": the whole script → a stored MP3 / WAV in the history. */
-export async function generateVoiceAction(input: TtsRequestInput): Promise<VoiceActionResult> {
+/** "Ovoz yasash": the whole script → a stored MP3 / WAV in the selected account's history. */
+export async function generateVoiceAction(input: TtsRequestInput, accountId: string): Promise<VoiceActionResult> {
   const name = await actor();
   const parsed = parseTtsRequest(input);
   if (!parsed.ok) return parsed;
+  const account = await resolveStoryAccount(accountId);
+  if (!account) return { ok: false, error: "Akkaunt topilmadi." };
   try {
-    const result = answer(await generateFull(parsed.value, { source: "admin", actor: name }));
+    const result = answer(await generateFull(parsed.value, { source: "admin", actor: name, accountId: account }));
     revalidatePath("/admin/instagram/voice");
     return result;
   } catch (error) { return failed(error); }

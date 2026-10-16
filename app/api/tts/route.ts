@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { bearerMatches } from "@/lib/stories/auth";
 import { MIGRATION_NEEDED, isMissingTable, parseTtsRequest } from "@/lib/tts/rules";
+import { resolveStoryAccount } from "@/lib/stories/service";
 import { generateFull } from "@/lib/tts/service";
 
 export const runtime = "nodejs";
@@ -9,7 +10,8 @@ export const maxDuration = 300;
 
 /**
  * Text → voice-over. Authorization: Bearer TTS_API_TOKEN.
- * JSON body: { text, lang ("uz"…), provider ("aisha" | "openai" | "elevenlabs"), voice (id from GET /api/tts/voices), speed? (1), format? ("mp3" | "wav") }
+ * JSON body: { text, lang ("uz"…), provider ("aisha" | "openai" | "elevenlabs"), voice (id from GET /api/tts/voices), speed? (1), format? ("mp3" | "wav"),
+ *   account? ("eshikmaster" or the account id; empty = the first Instagram account) }
  * Answers 201 { id, url (public), durationMs, durationSec, format, chars, chunks, costUsd, credits (VoiceLab, else null), creditsExact, warning }.
  * 400 bad input / provider without a key · 401 · 429 monthly limit · 502 provider error.
  */
@@ -20,7 +22,9 @@ export async function POST(request: Request) {
   const parsed = parseTtsRequest(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   try {
-    const result = await generateFull(parsed.value, { source: "api", actor: "API" });
+    const accountId = await resolveStoryAccount((body as { account?: unknown }).account);
+    if (!accountId) return NextResponse.json({ error: "account topilmadi." }, { status: 400 });
+    const result = await generateFull(parsed.value, { source: "api", actor: "API", accountId });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json({ id: result.id, url: result.url, durationMs: result.durationMs, durationSec: Math.round(result.durationMs / 100) / 10, format: result.format, chars: result.chars, chunks: result.chunks, costUsd: result.costUsd, credits: result.credits, creditsExact: result.creditsExact, warning: result.warning }, { status: 201 });
   } catch (error) {

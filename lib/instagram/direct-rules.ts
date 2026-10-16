@@ -11,6 +11,18 @@ export const DEFAULT_WORK_END = 20 * 60;
 const TZ_MS = 5 * 3_600_000; // Tashkent, UTC+5, no DST
 const DAY_MS = 86_400_000;
 
+export type Recipient = { id: string; name: string; chatId: string };
+
+/**
+ * Who gets an account's Direct cards / reminders: its Telegram group when one is set (id "" = no personal "opened by"
+ * link), else the admins who receive Instagram Direct; `withSuper` (2 h reminder, report) adds the Super Admins. One
+ * message per chat.
+ */
+export function directRecipients(groupChatId: string | null | undefined, receivers: Recipient[], superAdmins: Recipient[], withSuper = false): Recipient[] {
+  const base = groupChatId?.trim() ? [{ id: "", name: "Telegram guruh", chatId: groupChatId.trim() }] : receivers;
+  return [...new Map([...base, ...(withSuper ? superAdmins : [])].map(person => [person.chatId, person])).values()];
+}
+
 // ---- Working hours (Tashkent) ----------------------------------------------------------------------------
 
 /** "YYYY-MM-DD" of the Tashkent day. */
