@@ -5,7 +5,7 @@
 .sx h2{margin:0;font-size:18px;font-weight:800}
 .sx h3{margin:0;font-size:16px;font-weight:800}
 .sx p{margin:0}
-.sx-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:14px}
+.sx-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:14px}.sx-head>*{min-width:0;max-width:100%}.sx-pill{max-width:100%}
 .sx-head>div:first-child{display:flex;flex-direction:column;gap:6px;min-width:0}
 .sx-crumb{font-size:13px;color:var(--sx-muted)}
 .sx-lead{font-size:14px;color:var(--sx-muted)}

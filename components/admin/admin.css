@@ -181,5 +181,8 @@
   .admin-workspace table.is-cards td::before{content:attr(data-label);flex:0 0 40%;color:#6b7f95;font-size:12px;font-weight:600;text-align:left}
   .admin-workspace table.is-cards td[data-label=""]{justify-content:flex-end}.admin-workspace table.is-cards td[data-label=""]::before{display:none}
   .admin-workspace table.is-cards td>*{min-width:0;max-width:100%}
+  /* Pills and labels written with nowrap (e.g. "⚠️ Rama qo‘shilmagan · FN → FNV" on /admin/seh) pushed the page 10px wider. */
+  .admin-workspace table.is-cards td *{white-space:normal!important}
+  .admin-mobile-card details summary{cursor:pointer;font-size:13px;font-weight:700;color:#245487;margin-bottom:8px}
   .admin-workspace .admin-table-wrap.is-scroll,.admin-workspace .bk-table-wrap,.admin-workspace .sx-table-wrap{overflow-x:visible}
 }

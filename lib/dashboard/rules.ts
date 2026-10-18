@@ -77,7 +77,7 @@ export function delta(current: number, previous: number) {
 }
 
 // ---- Regular customer ranking ----------------------------------------------------------------
-export type CustomerYear = { id: string; name: string; regionCode: string | null; months: Array<number | null> };
+export type CustomerYear = { id: string; name: string; regionCode: string | null; months: Array<number | null>; seller?: string | null };
 export type CustomerRankRow = CustomerYear & { place: number; total: number; missing: number[]; status: { text: string; tone: "ok" | "missing" | "gap" } };
 
 /** Months that must already be filled: before the current month in the current year, all 12 in past years. */

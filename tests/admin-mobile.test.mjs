@@ -83,3 +83,12 @@ test("phones: every admin table becomes cards — cells get their column header 
   assert.match(await read("../components/admin/admin-shell.tsx"), /new MutationObserver\(run\)/);
   assert.match(await read("../components/admin/bklead/bklead.css"), /\.bk\{[^}]*grid-template-columns:minmax\(0,1fr\)/, "the .bk grid column never takes a wide table's width");
 });
+
+test("phones: 12-month customer ranking card — place, customer, seller, total, last 3 months; the rest under Batafsil", async () => {
+  const source = await read("../components/admin/bklead/customer-ranking.tsx");
+  assert.match(source, /bk-table-wrap has-mobile-cards/);
+  const card = source.slice(source.indexOf('<ul className="admin-mobile-cards">'));
+  for (const needle of ["row.place", "row.name", "row.seller", "row.total", "facts(row, recent, lastMonth)", "<summary>Batafsil</summary>", "facts(row, 0, recent)"]) assert.ok(card.includes(needle), needle);
+  assert.match(source, /const recent = Math\.max\(0, lastMonth - 3\)/);
+  assert.match(await read("../components/admin/admin.css"), /table\.is-cards td \*\{white-space:normal!important\}/, "no nowrap pill widens /admin/seh");
+});
