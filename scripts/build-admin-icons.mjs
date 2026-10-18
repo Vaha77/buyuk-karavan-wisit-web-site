@@ -1,20 +1,32 @@
-// Admin app icons (PWA, later Capacitor) from the "✳ BK" mark: node scripts/build-admin-icons.mjs
-// Replace the SVG below with the real logo when it arrives and run it again.
+// Admin app icons (PWA, Capacitor), the sidebar emblem and the offer-PDF logo from public/brand/:
+//   node scripts/build-admin-icons.mjs
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
-const OUT = new URL("../public/admin-icons/", import.meta.url);
-// `inset`: share of the side the mark uses (maskable icons keep it inside the safe circle).
-const svg = (size, inset, round) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="${round ? 22 : 0}" fill="#102c47"/>
-  <g transform="translate(50 50) scale(${inset}) translate(-50 -50)" fill="none" stroke="#fff" stroke-linecap="round">
-    <path d="M50 15v26M37 28h26M40.8 18.8l18.4 18.4M59.2 18.8 40.8 37.2" stroke-width="5.5" stroke="#7cc4ff"/>
-    <text x="50" y="82" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="34" fill="#fff" stroke="none">BK</text>
-  </g></svg>`;
+const path = relative => fileURLToPath(new URL(`../${relative}`, import.meta.url));
+const ICON = path("public/brand/bk-icon-1024.png"), MASKABLE = path("public/brand/bk-icon-maskable-1024.png"), LOGO = path("public/brand/bk-logo.png");
+const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
+mkdirSync(path("public/admin-icons"), { recursive: true });
+mkdirSync(path("mobile/assets"), { recursive: true });
 
-mkdirSync(OUT, { recursive: true });
-for (const [name, size, inset, round] of [["icon-192.png", 192, 1, true], ["icon-512.png", 512, 1, true], ["maskable-512.png", 512, 0.72, false], ["apple-touch-icon.png", 180, 1, false]]) {
-  await sharp(Buffer.from(svg(size, inset, round))).png().toFile(fileURLToPath(new URL(name, OUT)));
-  console.log(name);
+const resize = (source, size, out) => sharp(source).resize(size, size, { fit: "contain", background: WHITE }).flatten({ background: WHITE }).png().toFile(path(out));
+await resize(ICON, 192, "public/admin-icons/icon-192.png");
+await resize(ICON, 512, "public/admin-icons/icon-512.png");
+await resize(MASKABLE, 512, "public/admin-icons/maskable-512.png");
+await resize(ICON, 180, "public/admin-icons/apple-touch-icon.png");
+await resize(ICON, 32, "public/admin-icons/favicon-32.png");
+// Sidebar / login emblem shown at 32px (2× for sharp screens).
+await resize(ICON, 64, "public/admin-icons/emblem-64.png");
+// Offer PDF: ~40px high on the page, 3× for print.
+await sharp(LOGO).resize({ height: 120 }).png().toFile(path("public/admin-icons/pdf-logo.png"));
+
+// Capacitor (@capacitor/assets): icon and a white splash with the emblem in the middle.
+await resize(ICON, 1024, "mobile/assets/icon-only.png");
+await resize(MASKABLE, 1024, "mobile/assets/icon-foreground.png");
+await sharp({ create: { width: 1024, height: 1024, channels: 4, background: WHITE } }).png().toFile(path("mobile/assets/icon-background.png"));
+const emblem = await sharp(ICON).resize(900, 900).png().toBuffer();
+for (const name of ["splash.png", "splash-dark.png"]) {
+  await sharp({ create: { width: 2732, height: 2732, channels: 4, background: WHITE } }).composite([{ input: emblem, gravity: "center" }]).png().toFile(path(`mobile/assets/${name}`));
 }
+console.log("admin icons, emblem, pdf logo and Capacitor assets written");

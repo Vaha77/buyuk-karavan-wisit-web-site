@@ -186,3 +186,4 @@
   .admin-mobile-card details summary{cursor:pointer;font-size:13px;font-weight:700;color:#245487;margin-bottom:8px}
   .admin-workspace .admin-table-wrap.is-scroll,.admin-workspace .bk-table-wrap,.admin-workspace .sx-table-wrap{overflow-x:visible}
 }
+.admin-emblem{flex:none;width:32px;height:32px;border-radius:8px;object-fit:contain;background:#fff}

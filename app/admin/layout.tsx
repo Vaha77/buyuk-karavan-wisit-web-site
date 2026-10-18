@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
   manifest: "/admin/manifest.webmanifest",
   appleWebApp: { capable: true, title: "BK Admin", statusBarStyle: "default" },
-  icons: { apple: "/admin-icons/apple-touch-icon.png" },
+  icons: { icon: "/admin-icons/favicon-32.png", apple: "/admin-icons/apple-touch-icon.png" },
 };
 // viewport-fit=cover: the app draws under the notch; the shell pads itself with env(safe-area-inset-*).
 export const viewport: Viewport = { themeColor: "#102c47", viewportFit: "cover" };

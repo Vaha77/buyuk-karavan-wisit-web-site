@@ -1,7 +1,8 @@
 import "server-only";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import React from "react";
-import { Document, Font, Page, Path, StyleSheet, Svg, Text, View, pdf } from "@react-pdf/renderer";
+import { Document, Font, Image, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
 import { offerUsd as usd, type publicLines } from "./rules";
 
 Font.register({ family: "NotoSans", fonts: [
@@ -15,11 +16,13 @@ export type OfferPdfData = {
   lines: ReturnType<typeof publicLines>; totalUsd: number; sellerName: string; sellerPhone: string | null;
 };
 
+// Bytes, not a path: react-pdf reads a Windows path ("G:\…") as a URL.
+const LOGO = path.join(process.cwd(), "public/admin-icons/pdf-logo.png");
 const navy = "#123E7C", ink = "#0F1E33", muted = "#5B6B82", line = "#D9E3F3";
 const s = StyleSheet.create({
   page: { fontFamily: "NotoSans", fontSize: 9.5, color: ink, padding: 36 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${navy}`, paddingBottom: 12, marginBottom: 18 },
-  brand: { flexDirection: "row", alignItems: "center", gap: 6 }, brandText: { fontSize: 15, fontWeight: 700, color: navy, letterSpacing: 1 },
+
   title: { fontSize: 16, fontWeight: 700, marginBottom: 4 }, meta: { color: muted, marginBottom: 2 },
   box: { flexDirection: "row", justifyContent: "space-between", marginVertical: 14, padding: 10, backgroundColor: "#F3F6FB", borderRadius: 4 },
   label: { color: muted, fontSize: 8, marginBottom: 2 }, strong: { fontWeight: 700 },
@@ -32,7 +35,8 @@ const s = StyleSheet.create({
 function OfferDocument({ data }: { data: OfferPdfData }) {
   return <Document title={`Tijorat taklifi ${data.number}`}><Page size="A4" style={s.page}>
     <View style={s.head}>
-      <View style={s.brand}><Svg width={18} height={18} viewBox="0 0 24 24"><Path d="M12 2v20M2 12h20M4.9 4.9l14.2 14.2M19.1 4.9 4.9 19.1" stroke={navy} strokeWidth={2.6} strokeLinecap="round"/></Svg><Text style={s.brandText}>BUYUK KARAVAN</Text></View>
+      {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf Image has no alt */}
+      <Image src={{ data: readFileSync(LOGO), format: "png" }} style={{ height: 40, objectFit: "contain" }}/>
       <Text style={{ color: muted }}>{data.number}</Text>
     </View>
     <Text style={s.title}>Tijorat taklifi {data.number}</Text>

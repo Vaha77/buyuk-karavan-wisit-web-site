@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/admin/calculations/*/pdf": ["./node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff"],
     // Tijorat taklifi PDF (download route and the "Telegram’ga yuborish" action on the offers page) reads these by path.
-    "/admin/my/offers/**": ["./node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-{400,700}-normal.woff"],
+    "/admin/my/offers/**": ["./node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-{400,700}-normal.woff", "./public/admin-icons/pdf-logo.png"],
   },
 };
 
