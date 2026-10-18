@@ -99,7 +99,7 @@ export function condenserWarning(model: Pick<ZborkaModel, "fn">, catalog: Pick<Z
 /** condenserId: a condenser product (vazdushniy); composition / manualPrice: chiller (null price = "kelishiladi"). */
 export type ZborkaChoice = { assembly: Assembly; liters?: string | null; hp?: string | null; condenserId?: string | null; composition?: string | null; manualPrice?: number | null };
 export type ZborkaChange = { part: "receiver" | "water" | "air"; label: string; chosen: string; standard: string; delta: number };
-export type ZborkaQuote = { ok: true; title: string; base: number; standard: number; negotiated: boolean; product: Priced; changes: ZborkaChange[]; lines: Array<{ k: string; v: string }>; telegram: string[]; options: { liters: string; hp: string; fn: string; condenserId: string | null; condenser: string | null; composition: string | null } } | { ok: false; error: string };
+export type ZborkaQuote = { ok: true; title: string; base: number; standard: number; negotiated: boolean; frameChanged?: boolean; product: Priced; changes: ZborkaChange[]; lines: Array<{ k: string; v: string }>; telegram: string[]; options: { liters: string; hp: string; fn: string; condenserId: string | null; condenser: string | null; composition: string | null } } | { ok: false; error: string };
 type QuoteCatalog = Pick<ZborkaCatalog, "receivers"> & Partial<Pick<ZborkaCatalog, "condensers" | "standardCondenserCategoryId">>;
 
 /** Chiller: the model's compressor and the seller's composition; price typed by the seller or "kelishiladi". */
@@ -119,6 +119,9 @@ function quoteChiller(model: ZborkaModel, brand: string, choice: ZborkaChoice): 
   };
 }
 
+/** Condenser series = the letters of its code ("FN160" → "FN", "FNV200" → "FNV"); another series needs another frame. */
+export const condenserSeries = (code: string | null | undefined) => (code ?? "").toUpperCase().match(/^[A-Z]+/)?.[0] ?? "";
+
 /** Price and description of one configured assembly. A part can only be swapped when both its prices are known. */
 export function quoteZborka(model: ZborkaModel, group: Pick<ZborkaGroup, "label" | "hpTable" | "brand">, catalog: QuoteCatalog, choice: ZborkaChoice): ZborkaQuote {
   const receivers = catalog.receivers;
@@ -128,7 +131,7 @@ export function quoteZborka(model: ZborkaModel, group: Pick<ZborkaGroup, "label"
   const brand = group.brand, changes: ZborkaChange[] = [], lines = [{ k: "Kompressor", v: `${brand} ${model.model}` }], telegram: string[] = [];
   let base = product.base;
   const liters = choice.assembly === "k" ? "" : choice.liters || model.liters || "", hp = choice.hp || model.hp || "";
-  let fn = model.fn || "", condenserId: string | null = null, condenser: string | null = null;
+  let fn = model.fn || "", condenserId: string | null = null, condenser: string | null = null, frameChanged = false;
   if (choice.assembly !== "k") {
     if (liters !== (model.liters ?? "")) {
       const chosen = receivers[liters], standard = model.liters ? receivers[model.liters] : undefined;
@@ -164,7 +167,10 @@ export function quoteZborka(model: ZborkaModel, group: Pick<ZborkaGroup, "label"
     fn = shown?.code ?? fn; condenserId = shown?.id ?? null; condenser = shown?.label ?? (model.fn || null);
     lines.push({ k: "Kondensator", v: condenser ? `${condenser} + rama` : "standart" });
     telegram.push(`Kondensator: ${condenser || "standart"}${changed ? ` (standart ${standard!.label} o‘rniga)` : ""}, rama bilan`);
+    // The price list has no frame price per series: the seller adds it, the price itself stays as calculated.
+    frameChanged = changed && condenserSeries(chosen!.code) !== condenserSeries(standard!.code);
+    if (frameChanged) telegram.push("Rama narxi qo‘shilmagan (kondensator turi o‘zgargan)");
     title = `${brand} ${model.model} vazdushniy agregat${fn ? ` · ${fn}` : ""}`;
   }
-  return { ok: true, title, base: Math.round(base * 100) / 100, standard: product.base, negotiated: false, product, changes, lines, telegram, options: { liters, hp, fn, condenserId, condenser, composition: null } };
+  return { ok: true, title, base: Math.round(base * 100) / 100, standard: product.base, negotiated: false, frameChanged, product, changes, lines, telegram, options: { liters, hp, fn, condenserId, condenser, composition: null } };
 }

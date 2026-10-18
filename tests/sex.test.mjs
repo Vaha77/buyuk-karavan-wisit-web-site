@@ -74,11 +74,15 @@ test("zborka quote: condenser delta = chosen Prays price − standard condenser'
   assert.deepEqual(standard.telegram, ["Resiver: 20 L", "Kondensator: FN160 · Xitoy, rama bilan"]);
   const fnv200 = zborka.quoteZborka(model, group, catalog, { assembly: "vz", condenserId: "x-fnv200" });
   assert.equal(fnv200.base, 4123 + 1646 - 1228);
-  assert.deepEqual(fnv200.telegram, ["Resiver: 20 L", "Kondensator: FNV200 · Xitoy (standart FN160 · Xitoy o‘rniga), rama bilan"]);
+  assert.deepEqual(fnv200.telegram, ["Resiver: 20 L", "Kondensator: FNV200 · Xitoy (standart FN160 · Xitoy o‘rniga), rama bilan", "Rama narxi qo‘shilmagan (kondensator turi o‘zgargan)"]);
+  assert.equal(fnv200.frameChanged, true, "FN → FNV: another series, the frame price is not included");
   const ucs = zborka.quoteZborka(model, group, catalog, { assembly: "vz", condenserId: "u-fn160" });
   assert.equal(ucs.base, 4123 + 1400 - 1228, "same FN code from UCS: the real price difference");
   assert.equal(ucs.title, "BITZER 4NES+20 vazdushniy agregat · FN160");
   assert.match(ucs.telegram[1], /FN160 · UCS \(standart FN160 · Xitoy o‘rniga\)/, "Telegram shows the condenser's source");
+  assert.equal(ucs.frameChanged, false, "same series: no frame warning"); assert.equal(ucs.telegram.length, 2);
+  assert.equal(standard.frameChanged, false);
+  assert.deepEqual(["FN160", "FN180", "FNV200", "fnw250"].map(zborka.condenserSeries), ["FN", "FN", "FNV", "FNW"], "FN160 → FN180 is only a size change");
   const same = zborka.quoteZborka(model, group, catalog, { assembly: "vz", condenserId: "x-fn160" });
   assert.equal(same.changes.length, 0, "choosing the standard condenser is no change");
   const bigger = zborka.quoteZborka(model, group, catalog, { assembly: "vz", condenserId: "x-fnv200", liters: "30" });

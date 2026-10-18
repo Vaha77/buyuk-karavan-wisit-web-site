@@ -213,6 +213,7 @@ function AgregatForm({ userName, catalog, customers }: Props) {
         {quote?.ok && quote.lines.map(line => <div key={line.k} className="sx-summary-line"><span>{line.k}</span><b>{line.v}</b></div>)}
         <div className="sx-summary-line"><span>Soni</span><b>{qtyNumber || "—"}</b></div>
         {price !== null && quote?.ok && <PriceBlock base={Math.round(price * Math.max(qtyNumber, 1) * 100) / 100} delta={quote.changes.length ? (quote.base - quote.standard) * Math.max(qtyNumber, 1) : null} negotiated={quote.negotiated}/>}
+        {quote?.ok && quote.frameChanged && <p className="sx-pill is-yellow" role="note" style={{ margin: 0, borderRadius: 10, padding: "8px 12px", whiteSpace: "normal", fontSize: 13, lineHeight: 1.4 }}>⚠️ Hurmatli {userName.trim().split(/\s+/)[0] || userName}, kondensator turi o‘zgargani uchun rama narxi hisobga qo‘shilmadi. Iltimos, rama xarajatini o‘zingiz qo‘shib hisoblang.</p>}
         {quote && !quote.ok && <p className="sx-note is-error">{quote.error}</p>}
         {duplicate && <DuplicateQuestion text={duplicate} busy={pending} onYes={() => submit(true)} onNo={() => setDuplicate(null)}/>}
         {result && <SentNote result={result} onResent={setResult}/>}
