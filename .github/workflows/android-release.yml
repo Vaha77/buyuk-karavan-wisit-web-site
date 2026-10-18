@@ -24,6 +24,19 @@ jobs:
       - run: npx cap sync android
       - name: Keystore from secrets
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+      # Shows what is wrong with the signing secrets as annotations, without printing any secret value.
+      - name: Check signing secrets
+        env:
+          P: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          A: ${{ secrets.ANDROID_KEY_ALIAS }}
+          K: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "::notice::keystore file: $(stat -c %s "$RUNNER_TEMP/upload.jks") bytes"
+          for name in P A K; do [ -n "${!name}" ] || echo "::error::secret for $name is empty"; done
+          if ! out=$(keytool -list -keystore "$RUNNER_TEMP/upload.jks" -storepass "$P" 2>&1); then echo "::error::keystore does not open with ANDROID_KEYSTORE_PASSWORD (or ANDROID_KEYSTORE_BASE64 is not the .jks): $(echo "$out" | head -1)"; exit 1; fi
+          aliases=$(echo "$out" | grep -i "entry," | cut -d, -f1 | tr '\n' ' ')
+          echo "$aliases" | grep -qw -- "$A" || { echo "::error::ANDROID_KEY_ALIAS is not in the keystore; aliases there: $aliases"; exit 1; }
+          echo "::notice::keystore opens, alias found: $aliases"
       - name: Build AAB and APK
         working-directory: mobile/android
         env:
