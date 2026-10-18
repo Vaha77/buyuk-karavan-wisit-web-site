@@ -78,9 +78,15 @@ export async function getPlanBoardData(period: SalesPeriodRow, periods: SalesPer
 export async function getSalesPeople(periodId: string | null) {
   const rows = await getDb().salesPerson.findMany({
     orderBy: [{ isActive: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, kind: true, branchHead: true, note: true, isActive: true, sortOrder: true, telegramChatId: true, plans: { where: { periodId: periodId ?? "" }, select: { planUsd: true } }, _count: { select: { monthly: true } } },
+    select: { id: true, name: true, kind: true, branchHead: true, note: true, isActive: true, sortOrder: true, telegramChatId: true, agentId: true, plans: { where: { periodId: periodId ?? "" }, select: { planUsd: true } }, _count: { select: { monthly: true } } },
   });
   return rows.map(({ plans, _count, ...person }) => ({ ...person, plan: plans[0] ? Number(plans[0].planUsd) : null, monthlyCount: _count.monthly }));
+}
+
+/** Approved Telegram agents, for linking a seller to their leads and marja. */
+export async function getLinkableAgents() {
+  const rows = await getDb().salesAgent.findMany({ where: { isApproved: true }, orderBy: { firstName: "asc" }, select: { id: true, firstName: true, lastName: true, telegramUsername: true } });
+  return rows.map(agent => ({ id: agent.id, name: [agent.firstName, agent.lastName].filter(Boolean).join(" ") + (agent.telegramUsername ? ` (@${agent.telegramUsername})` : "") }));
 }
 
 /** Ranking of the current period for a seller's dashboard; only names, ranks, % and zones of other people. */

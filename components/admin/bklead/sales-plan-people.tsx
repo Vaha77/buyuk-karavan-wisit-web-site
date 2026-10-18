@@ -8,12 +8,13 @@ import { formatUsd, MONTHS_LONG } from "@/lib/dashboard/format";
 import { ConfirmDialog } from "./dialog";
 
 type Kind = "EMPLOYEE" | "BRANCH";
-export type SalesPersonRow = { id: string; name: string; kind: Kind; branchHead: string | null; note: string | null; isActive: boolean; sortOrder: number; telegramChatId: string | null; plan: number | null; monthlyCount: number };
+export type SalesPersonRow = { id: string; name: string; kind: Kind; branchHead: string | null; note: string | null; isActive: boolean; sortOrder: number; telegramChatId: string | null; agentId: string | null; plan: number | null; monthlyCount: number };
+type Agent = { id: string; name: string };
 type Period = { id: string; name: string; startYear: number; startMonth: number; monthCount: number };
 const KIND_LABEL: Record<Kind, string> = { EMPLOYEE: "Xodim", BRANCH: "Filial" };
 
 /** Sellers list with add / edit / delete; plans shown and edited for the selected period. */
-export function SalesPeopleManager({ people, period }: { people: SalesPersonRow[]; period: Period | null }) {
+export function SalesPeopleManager({ people, period, agents }: { people: SalesPersonRow[]; period: Period | null; agents: Agent[] }) {
   const router = useRouter();
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [deleting, setDeleting] = useState<SalesPersonRow | null>(null), [deleteError, setDeleteError] = useState("");
@@ -27,10 +28,10 @@ export function SalesPeopleManager({ people, period }: { people: SalesPersonRow[
   return <section className="bk-card" aria-labelledby="sp-people-title">
     <div className="bk-card-head"><div><h2 id="sp-people-title">Sotuvchilar</h2><span className="bk-muted">{people.filter(person => person.isActive).length} ta faol{period ? ` · reja: ${period.name}` : ""}</span></div>
       {editing !== "new" && <button type="button" className="bk-btn is-primary" onClick={() => setEditing("new")}><Plus size={15}/>Yangi sotuvchi</button>}</div>
-    {editing === "new" && <PersonForm period={period} nextOrder={people.reduce((max, person) => Math.max(max, person.sortOrder), 0) + 1} onDone={() => setEditing(null)}/>}
+    {editing === "new" && <PersonForm agents={agents} period={period} nextOrder={people.reduce((max, person) => Math.max(max, person.sortOrder), 0) + 1} onDone={() => setEditing(null)}/>}
     {people.length ? <div className="bk-table-wrap"><table className="bk-table">
       <thead><tr><th>Ism</th><th className="is-left">Turi</th><th className="is-left">Mas’ul</th><th>Joriy davr rejasi</th><th>Oylik yozuvlar</th><th className="is-left">Holat</th><th><span className="bk-sr-only">Amallar</span></th></tr></thead>
-      <tbody>{people.map(person => editing === person.id ? <tr key={person.id}><td colSpan={7} className="is-left"><PersonForm person={person} period={period} nextOrder={person.sortOrder} onDone={() => setEditing(null)}/></td></tr> : <tr key={person.id}>
+      <tbody>{people.map(person => editing === person.id ? <tr key={person.id}><td colSpan={7} className="is-left"><PersonForm agents={agents} person={person} period={period} nextOrder={person.sortOrder} onDone={() => setEditing(null)}/></td></tr> : <tr key={person.id}>
         <td className="is-strong">{person.name}{person.note && <small style={{ display: "block", fontWeight: 400 }}>{person.note}</small>}</td>
         <td className="is-left">{KIND_LABEL[person.kind]}</td><td className="is-left bk-muted">{person.branchHead || "—"}</td>
         <td>{person.plan ? formatUsd(person.plan) : <span className="bk-muted">—</span>}</td><td>{person.monthlyCount}</td>
@@ -45,18 +46,18 @@ export function SalesPeopleManager({ people, period }: { people: SalesPersonRow[
   </section>;
 }
 
-function PersonForm({ person, period, nextOrder, onDone }: { person?: SalesPersonRow; period: Period | null; nextOrder: number; onDone: () => void }) {
+function PersonForm({ person, period, nextOrder, onDone, agents }: { person?: SalesPersonRow; period: Period | null; nextOrder: number; onDone: () => void; agents: Agent[] }) {
   const router = useRouter();
   const [name, setName] = useState(person?.name ?? ""), [kind, setKind] = useState<Kind>(person?.kind ?? "EMPLOYEE"), [branchHead, setBranchHead] = useState(person?.branchHead ?? "");
   const [note, setNote] = useState(person?.note ?? ""), [isActive, setIsActive] = useState(person?.isActive ?? true), [sortOrder, setSortOrder] = useState(String(person?.sortOrder ?? nextOrder));
   const [plan, setPlan] = useState(person?.plan ? String(person.plan) : ""), [error, setError] = useState("");
-  const [telegramChatId, setTelegramChatId] = useState(person?.telegramChatId ?? "");
+  const [telegramChatId, setTelegramChatId] = useState(person?.telegramChatId ?? ""), [agentId, setAgentId] = useState(person?.agentId ?? "");
   const [pending, startTransition] = useTransition();
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     startTransition(async () => {
       setError("");
-      const result = await saveSalesPersonAction(person?.id ?? null, { name, kind, branchHead, note, isActive, sortOrder: Math.max(0, Math.trunc(Number(sortOrder) || 0)), telegramChatId, periodId: period?.id ?? null, plan });
+      const result = await saveSalesPersonAction(person?.id ?? null, { name, kind, branchHead, note, isActive, sortOrder: Math.max(0, Math.trunc(Number(sortOrder) || 0)), telegramChatId, agentId, periodId: period?.id ?? null, plan });
       if (!result.ok) { setError(result.error); return; }
       onDone(); router.refresh();
     });
@@ -71,6 +72,7 @@ function PersonForm({ person, period, nextOrder, onDone }: { person?: SalesPerso
     <div className="bk-row">
       <label className="bk-field"><span>Izoh (ixtiyoriy)</span><input value={note} onChange={event => setNote(event.target.value)} maxLength={300}/></label>
       <label className="bk-field"><span>Telegram chat ID (eslatma uchun)</span><input value={telegramChatId} onChange={event => setTelegramChatId(event.target.value)} inputMode="numeric" placeholder="123456789"/></label>
+      <label className="bk-field"><span>Telegram agent (lidlar, marja)</span><select value={agentId} onChange={event => setAgentId(event.target.value)}><option value="">Bog‘lanmagan</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
       <label className="bk-field"><span>Tartib</span><input value={sortOrder} onChange={event => setSortOrder(event.target.value)} inputMode="numeric"/></label>
       <label className="bk-field" style={{ alignContent: "end" }}><span><input type="checkbox" checked={isActive} onChange={event => setIsActive(event.target.checked)} style={{ width: "auto", minHeight: 0, marginRight: 8 }}/>Faol (dashboard’da ko‘rinadi)</span></label>
     </div>

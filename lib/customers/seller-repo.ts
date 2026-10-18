@@ -165,3 +165,17 @@ export async function sellerMapCustomers(db: Db, viewer: Viewer, year: number, t
     }));
   });
 }
+
+/** "Mening dashboardim": the viewer's active customers and this year's approved purchases, both AND-ed with customerScope. */
+export async function sellerDashboardRows(db: Db, viewer: Viewer, year: number) {
+  const scope = customerScope(viewer);
+  const [customers, purchases] = await Promise.all([
+    db.regularCustomer.findMany({ where: { AND: [scope, { isActive: true }] }, select: { id: true, name: true, phone: true, phoneNormalized: true, callIntervalDays: true, lastPurchaseAt: true, nextContactAt: true, createdAt: true } }),
+    db.customerPurchase.findMany({ where: { status: "APPROVED", customer: scope, date: { gte: new Date(Date.UTC(year, 0, 1)) } }, select: { customerId: true, date: true, amountUsd: true } }),
+  ]);
+  const names = new Map(customers.map(customer => [customer.id, customer.name]));
+  return {
+    customers: customers.map(customer => ({ ...customer, phone: customer.phoneNormalized ?? customer.phone })),
+    purchases: purchases.map(row => ({ customerId: row.customerId, customerName: names.get(row.customerId) ?? "—", date: row.date, amountUsd: Number(row.amountUsd) })),
+  };
+}

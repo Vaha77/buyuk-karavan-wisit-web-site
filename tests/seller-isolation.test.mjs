@@ -11,6 +11,7 @@ const approval = await import("../lib/auth/approval-rules.ts");
 const sellerMap = await import("../lib/customers/seller-map.ts");
 const planRules = await import("../lib/sales-plan/rules.ts");
 const ranking = await import("../lib/sales-plan/seller-ranking.ts");
+const dash = await import("../lib/customers/seller-dashboard.ts");
 
 // ---- In-memory stand-in for the Prisma delegates the repository uses ---------------------------------------------
 function matches(row, where, db) {
@@ -23,6 +24,7 @@ function matches(row, where, db) {
     if (condition !== null && typeof condition === "object" && !(condition instanceof Date)) {
       if ("contains" in condition) return typeof value === "string" && (condition.mode === "insensitive" ? value.toLowerCase().includes(condition.contains.toLowerCase()) : value.includes(condition.contains));
       if ("in" in condition) return condition.in.includes(value);
+      if ("gte" in condition) return value >= condition.gte;
       throw new Error(`unsupported condition ${JSON.stringify(condition)}`);
     }
     return value === condition;
@@ -303,4 +305,43 @@ test("reminder rules", () => {
   assert.deepEqual(rules.mergeMonthlySale({ amount: 500, currency: "USD", amountUsd: 500 }, { amount: 250, currency: "USD", amountUsd: 250 }), { amount: 750, currency: "USD", amountUsd: 750 });
   assert.deepEqual(rules.mergeMonthlySale({ amount: 500, currency: "USD", amountUsd: 500 }, { amount: 1_280_000, currency: "UZS", amountUsd: 100 }), { amount: 600, currency: "USD", amountUsd: 600 });
   assert.equal(rules.purchaseUsd(1_280_000, "UZS", null), null);
+});
+
+test("dashboard rows: only the seller's own customers and purchases", async () => {
+  const { db, a, b } = await setup();
+  db.tables.customerPurchase.push(
+    { id: "pa", customerId: a, status: "APPROVED", date: new Date("2026-03-05"), amountUsd: 400 },
+    { id: "pb", customerId: b, status: "APPROVED", date: new Date("2026-03-06"), amountUsd: 9000 },
+    { id: "pp", customerId: a, status: "PENDING", date: new Date("2026-03-07"), amountUsd: 50 },
+    { id: "old", customerId: a, status: "APPROVED", date: new Date("2025-12-30"), amountUsd: 70 });
+  const rows = await repo.sellerDashboardRows(db, sellerA, 2026);
+  assert.deepEqual(rows.customers.map(row => row.id), [a]);
+  assert.deepEqual(rows.purchases.map(row => row.amountUsd), [400]); // not B's 9000, not pending, not last year
+  const stats = dash.purchaseStats(rows.purchases, { year: 2026, month: 3 });
+  assert.deepEqual([stats.average, stats.biggest, stats.top.name, stats.boughtThisMonth], [400, 400, "A mijozi", 1]);
+  assert.ok(!JSON.stringify(rows).includes("B mijozi"));
+});
+
+test("month plan: share of the period plan, days left with today, daily need", () => {
+  assert.deepEqual(dash.monthPlan({ planUsd: 600_000, monthCount: 6, doneUsd: 40_000 }, { year: 2026, month: 10, day: 20 }), { plan: 100_000, done: 40_000, percent: 40, remaining: 60_000, daysLeft: 12, dailyNeeded: 5000 });
+  const over = dash.monthPlan({ planUsd: 1200, monthCount: 12, doneUsd: 150 }, { year: 2026, month: 2, day: 28 });
+  assert.deepEqual([over.plan, over.remaining, over.daysLeft, over.dailyNeeded], [100, 0, 1, 0]);
+});
+
+test("60+ days list: longest first, never-bought counts from the day added", () => {
+  const today = new Date("2026-10-18T06:00:00Z"), day = n => new Date(today.getTime() - n * 86_400_000);
+  const base = { phone: null, callIntervalDays: 60, nextContactAt: null, createdAt: day(400) };
+  const list = dash.staleCustomers([
+    { ...base, id: "a", name: "A", lastPurchaseAt: day(59) }, { ...base, id: "b", name: "B", lastPurchaseAt: day(60) },
+    { ...base, id: "c", name: "C", lastPurchaseAt: day(120) }, { ...base, id: "d", name: "D", lastPurchaseAt: null, createdAt: day(70) },
+  ], today);
+  assert.deepEqual(list.map(row => [row.id, row.days]), [["c", 120], ["d", 70], ["b", 60]]);
+});
+
+test("lead stats: conversion and sources", () => {
+  const stats = dash.leadStats([
+    { source: "INSTAGRAM", status: "WON", referralLinkId: null, hasSale: false }, { source: "INSTAGRAM_DM", status: "NEW", referralLinkId: null, hasSale: false },
+    { source: "CONTACT_FORM", status: "LOST", referralLinkId: "r1", hasSale: true }, { source: "PRODUCT", status: "NEW", referralLinkId: null, hasSale: false },
+  ]);
+  assert.deepEqual([stats.count, stats.won, stats.conversion, stats.sources], [4, 2, 50, { instagram: 2, referral: 1, site: 1 }]);
 });

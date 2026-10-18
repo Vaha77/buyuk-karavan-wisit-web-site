@@ -363,6 +363,7 @@ model SalesAgent {
   marjaTransactions    MarjaTransaction[]
   rewardRedemptions    RewardRedemption[]
   referralLinks        ReferralLink[]
+  salesPerson          SalesPerson?
 
   @@index([isApproved, isActive])
 }
@@ -1001,6 +1002,9 @@ model SalesPerson {
   monthly        SalesMonthly[]
   // Private Telegram chat for the daily "Bugun qo'ng'iroq" reminder; null = no reminder.
   telegramChatId String?            @db.VarChar(32)
+  // Telegram agent (leads, marja) of the same person, for the seller's own dashboard; null = not linked.
+  agentId        String?            @unique
+  agent          SalesAgent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
   user           AdminUser?
   customers      RegularCustomer[]
   contacts       CustomerContact[]
