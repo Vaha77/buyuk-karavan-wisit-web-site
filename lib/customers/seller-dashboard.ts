@@ -39,3 +39,20 @@ export function leadStats(leads: Array<{ source: string; status: string; referra
   const referral = leads.filter(lead => lead.referralLinkId && !lead.source.startsWith("INSTAGRAM")).length;
   return { count: leads.length, won, conversion: leads.length ? (won / leads.length) * 100 : 0, sources: { instagram, referral, site: leads.length - instagram - referral } };
 }
+
+/** Approved purchase USD per month (Jan..Dec) of `year`. */
+export function yearSales(purchases: Array<{ date: Date; amountUsd: number }>, year: number) {
+  const months = Array(12).fill(0) as number[];
+  for (const row of purchases) if (row.date.getUTCFullYear() === year) months[row.date.getUTCMonth()] = round(months[row.date.getUTCMonth()] + row.amountUsd);
+  return months;
+}
+
+/** Monthly plan (period plan ÷ its months) for each month of `year`; 0 where no period covers the month. */
+export function yearPlans(plans: Array<{ planUsd: number; startYear: number; startMonth: number; monthCount: number }>, year: number) {
+  const months = Array(12).fill(0) as number[];
+  for (const plan of plans) for (let i = 0; i < plan.monthCount; i++) {
+    const index = plan.startYear * 12 + plan.startMonth - 1 + i - year * 12;
+    if (index >= 0 && index < 12 && plan.monthCount > 0) months[index] = round(plan.planUsd / plan.monthCount);
+  }
+  return months;
+}

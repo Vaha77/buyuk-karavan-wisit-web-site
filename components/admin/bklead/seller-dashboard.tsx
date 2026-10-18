@@ -4,7 +4,7 @@ import { Phone } from "lucide-react";
 import { formatDayMonth, formatInt, formatPercent, formatUsd, MONTHS_LONG } from "@/lib/dashboard/format";
 import { STATUS_LABEL, TYPE_LABEL } from "@/lib/sex/rules";
 import type { myDashboard } from "@/lib/customers/seller-queries";
-import { LazyRegionLines } from "./lazy";
+import { PlanBars } from "./charts";
 import type { MyPlace } from "@/lib/sales-plan/seller-ranking";
 import { zoneStyle } from "@/lib/sales-plan/zones";
 
@@ -58,11 +58,18 @@ export function CustomersBlock({ data }: { data: Dashboard }) {
   </section>;
 }
 
-/** 4. DINAMIKA. */
+/** 4. DINAMIKA: approved purchases per month of this year against the monthly plan. */
 export function DynamicsBlock({ data, now }: { data: Dashboard; now: { year: number; month: number } }) {
-  const { purchases } = data;
-  return <section className="bk-card" aria-labelledby="md-dyn" style={{ display: "grid", gap: 12 }}><Head id="md-dyn" title="Dinamika" note={`Oylik sotuv, ${now.year} va ${now.year - 1}`}/>
-    <LazyRegionLines series={[{ name: String(now.year), months: data.months.thisYear }, { name: String(now.year - 1), months: data.months.lastYear }]} lastMonth={now.month} label={`Oylik sotuv: ${now.year} va ${now.year - 1}`}/>
+  const { purchases, months } = data;
+  const current = months.sales[now.month - 1], plan = months.plans[now.month - 1];
+  const bestValue = Math.max(...months.sales), best = months.sales.indexOf(bestValue);
+  return <section className="bk-card" aria-labelledby="md-dyn" style={{ display: "grid", gap: 12 }}><Head id="md-dyn" title="Dinamika" note={`Tasdiqlangan xaridlar, ${now.year} · qora chiziq — oy rejasi`}/>
+    <div className="bk-tiles">
+      <div className="bk-tile"><span>Bu oy</span><strong>{formatUsd(current)}{plan > 0 && ` · ${formatPercent((current / plan) * 100, 0)}`}</strong></div>
+      <div className="bk-tile"><span>Eng yaxshi oy</span><strong>{bestValue > 0 ? `${MONTHS_LONG[best]} · ${formatUsd(bestValue)}` : "—"}</strong></div>
+      <div className="bk-tile"><span>Yil boshidan jami</span><strong>{formatUsd(months.sales.reduce((sum, value) => sum + value, 0))}</strong></div>
+    </div>
+    <PlanBars sales={months.sales} plans={months.plans} current={now.month} label={`${now.year}-yil oylik sotuv va reja`}/>
     <div className="bk-tiles"><div className="bk-tile"><span>O‘rtacha chek</span><strong>{formatUsd(purchases.average)}</strong></div><div className="bk-tile"><span>Eng katta xarid</span><strong>{formatUsd(purchases.biggest)}</strong></div><div className="bk-tile"><span>Eng ko‘p olgan mijoz</span><strong>{purchases.top ? `${purchases.top.name} · ${formatUsd(purchases.top.total)}` : "—"}</strong></div></div>
   </section>;
 }

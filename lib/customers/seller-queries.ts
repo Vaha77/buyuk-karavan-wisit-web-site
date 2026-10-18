@@ -9,8 +9,7 @@ import { buildLeaderboard } from "./leaderboard";
 import { getCustomerYear } from "./queries";
 import { daysWithoutPurchase, dueTone, isDue } from "./seller-rules";
 import { viewerOf } from "./seller-service";
-import { leadStats, monthPlan, purchaseStats, staleCustomers } from "./seller-dashboard";
-import { getSalesPeriods, pickPeriod } from "@/lib/sales-plan/queries";
+import { leadStats, monthPlan, purchaseStats, staleCustomers, yearPlans, yearSales } from "./seller-dashboard";
 
 const OPEN_ORDERS = ["NEW", "ACCEPTED", "STARTED", "ISSUED"] as const;
 
@@ -48,29 +47,24 @@ export async function customerLeaderboard(user: User, now: { year: number; month
 export async function myDashboard(user: Pick<AdminUser, "id" | "role" | "salesPersonId">, month: { year: number; month: number }) {
   const db = getDb(), personId = user.salesPersonId ?? "", now = { ...month, day: new Date(Date.now() + 5 * 3_600_000).getUTCDate() };
   const monthStart = new Date(Date.UTC(now.year, now.month - 1, 1) - 5 * 3_600_000), yearStart = new Date(Date.UTC(now.year, 0, 1) - 5 * 3_600_000);
-  const [rows, person, monthly, periods, orders] = await Promise.all([
+  const [rows, person, planRows, orders] = await Promise.all([
     sellerDashboardRows(db, viewerOf(user), now.year),
     db.salesPerson.findUnique({ where: { id: personId }, select: { agentId: true } }),
-    db.salesMonthly.findMany({ where: { personId, year: { in: [now.year, now.year - 1] } }, select: { year: true, month: true, amountUsd: true } }),
-    getSalesPeriods(),
+    db.salesPlan.findMany({ where: { personId }, select: { planUsd: true, period: { select: { startYear: true, startMonth: true, monthCount: true } } } }),
     db.workshopOrder.findMany({ where: { sellerId: user.id, status: { in: [...OPEN_ORDERS] } }, orderBy: { createdAt: "desc" }, take: 20, select: { id: true, number: true, type: true, customerName: true, status: true, createdAt: true, dueDate: true } }),
   ]);
-  // The plan counts only when this month is inside the period (pickPeriod falls back to the latest one).
-  const found = pickPeriod(periods, undefined, now), offset = found ? now.year * 12 + now.month - (found.startYear * 12 + found.startMonth) : -1;
-  const period = found && offset >= 0 && offset < found.monthCount ? found : null, agentId = person?.agentId ?? null;
-  const [plan, leads, newLeads, marja] = await Promise.all([
-    period ? db.salesPlan.findUnique({ where: { periodId_personId: { periodId: period.id, personId } }, select: { planUsd: true } }) : null,
+  const agentId = person?.agentId ?? null;
+  const [leads, newLeads, marja] = await Promise.all([
     agentId ? db.lead.findMany({ where: { assignedAgentId: agentId, createdAt: { gte: monthStart } }, select: { source: true, status: true, referralLinkId: true, sale: { select: { id: true } } } }) : null,
     agentId ? db.lead.count({ where: { assignedAgentId: agentId, status: "NEW" } }) : null,
     agentId ? db.marjaTransaction.findMany({ where: { agentId, type: "SALE_EARNED", createdAt: { gte: yearStart } }, select: { amount: true, createdAt: true } }) : null,
   ]);
-  const series = (year: number) => Array.from({ length: 12 }, (_, index) => Number(monthly.find(row => row.year === year && row.month === index + 1)?.amountUsd ?? 0));
-  const thisYear = series(now.year);
+  // Sales = approved purchases of the seller's own customers; plan = period plan ÷ months, 0 outside every period.
+  const sales = yearSales(rows.purchases, now.year), plans = yearPlans(planRows.map(row => ({ planUsd: Number(row.planUsd), ...row.period })), now.year);
   return {
-    // Done = this month's approved purchases of the seller's own customers.
-    plan: plan && period ? monthPlan({ planUsd: Number(plan.planUsd), monthCount: period.monthCount, doneUsd: rows.purchases.filter(row => row.date.getUTCMonth() + 1 === now.month).reduce((sum, row) => sum + row.amountUsd, 0) }, now) : null,
+    plan: plans[now.month - 1] > 0 ? monthPlan({ planUsd: plans[now.month - 1], monthCount: 1, doneUsd: sales[now.month - 1] }, now) : null,
     customers: rows.customers.length, stale: staleCustomers(rows.customers), purchases: purchaseStats(rows.purchases, now),
-    months: { thisYear, lastYear: series(now.year - 1) },
+    months: { sales, plans },
     leads: leads ? leadStats(leads.map(lead => ({ source: lead.source, status: lead.status, referralLinkId: lead.referralLinkId, hasSale: !!lead.sale }))) : null, newLeads,
     marja: marja?.length ? { year: marja.reduce((sum, row) => sum + row.amount, 0), month: marja.filter(row => row.createdAt >= monthStart).reduce((sum, row) => sum + row.amount, 0) } : null,
     orders,

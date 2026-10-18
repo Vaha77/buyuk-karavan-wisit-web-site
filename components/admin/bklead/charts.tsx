@@ -59,6 +59,25 @@ export function MonthBars({ months, missing, label }: { months: number[]; missin
   </svg>;
 }
 
+/** Monthly sales bars of one year with the month's plan as a black tick; the current month is light (still running). */
+export function PlanBars({ sales, plans, current, label }: { sales: number[]; plans: number[]; current: number; label: string }) {
+  const width = 420, height = 190, top = 20, bottom = 20, gap = 6, inner = height - top - bottom;
+  const max = Math.max(1, ...sales, ...plans), barWidth = (width - gap * 11) / 12, best = sales.indexOf(Math.max(...sales));
+  const y = (value: number) => height - bottom - (inner * value) / max;
+  return <svg className="bk-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
+    <line x1="0" x2={width} y1={height - bottom} y2={height - bottom} stroke="#E3E9F2"/>
+    {sales.map((value, index) => {
+      const x = index * (barWidth + gap), plan = plans[index], peak = Math.min(y(value), plan ? y(plan) : Infinity);
+      return <g key={index}>
+        <rect x={x} y={y(value)} width={barWidth} height={height - bottom - y(value)} rx="3" fill={index + 1 === current ? "#8DB0E4" : "#123E7C"}><title>{`${MONTHS_LONG[index]}: ${formatUsd(value)}${plan ? ` · reja ${formatUsd(plan)} · ${formatInt((value / plan) * 100)}%` : ""}`}</title></rect>
+        {plan > 0 && <line x1={x - 2} x2={x + barWidth + 2} y1={y(plan)} y2={y(plan)} stroke="#0F1E33" strokeWidth="2.5"/>}
+        {value > 0 && (index === best || index + 1 === current) && <text x={x + barWidth / 2} y={peak - 5} textAnchor="middle" style={{ fill: "var(--bk-text)", fontWeight: 700 }}>{formatUsdK(value)}</text>}
+        <text x={x + barWidth / 2} y={height - 5} textAnchor="middle">{MONTHS_SHORT[index][0].toUpperCase() + MONTHS_SHORT[index].slice(1)}</text>
+      </g>;
+    })}
+  </svg>;
+}
+
 // Categorical order for the top-5 regions (validated: CVD ΔE ≥ 13, contrast ≥ 3:1 on white).
 export const SERIES_COLORS = ["#2F5FAF", "#D06A1E", "#1F9E89", "#8E5BD0", "#B8860B"];
 

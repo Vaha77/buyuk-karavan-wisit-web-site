@@ -345,3 +345,10 @@ test("lead stats: conversion and sources", () => {
   ]);
   assert.deepEqual([stats.count, stats.won, stats.conversion, stats.sources], [4, 2, 50, { instagram: 2, referral: 1, site: 1 }]);
 });
+
+test("dynamics: sales per month from approved purchases, plan only inside a period", () => {
+  const sales = dash.yearSales([{ date: new Date("2026-09-03"), amountUsd: 40_000 }, { date: new Date("2026-09-20"), amountUsd: 6_000 }, { date: new Date("2025-09-01"), amountUsd: 999 }], 2026);
+  assert.equal(sales[8], 46_000); assert.equal(sales.reduce((sum, value) => sum + value, 0), 46_000);
+  const plans = dash.yearPlans([{ planUsd: 600_000, startYear: 2026, startMonth: 3, monthCount: 6 }, { planUsd: 120_000, startYear: 2025, startMonth: 11, monthCount: 3 }], 2026);
+  assert.deepEqual(plans, [40_000, 0, 100_000, 100_000, 100_000, 100_000, 100_000, 100_000, 0, 0, 0, 0]); // Oct: no plan
+});

@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
-// Heavy blocks load their code only when they scroll into view, so the first screen comes up first.
+// The map loads their code only when they scroll into view, so the first screen comes up first.
 const SellerRegionMap = dynamic(() => import("./seller-region-map").then(module => module.SellerRegionMap), { ssr: false });
-const RegionLines = dynamic(() => import("./charts").then(module => module.RegionLines), { ssr: false });
 
 function InView({ minHeight, children }: { minHeight: number; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null), [shown, setShown] = useState(false);
@@ -18,4 +17,3 @@ function InView({ minHeight, children }: { minHeight: number; children: React.Re
 }
 
 export const LazySellerMap = (props: React.ComponentProps<typeof SellerRegionMap>) => <InView minHeight={520}><SellerRegionMap {...props}/></InView>;
-export const LazyRegionLines = (props: React.ComponentProps<typeof RegionLines>) => <InView minHeight={240}><RegionLines {...props}/></InView>;
