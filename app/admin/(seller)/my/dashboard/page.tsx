@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import type { AdminUser } from "@/generated/prisma/client";
 import { requireSeller } from "@/lib/auth/require-admin";
-import { customerLeaderboard, myDashboardAgent, myDashboardCore, myOpenOrders, myStats } from "@/lib/customers/seller-queries";
+import { customerLeaderboard, myDashboardAgent, myDashboardCore, myStats } from "@/lib/customers/seller-queries";
+import { getSellerQueue } from "@/lib/sex/queries";
+import { SehQueue } from "@/components/admin/sex/seh-queue";
 import { getSellerRanking } from "@/lib/sales-plan/queries";
 import { tashkentYearMonth } from "@/lib/dashboard/period";
 import { MONTHS_LONG } from "@/lib/dashboard/format";
 import { NotLinked } from "@/components/admin/bklead/not-linked";
-import { CustomersBlock, DynamicsBlock, LeadsBlock, MarjaBlock, OrdersBlock, PlanBlock, RankCard, TodayBlock } from "@/components/admin/bklead/seller-dashboard";
+import { CustomersBlock, DynamicsBlock, LeadsBlock, MarjaBlock, PlanBlock, RankCard, TodayBlock } from "@/components/admin/bklead/seller-dashboard";
 import { CustomerLeaderboard } from "@/components/admin/bklead/customer-leaderboard";
 import { BlockSkeleton } from "@/components/admin/skeletons";
 
@@ -29,7 +31,7 @@ async function AgentBlocks({ user, now }: { user: User; now: Now }) {
   const { leads, marja } = await myDashboardAgent(user, now);
   return <>{leads && <LeadsBlock leads={leads}/>}{marja && <MarjaBlock marja={marja}/>}</>;
 }
-async function Orders({ user }: { user: User }) { return <OrdersBlock orders={await myOpenOrders(user.id)}/>; }
+async function Queue({ user }: { user: User }) { return <SehQueue {...await getSellerQueue(user.id)} limit={5}/>; }
 async function Leaders({ user, now }: { user: User; now: Now }) { return <CustomerLeaderboard rows={await customerLeaderboard(user, now)} year={now.year}/>; }
 
 export default async function MyDashboardPage() {
@@ -45,7 +47,7 @@ export default async function MyDashboardPage() {
     <Suspense fallback={<BlockSkeleton height={220}/>}><Customers user={user} now={now}/></Suspense>
     <Suspense fallback={<BlockSkeleton height={380}/>}><Dynamics user={user} now={now}/></Suspense>
     <Suspense fallback={null}><AgentBlocks user={user} now={now}/></Suspense>
-    <Suspense fallback={<BlockSkeleton height={160}/>}><Orders user={user}/></Suspense>
+    <Suspense fallback={<BlockSkeleton height={260}/>}><Queue user={user}/></Suspense>
     <Suspense fallback={<BlockSkeleton height={300}/>}><Leaders user={user} now={now}/></Suspense>
   </div>;
 }

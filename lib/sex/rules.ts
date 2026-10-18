@@ -146,6 +146,21 @@ export function queuePositions(orders: Array<{ id: string; status: OrderStatus |
   return new Map(waiting.map((order, index) => [order.id, index + 1]));
 }
 
+/**
+ * "Seh navbati" for a seller: what is being assembled (by start time), then the queue in the order the Seh mas’uli
+ * accepted it (queuePositions). A row carries only the place, the title and — for other sellers — their name:
+ * no customer, no price.
+ */
+export function sellerQueue(orders: Array<{ id: string; status: OrderStatus | string; acceptedAt: Date | null; startedAt: Date | null; isTest?: boolean; sellerId: string; sellerName: string; title: string }>, sellerId: string) {
+  const positions = queuePositions(orders);
+  const started = orders.filter(order => order.status === "STARTED" && !order.isTest).sort((a, b) => new Date(a.startedAt ?? 0).getTime() - new Date(b.startedAt ?? 0).getTime());
+  const waiting = orders.filter(order => positions.has(order.id)).sort((a, b) => positions.get(a.id)! - positions.get(b.id)!);
+  const rows = [...started, ...waiting].map((order, index) => ({ place: index + 1, title: order.title, working: order.status === "STARTED", mine: order.sellerId === sellerId, seller: order.sellerId === sellerId ? null : order.sellerName }));
+  const first = rows.find(row => row.mine);
+  return { rows, me: first ? { place: first.place, ahead: first.place - 1, working: first.working } : null };
+}
+export type SellerQueue = ReturnType<typeof sellerQueue>;
+
 export const DEFAULT_WORKSHOP_DAILY_LIMIT = 5;
 /** Start of the current Tashkent day (UTC+5, no DST) as an instant: the daily "terish boshlandi" counter resets here. */
 export function tashkentDayStart(now = new Date()) {

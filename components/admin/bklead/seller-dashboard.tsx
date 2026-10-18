@@ -2,8 +2,7 @@
 import Link from "next/link";
 import { Phone } from "lucide-react";
 import { formatDayMonth, formatInt, formatPercent, formatUsd, MONTHS_LONG } from "@/lib/dashboard/format";
-import { STATUS_LABEL, TYPE_LABEL } from "@/lib/sex/rules";
-import type { myDashboardAgent, myDashboardCore, myOpenOrders } from "@/lib/customers/seller-queries";
+import type { myDashboardAgent, myDashboardCore } from "@/lib/customers/seller-queries";
 import { PlanBars } from "./charts";
 import type { MyPlace } from "@/lib/sales-plan/seller-ranking";
 import { zoneStyle } from "@/lib/sales-plan/zones";
@@ -86,15 +85,5 @@ export function LeadsBlock({ leads }: { leads: NonNullable<Agent["leads"]> }) {
 export function MarjaBlock({ marja }: { marja: NonNullable<Agent["marja"]> }) {
   return <section className="bk-card" aria-labelledby="md-marja"><Head id="md-marja" title="Mening marjam"/>
     <div className="bk-tiles bk-tiles-2"><div className="bk-tile"><span>Bu oy</span><strong>{formatInt(marja.month)}</strong></div><div className="bk-tile"><span>Yil boshidan</span><strong>{formatInt(marja.year)}</strong></div></div>
-  </section>;
-}
-
-/** 8. SEH ZAKAZLARI: the seller's open orders. */
-export function OrdersBlock({ orders }: { orders: Awaited<ReturnType<typeof myOpenOrders>> }) {
-  return <section className="bk-card" aria-labelledby="md-orders"><div className="bk-card-head"><div><h2 id="md-orders">Seh zakazlari</h2><span className="bk-muted">Ochiq zakazlaringiz</span></div><Link href="/admin/seh">Hammasi</Link></div>
-    {orders.length ? <div className="bk-list">{orders.map(order => <div key={order.id}>
-      <div className="bk-grow"><b>#{String(order.number).padStart(4, "0")} · {TYPE_LABEL[order.type]}{order.customerName ? ` · ${order.customerName}` : ""}</b><span>{formatDayMonth(order.createdAt)}{order.dueDate ? ` · muddat ${formatDayMonth(order.dueDate)}` : ""}</span></div>
-      <span className="bk-badge">{STATUS_LABEL[order.status]}</span>
-    </div>)}</div> : <div className="bk-empty">Ochiq zakaz yo‘q.</div>}
   </section>;
 }

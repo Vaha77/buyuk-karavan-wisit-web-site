@@ -17,12 +17,14 @@ type Props = {
   view?: "active" | "cancelled" | "test";
   role: string; userName: string; rows: OrderRow[]; month: { key: string; label: string }; months: Array<{ key: string; label: string }>;
   parts: PartOption[]; sellers: Option[]; customers: Option[];
+  /** Rendered under the header (the seller's "Seh navbati"). */
+  top?: React.ReactNode;
 };
 
 const WAIT_TEXT = { NEW: "Seh qabul qilishi kutilmoqda", ACCEPTED: "Navbatda · terish kutilmoqda", STARTED: "Sehda terilmoqda", ISSUED: "Krimga olish kutilmoqda", RECEIVED: "✓ Yopildi", CANCELLED: "Bekor qilingan" } as const;
 const queueLabel = (row: OrderRow) => (row.queue ? `${STATUS_LABEL.ACCEPTED} (${row.queue}-navbat)` : STATUS_LABEL.ACCEPTED);
 
-export function OrdersBoard({ view = "active", role, userName, rows, month, months, parts, sellers, customers }: Props) {
+export function OrdersBoard({ view = "active", role, userName, rows, month, months, parts, sellers, customers, top }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   // Month change: the old table stays visible, dimmed, until the new month is rendered.
@@ -75,6 +77,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
         {boss && <DownloadButton className="sx-btn is-primary" href={`/admin/seh/export?month=${month.key}`} fallbackName={`seh-zakazlari-${month.key}.xlsx`}/>}
       </div>
     </div>
+    {top}
 
     {!workshop && <div className="sx-chips" aria-label="Zakazlar">
       <button type="button" className="sx-chip" aria-pressed={view === "active"} disabled={monthPending} onClick={() => showView("active")}>Faol</button>

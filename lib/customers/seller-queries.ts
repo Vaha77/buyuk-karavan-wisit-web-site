@@ -13,7 +13,6 @@ import { daysWithoutPurchase, dueTone, isDue } from "./seller-rules";
 import { viewerOf } from "./seller-service";
 import { leadStats, monthPlan, purchaseStats, staleCustomers, yearPlans, yearSales } from "./seller-dashboard";
 
-const OPEN_ORDERS = ["NEW", "ACCEPTED", "STARTED", "ISSUED"] as const;
 
 type User = Pick<AdminUser, "role" | "salesPersonId">;
 type Row = Awaited<ReturnType<typeof listCustomers>>[number];
@@ -42,8 +41,8 @@ export async function customerLeaderboard(user: User, now: { year: number; month
   return buildLeaderboard(data.customers, new Map(owners.map(row => [row.id, { ownerId: row.ownerId, name: row.owner?.name ?? null }])), data.prizes, user.salesPersonId ?? "", now.year, now);
 }
 
-// "Mening dashboardim": every query is filtered by the seller's own ids (customer scope, SalesPerson, linked agent,
-// AdminUser for workshop orders); only the seller's own numbers are returned. Split per block so the page can stream;
+// "Mening dashboardim": every query is filtered by the seller's own ids (customer scope, SalesPerson, linked agent);
+// only the seller's own numbers are returned. Split per block so the page can stream;
 // cache() shares one load between the blocks of a request (primitive args: cache compares them by identity).
 type Month = { year: number; month: number };
 const today = (month: Month) => ({ ...month, day: new Date(Date.now() + 5 * 3_600_000).getUTCDate() });
@@ -80,4 +79,3 @@ const loadAgent = cache(async (personId: string, year: number, monthNumber: numb
 });
 export const myDashboardAgent = (user: User, now: Month) => loadAgent(user.salesPersonId ?? "", now.year, now.month);
 
-export const myOpenOrders = (userId: string) => getDb().workshopOrder.findMany({ where: { sellerId: userId, status: { in: [...OPEN_ORDERS] } }, orderBy: { createdAt: "desc" }, take: 20, select: { id: true, number: true, type: true, customerName: true, status: true, createdAt: true, dueDate: true } });

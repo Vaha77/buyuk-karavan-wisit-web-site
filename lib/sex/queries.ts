@@ -1,7 +1,8 @@
 import "server-only";
+import { orderTitle } from "./bot-text";
 import type { AdminUser, Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
-import { canCancel, canMarkTest, DEFAULT_WORKSHOP_DAILY_LIMIT, isReceiveOverdue, isStaff, monthRange, orderKind, orderNumber, orderScope, processSteps, queuePositions, RECEIVE_OVERDUE_MS, stripPrices, tashkentDayStart, when, shortDay, type OrderStatus, type PriceSnapshot, type StepView } from "./rules";
+import { canCancel, canMarkTest, DEFAULT_WORKSHOP_DAILY_LIMIT, isReceiveOverdue, isStaff, monthRange, orderKind, orderNumber, orderScope, processSteps, queuePositions, RECEIVE_OVERDUE_MS, sellerQueue, stripPrices, tashkentDayStart, when, shortDay, type OrderStatus, type PriceSnapshot, type StepView } from "./rules";
 
 type Viewer = Pick<AdminUser, "id" | "role" | "salesPersonId">;
 export type OrderRow = {
@@ -93,4 +94,14 @@ export async function customerOptions(viewer: Viewer) {
 
 export async function sellerOptions() {
   return getDb().adminUser.findMany({ where: { role: "SELLER", isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+}
+
+/** "Seh navbati" for a seller page: every open order of the workshop, reduced by sellerQueue (no customer, no price). */
+export async function getSellerQueue(sellerId: string) {
+  const db = getDb();
+  const [orders, workshop] = await Promise.all([
+    db.workshopOrder.findMany({ where: { status: { in: ["ACCEPTED", "STARTED"] }, isTest: false }, select: { id: true, status: true, acceptedAt: true, startedAt: true, sellerId: true, type: true, qty: true, seller: { select: { name: true } }, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } } }),
+    db.adminUser.findFirst({ where: { role: "WORKSHOP", isActive: true, archivedAt: null }, orderBy: { createdAt: "asc" }, select: { name: true } }),
+  ]);
+  return { workshopName: workshop?.name ?? "Seh", ...sellerQueue(orders.map(order => ({ ...order, sellerName: order.seller.name, title: orderTitle(order) })), sellerId) };
 }

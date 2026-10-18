@@ -600,3 +600,14 @@ test("plain /start: a chat bound to a profile is never registered as a seller; t
   const users = await readFile(new URL("../app/admin/(protected)/users/actions.ts", import.meta.url), "utf8");
   assert.match(users, /deletePendingAgentAction\(agentId:string\)[^\n]*?\{const actor=await requireRole\("SUPER_ADMIN"\)/, "stray records are deleted only by the Super Admin's click");
 });
+
+test("seller queue: assembling first, then accepted order; own rows marked; no customer or price", () => {
+  const { sellerQueue } = rules;
+  const at = minute => new Date(Date.UTC(2026, 9, 18, 6, minute));
+  const order = (id, status, sellerId, accepted, started = null, extra = {}) => ({ id, status, sellerId, sellerName: sellerId === "me" ? "Men" : "Abror", acceptedAt: at(accepted), startedAt: started === null ? null : at(started), title: `T-${id}`, customerName: "Mijoz X", priceSnapshot: { sale: 999 }, ...extra });
+  const queue = sellerQueue([order("c", "ACCEPTED", "other", 3), order("a", "ACCEPTED", "me", 2), order("s", "STARTED", "other", 1, 5), order("t", "ACCEPTED", "me", 0, null, { isTest: true })], "me");
+  assert.deepEqual(queue.rows.map(row => [row.place, row.title, row.working, row.mine, row.seller]), [[1, "T-s", true, false, "Abror"], [2, "T-a", false, true, null], [3, "T-c", false, false, "Abror"]]);
+  assert.deepEqual(queue.me, { place: 2, ahead: 1, working: false });
+  assert.ok(!/Mijoz X|999|priceSnapshot|customer/.test(JSON.stringify(queue)));
+  assert.equal(sellerQueue([order("x", "ACCEPTED", "other", 1)], "me").me, null);
+});
