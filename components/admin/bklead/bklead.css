@@ -257,3 +257,7 @@
 .bk-seg button[aria-pressed="true"]{background:var(--bk-primary);color:#fff}
 .bk-trophy{width:30px;display:grid;justify-items:center;flex:none;line-height:1}.bk-trophy small{font-size:11px;font-weight:700;color:var(--bk-muted)}
 .bk-trophy.is-1{color:#C99A1E}.bk-trophy.is-2{color:#8E99A8}.bk-trophy.is-3{color:#B8733A}
+.bk-map.is-wide svg{cursor:grab}.bk-map.is-wide path{vector-effect:non-scaling-stroke}
+.is-wide .bk-map-label{font-size:calc(12px * var(--s));stroke-width:calc(3px * var(--s))}.is-wide .bk-map-name{font-size:calc(10px * var(--s))}.is-wide .bk-map-attention text{font-size:calc(12px * var(--s))}
+.bk-zoom{position:absolute;left:12px;top:12px;z-index:1;display:flex;gap:4px}
+.bk-zoom button{min-width:32px;height:32px;padding:0 8px;border:1px solid var(--bk-border);border-radius:8px;background:#fff;color:var(--bk-text);font:inherit;font-size:13px;font-weight:700;cursor:pointer}

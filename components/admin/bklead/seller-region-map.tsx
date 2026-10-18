@@ -6,7 +6,7 @@ import { REGION_STATUS, STALE_DAYS, STATUS_ORDER, daysTone, type SellerMap } fro
 import { formatInt, formatUsd, formatUsdK } from "@/lib/dashboard/format";
 import { Callout } from "./region-map";
 import { DaysBadge, NewCustomerButton } from "./seller";
-import { CA_MAP as map, CA_WIDTH, CountryLayer, tipAt } from "./ca-map";
+import { CA_MAP as map, calloutBoxes, CountryBackground, CountryLayer, tipAt, useMapZoom } from "./ca-map";
 const shortName = (name: string) => name.replace(/ viloyati$/, "").replace(/ shahri$/, " sh.").replace(/ Respublikasi$/, "");
 const HATCH = "sl-hatch";
 const fillOf = (status: keyof typeof REGION_STATUS) => status === "empty" ? `url(#${HATCH})` : REGION_STATUS[status].color;
@@ -19,6 +19,9 @@ export function SellerRegionMap({ data, year }: { data: SellerMap; year: number 
   const panelRef = useRef<HTMLDivElement>(null);
   const region = selected ? byCode.get(selected) : undefined;
   const hovered = hover ? byCode.get(hover.code) : undefined;
+  const zoom = useMapZoom(), s = zoom.s;
+  const calloutText = (stat: SellerMap["regions"][number]) => `${shortName(stat.name)} ${stat.customers} · $${formatUsdK(stat.total)}`;
+  const callouts = map.regions.flatMap(area => { const stat = byCode.get(area.code); return stat?.customers && (area.small || area.point) ? [{ x: area.x, y: area.y, text: calloutText(stat) }] : []; });
 
   const pick = (code: string) => {
     setSelected(code);
@@ -33,31 +36,33 @@ export function SellerRegionMap({ data, year }: { data: SellerMap; year: number 
     </div>
     <div className="sl-regions-grid">
       <div className="bk-map sl-map is-wide" onMouseLeave={() => setHover(null)}>
-        <svg viewBox={map.viewBox} role="img" aria-label={`5 davlat: mening mijozlarim viloyatlar bo‘yicha, ${year}`}>
+        {zoom.controls}
+        <svg {...zoom.svgProps} role="img" aria-label={`5 davlat: mening mijozlarim viloyatlar bo‘yicha, ${year}`}>
           <defs>
             <pattern id={HATCH} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
               <rect width="7" height="7" fill={REGION_STATUS.empty.color}/><line x1="0" y1="0" x2="0" y2="7" stroke="#9DB8E0" strokeWidth="1.6"/>
             </pattern>
           </defs>
+          <CountryBackground/>
           {map.regions.filter(area => !area.point).map(area => {
             const stat = byCode.get(area.code);
             if (!stat) return null;
             const empty = stat.status === "empty";
             return <path key={area.code} className={`bk-area${selected === area.code ? " is-selected" : ""}${empty ? " sl-area-empty" : ""}`} d={area.d} fill={fillOf(stat.status)} tabIndex={0} role="button" aria-pressed={selected === area.code}
               aria-label={!stat.customers ? `${stat.name}: mijoz yo‘q — imkoniyat` : `${stat.name}: ${formatInt(stat.customers)} mijoz, ${formatUsd(stat.total)}`}
-              onMouseMove={event => setHover(tipAt(area.code, event))}
-              onFocus={() => setHover(tipAt(area.code, undefined, area))} onBlur={() => setHover(null)}
-              onClick={event => { setHover(tipAt(area.code, event)); pick(area.code); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pick(area.code); } }}/>;
+              onMouseMove={event => setHover(tipAt(area.code, zoom.box, event))}
+              onFocus={() => setHover(tipAt(area.code, zoom.box, undefined, area))} onBlur={() => setHover(null)}
+              onClick={event => { setHover(tipAt(area.code, zoom.box, event)); pick(area.code); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pick(area.code); } }}/>;
           })}
-          <CountryLayer/>
+          <CountryLayer s={s} avoid={calloutBoxes(callouts, s, zoom.box)}/>
           {map.regions.map(area => {
             const stat = byCode.get(area.code);
             if (!stat || !stat.customers) return null;
-            if (area.small || area.point) return <Callout key={area.code} x={area.x} y={area.y} text={`${shortName(stat.name)} ${stat.customers} · $${formatUsdK(stat.total)}`} maxX={CA_WIDTH}/>;
+            if (area.small || area.point) return <Callout key={area.code} x={area.x} y={area.y} text={calloutText(stat)} s={s} view={zoom.box}/>;
             const tone = REGION_STATUS[stat.status].text === "light" ? "is-dark" : "is-light";
             return <g key={area.code}>
               <text className={`bk-map-label ${tone}`} x={area.x} y={area.y} textAnchor="middle">${formatUsdK(stat.total)}</text>
-              <text className={`bk-map-name bk-map-label ${tone}`} x={area.x} y={area.y + 13} textAnchor="middle">{stat.customers} mijoz</text>
+              <text className={`bk-map-name bk-map-label ${tone}`} x={area.x} y={area.y + 13 * s} textAnchor="middle">{stat.customers} mijoz</text>
             </g>;
           })}
         </svg>

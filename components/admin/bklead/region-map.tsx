@@ -121,12 +121,18 @@ export function RegionMap({ rows, tips }: Props) {
 }
 
 /** Label with a leader line for areas too small to hold their number (city regions, point cities). */
-/** `maxX`: viewBox width; a label that would cross the right edge flips to the left of the point. */
-export function Callout({ x, y, text, maxX = Infinity }: { x: number; y: number; text: string; maxX?: number }) {
-  const width = text.length * 6.6 + 12, left = x + 34 + width > maxX - 4 ? Math.max(4, x - 34 - width) : x + 34, top = Math.max(2, y - 35);
+type View = { x: number; y: number; w: number };
+/** Callout box in viewBox units; `s` scales it (zoom), and it stays inside `view`, flipping left at the right edge. */
+export function calloutBox(x: number, y: number, text: string, s = 1, view: View = { x: 0, y: 0, w: Infinity }) {
+  const w = (text.length * 6.6 + 12) * s, dx = 34 * s;
+  const left = x + dx + w > view.x + view.w - 4 * s ? Math.max(view.x + 4 * s, x - dx - w) : x + dx;
+  return { x: left, y: Math.max(view.y + 2 * s, y - 35 * s), w, h: 20 * s };
+}
+export function Callout({ x, y, text, s = 1, view }: { x: number; y: number; text: string; s?: number; view?: View }) {
+  const box = calloutBox(x, y, text, s, view);
   return <g aria-hidden="true">
-    <line x1={x} y1={y} x2={left > x ? left : left + width} y2={top + 11} stroke="#0F1E33" strokeWidth="1"/>
-    <rect x={left} y={top} width={width} height="20" rx="6" fill="#0F1E33"/>
-    <text x={left + 6} y={top + 14} style={{ fill: "#fff", fontSize: 11, fontWeight: 700 }}>{text}</text>
+    <line x1={x} y1={y} x2={box.x > x ? box.x : box.x + box.w} y2={box.y + 11 * s} stroke="#0F1E33" strokeWidth="1" vectorEffect="non-scaling-stroke"/>
+    <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={6 * s} fill="#0F1E33"/>
+    <text x={box.x + 6 * s} y={box.y + 14 * s} style={{ fill: "#fff", fontSize: 11 * s, fontWeight: 700 }}>{text}</text>
   </g>;
 }

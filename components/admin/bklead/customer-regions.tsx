@@ -7,7 +7,7 @@ import { formatInt, formatPercent, formatUsd, formatUsdK, MONTHS_LONG } from "@/
 import { foreignTones, TONE_FILL, TONE_TEXT, uzbekistanTones, type Tone } from "@/lib/dashboard/rules";
 import { Callout } from "./region-map";
 import { MonthBars, RegionLines, SERIES_COLORS } from "./charts";
-import { CA_MAP as map, CA_WIDTH, CountryLayer, countryOf, tipAt } from "./ca-map";
+import { CA_MAP as map, calloutBoxes, CountryBackground, CountryLayer, countryOf, tipAt, useMapZoom } from "./ca-map";
 const shortName = (name: string) => name.replace(/ viloyati$/, "").replace(/ shahri$/, " sh.").replace(/ Respublikasi$/, "");
 
 function GrowthBadge({ growth }: { growth: RegionStat["growth"] }) {
@@ -46,6 +46,9 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
   const top5 = ranked.filter(region => region.total > 0).slice(0, 5);
   const region = byCode.get(selected) ?? ranked[0];
   const hovered = hover ? byCode.get(hover.code) : null;
+  const zoom = useMapZoom(), s = zoom.s;
+  const calloutText = (stat: RegionStat) => `${shortName(stat.name)} ${formatUsdK(stat.total)} · ${stat.customers}`;
+  const callouts = map.regions.flatMap(area => { const stat = byCode.get(area.code); return stat?.customers && (area.small || area.point) ? [{ x: area.x, y: area.y, text: calloutText(stat) }] : []; });
 
   const pick = (code: string) => {
     setSelected(code);
@@ -62,27 +65,29 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
           <div className="bk-legend" aria-hidden="true"><span><i style={{ background: TONE_FILL.top }}/>Eng ko‘p</span><span><i style={{ background: TONE_FILL.b1 }}/>Yuqori</span><span><i style={{ background: TONE_FILL.b2 }}/>O‘rta</span><span><i style={{ background: TONE_FILL.low }}/>Eng kam</span><span><i style={{ background: TONE_FILL.none }}/>Mijoz yo‘q (!)</span></div>
         </div>
         <div className="bk-map is-wide" onMouseLeave={() => setHover(null)}>
-          <svg viewBox={map.viewBox} role="img" aria-label={`O‘zbekiston, Qozog‘iston, Qirg‘iziston, Tojikiston, Turkmaniston: viloyatlar bo‘yicha doimiy mijozlar savdosi, ${stats.year}`}>
+          {zoom.controls}
+          <svg {...zoom.svgProps} role="img" aria-label={`O‘zbekiston, Qozog‘iston, Qirg‘iziston, Tojikiston, Turkmaniston: viloyatlar bo‘yicha doimiy mijozlar savdosi, ${stats.year}`}>
+            <CountryBackground/>
             {map.regions.filter(area => !area.point).map(area => {
               const stat = byCode.get(area.code);
               if (!stat) return null;
               return <path key={area.code} className={`bk-area${selected === area.code ? " is-selected" : ""}`} d={area.d} fill={TONE_FILL[tones[area.code] ?? "none"]} tabIndex={0} role="button" aria-pressed={selected === area.code}
                 aria-label={`${stat.name}: ${formatInt(stat.customers)} mijoz, ${formatUsd(stat.total)}`}
-                onMouseMove={event => setHover(tipAt(area.code, event))}
-                onFocus={() => setHover(tipAt(area.code, undefined, area))} onBlur={() => setHover(null)}
-                onClick={event => { setHover(tipAt(area.code, event)); pick(area.code); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pick(area.code); } }}/>;
+                onMouseMove={event => setHover(tipAt(area.code, zoom.box, event))}
+                onFocus={() => setHover(tipAt(area.code, zoom.box, undefined, area))} onBlur={() => setHover(null)}
+                onClick={event => { setHover(tipAt(area.code, zoom.box, event)); pick(area.code); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pick(area.code); } }}/>;
             })}
-            <CountryLayer/>
+            <CountryLayer s={s} avoid={calloutBoxes(callouts, s, zoom.box)}/>
             {map.regions.map(area => {
               const stat = byCode.get(area.code);
               if (!stat || (area.point && !stat.customers)) return null;
               // "!" (no customers) only for Uzbekistan, the home market; elsewhere the area just stays uncoloured.
-              if (!stat.customers) return countryOf(area.code) !== "UZ" ? null : <g key={area.code} aria-hidden="true" className="bk-map-attention"><circle cx={area.x} cy={area.y} r="8" fill="#E07A2E" stroke="#fff" strokeWidth="1.5"/><text x={area.x} y={area.y + 4} textAnchor="middle">!</text></g>;
-              if (area.small || area.point) return <Callout key={area.code} x={area.x} y={area.y} text={`${shortName(stat.name)} ${formatUsdK(stat.total)} · ${stat.customers}`} maxX={CA_WIDTH}/>;
+              if (!stat.customers) return countryOf(area.code) !== "UZ" ? null : <g key={area.code} aria-hidden="true" className="bk-map-attention"><circle cx={area.x} cy={area.y} r={8 * s} fill="#E07A2E" stroke="#fff" strokeWidth={1.5 * s}/><text x={area.x} y={area.y + 4 * s} textAnchor="middle">!</text></g>;
+              if (area.small || area.point) return <Callout key={area.code} x={area.x} y={area.y} text={calloutText(stat)} s={s} view={zoom.box}/>;
               const tone = tones[area.code] ?? "none", light = tone === "b2" || tone === "b3" || tone === "none";
               return <g key={area.code}>
                 <text className={`bk-map-label ${light ? "is-light" : "is-dark"}`} x={area.x} y={area.y} textAnchor="middle" style={{ fill: TONE_TEXT[tone] }}>{formatUsdK(stat.total)} $</text>
-                <text className={`bk-map-name bk-map-label ${light ? "is-light" : "is-dark"}`} x={area.x} y={area.y + 13} textAnchor="middle" style={{ fill: TONE_TEXT[tone] }}>{stat.customers} mijoz</text>
+                <text className={`bk-map-name bk-map-label ${light ? "is-light" : "is-dark"}`} x={area.x} y={area.y + 13 * s} textAnchor="middle" style={{ fill: TONE_TEXT[tone] }}>{stat.customers} mijoz</text>
               </g>;
             })}
           </svg>
