@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Download, Eye, Send } from "lucide-react";
 import { saveOfferAction, sendOfferTelegramAction } from "@/app/admin/(seller)/my/offers/actions";
-import { formatUsd } from "@/lib/dashboard/format";
+import { offerUsd } from "@/lib/offers/rules";
 
 type Product = { id: string; title: string; category: string; baseUsd: number };
 type Line = { category: string; productId: string; qty: string; markup: string };
@@ -60,13 +60,13 @@ export function OfferForm({ products, customers, initial }: { products: Product[
         <label className="bk-field" style={{ flex: "2 1 240px" }}><span>Mahsulot</span><select value={line.productId} onChange={event => update(index, { productId: event.target.value })} required><option value="">Tanlang</option>{products.filter(product => product.category === line.category).map(product => <option key={product.id} value={product.id}>{product.title}</option>)}</select></label>
         <label className="bk-field" style={{ width: 80 }}><span>Soni</span><input value={line.qty} onChange={event => update(index, { qty: event.target.value.replace(/\D+/g, "") })} inputMode="numeric" required/></label>
         <label className="bk-field" style={{ width: 100 }}><span>Ustama %</span><input value={line.markup} onChange={event => update(index, { markup: event.target.value })} inputMode="decimal" placeholder={markup}/></label>
-        <span style={{ minWidth: 90, textAlign: "right", fontWeight: 700, paddingBottom: 10 }}>{line.productId ? formatUsd(priceOf(line) * (Number(line.qty) || 0)) : "—"}</span>
+        <span style={{ minWidth: 90, textAlign: "right", fontWeight: 700, paddingBottom: 10 }}>{line.productId ? offerUsd(priceOf(line) * (Number(line.qty) || 0)) : "—"}</span>
         <button type="button" className="bk-btn" aria-label="Qatorni o‘chirish" onClick={() => { setSaved(null); setLines(lines.length > 1 ? lines.filter((_, i) => i !== index) : [{ category: "", productId: "", qty: "1", markup: "" }]); }}>×</button>
       </div>)}
       <button type="button" className="bk-btn" style={{ justifySelf: "start" }} onClick={() => setLines([...lines, { category: "", productId: "", qty: "1", markup: "" }])}>+ Mahsulot qo‘shish</button>
     </div>
     <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-      <strong style={{ fontSize: 18 }}>Jami: {formatUsd(total)}</strong>
+      <strong style={{ fontSize: 18 }}>Jami: {offerUsd(total)}</strong>
       <button type="submit" className="bk-btn is-primary" disabled={pending}>{pending ? "Saqlanmoqda…" : "Saqlash"}</button>
     </div>
     {error && <p className="bk-note is-soft" role="alert">{error}</p>}

@@ -2,7 +2,7 @@ import "server-only";
 import path from "node:path";
 import React from "react";
 import { Document, Font, Page, Path, StyleSheet, Svg, Text, View, pdf } from "@react-pdf/renderer";
-import type { publicLines } from "./rules";
+import { offerUsd as usd, type publicLines } from "./rules";
 
 Font.register({ family: "NotoSans", fonts: [
   { src: path.join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-400-normal.woff"), fontWeight: 400 },
@@ -28,7 +28,6 @@ const s = StyleSheet.create({
   total: { flexDirection: "row", justifyContent: "flex-end", marginTop: 10, gap: 20, fontSize: 12, fontWeight: 700 },
   foot: { position: "absolute", left: 36, right: 36, bottom: 28, borderTop: `1px solid ${line}`, paddingTop: 8, flexDirection: "row", justifyContent: "space-between", color: muted, fontSize: 8.5 },
 });
-const usd = (value: number) => `$${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value)}`;
 
 function OfferDocument({ data }: { data: OfferPdfData }) {
   return <Document title={`Tijorat taklifi ${data.number}`}><Page size="A4" style={s.page}>

@@ -35,3 +35,8 @@ test("offer line name: model + name, without repeating a model the name already 
   assert.equal(offers.offerTitle("4NES-20Y", "Bitzer kompressor"), "4NES-20Y Bitzer kompressor");
   assert.equal(offers.offerTitle("", "Resiver 20 L"), "Resiver 20 L");
 });
+
+test("offer money always has two decimals", () => {
+  assert.equal(offers.offerUsd(1163.4).replace(/\s/g, " "), "$1 163,40");
+  assert.equal(offers.offerUsd(2301).replace(/\s/g, " "), "$2 301,00");
+});

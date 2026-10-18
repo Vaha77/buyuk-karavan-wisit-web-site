@@ -3,6 +3,8 @@ export const OFFER_VALID_DAYS = 7;
 export const MAX_MARKUP = 500;
 export const offerNumber = (number: number) => `KP-${String(number).padStart(4, "0")}`;
 const cents = (value: number) => Math.round(value * 100) / 100;
+/** Offer money: always two decimals, "$1 163,40" (form and PDF). */
+export const offerUsd = (value: number) => `$${new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
 /** Line name = model + name; a name that already contains the model is used as it is (no "DD 100 … DD 100 …"). */
 export function offerTitle(model: string | null | undefined, name: string) {
   const m = (model ?? "").trim(), n = name.trim();
