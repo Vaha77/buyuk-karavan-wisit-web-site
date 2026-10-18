@@ -107,7 +107,7 @@ function AgregatForm({ userName, catalog, customers }: Props) {
   const [modelKey, setModelKey] = useState(group?.models[0]?.key ?? "");
   const model = group?.models.find(item => item.key === modelKey) ?? group?.models[0];
   const [assembly, setAssembly] = useState<Assembly>("vz");
-  const [liters, setLiters] = useState<string | null>(null), [hp, setHp] = useState<string | null>(null), [condenserId, setCondenserId] = useState<string | null>(null);
+  const [hp, setHp] = useState<string | null>(null), [condenserId, setCondenserId] = useState<string | null>(null), [fnCat, setFnCat] = useState<string | null>(null);
   // Chiller: no ready scheme — composition is required, the price is typed or left empty ("kelishiladi").
   const [composition, setComposition] = useState(""), [manualPrice, setManualPrice] = useState("");
   const [qty, setQty] = useState("1"), [dueDate, setDueDate] = useState(""), [purpose, setPurpose] = useState<"SHOP" | "CLIENT">("CLIENT"), [customer, setCustomer] = useState(""), [note, setNote] = useState("");
@@ -117,28 +117,32 @@ function AgregatForm({ userName, catalog, customers }: Props) {
   const available = (key: Assembly) => key === "ch" ? !!model : !!model?.[key];
   const manualNumber = manualPrice.trim() ? Number(manualPrice.replace(",", ".").replace(/\s/g, "")) : null;
   const effective = model && !available(assembly) ? ASSEMBLIES.find(item => available(item.key))?.key ?? assembly : assembly;
-  const quote = useMemo(() => model && group ? quoteZborka(model, group, catalog, { assembly: effective, liters, hp, condenserId, composition, manualPrice: manualNumber }) : null, [model, group, catalog, effective, liters, hp, condenserId, composition, manualNumber]);
-  const resetParts = () => { setLiters(null); setHp(null); setCondenserId(null); setResult(null); };
+  const quote = useMemo(() => model && group ? quoteZborka(model, group, catalog, { assembly: effective, liters: null, hp, condenserId, composition, manualPrice: manualNumber }) : null, [model, group, catalog, effective, hp, condenserId, composition, manualNumber]);
+  const resetParts = () => { setHp(null); setCondenserId(null); setFnCat(null); setResult(null); };
   if (!group || !model) return <div className="sx-card"><p className="sx-note">{catalog.notice ?? "Praysda prays narxi kiritilgan kompressor/agregat topilmadi. Avval Prays bo‘limida narxlarni kiriting."}</p></div>;
   const standardFn = standardCondenser(catalog.condensers, model.fn, catalog.standardCondenserCategoryId);
   const fnWarning = effective === "vz" ? condenserWarning(model, catalog) : null;
   const condenserPrice = Object.fromEntries(catalog.condensers.map(item => [item.id, item.base]));
 
-  const receiverKnown = !!model.liters && catalog.receivers[model.liters] !== undefined;
-  const receiverOptions = receiverKnown ? Object.keys(catalog.receivers) : [model.liters ?? ""].filter(Boolean);
-  const parts = [] as Array<{ key: string; label: string; value: string; standard: string; options: Array<{ value: string; label: string; price?: number }>; set: (value: string) => void; table: Record<string, number>; disabledNote?: string; format: (value: string) => string }>;
-  if (effective !== "k" && effective !== "ch" && model.liters) parts.push({ key: "res", label: "Resiver bachok", value: quote?.ok ? quote.options.liters : model.liters, standard: model.liters, options: receiverOptions.map(value => ({ value, label: `${value} L` })), set: value => { setLiters(value); setResult(null); }, table: catalog.receivers, disabledNote: receiverKnown ? undefined : "Resiver narxi kiritilmagan", format: value => `${value} L` });
+  type Choice = { value: string; options: Array<{ value: string; label: string }>; set: (value: string) => void };
+  const parts = [] as Array<{ key: string; label: string; value: string; standard: string; options: Array<{ value: string; label: string; price?: number }>; set: (value: string) => void; table: Record<string, number>; disabledNote?: string; format: (value: string) => string; category?: Choice & { label: string } }>;
   if (effective === "vd" && model.hp) parts.push({ key: "vk", label: "Vadinoy kondensator", value: hp ?? model.hp, standard: model.hp, options: Object.keys(group.hpTable).map(value => ({ value, label: `${value} HP` })), set: value => { setHp(value); setResult(null); }, table: group.hpTable, format: value => `${value} HP` });
   // Condensers of the "Kondensator" categories with their Prays prices; the standard one comes from the Prays setting.
   if (effective === "vz" && model.fn) {
     const standardValue = standardFn?.id ?? "";
-    const options = [...(standardFn ? [] : [{ value: "", label: `${model.fn} · standart` }]), ...catalog.condensers.map(item => ({ value: item.id, label: item.label }))];
-    parts.push({ key: "fn", label: "Vazdushniy kondensator (rama bilan)", value: condenserId ?? standardValue, standard: standardValue, options, set: value => { setCondenserId(value || null); setResult(null); }, table: condenserPrice, disabledNote: fnWarning ?? undefined, format: value => catalog.condensers.find(item => item.id === value)?.label ?? model.fn ?? "" });
+    // [Kategoriya ▼] [FN markasi ▼]: a new category clears the model until one of its models is picked.
+    const categories = [...new Map(catalog.condensers.map(item => [item.categoryId, item.source])).entries()];
+    const category = fnCat ?? catalog.condensers.find(item => item.id === condenserId)?.categoryId ?? standardFn?.categoryId ?? categories[0]?.[0] ?? "";
+    const value = condenserId ?? (!fnCat || standardFn?.categoryId === fnCat ? standardValue : "");
+    const options = [...(value === "" ? [{ value: "", label: fnCat ? "FN markasini tanlang" : `${model.fn} · standart` }] : []), ...catalog.condensers.filter(item => item.categoryId === category).map(item => ({ value: item.id, label: item.label }))];
+    parts.push({ key: "fn", label: "FN markasi", value, standard: standardValue, options, set: next => { setCondenserId(next || null); setResult(null); }, table: condenserPrice, disabledNote: fnWarning ?? undefined, format: id => catalog.condensers.find(item => item.id === id)?.label ?? model.fn ?? "",
+      category: { label: "Vazdushniy kondensator (rama bilan)", value: category, options: categories.map(([id, label]) => ({ value: id, label })), set: next => { setFnCat(next); setCondenserId(null); setResult(null); } } });
   }
 
   const qtyNumber = Number(qty);
   const price = quote?.ok ? quote.base : null;
-  const ready = quote?.ok && Number.isInteger(qtyNumber) && qtyNumber >= 1 && (purpose === "SHOP" || customer.trim()) && (effective !== "ch" || composition.trim().length >= 3);
+  const fnPending = effective === "vz" && parts.some(part => part.key === "fn" && part.value === "" && !!fnCat);
+  const ready = quote?.ok && !fnPending && Number.isInteger(qtyNumber) && qtyNumber >= 1 && (purpose === "SHOP" || customer.trim()) && (effective !== "ch" || composition.trim().length >= 3);
   const known = customers.find(item => item.name === customer.trim());
   const submit = (confirmDuplicate = false) => {
     if (submittingRef.current) return;
@@ -146,7 +150,7 @@ function AgregatForm({ userName, catalog, customers }: Props) {
     startTransition(async () => {
       try {
         setResult(null); setDuplicate(null);
-        const response = await createAgregatOrderAction({ requestId, confirmDuplicate, groupKey: group.key, modelKey: model.key, assembly: effective, liters: effective === "k" || effective === "ch" ? null : liters, hp: effective === "vd" ? hp : null, condenserId: effective === "vz" ? condenserId : null, composition: effective === "ch" ? composition.trim() : null, manualPrice: effective === "ch" ? manualNumber : null, qty: qtyNumber, dueDate: dueDate || null, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, note: note.trim() || null });
+        const response = await createAgregatOrderAction({ requestId, confirmDuplicate, groupKey: group.key, modelKey: model.key, assembly: effective, liters: null, hp: effective === "vd" ? hp : null, condenserId: effective === "vz" ? condenserId : null, composition: effective === "ch" ? composition.trim() : null, manualPrice: effective === "ch" ? manualNumber : null, qty: qtyNumber, dueDate: dueDate || null, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, note: note.trim() || null });
         if (!response.ok && response.duplicate) { setDuplicate(response.error); return; }
         setResult(sentResult(response, "Zakaz"));
         if (!response.ok) return;
@@ -177,10 +181,14 @@ function AgregatForm({ userName, catalog, customers }: Props) {
           {parts.map(part => {
             const changed = part.value !== part.standard, delta = changed && part.table[part.value] !== undefined && part.table[part.standard] !== undefined ? part.table[part.value] - part.table[part.standard] : 0;
             return <div key={part.key} style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
+              {part.category && <label className="sx-field" style={{ flex: "1 1 200px" }}>{part.category.label}
+                <select className="is-big" value={part.category.value} disabled={!!part.disabledNote} onChange={event => part.category?.set(event.target.value)}>{part.category.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+              </label>}
               <label className="sx-field" style={{ flex: "1 1 240px" }}>{part.label}
                 <select className={`is-big ${changed ? "is-changed" : ""}`} value={part.value} disabled={!!part.disabledNote} onChange={event => part.set(event.target.value)}>{part.options.map(option => <option key={option.value || "standard"} value={option.value}>{option.label}{option.value && option.value === part.standard ? "  · standart" : ""}</option>)}</select>
               </label>
               {part.disabledNote ? <span className="sx-pill is-yellow" role="alert" style={{ minHeight: 46, borderRadius: 10, padding: "6px 12px", whiteSpace: "normal", fontSize: 12 }}>⚠️ {part.disabledNote}</span>
+                : part.value === "" && fnPending ? <span className="sx-pill is-yellow" style={{ height: 46, borderRadius: 10, padding: "0 12px", fontSize: 13 }}>FN markasini tanlang</span>
                 : changed ? <span className="sx-pill is-yellow" style={{ height: 46, borderRadius: 10, padding: "0 12px", fontSize: 13 }}>standart {part.format(part.standard)} · {formatSignedUsd(Math.round(delta))}</span>
                 : <span className="sx-pill is-green" style={{ height: 46, borderRadius: 10, padding: "0 12px", fontSize: 13 }}>standart</span>}
             </div>;
