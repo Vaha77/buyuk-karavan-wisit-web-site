@@ -250,9 +250,9 @@ test("rank card: equal % with the place above is a tie, not \"yana $0 kerak\"", 
 });
 
 test("seller routes: only /admin/my and /admin/seh are reachable", () => {
-  for (const path of ["/admin/my", "/admin/my/today", "/admin/my/purchase", "/admin/my/customers/abc", "/admin/seh", "/admin/seh/new"]) assert.ok(access.isSellerPathAllowed(path), path);
+  for (const path of ["/admin/my", "/admin/my/dashboard", "/admin/my/today", "/admin/my/purchase", "/admin/my/customers/abc", "/admin/seh", "/admin/seh/new"]) assert.ok(access.isSellerPathAllowed(path), path);
   for (const path of ["/admin", "/admin/customers", "/admin/customers/purchases", "/admin/sales-plan", "/admin/users", "/admin/mystery", "/admin/my-other", "/admin/sexy", "/admin/prays"]) assert.ok(!access.isSellerPathAllowed(path), path);
-  assert.equal(access.homeFor("SELLER"), "/admin/my");
+  assert.equal(access.homeFor("SELLER"), "/admin/my/dashboard");
   assert.equal(access.homeFor("ADMIN"), "/admin");
 });
 

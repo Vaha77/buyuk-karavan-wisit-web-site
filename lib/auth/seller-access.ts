@@ -21,7 +21,7 @@ export const LIMITED_ROLES = ["SELLER", "WORKSHOP"] as const;
 export function isLimitedRole(role: string) { return (LIMITED_ROLES as readonly string[]).includes(role); }
 
 /** Where a signed-in user lands after login (and where a limited role is sent from other pages). */
-export function homeFor(role: string) { return role === "SELLER" ? SELLER_HOME : role === "WORKSHOP" ? SEX_HOME : "/admin"; }
+export function homeFor(role: string) { return role === "SELLER" ? `${SELLER_HOME}/dashboard` : role === "WORKSHOP" ? SEX_HOME : "/admin"; }
 
 /** A GET/HEAD page visit (incl. client navigation), as opposed to a POST or a server action call. */
 export function isPageRequest(request: { method: string; headers: { has(name: string): boolean } }) {

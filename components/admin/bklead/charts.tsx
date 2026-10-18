@@ -1,4 +1,4 @@
-import { formatInt, formatUsd, formatUsdK, MONTHS_LONG } from "@/lib/dashboard/format";
+import { formatInt, formatUsd, formatUsdK, MONTHS_LONG, MONTHS_SHORT } from "@/lib/dashboard/format";
 
 /** Daily bars; the highest days are drawn navy, the rest light blue. Server-rendered SVG. */
 export function DailyBars({ days, highlight = 2, label }: { days: Array<{ day: string; clicks: number }>; highlight?: number; label: string }) {
@@ -75,7 +75,7 @@ export function RegionLines({ series, lastMonth, label }: { series: Array<{ name
   for (let index = 1; index < ends.length; index++) ends[index].y = Math.max(ends[index].y, ends[index - 1].y + 14);
   return <svg className="bk-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
     {[0, 1, 2, 3].map(tick => <g key={tick}><line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} stroke="#E3E9F2"/><text x={left - 8} y={y(tick * step) + 4} textAnchor="end">{formatUsdK(tick * step)}</text></g>)}
-    {Array.from({ length: count }, (_, index) => <text key={index} x={x(index)} y={height - 6} textAnchor="middle">{MONTHS_LONG[index].slice(0, 3)}</text>)}
+    {Array.from({ length: count }, (_, index) => <text key={index} x={x(index)} y={height - 6} textAnchor="middle">{MONTHS_SHORT[index][0].toUpperCase() + MONTHS_SHORT[index].slice(1)}</text>)}
     {series.map((item, index) => <g key={item.name}>
       <path d={item.months.slice(0, count).map((value, month) => `${month ? "L" : "M"}${x(month).toFixed(1)} ${y(value).toFixed(1)}`).join("")} fill="none" stroke={SERIES_COLORS[index]} strokeWidth="2" strokeLinejoin="round"/>
       {item.months.slice(0, count).map((value, month) => <circle key={month} cx={x(month)} cy={y(value)} r="4" fill="#fff" stroke={SERIES_COLORS[index]} strokeWidth="2"><title>{`${item.name}, ${MONTHS_LONG[month]}: ${formatUsd(value)}`}</title></circle>)}

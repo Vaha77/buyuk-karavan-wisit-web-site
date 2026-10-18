@@ -49,6 +49,7 @@ const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path
   { match: path => path === "/admin", title: "BKLead Dashboard", subtitle: "Lidlar, sotuvlar va hududlar bo‘yicha umumiy holat" },
   { match: path => path.startsWith("/admin/customers/purchases"), title: "Tasdiqlash kerak", subtitle: "Sotuvchilar kiritgan xaridlarni tasdiqlash yoki rad etish" },
   { match: path => path.startsWith("/admin/customers/control"), title: "Nazorat", subtitle: "Sotuvchilar bo‘yicha muddati o‘tgan qo‘ng‘iroqlar" },
+  { match: path => path.startsWith("/admin/my/dashboard"), title: "Mening dashboardim", subtitle: "Faqat sizning ma’lumotlaringiz" },
   { match: path => path === "/admin/my", title: "Mening mijozlarim", subtitle: "Sizga biriktirilgan doimiy mijozlar" },
   { match: path => path.startsWith("/admin/seh/new"), title: "Seh / Yangi zakaz", subtitle: "Zborka buyurtmasi yoki zapchast zayavkasi" },
   { match: path => path.startsWith("/admin/seh"), title: "Seh zakazlari", subtitle: "Zayavka → Qabul → Chiqib ketdi → Krimga olindi" },
@@ -86,6 +87,7 @@ function sectionOf(path: string) {
 // A SELLER only has their own section (proxy.ts and requireAdmin enforce it on the server).
 const sellerNavigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "MENING BO‘LIMIM", items: [
+    { label: "Dashboard", href: "/admin/my/dashboard", icon: LayoutDashboard },
     { label: "Mening mijozlarim", href: "/admin/my", icon: Users },
     { label: "Bugun qo‘ng‘iroq", href: "/admin/my/today", icon: PhoneCall, badge: "due" },
     { label: "Xarid kiritish", href: "/admin/my/purchase", icon: ShoppingBag },

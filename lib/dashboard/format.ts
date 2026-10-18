@@ -20,7 +20,7 @@ export function formatUsdK(value: number) { return value >= 1000 ? `${formatDeci
 
 export function percentOf(part: number, whole: number) { return whole > 0 ? (part / whole) * 100 : 0; }
 
-const MONTHS_SHORT = ["yan", "fev", "mar", "apr", "may", "iyn", "iyl", "avg", "sen", "okt", "noy", "dek"];
+export const MONTHS_SHORT = ["yan", "fev", "mar", "apr", "may", "iyn", "iyl", "avg", "sen", "okt", "noy", "dek"];
 export const MONTHS_LONG = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"];
 /** "13 iyl" in Asia/Tashkent (UTC+5, no DST). */
 export function formatDayMonth(date: Date) { const local = tashkent(date); return `${local.getUTCDate()} ${MONTHS_SHORT[local.getUTCMonth()]}`; }
