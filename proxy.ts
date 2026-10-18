@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import { NextResponse, type NextRequest } from "next/server";
 import { homeFor, roleAccess } from "@/lib/auth/seller-access";
+import { PUBLIC_ADMIN_PATHS } from "@/lib/pwa";
 
 const COOKIE_NAME = "bk_admin_session";
 const pool = new Pool({
@@ -45,7 +46,7 @@ async function hasValidSession(tokenHash: string) {
 }
 
 export async function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname === "/admin/login" || request.nextUrl.pathname === "/admin/register") return NextResponse.next();
+  if (PUBLIC_ADMIN_PATHS.includes(request.nextUrl.pathname)) return NextResponse.next();
 
   const token = request.cookies.get(COOKIE_NAME)?.value;
   let role: string | null = null;

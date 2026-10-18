@@ -147,5 +147,10 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
       </header>
       <div className="admin-workspace">{children}</div>
     </div>
+    {/* Phone: the first sections as a bottom bar (above the home indicator), the rest under "Menyu". */}
+    <nav className="admin-tabbar" aria-label="Asosiy bo‘limlar">
+      {groups.flatMap(group => group.items).filter(item => visible(item) && !item.soon).slice(0, 4).map(item => { const Icon = item.icon; return <Link key={item.href} href={item.href} className={item.href === activeHref ? "is-active" : undefined} aria-current={item.href === activeHref ? "page" : undefined}><Icon size={20}/><span>{item.label}</span></Link>; })}
+      <button type="button" onClick={() => setOpen(true)}><Menu size={20}/><span>Menyu</span></button>
+    </nav>
   </div>;
 }
