@@ -352,3 +352,9 @@ test("dynamics: sales per month from approved purchases, plan only inside a peri
   const plans = dash.yearPlans([{ planUsd: 600_000, startYear: 2026, startMonth: 3, monthCount: 6 }, { planUsd: 120_000, startYear: 2025, startMonth: 11, monthCount: 3 }], 2026);
   assert.deepEqual(plans, [40_000, 0, 100_000, 100_000, 100_000, 100_000, 100_000, 100_000, 0, 0, 0, 0]); // Oct: no plan
 });
+
+test("seller Telegram texts: order ready, purchase approved / rejected", () => {
+  assert.equal(rules.orderIssuedText("#0042", "BITZER 4NES+20 vazdushniy agregat · FN160 ×1"), "✅ Zakazingiz tayyor — #0042 BITZER 4NES+20 vazdushniy agregat · FN160 ×1 sehdan chiqdi, olib ketishingiz mumkin");
+  assert.equal(rules.purchaseApprovedText("Huseyin", 12_345.6), "💰 Xaridingiz tasdiqlandi — Huseyin · $12 346 · oylik rejaga qo‘shildi");
+  assert.equal(rules.purchaseRejectedText("Huseyin", 500, "Chek yo‘q"), "❌ Xaridingiz rad etildi — Huseyin · $500\nSabab: Chek yo‘q");
+});

@@ -8,7 +8,9 @@ import { daysWithoutPurchase, reminderText } from "./seller-rules";
 /** Daily 09:00 (Tashkent) reminder: each seller with a Telegram chat gets their own due customers; others are skipped. */
 export async function sendSellerReminders(today = new Date()) {
   const db = getDb();
-  const sellers = await db.salesPerson.findMany({ where: { isActive: true, telegramChatId: { not: null } }, select: { id: true, name: true, telegramChatId: true } });
+  // Chat: the bot-linked one of the seller's account first, else the one typed on the SalesPerson (see sellerChat).
+  const people = await db.salesPerson.findMany({ where: { isActive: true, OR: [{ telegramChatId: { not: null } }, { user: { telegramChatId: { not: null } } }] }, select: { id: true, name: true, telegramChatId: true, user: { select: { telegramChatId: true } } } });
+  const sellers = people.map(person => ({ ...person, telegramChatId: person.user?.telegramChatId ?? person.telegramChatId }));
   let sent = 0, skipped = 0, failed = 0;
   for (const seller of sellers) {
     // Same scoped query as the seller's "Bugun qo‘ng‘iroq" page.

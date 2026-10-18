@@ -11,6 +11,9 @@ import { createOnce } from "./idempotency";
 import type { DeliveryStatus } from "./bot-text";
 import { buildZborkaCatalog, frameAlertText, frameChange, quoteZborka, type Assembly } from "./zborka";
 import { sendMessage } from "@/lib/telegram/client";
+import { orderIssuedText } from "@/lib/customers/seller-rules";
+import { tellSeller } from "@/lib/customers/seller-telegram";
+import { orderTitle } from "./bot-text";
 
 type Actor = Pick<AdminUser, "id" | "name" | "role" | "salesPersonId">;
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -168,6 +171,10 @@ export async function transitionOrder(actor: Actor, id: string, action: OrderAct
   }
   await writeAudit(actor, { action: "STATUS_CHANGE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order.number), summary: `${orderNumber(order.number)}: ${STATUS_LABEL[order.status]} → ${STATUS_LABEL[check.to]}${via === "telegram" ? " (Telegram orqali)" : ""}`, metadata: { via }, before: { status: order.status }, after: { status: check.to, ...(corrections.length ? { issuedQty: Object.fromEntries(corrections.map(item => [item.id, issuedQty![item.id]])) } : {}) } });
   await notifyChanged(id, action === "start");
+  if (check.to === "ISSUED") {
+    const issued = await db.workshopOrder.findUnique({ where: { id }, select: { number: true, sellerId: true, type: true, qty: true, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } } });
+    if (issued) await tellSeller({ userId: issued.sellerId }, orderIssuedText(orderNumber(issued.number), orderTitle(issued)));
+  }
   revalidatePath("/admin/seh");
   return { ok: true, status: check.to };
 }

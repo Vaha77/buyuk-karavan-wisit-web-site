@@ -12,6 +12,9 @@ import { NotLinked } from "@/components/admin/bklead/not-linked";
 import { CustomersBlock, DynamicsBlock, LeadsBlock, MarjaBlock, PlanBlock, RankCard, TodayBlock } from "@/components/admin/bklead/seller-dashboard";
 import { CustomerLeaderboard } from "@/components/admin/bklead/customer-leaderboard";
 import { BlockSkeleton } from "@/components/admin/skeletons";
+import { sellerChat } from "@/lib/customers/seller-telegram";
+import { TelegramLink } from "@/components/admin/sex/telegram-link";
+import "@/components/admin/sex/sex.css";
 
 export const metadata: Metadata = { title: "Mening dashboardim | BUYUK KARAVAN" };
 
@@ -31,6 +34,11 @@ async function AgentBlocks({ user, now }: { user: User; now: Now }) {
   const { leads, marja } = await myDashboardAgent(user, now);
   return <>{leads && <LeadsBlock leads={leads}/>}{marja && <MarjaBlock marja={marja}/>}</>;
 }
+/** Shown only while no Telegram chat is linked: the messages (orders, purchases, reminders) need it. */
+async function TelegramPrompt({ user }: { user: User }) {
+  if (await sellerChat({ userId: user.id })) return null;
+  return <section className="bk-card" aria-labelledby="md-tg" style={{ display: "grid", gap: 8 }}><div><h2 id="md-tg">Telegram’ni ulang</h2><span className="bk-muted">Zakaz tayyor bo‘lganda, xarid tasdiqlanganda va qo‘ng‘iroq vaqtida bot sizga xabar yuboradi.</span></div><TelegramLink linked={false}/></section>;
+}
 async function Queue({ user }: { user: User }) { return <SehQueue {...await getSellerQueue(user.id)} limit={5}/>; }
 async function Leaders({ user, now }: { user: User; now: Now }) { return <CustomerLeaderboard rows={await customerLeaderboard(user, now)} year={now.year}/>; }
 
@@ -41,6 +49,7 @@ export default async function MyDashboardPage() {
   const firstName = user.name.trim().split(/\s+/)[0] || user.name;
   return <div className="bk">
     <div className="bk-head"><div><h1>Mening dashboardim</h1><p className="bk-muted">Salom, {firstName} · {MONTHS_LONG[now.month - 1]} {now.year}</p></div></div>
+    <Suspense fallback={null}><TelegramPrompt user={user}/></Suspense>
     <Suspense fallback={<BlockSkeleton height={130}/>}><Plan user={user} now={now}/></Suspense>
     <Suspense fallback={<BlockSkeleton height={60}/>}><Rank user={user}/></Suspense>
     <Suspense fallback={<BlockSkeleton height={110}/>}><Today user={user} now={now}/></Suspense>

@@ -74,3 +74,9 @@ export function reminderText(customers: Array<{ name: string; phone: string | nu
   if (list.length > 20) lines.push(`… va yana ${list.length - 20} ta`);
   return [`📞 Bugun ${list.length} ta mijozingizga qo‘ng‘iroq qiling:`, "", ...lines, "", "Natijani admin panelda “Bugun qo‘ng‘iroq” bo‘limida belgilang."].join("\n");
 }
+
+// ---- Seller Telegram messages -----------------------------------------------------------------------
+const usd = (value: number) => `$${Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ")}`;
+export const purchaseApprovedText = (customer: string, amountUsd: number) => `💰 Xaridingiz tasdiqlandi — ${customer} · ${usd(amountUsd)} · oylik rejaga qo‘shildi`;
+export const purchaseRejectedText = (customer: string, amountUsd: number, reason: string) => `❌ Xaridingiz rad etildi — ${customer} · ${usd(amountUsd)}\nSabab: ${reason}`;
+export const orderIssuedText = (number: string, title: string) => `✅ Zakazingiz tayyor — ${number} ${title} sehdan chiqdi, olib ketishingiz mumkin`;

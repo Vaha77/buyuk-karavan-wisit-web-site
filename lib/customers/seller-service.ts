@@ -7,7 +7,8 @@ import { getUsdUzsRate } from "@/lib/currency/cbu";
 import { expireDashboard } from "@/lib/referrals/tracking";
 import { sendMessage, telegramErrorDetails } from "@/lib/telegram/client";
 import { addSellerCustomer, createPurchase, recordContact, updateSellerCustomer, type NewCustomerInput, type Viewer } from "./seller-repo";
-import { mergeMonthlySale, type ContactResult } from "./seller-rules";
+import { mergeMonthlySale, purchaseApprovedText, purchaseRejectedText, type ContactResult } from "./seller-rules";
+import { tellSeller } from "./seller-telegram";
 
 type Actor = Pick<AdminUser, "id" | "name" | "role" | "salesPersonId">;
 export const viewerOf = (user: Pick<AdminUser, "role" | "salesPersonId">): Viewer => ({ role: user.role, salesPersonId: user.salesPersonId });
@@ -78,6 +79,7 @@ export async function approvePurchase(actor: Pick<AdminUser, "id" | "name">, id:
   });
   await writeAudit(actor, { action: "APPROVE", entityType: "CUSTOMER_PURCHASE", entityId: id, entityName: purchase.customer.name, summary: `Xaridni tasdiqladi: ${purchase.customer.name}, ${year}-yil ${month}-oy, $${purchase.amountUsd.toString()}`, after: { amount: purchase.amount.toString(), currency: purchase.currency, amountUsd: purchase.amountUsd.toString(), year, month } });
   expireDashboard();
+  await tellSeller({ salesPersonId: purchase.sellerId }, purchaseApprovedText(purchase.customer.name, Number(purchase.amountUsd)));
 }
 
 export async function rejectPurchase(actor: Pick<AdminUser, "id" | "name">, id: string, reason: string) {
@@ -89,4 +91,5 @@ export async function rejectPurchase(actor: Pick<AdminUser, "id" | "name">, id: 
   const flipped = await db.customerPurchase.updateMany({ where: { id, status: "PENDING" }, data: { status: "REJECTED", rejectReason: text, reviewedById: actor.id, reviewedAt: new Date() } });
   if (flipped.count !== 1) throw new PurchaseReviewError("Bu xarid allaqachon ko‘rib chiqilgan.");
   await writeAudit(actor, { action: "REJECT", entityType: "CUSTOMER_PURCHASE", entityId: id, entityName: purchase.customer.name, summary: `Xaridni rad etdi: ${purchase.customer.name} — ${text}`, after: { reason: text } });
+  await tellSeller({ salesPersonId: purchase.sellerId }, purchaseRejectedText(purchase.customer.name, Number(purchase.amountUsd), text));
 }
