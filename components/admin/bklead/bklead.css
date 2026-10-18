@@ -79,8 +79,8 @@
 .bk-map-card{display:grid;gap:14px}
 .bk-map{position:relative;border-radius:12px;background:#F7F9FC;padding:8px}
 .bk-map svg{width:100%;height:auto;display:block;max-height:520px}.bk-map.is-wide svg{max-height:none}
-.bk-map path.bk-area{stroke:#fff;stroke-width:1;transition:opacity .15s;cursor:pointer;outline:none}
-.bk-map path.bk-area:hover,.bk-map path.bk-area:focus-visible{opacity:.82;stroke:var(--bk-text);stroke-width:1.5}
+.bk-map .bk-area{stroke:#fff;stroke-width:1;transition:opacity .15s;cursor:pointer;outline:none}
+.bk-map .bk-area:hover,.bk-map .bk-area:focus-visible{opacity:.82;stroke:var(--bk-text);stroke-width:1.5}
 .bk-map-label{font-family:var(--font-space),system-ui,sans-serif;font-size:12px;font-weight:700;pointer-events:none;paint-order:stroke;stroke-width:3px;stroke-linejoin:round}
 .bk-map-label.is-dark{fill:#fff;stroke:rgba(18,62,124,.35)}.bk-map-label.is-light{fill:var(--bk-text);stroke:rgba(255,255,255,.7)}
 .bk-map-name{font-size:10px;font-weight:600;pointer-events:none}
@@ -143,7 +143,7 @@
 .bk-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* Regular customers by region */
-.bk-map path.bk-area.is-selected{stroke:var(--bk-text);stroke-width:2.2}
+.bk-map .bk-area.is-selected{stroke:var(--bk-text);stroke-width:2.2}
 .bk-map-attention{pointer-events:none}.bk-map-attention text{fill:#2B1200;font-size:12px;font-weight:800}
 .bk-map-tooltip-rich{display:grid;gap:2px}.bk-map-tooltip-rich span{font-weight:500;color:#D5E0F0}
 .bk-region-detail{display:grid;align-content:start;gap:14px}
@@ -226,7 +226,7 @@
 .sl-regions .bk-legend i.sl-legend-hatch{background:repeating-linear-gradient(45deg,#DCE8F8 0 3px,#9DB8E0 3px 4.5px);outline:1px solid #9DB8E0;outline-offset:-1px}
 .sl-regions-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
 .sl-map{background:#F5F9FE}
-.bk-map path.bk-area.sl-area-empty{stroke:#9DB8E0}
+.bk-map .bk-area.sl-area-empty{stroke:#9DB8E0}
 .sl-regions-side{display:grid;gap:12px;min-width:0}
 .sl-region-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .sl-region-card{display:grid;gap:3px;padding:12px;border-radius:12px;font-size:12px;min-width:0}
@@ -257,7 +257,7 @@
 .bk-seg button[aria-pressed="true"]{background:var(--bk-primary);color:#fff}
 .bk-trophy{width:30px;display:grid;justify-items:center;flex:none;line-height:1}.bk-trophy small{font-size:11px;font-weight:700;color:var(--bk-muted)}
 .bk-trophy.is-1{color:#C99A1E}.bk-trophy.is-2{color:#8E99A8}.bk-trophy.is-3{color:#B8733A}
-.bk-map.is-wide svg{cursor:grab}.bk-map.is-wide path{vector-effect:non-scaling-stroke}
+.bk-map.is-wide svg{cursor:grab}.bk-map.is-wide path,.bk-map.is-wide circle{vector-effect:non-scaling-stroke}
 .is-wide .bk-map-label{font-size:calc(12px * var(--s));stroke-width:calc(3px * var(--s))}.is-wide .bk-map-name{font-size:calc(10px * var(--s))}.is-wide .bk-map-attention text{font-size:calc(12px * var(--s))}
 .bk-zoom{position:absolute;left:12px;top:12px;z-index:1;display:flex;gap:4px}
 .bk-zoom button{min-width:32px;height:32px;padding:0 8px;border:1px solid var(--bk-border);border-radius:8px;background:#fff;color:var(--bk-text);font:inherit;font-size:13px;font-weight:700;cursor:pointer}

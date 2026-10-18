@@ -6,7 +6,7 @@ import { REGION_STATUS, STALE_DAYS, STATUS_ORDER, daysTone, type SellerMap } fro
 import { formatInt, formatUsd, formatUsdK } from "@/lib/dashboard/format";
 import { Callout } from "./region-map";
 import { DaysBadge, NewCustomerButton } from "./seller";
-import { CA_MAP as map, calloutBoxes, CountryBackground, CountryLayer, tipAt, useMapZoom } from "./ca-map";
+import { CA_MAP as map, calloutBoxes, shapeOf, CountryBackground, CountryLayer, tipAt, useMapZoom } from "./ca-map";
 const shortName = (name: string) => name.replace(/ viloyati$/, "").replace(/ shahri$/, " sh.").replace(/ Respublikasi$/, "");
 const HATCH = "sl-hatch";
 const fillOf = (status: keyof typeof REGION_STATUS) => status === "empty" ? `url(#${HATCH})` : REGION_STATUS[status].color;
@@ -44,11 +44,12 @@ export function SellerRegionMap({ data, year }: { data: SellerMap; year: number 
             </pattern>
           </defs>
           <CountryBackground/>
-          {map.regions.filter(area => !area.point).map(area => {
+          {map.regions.filter(area => !area.point || byCode.get(area.code)?.customers).map(area => {
             const stat = byCode.get(area.code);
             if (!stat) return null;
             const empty = stat.status === "empty";
-            return <path key={area.code} className={`bk-area${selected === area.code ? " is-selected" : ""}${empty ? " sl-area-empty" : ""}`} d={area.d} fill={fillOf(stat.status)} tabIndex={0} role="button" aria-pressed={selected === area.code}
+            const shape = shapeOf(area, s), Shape = "r" in shape ? "circle" : "path";
+              return <Shape key={area.code} className={`bk-area${selected === area.code ? " is-selected" : ""}${empty ? " sl-area-empty" : ""}`} {...shape} fill={fillOf(stat.status)} tabIndex={0} role="button" aria-pressed={selected === area.code}
               aria-label={!stat.customers ? `${stat.name}: mijoz yo‘q — imkoniyat` : `${stat.name}: ${formatInt(stat.customers)} mijoz, ${formatUsd(stat.total)}`}
               onMouseMove={event => setHover(tipAt(area.code, zoom.box, event))}
               onFocus={() => setHover(tipAt(area.code, zoom.box, undefined, area))} onBlur={() => setHover(null)}
@@ -73,7 +74,7 @@ export function SellerRegionMap({ data, year }: { data: SellerMap; year: number 
             <span>Qo‘ng‘iroq kerak: {formatInt(hovered.due)}</span>
           </> : <span>Mijoz yo‘q — imkoniyat</span>}
         </div>}
-        <span className="bk-map-credit">Xarita: Natural Earth</span>
+        <span className="bk-map-credit">Xarita: Natural Earth, geoBoundaries</span>
       </div>
 
       <div className="sl-regions-side" ref={panelRef}>

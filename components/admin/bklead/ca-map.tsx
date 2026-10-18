@@ -5,11 +5,13 @@ import caView from "@/lib/dashboard/maps/ca.json";
 import { COUNTRY_NAMES, type CustomerCountry } from "@/lib/dashboard/regions";
 import { calloutBox } from "./region-map";
 
-type MapView = { viewBox: string; regions: Array<{ code: string; d: string; x: number; y: number; small: boolean; point?: boolean }>; countries: Array<{ code: string; d: string; x: number; y: number }> };
+type MapView = { viewBox: string; regions: Array<{ code: string; d: string; x: number; y: number; small: boolean; point?: boolean; size?: number }>; countries: Array<{ code: string; d: string; x: number; y: number }> };
 /** UZ, KZ, KG, TJ, TM on one Natural Earth admin-1 map (scripts/build-region-maps.mjs, view "ca"). */
 export const CA_MAP: MapView = caView;
 export const [CA_WIDTH, CA_HEIGHT] = CA_MAP.viewBox.split(" ").slice(2).map(Number);
 export const countryOf = (code: string) => code.split("-")[0] as CustomerCountry;
+/** A city smaller than 10 screen px (or a point without a polygon) is drawn as a 10 px dot instead. */
+export const shapeOf = (area: MapView["regions"][number], s: number) => area.point || (area.size ?? Infinity) / s < 10 ? { cx: area.x, cy: area.y, r: 5 * s } : { d: area.d };
 
 type Box = { x: number; y: number; w: number; h: number };
 // Opening view: Uzbekistan with Tajikistan, Kyrgyzstan and Turkmenistan; northern Kazakhstan may be cut off.

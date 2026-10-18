@@ -7,7 +7,7 @@ import { formatInt, formatPercent, formatUsd, formatUsdK, MONTHS_LONG } from "@/
 import { foreignTones, TONE_FILL, TONE_TEXT, uzbekistanTones, type Tone } from "@/lib/dashboard/rules";
 import { Callout } from "./region-map";
 import { MonthBars, RegionLines, SERIES_COLORS } from "./charts";
-import { CA_MAP as map, calloutBoxes, CountryBackground, CountryLayer, countryOf, tipAt, useMapZoom } from "./ca-map";
+import { CA_MAP as map, calloutBoxes, shapeOf, CountryBackground, CountryLayer, countryOf, tipAt, useMapZoom } from "./ca-map";
 const shortName = (name: string) => name.replace(/ viloyati$/, "").replace(/ shahri$/, " sh.").replace(/ Respublikasi$/, "");
 
 function GrowthBadge({ growth }: { growth: RegionStat["growth"] }) {
@@ -68,10 +68,11 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
           {zoom.controls}
           <svg {...zoom.svgProps} role="img" aria-label={`O‘zbekiston, Qozog‘iston, Qirg‘iziston, Tojikiston, Turkmaniston: viloyatlar bo‘yicha doimiy mijozlar savdosi, ${stats.year}`}>
             <CountryBackground/>
-            {map.regions.filter(area => !area.point).map(area => {
+            {map.regions.filter(area => !area.point || byCode.get(area.code)?.customers).map(area => {
               const stat = byCode.get(area.code);
               if (!stat) return null;
-              return <path key={area.code} className={`bk-area${selected === area.code ? " is-selected" : ""}`} d={area.d} fill={TONE_FILL[tones[area.code] ?? "none"]} tabIndex={0} role="button" aria-pressed={selected === area.code}
+              const shape = shapeOf(area, s), Shape = "r" in shape ? "circle" : "path";
+              return <Shape key={area.code} className={`bk-area${selected === area.code ? " is-selected" : ""}`} {...shape} fill={TONE_FILL[tones[area.code] ?? "none"]} tabIndex={0} role="button" aria-pressed={selected === area.code}
                 aria-label={`${stat.name}: ${formatInt(stat.customers)} mijoz, ${formatUsd(stat.total)}`}
                 onMouseMove={event => setHover(tipAt(area.code, zoom.box, event))}
                 onFocus={() => setHover(tipAt(area.code, zoom.box, undefined, area))} onBlur={() => setHover(null)}
@@ -95,7 +96,7 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
             <strong>{hovered.name}</strong>
             {hovered.customers ? <span>{formatInt(hovered.customers)} mijoz · {formatUsd(hovered.total)} · {formatPercent(hovered.share)}</span> : <span>Mijoz yo‘q — e’tibor kerak</span>}
           </div>}
-          <span className="bk-map-credit">Xarita: Natural Earth</span>
+          <span className="bk-map-credit">Xarita: Natural Earth, geoBoundaries</span>
         </div>
         {stats.unassigned.customers > 0 && <p className="bk-muted">Viloyati ko‘rsatilmagan yoki xorijdagi mijozlar: {formatInt(stats.unassigned.customers)} ta · {formatUsd(stats.unassigned.total)} — mijozlar ro‘yxatida viloyatni tanlang.</p>}
       </section>

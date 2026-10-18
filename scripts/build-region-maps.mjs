@@ -1,7 +1,9 @@
 // Builds the BKLead dashboard maps from Natural Earth admin-1 boundaries (public domain, naturalearthdata.com).
 //
 //   curl -L -o ne_admin1.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson
-//   node scripts/build-region-maps.mjs ne_admin1.geojson
+//   node scripts/build-region-maps.mjs ne_admin1.geojson [geoboundaries-dir]
+// Optional geoBoundaries dir (geoboundaries.org, ODbL) with UZB.geojson, KAZ.geojson, TJK.geojson (ADM1) and KAZ2.geojson (ADM2):
+// city polygons for the "ca" map (Shymkent has none in Natural Earth, the others are coarse there).
 //
 // Output: lib/dashboard/maps/{all,uz,kz,kg,tj,tm,af,ca}.json (ca = the 5 customer countries, regions + country borders) — pre-projected SVG paths, so the browser needs no geo library.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -10,7 +12,8 @@ import { topology } from "topojson-server";
 import { presimplify, quantile, simplify } from "topojson-simplify";
 import { feature, merge } from "topojson-client";
 
-const source = process.argv[2];
+const source = process.argv[2], gbDir = process.argv[3];
+const GB_CITIES = [["UZB", "Tashkent", "UZ-TK"], ["KAZ", "Almaty", "KZ-ALM"], ["KAZ", "Astana", "KZ-AST"], ["TJK", "Dushanbe", "TJ-DU"], ["KAZ2", "Shymkent", "KZ-SHY"]];
 if (!source) { console.error("Usage: node scripts/build-region-maps.mjs <ne_10m_admin_1_states_provinces.geojson>"); process.exit(1); }
 const OUT = new URL("../lib/dashboard/maps/", import.meta.url);
 const COUNTRIES = ["UZ", "KZ", "KG", "TJ", "TM", "AF"];
@@ -58,14 +61,30 @@ function build(view, pick, width = 640) {
     : collection.features.map(f => ({ code: f.properties.code, d: round(path(f)), centroid: path.centroid(f), area: geoArea(f) }));
   // ca: "small" by on-screen size, since its scale differs from the country views.
   const isSmall = (area, f) => view === "ca" ? path.area(f) < 700 : view !== "all" && area < 2e-5;
-  const regions = areas.map(({ code, d, centroid, area }, index) => ({ code, d, x: +centroid[0].toFixed(1), y: +centroid[1].toFixed(1), small: isSmall(area, collection.features[index]) }));
-  for (const city of CITY_POINTS.filter(point => view === point.country.toLowerCase() || view === "ca")) {
+  // size: largest side in viewBox units, so the page can draw a tiny city as a min-size dot.
+  const sizeOf = f => { const [[x0, y0], [x1, y1]] = path.bounds(f); return +Math.max(x1 - x0, y1 - y0).toFixed(1); };
+  const regions = areas.map(({ code, d, centroid, area }, index) => ({ code, d, x: +centroid[0].toFixed(1), y: +centroid[1].toFixed(1), small: isSmall(area, collection.features[index]), ...(view === "ca" && { size: sizeOf(collection.features[index]) }) }));
+  const cities = view !== "ca" || !gbDir ? [] : GB_CITIES.map(([file, name, code]) => {
+    const f = JSON.parse(readFileSync(`${gbDir}/${file}.geojson`, "utf8")).features.find(item => item.properties.shapeName === name);
+    // geoBoundaries rings wind the other way than d3 expects; reversed, the polygon is the city, not the rest of the globe.
+    if (geoArea(f) > 2 * Math.PI) f.geometry.coordinates = f.geometry.type === "Polygon" ? f.geometry.coordinates.map(ring => ring.reverse()) : f.geometry.coordinates.map(polygon => polygon.map(ring => ring.reverse()));
+    // Full-resolution source: keep about 40 points per city.
+    let t = presimplify(topology({ c: f }, 1e5));
+    const points = t.arcs.reduce((sum, arc) => sum + arc.length, 0);
+    t = simplify(t, quantile(t, Math.min(1, 40 / points))); // p = share of points kept
+    const shape = feature(t, t.objects.c), [x, y] = path.centroid(shape);
+    return { code, d: round(path(shape)), x: +x.toFixed(1), y: +y.toFixed(1), small: true, size: sizeOf(shape) };
+  });
+  for (const city of cities) { const index = regions.findIndex(item => item.code === city.code); if (index >= 0) regions[index] = city; else regions.push(city); }
+  for (const city of CITY_POINTS.filter(point => (view === point.country.toLowerCase() || view === "ca") && !cities.some(item => item.code === point.code))) {
     const [x, y] = projection(city.lonLat);
     regions.push({ code: city.code, d: "", x: +x.toFixed(1), y: +y.toFixed(1), small: true, point: true });
   }
+  // Cities are drawn over their parent region.
+  regions.sort((a, b) => a.small - b.small);
   const outlines = view === "all" ? "" : round(path(merge(topo, geoms)));
   const countries = view !== "ca" ? undefined : CA.map(country => { const shape = withoutHoles(merge(topo, geoms.filter(g => g.properties.country === country))); const [x, y] = path.centroid(shape); return { code: country, d: round(path(shape)), x: +x.toFixed(1), y: +y.toFixed(1) }; });
-  return { view, viewBox: `0 0 ${width} ${height}`, outline: outlines, regions, ...(countries && { countries }), credit: "Natural Earth" };
+  return { view, viewBox: `0 0 ${width} ${height}`, outline: outlines, regions, ...(countries && { countries }), credit: cities.length ? "Natural Earth, geoBoundaries" : "Natural Earth" };
 }
 
 mkdirSync(OUT, { recursive: true });
