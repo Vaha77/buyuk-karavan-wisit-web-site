@@ -45,3 +45,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /backups
+
+# Capacitor app build output and signing keys (keys live in G:\BK-keys, never in git)
+mobile/node_modules/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+*.jks
+*.keystore
