@@ -61,18 +61,24 @@ export function MonthBars({ months, missing, label }: { months: number[]; missin
 
 /** Monthly sales bars of one year with the month's plan as a black tick; the current month is light (still running). */
 export function PlanBars({ sales, plans, current, label }: { sales: number[]; plans: number[]; current: number; label: string }) {
-  const width = 420, height = 190, top = 20, bottom = 20, gap = 6, inner = height - top - bottom;
+  // top leaves a band for the tooltip (hover or tap = focus; tapping elsewhere blurs it).
+  const width = 420, height = 200, top = 34, bottom = 20, gap = 6, inner = height - top - bottom;
+  const monthLabel = (index: number) => MONTHS_SHORT[index][0].toUpperCase() + MONTHS_SHORT[index].slice(1);
   const max = Math.max(1, ...sales, ...plans), barWidth = (width - gap * 11) / 12, best = sales.indexOf(Math.max(...sales));
   const y = (value: number) => height - bottom - (inner * value) / max;
   return <svg className="bk-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
     <line x1="0" x2={width} y1={height - bottom} y2={height - bottom} stroke="#E3E9F2"/>
     {sales.map((value, index) => {
       const x = index * (barWidth + gap), plan = plans[index], peak = Math.min(y(value), plan ? y(plan) : Infinity);
-      return <g key={index}>
-        <rect x={x} y={y(value)} width={barWidth} height={height - bottom - y(value)} rx="3" fill={index + 1 === current ? "#8DB0E4" : "#123E7C"}><title>{`${MONTHS_LONG[index]}: ${formatUsd(value)}${plan ? ` · reja ${formatUsd(plan)} · ${formatInt((value / plan) * 100)}%` : ""}`}</title></rect>
+      const tip = `${monthLabel(index)}: ${formatUsd(value)}${plan ? ` · reja ${formatUsd(plan)} · ${formatInt((value / plan) * 100)}%` : ""}`, tipWidth = tip.length * 6.2 + 12;
+      const tipX = Math.min(width - tipWidth, Math.max(0, x + barWidth / 2 - tipWidth / 2));
+      return <g key={index} className="bk-bar" tabIndex={0} aria-label={tip}>
+        <rect x={x - gap / 2} y={top} width={barWidth + gap} height={inner} fill="transparent"/>
+        <rect x={x} y={y(value)} width={barWidth} height={height - bottom - y(value)} rx="3" fill={index + 1 === current ? "#8DB0E4" : "#123E7C"}/>
         {plan > 0 && <line x1={x - 2} x2={x + barWidth + 2} y1={y(plan)} y2={y(plan)} stroke="#0F1E33" strokeWidth="2.5"/>}
         {value > 0 && (index === best || index + 1 === current) && <text x={x + barWidth / 2} y={peak - 5} textAnchor="middle" style={{ fill: "var(--bk-text)", fontWeight: 700 }}>{formatUsdK(value)}</text>}
-        <text x={x + barWidth / 2} y={height - 5} textAnchor="middle">{MONTHS_SHORT[index][0].toUpperCase() + MONTHS_SHORT[index].slice(1)}</text>
+        <text x={x + barWidth / 2} y={height - 5} textAnchor="middle">{monthLabel(index)}</text>
+        <g className="bk-bar-tip"><rect x={tipX} y="0" width={tipWidth} height="20" rx="5" fill="#0F1E33"/><text x={tipX + 6} y="14" style={{ fill: "#fff", fontWeight: 600 }}>{tip}</text></g>
       </g>;
     })}
   </svg>;

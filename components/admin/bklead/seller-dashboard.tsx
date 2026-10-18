@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Phone } from "lucide-react";
 import { formatDayMonth, formatInt, formatPercent, formatUsd, MONTHS_LONG } from "@/lib/dashboard/format";
 import { STATUS_LABEL, TYPE_LABEL } from "@/lib/sex/rules";
-import type { myDashboard } from "@/lib/customers/seller-queries";
+import type { myDashboardAgent, myDashboardCore, myOpenOrders } from "@/lib/customers/seller-queries";
 import { PlanBars } from "./charts";
 import type { MyPlace } from "@/lib/sales-plan/seller-ranking";
 import { zoneStyle } from "@/lib/sales-plan/zones";
@@ -20,7 +20,8 @@ export function RankCard({ me, periodName }: { me: MyPlace | null; periodName: s
   </section>;
 }
 
-type Dashboard = Awaited<ReturnType<typeof myDashboard>>;
+type Core = Awaited<ReturnType<typeof myDashboardCore>>;
+type Agent = Awaited<ReturnType<typeof myDashboardAgent>>;
 const Kpi = ({ label, value, foot, href, alert }: { label: string; value: string; foot?: string; href?: string; alert?: boolean }) => {
   const body = <><div className="bk-kpi-top">{label}</div><strong className={alert ? "sl-alert" : undefined}>{value}</strong>{foot && <span className="bk-kpi-foot">{foot}</span>}</>;
   return href ? <Link href={href} className="bk-card bk-kpi sl-kpi-link">{body}</Link> : <div className="bk-card bk-kpi">{body}</div>;
@@ -28,7 +29,7 @@ const Kpi = ({ label, value, foot, href, alert }: { label: string; value: string
 const Head = ({ id, title, note }: { id: string; title: string; note?: string }) => <div className="bk-card-head"><div><h2 id={id}>{title}</h2>{note && <span className="bk-muted">{note}</span>}</div></div>;
 
 /** 1. REJA: this month's share of the period plan. */
-export function PlanBlock({ plan, month }: { plan: Dashboard["plan"]; month: number }) {
+export function PlanBlock({ plan, month }: { plan: Core["plan"]; month: number }) {
   return <section className="bk-card" aria-labelledby="md-plan"><Head id="md-plan" title={`Reja — ${MONTHS_LONG[month - 1]}`} note="Davr rejasining shu oyga to‘g‘ri keladigan qismi · tasdiqlangan xaridlar"/>
     {plan ? <div style={{ display: "grid", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}><strong>{formatUsd(plan.done)} / {formatUsd(plan.plan)}</strong><strong>{formatPercent(plan.percent)}</strong></div>
@@ -48,7 +49,7 @@ export function TodayBlock({ due, pending, newLeads }: { due: number; pending: n
 }
 
 /** 3. MIJOZLAR: counts and the 60+ days list. */
-export function CustomersBlock({ data }: { data: Dashboard }) {
+export function CustomersBlock({ data }: { data: Core }) {
   return <section className="bk-card" aria-labelledby="md-customers" style={{ display: "grid", gap: 12 }}><Head id="md-customers" title="Mijozlar"/>
     <div className="bk-tiles"><div className="bk-tile"><span>Faol mijozlar</span><strong>{formatInt(data.customers)}</strong></div><div className="bk-tile"><span>Bu oy xarid qilganlar</span><strong>{formatInt(data.purchases.boughtThisMonth)}</strong></div><div className="bk-tile"><span>60+ kun xarid qilmagan</span><strong>{formatInt(data.stale.length)}</strong></div></div>
     {data.stale.length > 0 && <div className="bk-list">{data.stale.map(customer => <div key={customer.id}>
@@ -59,7 +60,7 @@ export function CustomersBlock({ data }: { data: Dashboard }) {
 }
 
 /** 4. DINAMIKA: approved purchases per month of this year against the monthly plan. */
-export function DynamicsBlock({ data, now }: { data: Dashboard; now: { year: number; month: number } }) {
+export function DynamicsBlock({ data, now }: { data: Core; now: { year: number; month: number } }) {
   const { purchases, months } = data;
   const current = months.sales[now.month - 1], plan = months.plans[now.month - 1];
   const bestValue = Math.max(...months.sales), best = months.sales.indexOf(bestValue);
@@ -75,21 +76,21 @@ export function DynamicsBlock({ data, now }: { data: Dashboard; now: { year: num
 }
 
 /** 5. LIDLAR (only with a linked Telegram agent). */
-export function LeadsBlock({ leads }: { leads: NonNullable<Dashboard["leads"]> }) {
+export function LeadsBlock({ leads }: { leads: NonNullable<Agent["leads"]> }) {
   return <section className="bk-card" aria-labelledby="md-leads"><Head id="md-leads" title="Lidlar — bu oy"/>
     <div className="bk-tiles"><div className="bk-tile"><span>Kelgan lidlar</span><strong>{formatInt(leads.count)}</strong></div><div className="bk-tile"><span>Sotuvga aylangan</span><strong>{formatInt(leads.won)} · {formatPercent(leads.conversion)}</strong></div><div className="bk-tile"><span>Manbalar</span><strong>Instagram {leads.sources.instagram} · Sayt {leads.sources.site} · Referal {leads.sources.referral}</strong></div></div>
   </section>;
 }
 
 /** 6. MARJA (hidden without data). */
-export function MarjaBlock({ marja }: { marja: NonNullable<Dashboard["marja"]> }) {
+export function MarjaBlock({ marja }: { marja: NonNullable<Agent["marja"]> }) {
   return <section className="bk-card" aria-labelledby="md-marja"><Head id="md-marja" title="Mening marjam"/>
     <div className="bk-tiles bk-tiles-2"><div className="bk-tile"><span>Bu oy</span><strong>{formatInt(marja.month)}</strong></div><div className="bk-tile"><span>Yil boshidan</span><strong>{formatInt(marja.year)}</strong></div></div>
   </section>;
 }
 
 /** 8. SEH ZAKAZLARI: the seller's open orders. */
-export function OrdersBlock({ orders }: { orders: Dashboard["orders"] }) {
+export function OrdersBlock({ orders }: { orders: Awaited<ReturnType<typeof myOpenOrders>> }) {
   return <section className="bk-card" aria-labelledby="md-orders"><div className="bk-card-head"><div><h2 id="md-orders">Seh zakazlari</h2><span className="bk-muted">Ochiq zakazlaringiz</span></div><Link href="/admin/seh">Hammasi</Link></div>
     {orders.length ? <div className="bk-list">{orders.map(order => <div key={order.id}>
       <div className="bk-grow"><b>#{String(order.number).padStart(4, "0")} · {TYPE_LABEL[order.type]}{order.customerName ? ` · ${order.customerName}` : ""}</b><span>{formatDayMonth(order.createdAt)}{order.dueDate ? ` · muddat ${formatDayMonth(order.dueDate)}` : ""}</span></div>

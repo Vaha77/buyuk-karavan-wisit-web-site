@@ -115,3 +115,8 @@ export function ShellSkeleton() {
     <div className="sk-shell-main"><div className="sk-shell-top"><div style={{ display: "grid", gap: 6, flex: 1 }}><Sk w={180} h={16}/><Sk w={260} h={11}/></div><Sk w={36} h={36} round/></div><div className="sk-shell-body"><GenericSkeleton/></div></div>
   </div>;
 }
+
+/** One dashboard block while it streams in. */
+export function BlockSkeleton({ height = 160 }: { height?: number }) {
+  return <div className="sk-card" role="status" style={{ height }}><Sk w={160} h={16}/><Sk h={Math.max(14, height - 70)}/><span className="sr-only">Yuklanmoqda…</span></div>;
+}

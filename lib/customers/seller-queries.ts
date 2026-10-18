@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import type { AdminUser } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { COUNTRY_NAMES, regionName, type CountryCode } from "@/lib/dashboard/regions";
@@ -40,33 +42,42 @@ export async function customerLeaderboard(user: User, now: { year: number; month
   return buildLeaderboard(data.customers, new Map(owners.map(row => [row.id, { ownerId: row.ownerId, name: row.owner?.name ?? null }])), data.prizes, user.salesPersonId ?? "", now.year, now);
 }
 
-/**
- * "Mening dashboardim": every query is filtered by the seller's own ids (customer scope, SalesPerson, linked agent,
- * AdminUser for workshop orders), in parallel. Only the seller's own numbers are returned.
- */
-export async function myDashboard(user: Pick<AdminUser, "id" | "role" | "salesPersonId">, month: { year: number; month: number }) {
-  const db = getDb(), personId = user.salesPersonId ?? "", now = { ...month, day: new Date(Date.now() + 5 * 3_600_000).getUTCDate() };
-  const monthStart = new Date(Date.UTC(now.year, now.month - 1, 1) - 5 * 3_600_000), yearStart = new Date(Date.UTC(now.year, 0, 1) - 5 * 3_600_000);
-  const [rows, person, planRows, orders] = await Promise.all([
-    sellerDashboardRows(db, viewerOf(user), now.year),
-    db.salesPerson.findUnique({ where: { id: personId }, select: { agentId: true } }),
+// "Mening dashboardim": every query is filtered by the seller's own ids (customer scope, SalesPerson, linked agent,
+// AdminUser for workshop orders); only the seller's own numbers are returned. Split per block so the page can stream;
+// cache() shares one load between the blocks of a request (primitive args: cache compares them by identity).
+type Month = { year: number; month: number };
+const today = (month: Month) => ({ ...month, day: new Date(Date.now() + 5 * 3_600_000).getUTCDate() });
+const monthStartOf = (now: Month) => new Date(Date.UTC(now.year, now.month - 1, 1) - 5 * 3_600_000);
+
+const loadCore = cache(async (role: string, personId: string, year: number, monthNumber: number) => {
+  const db = getDb(), now = today({ year, month: monthNumber });
+  const [rows, planRows] = await Promise.all([
+    sellerDashboardRows(db, { role, salesPersonId: personId }, year),
     db.salesPlan.findMany({ where: { personId }, select: { planUsd: true, period: { select: { startYear: true, startMonth: true, monthCount: true } } } }),
-    db.workshopOrder.findMany({ where: { sellerId: user.id, status: { in: [...OPEN_ORDERS] } }, orderBy: { createdAt: "desc" }, take: 20, select: { id: true, number: true, type: true, customerName: true, status: true, createdAt: true, dueDate: true } }),
-  ]);
-  const agentId = person?.agentId ?? null;
-  const [leads, newLeads, marja] = await Promise.all([
-    agentId ? db.lead.findMany({ where: { assignedAgentId: agentId, createdAt: { gte: monthStart } }, select: { source: true, status: true, referralLinkId: true, sale: { select: { id: true } } } }) : null,
-    agentId ? db.lead.count({ where: { assignedAgentId: agentId, status: "NEW" } }) : null,
-    agentId ? db.marjaTransaction.findMany({ where: { agentId, type: "SALE_EARNED", createdAt: { gte: yearStart } }, select: { amount: true, createdAt: true } }) : null,
   ]);
   // Sales = approved purchases of the seller's own customers; plan = period plan ÷ months, 0 outside every period.
-  const sales = yearSales(rows.purchases, now.year), plans = yearPlans(planRows.map(row => ({ planUsd: Number(row.planUsd), ...row.period })), now.year);
+  const sales = yearSales(rows.purchases, year), plans = yearPlans(planRows.map(row => ({ planUsd: Number(row.planUsd), ...row.period })), year);
   return {
-    plan: plans[now.month - 1] > 0 ? monthPlan({ planUsd: plans[now.month - 1], monthCount: 1, doneUsd: sales[now.month - 1] }, now) : null,
-    customers: rows.customers.length, stale: staleCustomers(rows.customers), purchases: purchaseStats(rows.purchases, now),
-    months: { sales, plans },
-    leads: leads ? leadStats(leads.map(lead => ({ source: lead.source, status: lead.status, referralLinkId: lead.referralLinkId, hasSale: !!lead.sale }))) : null, newLeads,
-    marja: marja?.length ? { year: marja.reduce((sum, row) => sum + row.amount, 0), month: marja.filter(row => row.createdAt >= monthStart).reduce((sum, row) => sum + row.amount, 0) } : null,
-    orders,
+    plan: plans[monthNumber - 1] > 0 ? monthPlan({ planUsd: plans[monthNumber - 1], monthCount: 1, doneUsd: sales[monthNumber - 1] }, now) : null,
+    customers: rows.customers.length, stale: staleCustomers(rows.customers), purchases: purchaseStats(rows.purchases, now), months: { sales, plans },
   };
-}
+});
+export const myDashboardCore = (user: User, now: Month) => loadCore(user.role, user.salesPersonId ?? "", now.year, now.month);
+
+const loadAgent = cache(async (personId: string, year: number, monthNumber: number) => {
+  const db = getDb(), monthStart = monthStartOf({ year, month: monthNumber }), yearStart = new Date(Date.UTC(year, 0, 1) - 5 * 3_600_000);
+  const agentId = (await db.salesPerson.findUnique({ where: { id: personId }, select: { agentId: true } }))?.agentId;
+  if (!agentId) return { leads: null, newLeads: null, marja: null };
+  const [leads, newLeads, marja] = await Promise.all([
+    db.lead.findMany({ where: { assignedAgentId: agentId, createdAt: { gte: monthStart } }, select: { source: true, status: true, referralLinkId: true, sale: { select: { id: true } } } }),
+    db.lead.count({ where: { assignedAgentId: agentId, status: "NEW" } }),
+    db.marjaTransaction.findMany({ where: { agentId, type: "SALE_EARNED", createdAt: { gte: yearStart } }, select: { amount: true, createdAt: true } }),
+  ]);
+  return {
+    leads: leadStats(leads.map(lead => ({ source: lead.source, status: lead.status, referralLinkId: lead.referralLinkId, hasSale: !!lead.sale }))), newLeads,
+    marja: marja.length ? { year: marja.reduce((sum, row) => sum + row.amount, 0), month: marja.filter(row => row.createdAt >= monthStart).reduce((sum, row) => sum + row.amount, 0) } : null,
+  };
+});
+export const myDashboardAgent = (user: User, now: Month) => loadAgent(user.salesPersonId ?? "", now.year, now.month);
+
+export const myOpenOrders = (userId: string) => getDb().workshopOrder.findMany({ where: { sellerId: userId, status: { in: [...OPEN_ORDERS] } }, orderBy: { createdAt: "desc" }, take: 20, select: { id: true, number: true, type: true, customerName: true, status: true, createdAt: true, dueDate: true } });
