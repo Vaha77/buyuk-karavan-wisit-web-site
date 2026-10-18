@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeCheck, Bell, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PhoneCall, PlusCircle, Search, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wrench, X } from "lucide-react";
+import { BadgeCheck, Bell, FileText, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PhoneCall, PlusCircle, Search, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wrench, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 import { homeFor } from "@/lib/auth/seller-access";
 import { NavigationProgress } from "./feedback";
@@ -55,6 +55,7 @@ const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path
   { match: path => path.startsWith("/admin/seh"), title: "Seh zakazlari", subtitle: "Zayavka → Qabul → Chiqib ketdi → Krimga olindi" },
   { match: path => path.startsWith("/admin/my/today"), title: "Bugun qo‘ng‘iroq", subtitle: "Qo‘ng‘iroq qilish vaqti kelgan mijozlar" },
   { match: path => path.startsWith("/admin/my/purchase"), title: "Xarid kiritish", subtitle: "Xarid admin tasdiqlagach hisobga olinadi" },
+  { match: path => path.startsWith("/admin/my/offers"), title: "Tijorat taklifi", subtitle: "Mijozga narx taklifi (PDF)" },
   { match: path => path.startsWith("/admin/my/"), title: "Mijoz", subtitle: "Qo‘ng‘iroqlar va xaridlar" },
   { match: path => path.startsWith("/admin/customers"), title: "Doimiy mijozlar", subtitle: "Viloyatlar bo‘yicha savdo va yillik reyting" },
   { match: path => path.startsWith("/admin/instagram"), title: "Instagram", subtitle: "Komment → Direct’ga avtomatik narx" },
@@ -91,6 +92,7 @@ const sellerNavigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Mening mijozlarim", href: "/admin/my", icon: Users },
     { label: "Bugun qo‘ng‘iroq", href: "/admin/my/today", icon: PhoneCall, badge: "due" },
     { label: "Xarid kiritish", href: "/admin/my/purchase", icon: ShoppingBag },
+    { label: "Tijorat taklifi", href: "/admin/my/offers", icon: FileText },
   ] },
   { group: "SEH", items: [
     { label: "Mening zakazlarim", href: "/admin/seh", icon: Wrench },

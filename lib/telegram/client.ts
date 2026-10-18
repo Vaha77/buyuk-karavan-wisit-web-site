@@ -81,3 +81,16 @@ export function answerCallbackQuery(id:string,text:string,showAlert=false){
   void promise.catch(()=>{if(callbackAcks.get(id)?.promise===promise)callbackAcks.delete(id);});
   return promise;
 }
+/** A file (PDF) to a chat: multipart upload, so not through call(). */
+export async function sendDocument(chatId:string,file:Uint8Array,filename:string,caption?:string){
+  const form=new FormData();
+  form.set("chat_id",chatId);form.set("document",new Blob([file as BlobPart],{type:"application/pdf"}),filename);if(caption)form.set("caption",caption.slice(0,1024));
+  let response:Response;
+  try{response=await fetch(`https://api.telegram.org/bot${botToken()}/sendDocument`,{method:"POST",body:form,cache:"no-store",signal:AbortSignal.timeout(20_000)});}
+  catch(error){throw new TelegramRequestError("sendDocument",safeCause(error));}
+  let body:TelegramResponse<SentMessage>|null=null;
+  try{body=await response.json() as TelegramResponse<SentMessage>;}
+  catch{throw new TelegramResponseError("sendDocument",response.status);}
+  if(!response.ok||!body.ok||body.result===undefined)throw new TelegramApiError("sendDocument",response.status,body.error_code,body.description,body.parameters?.migrate_to_chat_id);
+  return body.result;
+}

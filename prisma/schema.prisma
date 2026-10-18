@@ -464,6 +464,7 @@ model AdminUser {
   purchasesReviewed    CustomerPurchase[]           @relation("PurchaseReviewer")
   priceChanges         PriceChange[]
   workshopOrdersSold     WorkshopOrder[]            @relation("WorkshopOrderSeller")
+  commercialOffers       CommercialOffer[]
   workshopOrdersCreated  WorkshopOrder[]            @relation("WorkshopOrderCreator")
   workshopOrdersAccepted WorkshopOrder[]            @relation("WorkshopOrderAcceptor")
   workshopOrdersStarted  WorkshopOrder[]            @relation("WorkshopOrderStarter")
@@ -886,6 +887,7 @@ model RegularCustomer {
   purchases        CustomerPurchase[]
   workshopOrders   WorkshopOrder[]
   calculations     Calculation[]
+  commercialOffers CommercialOffer[]
 
   @@index([isActive])
   @@index([ownerId, isActive])
@@ -1663,4 +1665,25 @@ model TtsGeneration {
 
   @@index([createdAt])
   @@index([kind, createdAt])
+}
+
+// "Tijorat taklifi" (KP) a seller makes for a client: Prays price + markup, priced on the server when saved.
+model CommercialOffer {
+  id            String           @id @default(cuid())
+  // Shown as KP-0001.
+  number        Int              @unique @default(autoincrement())
+  sellerId      String
+  customerId    String?
+  customerName  String           @db.VarChar(120)
+  customerPhone String?          @db.VarChar(40)
+  markupPercent Decimal          @db.Decimal(6, 2)
+  // [{ productId, title, qty, baseUsd, markupPercent, priceUsd }] — baseUsd and markup never reach the PDF.
+  items         Json
+  totalUsd      Decimal          @db.Decimal(18, 2)
+  validUntil    DateTime         @db.Date
+  createdAt     DateTime         @default(now())
+  seller        AdminUser        @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  customer      RegularCustomer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([sellerId, createdAt])
 }
