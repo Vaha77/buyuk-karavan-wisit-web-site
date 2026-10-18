@@ -622,3 +622,10 @@ test("frame alert for admins: FN → FNV gives the badge text and the Telegram m
   assert.equal(zborka.frameAlertText("#0042", "Abdulvohid", zborka.frameChange(saved("FNV200"))), "⚠️ #0042 · Abdulvohid: kondensator turi o‘zgargan (FN → FNV), rama narxi qo‘shilmagan.");
   for (const options of [saved("FN180"), saved("FN160"), saved("FNV200", "vd"), null, {}]) assert.equal(zborka.frameChange(options), null);
 });
+
+test("Prays label: a Briliant list without a freon reads Briliant R22; Briliant R404 and others stay", () => {
+  assert.equal(zborka.priceListLabel("Briliant", null), "Briliant R22");
+  assert.equal(zborka.priceListLabel("Briliant", "R404"), "Briliant R404");
+  assert.equal(zborka.priceListLabel("Bitzer", null), "Bitzer");
+  assert.equal(zborka.priceListLabel("Bitzer", "R22"), "Bitzer R22");
+});

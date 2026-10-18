@@ -19,6 +19,9 @@ export const ASSEMBLIES: Array<{ key: Assembly; name: string; sub: string }> = [
 ];
 type Priced = { id: string; name: string; base: number };
 export type ZborkaModel = { key: string; model: string; k: Priced | null; rb: Priced | null; vd: Priced | null; vz: Priced | null; liters: string | null; hp: string | null; fn: string | null };
+/** Prays select label: brand + freon; a Briliant price list without a freon is the R22 one (label only, key unchanged). */
+export const priceListLabel = (brand: string, freon: string | null | undefined) => [brand, freon || (/^briliant$/i.test(brand) ? "R22" : null)].filter(Boolean).join(" ");
+
 export type ZborkaGroup = { key: string; label: string; brand: string; models: ZborkaModel[]; hpTable: Record<string, number> };
 /** notice: why the compressor list is empty (no category flagged yet). */
 export type ZborkaCatalog = { groups: ZborkaGroup[]; receivers: Record<string, number>; condensers: Condenser[]; standardCondenserCategoryId: string | null; notice: string | null };
@@ -53,7 +56,7 @@ export function buildZborkaCatalog(products: ZborkaProduct[], parts: ZborkaPart[
     const slot = slotOf(f.kind);
     if (!slot || !f.modelKey || (gated && !allowed.has(id))) continue;
     const brand = normalizeBrand(product.brand), key = `${brand}|${f.freon ?? ""}`;
-    const group = groups.get(key) ?? { brand, label: [titleCase(product.brand.trim()), f.freon].filter(Boolean).join(" "), models: new Map() };
+    const group = groups.get(key) ?? { brand, label: priceListLabel(titleCase(product.brand.trim()), f.freon), models: new Map() };
     groups.set(key, group);
     const model = group.models.get(f.modelKey) ?? { key: f.modelKey, model: product.model.trim() || f.modelKey, k: null, rb: null, vd: null, vz: null, liters: null, hp: null, fn: null };
     group.models.set(f.modelKey, model);
