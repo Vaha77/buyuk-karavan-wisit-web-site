@@ -78,7 +78,7 @@
 /* Map */
 .bk-map-card{display:grid;gap:14px}
 .bk-map{position:relative;border-radius:12px;background:#F7F9FC;padding:8px}
-.bk-map svg{width:100%;height:auto;display:block;max-height:520px}
+.bk-map svg{width:100%;height:auto;display:block;max-height:520px}.bk-map.is-wide svg{max-height:none}
 .bk-map path.bk-area{stroke:#fff;stroke-width:1;transition:opacity .15s;cursor:pointer;outline:none}
 .bk-map path.bk-area:hover,.bk-map path.bk-area:focus-visible{opacity:.82;stroke:var(--bk-text);stroke-width:1.5}
 .bk-map-label{font-family:var(--font-space),system-ui,sans-serif;font-size:12px;font-weight:700;pointer-events:none;paint-order:stroke;stroke-width:3px;stroke-linejoin:round}
@@ -224,7 +224,7 @@
 /* Seller dashboard (/admin/my): rank hero, own-regions map, ranking */
 .sl-regions{display:grid;gap:4px}
 .sl-regions .bk-legend i.sl-legend-hatch{background:repeating-linear-gradient(45deg,#DCE8F8 0 3px,#9DB8E0 3px 4.5px);outline:1px solid #9DB8E0;outline-offset:-1px}
-.sl-regions-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:start}
+.sl-regions-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
 .sl-map{background:#F5F9FE}
 .bk-map path.bk-area.sl-area-empty{stroke:#9DB8E0}
 .sl-regions-side{display:grid;gap:12px;min-width:0}

@@ -121,11 +121,12 @@ export function RegionMap({ rows, tips }: Props) {
 }
 
 /** Label with a leader line for areas too small to hold their number (city regions, point cities). */
-export function Callout({ x, y, text }: { x: number; y: number; text: string }) {
-  const dx = 34, dy = -24, width = text.length * 6.6 + 12;
+/** `maxX`: viewBox width; a label that would cross the right edge flips to the left of the point. */
+export function Callout({ x, y, text, maxX = Infinity }: { x: number; y: number; text: string; maxX?: number }) {
+  const width = text.length * 6.6 + 12, left = x + 34 + width > maxX - 4 ? Math.max(4, x - 34 - width) : x + 34, top = Math.max(2, y - 35);
   return <g aria-hidden="true">
-    <line x1={x} y1={y} x2={x + dx} y2={y + dy} stroke="#0F1E33" strokeWidth="1"/>
-    <rect x={x + dx} y={y + dy - 11} width={width} height="20" rx="6" fill="#0F1E33"/>
-    <text x={x + dx + 6} y={y + dy + 3} style={{ fill: "#fff", fontSize: 11, fontWeight: 700 }}>{text}</text>
+    <line x1={x} y1={y} x2={left > x ? left : left + width} y2={top + 11} stroke="#0F1E33" strokeWidth="1"/>
+    <rect x={left} y={top} width={width} height="20" rx="6" fill="#0F1E33"/>
+    <text x={left + 6} y={top + 14} style={{ fill: "#fff", fontSize: 11, fontWeight: 700 }}>{text}</text>
   </g>;
 }

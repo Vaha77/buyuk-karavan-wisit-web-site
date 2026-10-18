@@ -3,7 +3,7 @@
 //   curl -L -o ne_admin1.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson
 //   node scripts/build-region-maps.mjs ne_admin1.geojson
 //
-// Output: lib/dashboard/maps/{all,uz,kz,kg,tj,tm,af}.json — pre-projected SVG paths, so the browser needs no geo library.
+// Output: lib/dashboard/maps/{all,uz,kz,kg,tj,tm,af,ca}.json (ca = the 5 customer countries, regions + country borders) — pre-projected SVG paths, so the browser needs no geo library.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { geoArea, geoConicEqualArea, geoPath } from "d3-geo";
 import { topology } from "topojson-server";
@@ -14,6 +14,7 @@ const source = process.argv[2];
 if (!source) { console.error("Usage: node scripts/build-region-maps.mjs <ne_10m_admin_1_states_provinces.geojson>"); process.exit(1); }
 const OUT = new URL("../lib/dashboard/maps/", import.meta.url);
 const COUNTRIES = ["UZ", "KZ", "KG", "TJ", "TM", "AF"];
+const CA = ["UZ", "KZ", "KG", "TJ", "TM"];
 // "Tadzhikistan Territories" has the placeholder ISO code "TJ-X01~" and becomes TJ-RR.
 // Natural Earth reuses one ISO code for two areas in a few places; adm1_code tells them apart.
 const CODE_OVERRIDES = { "KAZ-4829": "KZ-ALM", "AFG-1769": "AF-PAN", "AFG-1753": "AF-DAY" };
@@ -55,19 +56,22 @@ function build(view, pick, width = 640) {
   const areas = view === "all"
     ? COUNTRIES.map(country => { const shape = withoutHoles(merge(topo, geoms.filter(g => g.properties.country === country))); return { code: country, d: round(path(shape)), centroid: path.centroid(shape), area: geoArea(shape) }; })
     : collection.features.map(f => ({ code: f.properties.code, d: round(path(f)), centroid: path.centroid(f), area: geoArea(f) }));
-  const regions = areas.map(({ code, d, centroid, area }) => ({ code, d, x: +centroid[0].toFixed(1), y: +centroid[1].toFixed(1), small: view !== "all" && area < 2e-5 }));
-  for (const city of CITY_POINTS.filter(point => view === point.country.toLowerCase())) {
+  // ca: "small" by on-screen size, since its scale differs from the country views.
+  const isSmall = (area, f) => view === "ca" ? path.area(f) < 700 : view !== "all" && area < 2e-5;
+  const regions = areas.map(({ code, d, centroid, area }, index) => ({ code, d, x: +centroid[0].toFixed(1), y: +centroid[1].toFixed(1), small: isSmall(area, collection.features[index]) }));
+  for (const city of CITY_POINTS.filter(point => view === point.country.toLowerCase() || view === "ca")) {
     const [x, y] = projection(city.lonLat);
     regions.push({ code: city.code, d: "", x: +x.toFixed(1), y: +y.toFixed(1), small: true, point: true });
   }
   const outlines = view === "all" ? "" : round(path(merge(topo, geoms)));
-  return { view, viewBox: `0 0 ${width} ${height}`, outline: outlines, regions, credit: "Natural Earth" };
+  const countries = view !== "ca" ? undefined : CA.map(country => { const shape = withoutHoles(merge(topo, geoms.filter(g => g.properties.country === country))); const [x, y] = path.centroid(shape); return { code: country, d: round(path(shape)), x: +x.toFixed(1), y: +y.toFixed(1) }; });
+  return { view, viewBox: `0 0 ${width} ${height}`, outline: outlines, regions, ...(countries && { countries }), credit: "Natural Earth" };
 }
 
 mkdirSync(OUT, { recursive: true });
-const views = { all: () => true, ...Object.fromEntries(COUNTRIES.map(country => [country.toLowerCase(), g => g.properties.country === country])) };
+const views = { all: () => true, ...Object.fromEntries(COUNTRIES.map(country => [country.toLowerCase(), g => g.properties.country === country])), ca: g => CA.includes(g.properties.country) };
 for (const [view, pick] of Object.entries(views)) {
-  const json = JSON.stringify(build(view, pick));
+  const json = JSON.stringify(build(view, pick, view === "ca" ? 1000 : 640));
   writeFileSync(new URL(`${view}.json`, OUT), json);
   console.log(view.padEnd(4), `${(json.length / 1024).toFixed(1)} KB`);
 }

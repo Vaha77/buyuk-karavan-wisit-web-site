@@ -37,7 +37,7 @@ test("no amount ever reaches the seller", () => {
   assert.ok(!/4000|1500|"total"|"months"/.test(JSON.stringify(board)));
 });
 
-test("region lists follow the chosen country", () => {
+test("region lists follow the chosen country", async () => {
   assert.deepEqual([...regions.CUSTOMER_COUNTRIES], ["UZ", "KZ", "KG", "TJ", "TM"]);
   const counts = Object.fromEntries(regions.CUSTOMER_COUNTRIES.map(code => [code, regions.regionsOf(code).length]));
   assert.deepEqual(counts, { UZ: 14, KZ: 20, KG: 9, TJ: 5, TM: 6 });
@@ -46,4 +46,8 @@ test("region lists follow the chosen country", () => {
   assert.ok(regions.regionsOf("KZ").every(region => region.code.startsWith("KZ-")));
   assert.ok(regions.isRegionOf("KG-O", "KG") && !regions.isRegionOf("KG-O", "UZ"));
   assert.ok(!regions.CUSTOMER_REGIONS.some(region => region.country === "AF"));
+  const { readFileSync } = await import("node:fs");
+  const ca = JSON.parse(readFileSync(new URL("../lib/dashboard/maps/ca.json", import.meta.url), "utf8"));
+  assert.deepEqual(ca.regions.map(region => region.code).sort(), regions.CUSTOMER_REGIONS.map(region => region.code).sort(), "one map has every customer region");
+  assert.deepEqual(ca.countries.map(country => country.code), ["UZ", "KZ", "KG", "TJ", "TM"]);
 });
