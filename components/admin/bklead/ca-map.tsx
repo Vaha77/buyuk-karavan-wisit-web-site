@@ -42,8 +42,11 @@ export function useMapZoom() {
       const rect = svg.getBoundingClientRect();
       zoomAt(event.deltaY > 0 ? 1.2 : 1 / 1.2, (event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
     };
+    // Two fingers always zoom the map, never the page.
+    const onTouch = (event: TouchEvent) => { if (event.touches.length > 1) event.preventDefault(); };
     svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => { observer.disconnect(); svg.removeEventListener("wheel", onWheel); };
+    svg.addEventListener("touchmove", onTouch, { passive: false });
+    return () => { observer.disconnect(); svg.removeEventListener("wheel", onWheel); svg.removeEventListener("touchmove", onTouch); };
   }, []);
 
   const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
@@ -65,7 +68,8 @@ export function useMapZoom() {
   return {
     box, s: box.w / px,
     svgProps: {
-      ref, viewBox: `${box.x} ${box.y} ${box.w} ${box.h}`, style: { touchAction: "none", "--s": box.w / px } as React.CSSProperties,
+      // Whole map ("Hammasi"): one finger scrolls the page; zoomed in: one finger pans the map.
+      ref, viewBox: `${box.x} ${box.y} ${box.w} ${box.h}`, style: { touchAction: box.w < CA_WIDTH ? "none" : "pan-x pan-y", "--s": box.w / px } as React.CSSProperties,
       onPointerDown: (event: React.PointerEvent) => { if (!pointers.current.size) moved.current = 0; pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY }); },
       onPointerMove, onPointerUp: release, onPointerCancel: release, onPointerLeave: release,
       // A drag is not a click on the region under the pointer.
