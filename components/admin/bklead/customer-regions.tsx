@@ -78,7 +78,7 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
                 onFocus={() => setHover(tipAt(area.code, zoom.box, undefined, area))} onBlur={() => setHover(null)}
                 onClick={event => { setHover(tipAt(area.code, zoom.box, event)); pick(area.code); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pick(area.code); } }}/>;
             })}
-            <CountryLayer s={s} avoid={calloutBoxes(callouts, s, zoom.box)}/>
+            <CountryLayer s={s} avoid={calloutBoxes(callouts, s, zoom.box, map.regions.filter(area => !area.small && !area.point && byCode.get(area.code)?.customers))}/>
             {map.regions.map(area => {
               const stat = byCode.get(area.code);
               if (!stat || (area.point && !stat.customers)) return null;

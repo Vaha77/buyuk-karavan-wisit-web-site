@@ -36,7 +36,14 @@ export function useMapZoom() {
   useEffect(() => {
     const svg = ref.current;
     if (!svg) return;
-    const observer = new ResizeObserver(([entry]) => setPx(entry.contentRect.width || CA_WIDTH));
+    let first = true;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry.contentRect.width || CA_WIDTH;
+      setPx(width);
+      // Phone: open on the whole map ("Hammasi"); the zoomed opening view is for wide screens.
+      if (first && width < 600) setBox({ x: 0, y: 0, w: CA_WIDTH, h: CA_HEIGHT });
+      first = false;
+    });
     observer.observe(svg);
     // Native listener: React's wheel handler is passive and cannot stop the page from scrolling.
     const onWheel = (event: WheelEvent) => {
@@ -104,8 +111,11 @@ export function CountryLayer({ s, avoid }: { s: number; avoid: Array<{ x: number
   </g>;
 }
 
-/** Visible callout boxes, for CountryLayer to avoid. */
-export const calloutBoxes = (items: Array<{ x: number; y: number; text: string }>, s: number, view: Box) => items.map(item => calloutBox(item.x, item.y, item.text, s, view));
+/** Callout boxes and the two-line region labels ("446k $ / 1 mijoz"), for CountryLayer to avoid. */
+export const calloutBoxes = (items: Array<{ x: number; y: number; text: string }>, s: number, view: Box, labels: Array<{ x: number; y: number }> = []) => [
+  ...items.map(item => calloutBox(item.x, item.y, item.text, s, view)),
+  ...labels.map(label => ({ x: label.x - 34 * s, y: label.y - 14 * s, w: 68 * s, h: 32 * s })),
+];
 
 /** Tooltip position (percent of the map box) for a pointer event or a focused area. */
 export function tipAt(code: string, box: Box, event?: React.MouseEvent<SVGPathElement>, area?: { x: number; y: number }) {

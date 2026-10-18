@@ -113,3 +113,15 @@ test("wiring: Prays categories panel (Super Admin), activity history, zayavka fr
   assert.doesNotMatch(migration.replace(/^--.*$/gm, ""), /\bDROP\b|DELETE FROM|\bTRUNCATE\b|ALTER COLUMN|UPDATE /i);
   assert.match(migration, /DEFAULT false/, "nothing is flagged automatically");
 });
+
+test("condenser codes: FN022 = FN22 (standard is found), one entry per code in a category", () => {
+  const cats = [{ id: "u", name: "FN/FNV kondensator UCS", workshopAssembly: true, workshopRole: "CONDENSER", workshopIssue: false }];
+  const list = c.condenserList([
+    { id: "a", name: "Kondensator FN007", brand: "UCS", model: "FN007", basePriceUsd: 300, categoryId: "u" },
+    { id: "b", name: "Kondensator FN7", brand: "UCS", model: "FN7", basePriceUsd: 280, categoryId: "u" },
+    { id: "c", name: "Kondensator FN022", brand: "UCS", model: "FN022", basePriceUsd: 500, categoryId: "u" },
+  ], cats);
+  assert.deepEqual(list.map(item => [item.id, item.label]), [["b", "FN7 · UCS"], ["c", "FN22 · UCS"]]);
+  assert.equal(c.standardCondenser(list, "FN22", "u")?.id, "c");
+  assert.equal(c.standardCondenser(list, "fn022", "u")?.id, "c");
+});

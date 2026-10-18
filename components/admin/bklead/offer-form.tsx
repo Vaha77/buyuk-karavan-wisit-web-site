@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, Send } from "lucide-react";
+import { Download, Eye, Send } from "lucide-react";
 import { saveOfferAction, sendOfferTelegramAction } from "@/app/admin/(seller)/my/offers/actions";
 import { formatUsd } from "@/lib/dashboard/format";
 
@@ -17,7 +17,8 @@ export function OfferActions({ id, copy = true }: { id: string; copy?: boolean }
   const send = () => startTransition(async () => { const result = await sendOfferTelegramAction(id); setMessage(result.ok ? { ok: true, text: "Telegram’ga yuborildi — mijozga forward qiling." } : { ok: false, text: result.error }); });
   return <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
     <div className="bk-actions">
-      <a className="bk-btn" href={`/admin/my/offers/${id}/pdf`}><Download size={14}/> PDF yuklash</a>
+      <a className="bk-btn" href={`/admin/my/offers/${id}/pdf?inline=1`} target="_blank" rel="noopener"><Eye size={14}/> Ko‘rish</a>
+      <a className="bk-btn" href={`/admin/my/offers/${id}/pdf`} download><Download size={14}/> PDF yuklash</a>
       <button type="button" className="bk-btn" disabled={pending} onClick={send}><Send size={14}/> {pending ? "Yuborilmoqda…" : "Telegram’ga yuborish"}</button>
       {copy && <Link className="bk-btn" href={`/admin/my/offers/new?copy=${id}`}>Nusxalash</Link>}
     </div>

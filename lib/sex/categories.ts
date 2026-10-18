@@ -65,19 +65,26 @@ export function condenserList(products: CondenserProduct[], categories: Category
   for (const product of products) {
     const category = product.categoryId ? byId.get(product.categoryId) : undefined;
     if (!category || product.basePriceUsd === null) continue;
-    const code = extractCondenserCode(`${product.model} ${product.name}`);
+    const code = condenserKey(extractCondenserCode(`${product.model} ${product.name}`));
     if (!code) continue;
     const source = categoryShortName(category.name) || product.brand;
+    // One entry per code in a category (the cheapest): "FN007" and "FN7" of the same supplier are the same condenser.
+    const twin = out.find(item => item.categoryId === category.id && item.code === code);
+    if (twin && twin.base <= product.basePriceUsd) continue;
+    if (twin) out.splice(out.indexOf(twin), 1);
     out.push({ id: product.id, code, label: `${code} · ${source}`, source, categoryId: category.id, base: product.basePriceUsd });
   }
   const number = (code: string) => Number(code.replace(/\D+/g, ""));
   return out.sort((a, b) => number(a.code) - number(b.code) || a.code.localeCompare(b.code) || a.source.localeCompare(b.source));
 }
 
+/** "fn022" / "FN22" → "FN22": leading zeros of the number do not make another condenser. */
+export const condenserKey = (code: string) => code.toUpperCase().replace(/^(FNV?)0+(?=\d)/, "$1");
+
 /** The standard condenser of a model: its FN code in the category chosen in the Prays settings (cheapest if there are two). */
 export function standardCondenser(condensers: Condenser[], code: string | null | undefined, standardCategoryId: string | null | undefined) {
   if (!code || !standardCategoryId) return null;
-  return condensers.filter(item => item.categoryId === standardCategoryId && item.code === code.toUpperCase()).sort((a, b) => a.base - b.base)[0] ?? null;
+  return condensers.filter(item => item.categoryId === standardCategoryId && item.code === condenserKey(code)).sort((a, b) => a.base - b.base)[0] ?? null;
 }
 
 // ---- Zapchast zayavkasi: "Sehdan alohida chiqadi" goods -----------------------------------------------

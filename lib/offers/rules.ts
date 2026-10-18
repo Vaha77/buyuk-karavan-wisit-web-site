@@ -3,6 +3,11 @@ export const OFFER_VALID_DAYS = 7;
 export const MAX_MARKUP = 500;
 export const offerNumber = (number: number) => `KP-${String(number).padStart(4, "0")}`;
 const cents = (value: number) => Math.round(value * 100) / 100;
+/** Line name = model + name; a name that already contains the model is used as it is (no "DD 100 … DD 100 …"). */
+export function offerTitle(model: string | null | undefined, name: string) {
+  const m = (model ?? "").trim(), n = name.trim();
+  return !m || n.toLowerCase().includes(m.toLowerCase()) ? n : `${m} ${n}`;
+}
 
 export type OfferLineInput = { productId: string; qty: number; markupPercent: number | null };
 export type OfferItem = { productId: string; title: string; qty: number; baseUsd: number; markupPercent: number; priceUsd: number; sumUsd: number };

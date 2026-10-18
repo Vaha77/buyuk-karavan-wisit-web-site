@@ -29,3 +29,9 @@ test("PDF lines carry no Prays price and no markup", () => {
   assert.deepEqual(lines, [{ title: "BITZER 4NES-20Y", qty: 1, priceUsd: 1200, sumUsd: 1200 }]);
   assert.ok(!/baseUsd|markup|1000/.test(JSON.stringify(lines)));
 });
+
+test("offer line name: model + name, without repeating a model the name already has", () => {
+  assert.equal(offers.offerTitle("DD 100 Turbo", "UCS DD 100 Turbo havo sovutgich"), "UCS DD 100 Turbo havo sovutgich");
+  assert.equal(offers.offerTitle("4NES-20Y", "Bitzer kompressor"), "4NES-20Y Bitzer kompressor");
+  assert.equal(offers.offerTitle("", "Resiver 20 L"), "Resiver 20 L");
+});

@@ -6,7 +6,7 @@ import { getCustomer } from "@/lib/customers/seller-repo";
 import { viewerOf } from "@/lib/customers/seller-service";
 import { sellerChat } from "@/lib/customers/seller-telegram";
 import { sendDocument } from "@/lib/telegram/client";
-import { OFFER_VALID_DAYS, offerNumber, priceOffer, publicLines, type OfferItem, type OfferLineInput } from "./rules";
+import { OFFER_VALID_DAYS, offerNumber, offerTitle, priceOffer, publicLines, type OfferItem, type OfferLineInput } from "./rules";
 import { renderOfferPdf } from "./offer-pdf";
 
 type Seller = Pick<AdminUser, "id" | "name" | "role" | "salesPersonId">;
@@ -15,7 +15,7 @@ const day = (date: Date) => date.toISOString().slice(0, 10).split("-").reverse()
 /** Priced Prays products for the offer form, by category. */
 export async function offerProducts() {
   return (await getPraysProducts()).filter(product => product.basePriceUsd !== null && product.basePriceUsd > 0)
-    .map(product => ({ id: product.id, title: [product.brand, product.model, product.name].filter(Boolean).join(" "), category: product.categoryName ?? "Boshqa", baseUsd: product.basePriceUsd! }));
+    .map(product => ({ id: product.id, title: offerTitle(product.model, product.name), category: product.categoryName ?? "Boshqa", baseUsd: product.basePriceUsd! }));
 }
 
 export type OfferInput = { customerId: string | null; customerName: string; customerPhone: string; markupPercent: number; lines: OfferLineInput[] };
