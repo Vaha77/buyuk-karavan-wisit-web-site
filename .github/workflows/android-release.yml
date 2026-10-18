@@ -32,7 +32,7 @@ jobs:
           K: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           echo "::notice::keystore file: $(stat -c %s "$RUNNER_TEMP/upload.jks") bytes"
-          for name in P A K; do [ -n "${!name}" ] || echo "::error::secret for $name is empty"; done
+          for name in P A K; do [ -n "${!name}" ] || echo "::error::secret for $name is empty"; [[ "${!name}" == *$'\n'* ]] && { echo "::error::secret for $name has more than one line (paste only the value)"; exit 1; }; done
           if ! out=$(keytool -list -keystore "$RUNNER_TEMP/upload.jks" -storepass "$P" 2>&1); then echo "::error::keystore does not open with ANDROID_KEYSTORE_PASSWORD (or ANDROID_KEYSTORE_BASE64 is not the .jks): $(echo "$out" | head -1)"; exit 1; fi
           aliases=$(echo "$out" | grep -i "entry," | cut -d, -f1 | tr '\n' ' ')
           echo "$aliases" | grep -qw -- "$A" || { echo "::error::ANDROID_KEY_ALIAS is not in the keystore; aliases there: $aliases"; exit 1; }
@@ -50,7 +50,8 @@ jobs:
           chmod +x gradlew
           ./gradlew bundleRelease assembleRelease 2>&1 | tee "$RUNNER_TEMP/gradle.log" || true
           if [ "${PIPESTATUS[0]}" != "0" ] || ! ls app/build/outputs/bundle/release/*.aab >/dev/null 2>&1; then
-            echo "::error::$(grep -A8 'What went wrong' "$RUNNER_TEMP/gradle.log" | tr '\n' ' ' | cut -c1-900)"
+            # Long base64 runs (key material) are cut out: annotations of this public repo are visible to everyone.
+            echo "::error::$(grep -A8 'What went wrong' "$RUNNER_TEMP/gradle.log" | tr '\n' ' ' | sed -E 's#[A-Za-z0-9+/=]{24,}#[…]#g' | cut -c1-600)"
             exit 1
           fi
       - uses: actions/upload-artifact@v4
