@@ -136,19 +136,32 @@ export async function sellerPurchases(db: Db, viewer: Viewer) {
 }
 
 /**
- * "Mening hududlarim": the viewer's active customers with this year's approved total (monthly sales) each.
- * Both queries are AND-ed with customerScope, so a seller's map is built from their own customers only.
+ * "Mening hududlarim": the viewer's active customers with this year's approved total (monthly sales) per location.
+ * A month's location = the latest approved purchase of that month that has one, else the customer's (as on the admin map).
+ * Every query is AND-ed with customerScope, so a seller's map is built from their own customers only.
  */
 export async function sellerMapCustomers(db: Db, viewer: Viewer, year: number, today = new Date()): Promise<MapCustomer[]> {
   const scope = customerScope(viewer);
-  const [customers, sales] = await Promise.all([
+  const [customers, sales, purchases] = await Promise.all([
     db.regularCustomer.findMany({ where: { AND: [scope, { isActive: true }] }, select: { id: true, name: true, country: true, regionCode: true, callIntervalDays: true, lastPurchaseAt: true, nextContactAt: true, createdAt: true } }),
-    db.regularCustomerMonthlySale.findMany({ where: { year, customer: scope }, select: { customerId: true, amountUsd: true } }),
+    db.regularCustomerMonthlySale.findMany({ where: { year, customer: scope }, select: { customerId: true, month: true, amountUsd: true } }),
+    db.customerPurchase.findMany({ where: { status: "APPROVED", customer: scope }, orderBy: [{ date: "asc" }, { createdAt: "asc" }], select: { customerId: true, date: true, country: true, regionCode: true } }),
   ]);
-  const totals = new Map<string, number>();
-  for (const sale of sales) totals.set(sale.customerId, (totals.get(sale.customerId) ?? 0) + Number(sale.amountUsd));
-  return customers.map(customer => ({
-    id: customer.id, name: customer.name, country: customer.country, regionCode: customer.regionCode,
-    days: daysWithoutPurchase(customer, today), due: isDue(customer, today), total: totals.get(customer.id) ?? 0,
-  }));
+  const placeOf = new Map<string, { country: string; regionCode: string }>(); // `${customerId}|${month}` → last purchase location
+  for (const row of purchases) if (row.regionCode && row.country && row.date.getUTCFullYear() === year) placeOf.set(`${row.customerId}|${row.date.getUTCMonth() + 1}`, { country: row.country, regionCode: row.regionCode });
+  return customers.flatMap(customer => {
+    const totals = new Map<string, { country: string; regionCode: string | null; total: number }>();
+    const home = `${customer.country}|${customer.regionCode}`;
+    totals.set(home, { country: customer.country, regionCode: customer.regionCode, total: 0 });
+    for (const sale of sales.filter(row => row.customerId === customer.id)) {
+      const place = placeOf.get(`${customer.id}|${sale.month}`) ?? customer, key = `${place.country}|${place.regionCode}`;
+      const entry = totals.get(key) ?? { country: place.country, regionCode: place.regionCode, total: 0 };
+      entry.total += Number(sale.amountUsd); totals.set(key, entry);
+    }
+    // Without any sale the customer stays at their current location; otherwise only where the sales were.
+    return [...totals.values()].filter(entry => entry.total > 0 || totals.size === 1).map(entry => ({
+      id: customer.id, name: customer.name, country: entry.country, regionCode: entry.regionCode,
+      days: daysWithoutPurchase(customer, today), due: isDue(customer, today), total: entry.total,
+    }));
+  });
 }

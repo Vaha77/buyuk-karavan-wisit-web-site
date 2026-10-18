@@ -19,7 +19,7 @@ const rows = [
 
 test("region totals, shares, averages and ranking", () => {
   const stats = buildRegionStats(rows, 2026, now);
-  assert.equal(stats.regions.length, 49); // UZ 14 + KZ 17 + KG 8 + TJ 5 + TM 5
+  assert.equal(stats.regions.length, 54); // UZ 14 + KZ 20 + KG 9 + TJ 5 + TM 6
   assert.deepEqual(stats.regions.slice(0, 4).map(region => region.code), ["UZ-TK", "UZ-SA", "KZ-AST", "UZ-NG"]);
   const sa = stats.regions.find(region => region.code === "UZ-SA");
   assert.equal(sa.customers, 2);
@@ -58,10 +58,19 @@ test("KPIs count every active customer; customers without a region stay off the 
   assert.equal(kpis.total, 8500);
   assert.equal(Math.round(kpis.average), Math.round(8500 / 6));
   assert.equal(kpis.regionsWithCustomers, 4);
-  assert.equal(kpis.regionCount, 49);
+  assert.equal(kpis.regionCount, 54);
   assert.equal(kpis.prevTotal, 1500);
   assert.deepEqual(unassigned, { customers: 1, total: 300 });
   assert.equal(buildRegionStats(rows, 2026, now).regions.find(region => region.code === "KZ-AST").total, 200);
+});
+
+test("sales follow the purchase location; new regions also count for their parent", () => {
+  const moved = [sale("m", "Mover", "UZ-SA", 2026, 1, 600), sale("m", "Mover", "UZ-TK", 2026, 2, 400), sale("k", "Kappa", "KZ-ABA", 2026, 1, 900, "KZ")];
+  const stats = buildRegionStats(moved, 2026, now);
+  const at = code => stats.regions.find(region => region.code === code);
+  assert.deepEqual([at("UZ-SA").total, at("UZ-TK").total], [600, 400]);
+  assert.equal(stats.kpis.activeCustomers, 2); // Mover is one customer even in two regions
+  assert.deepEqual([at("KZ-ABA").total, at("KZ-VOS").total, at("KZ-VOS").customers], [900, 900, 1]);
 });
 
 test("past years use all 12 months and an empty input gives zeroed regions", () => {

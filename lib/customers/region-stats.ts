@@ -1,9 +1,9 @@
 // Regular customer sales by region (UZ, KZ, KG, TJ, TM) for one year. Pure: the page loads the rows in one query and
 // builds the stats on the server, so the client only renders. Regions are CUSTOMER_REGIONS in lib/dashboard/regions.
-import { CUSTOMER_REGIONS } from "../dashboard/regions";
+import { countsFor, CUSTOMER_REGIONS } from "../dashboard/regions";
 import { delta, requiredMonths } from "../dashboard/rules";
 
-/** One row per (customer, monthly sale) from a LEFT JOIN; year/month/amountUsd are null for a customer without sales. */
+/** One row per (customer, monthly sale) from a LEFT JOIN; year/month/amountUsd are null for a customer without sales. A customer whose sales sit in two regions counts in both. */
 export type CustomerSaleRow = { id: string; name: string; country: string; regionCode: string | null; year: number | null; month: number | null; amountUsd: number | null };
 export type Growth = ReturnType<typeof delta> | null;
 export type RegionCustomer = { id: string; name: string; total: number; months: Array<number | null> };
@@ -28,20 +28,22 @@ export function buildRegionStats(rows: CustomerSaleRow[], year: number, now: { y
   const required = requiredMonths(year, now);
   const customers = new Map<string, { id: string; name: string; country: string; regionCode: string | null; months: Array<number | null>; prev: Array<number | null> }>();
   for (const row of rows) {
-    let customer = customers.get(row.id);
-    if (!customer) { customer = { id: row.id, name: row.name, country: row.country, regionCode: row.regionCode, months: Array(12).fill(null), prev: Array(12).fill(null) }; customers.set(row.id, customer); }
+    const key = `${row.id}|${row.country}|${row.regionCode}`;
+    let customer = customers.get(key);
+    if (!customer) { customer = { id: row.id, name: row.name, country: row.country, regionCode: row.regionCode, months: Array(12).fill(null), prev: Array(12).fill(null) }; customers.set(key, customer); }
     if (row.month === null || row.month < 1 || row.month > 12 || row.amountUsd === null) continue;
     if (row.year === year) customer.months[row.month - 1] = (customer.months[row.month - 1] ?? 0) + Number(row.amountUsd);
     else if (row.year === year - 1) customer.prev[row.month - 1] = (customer.prev[row.month - 1] ?? 0) + Number(row.amountUsd);
   }
   const all = [...customers.values()];
+  const people = new Set(all.map(customer => customer.id)).size;
   const prevOf = (months: Array<number | null>) => sum(months.slice(0, periodEnd));
   const grandTotal = round(sum(all.flatMap(customer => customer.months)));
   const grandPrev = round(sum(all.flatMap(customer => customer.prev.slice(0, periodEnd))));
 
   const regionCodes = new Set(CUSTOMER_REGIONS.map(region => region.code));
   const regions = CUSTOMER_REGIONS.map((region): RegionStat => {
-    const members = all.filter(customer => customer.country === region.country && customer.regionCode === region.code);
+    const members = all.filter(customer => customer.country === region.country && countsFor(customer.regionCode, region.code));
     const customerRows = members.map(customer => ({ id: customer.id, name: customer.name, total: round(sum(customer.months)), months: customer.months }))
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     const total = round(sum(customerRows.map(row => row.total)));
@@ -63,7 +65,7 @@ export function buildRegionStats(rows: CustomerSaleRow[], year: number, now: { y
   return {
     year, periodEnd,
     kpis: {
-      activeCustomers: all.length, total: grandTotal, average: all.length ? grandTotal / all.length : 0,
+      activeCustomers: people, total: grandTotal, average: people ? grandTotal / people : 0,
       regionsWithCustomers: regions.filter(region => region.customers > 0).length, regionCount: CUSTOMER_REGIONS.length,
       prevTotal: grandPrev, growth: grandPrev > 0 || grandTotal > 0 ? delta(grandTotal, grandPrev) : null,
     },

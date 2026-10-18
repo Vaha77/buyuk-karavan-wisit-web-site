@@ -190,7 +190,7 @@ test("the seller map is built from the seller's own customers only", async () =>
   assert.equal(region("UZ-SA").total, 1000); // B's 7000 in the same region is not counted
   assert.equal(region("UZ-NG").total, 500);
   assert.equal(region("UZ-BU").status, "empty"); // B's region is an opportunity for A
-  assert.equal(mapA.opened, 2); assert.equal(mapA.regionCount, 49);
+  assert.equal(mapA.opened, 2); assert.equal(mapA.regionCount, 54);
   assert.ok(!mapA.regions.flatMap(row => row.list).some(row => row.id === b));
   const mapB = sellerMap.buildSellerMap(await repo.sellerMapCustomers(db, sellerB, 2026, today));
   assert.equal(mapB.regions.find(row => row.code === "UZ-SA").total, 7000);
@@ -208,6 +208,15 @@ test("a purchase needs a region of the chosen country and saves it on the purcha
   assert.deepEqual([db.tables.customerPurchase[0].country, db.tables.customerPurchase[0].regionCode], ["KZ", "KZ-ALM"]);
   const customer = db.tables.regularCustomer.find(row => row.id === a);
   assert.deepEqual([customer.country, customer.regionCode], ["KZ", "KZ-ALM"]);
+});
+
+test("the seller map follows the approved purchase location, then the customer's", async () => {
+  const { db, a } = await setup(); // A's March sale: 1000, customer in UZ-SA
+  db.tables.regularCustomerMonthlySale.push({ id: "s4", customerId: a, year: 2026, month: 4, amountUsd: 300 });
+  db.tables.customerPurchase.push({ id: "p1", customerId: a, status: "APPROVED", date: new Date("2026-04-05"), country: "KZ", regionCode: "KZ-ABA" }, { id: "p2", customerId: a, status: "PENDING", date: new Date("2026-03-05"), country: "UZ", regionCode: "UZ-NG" });
+  const map = sellerMap.buildSellerMap(await repo.sellerMapCustomers(db, sellerA, 2026, new Date("2026-05-01T06:00:00Z")));
+  const at = code => map.regions.find(row => row.code === code);
+  assert.deepEqual([at("UZ-SA").total, at("KZ-ABA").total, at("KZ-VOS").total, at("UZ-NG").total], [1000, 300, 300, 0]);
 });
 
 test("seller ranking carries only rank, name, percent and zone of other sellers", () => {

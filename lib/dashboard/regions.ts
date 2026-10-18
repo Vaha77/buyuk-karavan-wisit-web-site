@@ -10,7 +10,8 @@ export type LeadCountry = CountryCode | "OTHER";
 
 export const COUNTRY_NAMES: Record<LeadCountry, string> = { UZ: "O‘zbekiston", KZ: "Qozog‘iston", KG: "Qirg‘iziston", TJ: "Tojikiston", TM: "Turkmaniston", AF: "Afg‘oniston", OTHER: "Boshqa davlat" };
 
-export type RegionInfo = { code: string; country: CountryCode; name: string; city?: boolean };
+// `parent`: the Natural Earth polygon the region lies in; customer maps add its numbers to the parent too.
+export type RegionInfo = { code: string; country: CountryCode; name: string; city?: boolean; parent?: string };
 
 // Order = order in the public form select.
 export const REGIONS: RegionInfo[] = [
@@ -46,8 +47,12 @@ export const REGIONS: RegionInfo[] = [
   { code: "KZ-PAV", country: "KZ", name: "Pavlodar viloyati" },
   { code: "KZ-KAR", country: "KZ", name: "Qarag‘andi viloyati" },
   { code: "KZ-VOS", country: "KZ", name: "Sharqiy Qozog‘iston viloyati" },
+  { code: "KZ-ABA", country: "KZ", name: "Abay viloyati", parent: "KZ-VOS" },
+  { code: "KZ-ZHT", country: "KZ", name: "Jetisu viloyati", parent: "KZ-ALA" },
+  { code: "KZ-ULY", country: "KZ", name: "Ulitau viloyati", parent: "KZ-KAR" },
 
   { code: "KG-GB", country: "KG", name: "Bishkek shahri", city: true },
+  { code: "KG-GO", country: "KG", name: "O‘sh shahri", city: true, parent: "KG-O" },
   { code: "KG-O", country: "KG", name: "O‘sh viloyati" },
   { code: "KG-J", country: "KG", name: "Jalolobod viloyati" },
   { code: "KG-B", country: "KG", name: "Botken viloyati" },
@@ -62,6 +67,7 @@ export const REGIONS: RegionInfo[] = [
   { code: "TJ-GB", country: "TJ", name: "Tog‘li Badaxshon" },
   { code: "TJ-RR", country: "TJ", name: "Respublika tasarrufidagi tumanlar" },
 
+  { code: "TM-S", country: "TM", name: "Ashxobod shahri", city: true, parent: "TM-A" },
   { code: "TM-A", country: "TM", name: "Ahal viloyati" },
   { code: "TM-B", country: "TM", name: "Balkan viloyati" },
   { code: "TM-D", country: "TM", name: "Dashoguz viloyati" },
@@ -91,6 +97,8 @@ export const REGION_BY_CODE = new Map(REGIONS.map(region => [region.code, region
 export function regionName(code: string | null | undefined) { return (code && REGION_BY_CODE.get(code)?.name) || "Aniqlanmagan"; }
 export function regionsOf(country: CountryCode) { return REGIONS.filter(region => region.country === country); }
 export function isCountryCode(value: unknown): value is CountryCode { return typeof value === "string" && (COUNTRY_CODES as readonly string[]).includes(value); }
+/** A customer in `regionCode` also counts for region `code` (itself or its parent). */
+export function countsFor(regionCode: string | null, code: string) { return !!regionCode && (regionCode === code || REGION_BY_CODE.get(regionCode)?.parent === code); }
 export function isRegionOf(code: string, country: string) { return REGION_BY_CODE.get(code)?.country === country; }
 
 /** The Fergana valley callout on the Uzbekistan map. */

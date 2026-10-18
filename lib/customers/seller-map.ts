@@ -1,6 +1,6 @@
 // "Mening hududlarim" on the seller dashboard: per region status (5 Central Asian countries) of the seller's OWN customers.
 // Pure (no DB), tested. The input is already scoped on the server (ownerId = the seller's SalesPerson).
-import { CUSTOMER_REGIONS } from "../dashboard/regions";
+import { countsFor, CUSTOMER_REGIONS } from "../dashboard/regions";
 
 export type RegionStatus = "strongest" | "strong" | "medium" | "low" | "stale" | "empty";
 /** Map colours and legend labels, in legend order. "empty" is drawn with a hatch pattern (see the map component). */
@@ -59,7 +59,7 @@ export type SellerMap = {
 /** Region rows for every CUSTOMER_REGIONS region, plus the two summary cards. */
 export function buildSellerMap(customers: MapCustomer[]): SellerMap {
   const regions = CUSTOMER_REGIONS.map(region => {
-    const own = customers.filter(customer => customer.regionCode === region.code);
+    const own = customers.filter(customer => countsFor(customer.regionCode, region.code));
     return {
       code: region.code, name: region.name, customers: own.length,
       total: Math.round(own.reduce((sum, customer) => sum + customer.total, 0) * 100) / 100,

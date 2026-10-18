@@ -40,7 +40,9 @@ test("no amount ever reaches the seller", () => {
 test("region lists follow the chosen country", () => {
   assert.deepEqual([...regions.CUSTOMER_COUNTRIES], ["UZ", "KZ", "KG", "TJ", "TM"]);
   const counts = Object.fromEntries(regions.CUSTOMER_COUNTRIES.map(code => [code, regions.regionsOf(code).length]));
-  assert.deepEqual(counts, { UZ: 14, KZ: 17, KG: 8, TJ: 5, TM: 5 });
+  assert.deepEqual(counts, { UZ: 14, KZ: 20, KG: 9, TJ: 5, TM: 6 });
+  assert.deepEqual(["KZ-ABA", "KZ-ZHT", "KZ-ULY", "KG-GO", "TM-S"].map(code => regions.REGION_BY_CODE.get(code).parent), ["KZ-VOS", "KZ-ALA", "KZ-KAR", "KG-O", "TM-A"]);
+  assert.ok(regions.countsFor("KZ-ABA", "KZ-VOS") && regions.countsFor("KZ-ABA", "KZ-ABA") && !regions.countsFor("KZ-VOS", "KZ-ABA"));
   assert.ok(regions.regionsOf("KZ").every(region => region.code.startsWith("KZ-")));
   assert.ok(regions.isRegionOf("KG-O", "KG") && !regions.isRegionOf("KG-O", "UZ"));
   assert.ok(!regions.CUSTOMER_REGIONS.some(region => region.country === "AF"));

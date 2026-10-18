@@ -18,7 +18,12 @@ const COUNTRIES = ["UZ", "KZ", "KG", "TJ", "TM", "AF"];
 // Natural Earth reuses one ISO code for two areas in a few places; adm1_code tells them apart.
 const CODE_OVERRIDES = { "KAZ-4829": "KZ-ALM", "AFG-1769": "AF-PAN", "AFG-1753": "AF-DAY" };
 // Cities without their own polygon in Natural Earth: drawn as a point with a callout.
-const CITY_POINTS = [{ code: "KZ-SHY", country: "KZ", lonLat: [69.59, 42.32] }];
+// Also regions newer than Natural Earth (KZ 2022: Abay, Jetisu, Ulytau), placed at their administrative centre.
+const CITY_POINTS = [
+  { code: "KZ-SHY", country: "KZ", lonLat: [69.59, 42.32] }, { code: "KZ-ABA", country: "KZ", lonLat: [80.23, 50.41] },
+  { code: "KZ-ZHT", country: "KZ", lonLat: [78.37, 45.02] }, { code: "KZ-ULY", country: "KZ", lonLat: [67.71, 47.8] },
+  { code: "KG-GO", country: "KG", lonLat: [72.8, 40.53] }, { code: "TM-S", country: "TM", lonLat: [58.38, 37.95] },
+];
 
 const all = JSON.parse(readFileSync(source, "utf8"));
 const features = all.features.filter(f => COUNTRIES.includes(f.properties.iso_a2)).map(f => {

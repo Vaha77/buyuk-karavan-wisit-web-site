@@ -31,15 +31,24 @@ export async function getRegularCustomers() {
   return getDb().regularCustomer.findMany({ orderBy: [{ isActive: "desc" }, { name: "asc" }], select: { id: true, name: true, country: true, regionCode: true, phone: true, note: true, isActive: true, ownerId: true, callIntervalDays: true, owner: { select: { name: true } }, _count: { select: { sales: true } } } });
 }
 
-/** Active customers joined with their monthly sales for `year` and the year before, in one query (see buildRegionStats). */
+/**
+ * Active customers joined with their monthly sales for `year` and the year before, in one query (see buildRegionStats).
+ * A month's location = the latest approved purchase of that month that has one, else the customer's current location.
+ */
 async function loadRegionRows(year: number): Promise<CustomerSaleRow[]> {
   return getDb().$queryRaw<CustomerSaleRow[]>(Prisma.sql`
-    SELECT c.id, c.name, c.country, c."regionCode", s.year, s.month, s."amountUsd"::float8 AS "amountUsd"
+    SELECT c.id, c.name, COALESCE(p.country, c.country) AS country, COALESCE(p."regionCode", c."regionCode") AS "regionCode", s.year, s.month, s."amountUsd"::float8 AS "amountUsd"
     FROM "RegularCustomer" c
     LEFT JOIN "RegularCustomerMonthlySale" s ON s."customerId" = c.id AND s.year IN (${year}, ${year - 1})
+    LEFT JOIN LATERAL (
+      SELECT cp.country, cp."regionCode" FROM "CustomerPurchase" cp
+      WHERE cp."customerId" = c.id AND cp.status = 'APPROVED' AND cp."regionCode" IS NOT NULL
+        AND EXTRACT(YEAR FROM cp.date) = s.year AND EXTRACT(MONTH FROM cp.date) = s.month
+      ORDER BY cp.date DESC, cp."createdAt" DESC LIMIT 1
+    ) p ON true
     WHERE c."isActive" = true`);
 }
-const cachedRegionRows = unstable_cache(loadRegionRows, ["regular-customer-regions-v1"], { revalidate: 300, tags: [DASHBOARD_TAG] });
+const cachedRegionRows = unstable_cache(loadRegionRows, ["regular-customer-regions-v2"], { revalidate: 300, tags: [DASHBOARD_TAG] });
 export async function getCustomerRegionRows(year: number) { return cachedRegionRows(year); }
 
 /** Sellers that customers can be assigned to (active SalesPerson rows). */
