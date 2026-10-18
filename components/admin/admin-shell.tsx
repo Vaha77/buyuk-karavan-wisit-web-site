@@ -17,8 +17,8 @@ type NavItem = { label: string; /** Phone bottom bar name */ short?: string; hre
 const navigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "ASOSIY", items: [
     { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-    { label: "Doimiy mijozlar", href: "/admin/customers", icon: Handshake },
-    { label: "Tasdiqlash kerak", href: "/admin/customers/purchases", icon: BadgeCheck, adminOnly: true, badge: "purchases" },
+    { label: "Doimiy mijozlar", short: "Mijozlar", href: "/admin/customers", icon: Handshake },
+    { label: "Tasdiqlash kerak", short: "Tasdiqlash", href: "/admin/customers/purchases", icon: BadgeCheck, adminOnly: true, badge: "purchases" },
     { label: "Nazorat", href: "/admin/customers/control", icon: ClipboardList, adminOnly: true },
     { label: "Mahsulotlar", href: "/admin/products", icon: Package },
     { label: "Prays", href: "/admin/prays", icon: Tags, superOnly: true },
