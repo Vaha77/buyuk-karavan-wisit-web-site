@@ -80,3 +80,12 @@ const usd = (value: number) => `$${Math.round(value).toString().replace(/\B(?=(\
 export const purchaseApprovedText = (customer: string, amountUsd: number) => `💰 Xaridingiz tasdiqlandi — ${customer} · ${usd(amountUsd)} · oylik rejaga qo‘shildi`;
 export const purchaseRejectedText = (customer: string, amountUsd: number, reason: string) => `❌ Xaridingiz rad etildi — ${customer} · ${usd(amountUsd)}\nSabab: ${reason}`;
 export const orderIssuedText = (number: string, title: string) => `✅ Zakazingiz tayyor — ${number} ${title} sehdan chiqdi, olib ketishingiz mumkin`;
+
+/** Monday summary; `plan` null (no plan period this month) → no plan line. Built from one seller's own numbers only. */
+export function weeklySummaryText(input: { range: string; totalUsd: number; count: number; plan: { percent: number; rank: number | null } | null; calls: string[] }) {
+  const lines = [`📊 Haftalik xulosa · ${input.range}`, `O‘tgan hafta: ${usd(input.totalUsd)} (${input.count} ta xarid)`];
+  if (input.plan) lines.push(`Oylik reja: ${Math.round(input.plan.percent)}%${input.plan.rank ? ` · reytingda ${input.plan.rank}-o‘rin` : ""}`);
+  const names = input.calls.slice(0, 15).join(", ") + (input.calls.length > 15 ? ` va yana ${input.calls.length - 15} ta` : "");
+  lines.push(input.calls.length ? `Bu hafta qo‘ng‘iroq: ${input.calls.length} ta mijoz — ${names}` : "Bu hafta qo‘ng‘iroq: yo‘q");
+  return lines.join("\n");
+}

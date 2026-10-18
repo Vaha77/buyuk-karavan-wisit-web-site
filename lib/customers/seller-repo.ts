@@ -179,3 +179,9 @@ export async function sellerDashboardRows(db: Db, viewer: Viewer, year: number) 
     purchases: purchases.map(row => ({ customerId: row.customerId, customerName: names.get(row.customerId) ?? "—", date: row.date, amountUsd: Number(row.amountUsd) })),
   };
 }
+
+/** Approved purchases of the viewer's own customers with date in [from, to) (weekly summary). */
+export async function sellerPurchasesBetween(db: Db, viewer: Viewer, from: Date, to: Date) {
+  const rows = await db.customerPurchase.findMany({ where: { status: "APPROVED", customer: customerScope(viewer), date: { gte: from, lt: to } }, select: { amountUsd: true } });
+  return { count: rows.length, totalUsd: Math.round(rows.reduce((sum, row) => sum + Number(row.amountUsd), 0) * 100) / 100 };
+}

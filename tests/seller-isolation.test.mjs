@@ -24,7 +24,7 @@ function matches(row, where, db) {
     if (condition !== null && typeof condition === "object" && !(condition instanceof Date)) {
       if ("contains" in condition) return typeof value === "string" && (condition.mode === "insensitive" ? value.toLowerCase().includes(condition.contains.toLowerCase()) : value.includes(condition.contains));
       if ("in" in condition) return condition.in.includes(value);
-      if ("gte" in condition) return value >= condition.gte;
+      if ("gte" in condition || "lt" in condition) return (!("gte" in condition) || value >= condition.gte) && (!("lt" in condition) || value < condition.lt);
       throw new Error(`unsupported condition ${JSON.stringify(condition)}`);
     }
     return value === condition;
@@ -357,4 +357,18 @@ test("seller Telegram texts: order ready, purchase approved / rejected", () => {
   assert.equal(rules.orderIssuedText("#0042", "BITZER 4NES+20 vazdushniy agregat · FN160 ×1"), "✅ Zakazingiz tayyor — #0042 BITZER 4NES+20 vazdushniy agregat · FN160 ×1 sehdan chiqdi, olib ketishingiz mumkin");
   assert.equal(rules.purchaseApprovedText("Huseyin", 12_345.6), "💰 Xaridingiz tasdiqlandi — Huseyin · $12 346 · oylik rejaga qo‘shildi");
   assert.equal(rules.purchaseRejectedText("Huseyin", 500, "Chek yo‘q"), "❌ Xaridingiz rad etildi — Huseyin · $500\nSabab: Chek yo‘q");
+});
+
+test("weekly summary: text with and without a plan; only the seller's own purchases of last week", async () => {
+  assert.equal(rules.weeklySummaryText({ range: "12.10–18.10.2026", totalUsd: 46_000, count: 3, plan: { percent: 63.4, rank: 5 }, calls: ["Huseyin", "Akmal"] }),
+    ["📊 Haftalik xulosa · 12.10–18.10.2026", "O‘tgan hafta: $46 000 (3 ta xarid)", "Oylik reja: 63% · reytingda 5-o‘rin", "Bu hafta qo‘ng‘iroq: 2 ta mijoz — Huseyin, Akmal"].join(String.fromCharCode(10)));
+  const noPlan = rules.weeklySummaryText({ range: "12.10–18.10.2026", totalUsd: 0, count: 0, plan: null, calls: [] });
+  assert.ok(!noPlan.includes("Oylik reja")); assert.ok(noPlan.endsWith("Bu hafta qo‘ng‘iroq: yo‘q"));
+  const { db, a, b } = await setup();
+  db.tables.customerPurchase.push(
+    { id: "w1", customerId: a, status: "APPROVED", date: new Date("2026-10-13"), amountUsd: 400 },
+    { id: "w2", customerId: a, status: "APPROVED", date: new Date("2026-10-19"), amountUsd: 70 }, // this week: out
+    { id: "w3", customerId: a, status: "PENDING", date: new Date("2026-10-14"), amountUsd: 50 },
+    { id: "w4", customerId: b, status: "APPROVED", date: new Date("2026-10-14"), amountUsd: 9000 }); // seller B
+  assert.deepEqual(await repo.sellerPurchasesBetween(db, sellerA, new Date("2026-10-12"), new Date("2026-10-19")), { count: 1, totalUsd: 400 });
 });
