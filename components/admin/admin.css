@@ -122,6 +122,7 @@
 .admin-table-wrap.is-scroll{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .admin-table-wrap.is-scroll table{min-width:560px}
 .admin-mobile-cards{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.has-mobile-cards{display:none!important}
 .admin-mobile-card{display:grid;gap:10px;min-width:0;background:#fff;border:1px solid var(--admin-line);border-radius:14px;padding:13px;box-shadow:0 6px 18px #1b4a7608}
 .admin-mobile-card-head{display:flex;align-items:flex-start;gap:10px}
 .admin-mobile-card-head>div:not(.admin-row-tools){display:grid;gap:2px;min-width:0;flex:1}

@@ -132,7 +132,7 @@ export async function dueCustomers(db: Db, viewer: Viewer, today = new Date()) {
 }
 
 export async function sellerPurchases(db: Db, viewer: Viewer) {
-  return db.customerPurchase.findMany({ where: { customer: customerScope(viewer) }, orderBy: { createdAt: "desc" }, take: 30, select: { id: true, date: true, amount: true, currency: true, amountUsd: true, status: true, rejectReason: true, customer: { select: { id: true, name: true } } } });
+  return db.customerPurchase.findMany({ where: { customer: customerScope(viewer) }, orderBy: { createdAt: "desc" }, take: 30, select: { id: true, date: true, amount: true, currency: true, amountUsd: true, status: true, rejectReason: true, regionCode: true, customer: { select: { id: true, name: true } } } });
 }
 
 /**

@@ -44,3 +44,24 @@ test("no other admin page hides a table on phones without an alternative", async
     assert.ok(known.has(name) && (name !== "page.tsx" || /calculation-mobile-list/.test(source)), `${file} hides its table on phones without cards`);
   }
 });
+
+test("seller pages on phones: order and purchase tables become cards; every other table scrolls inside its wrapper", async () => {
+  const css = await read("../components/admin/admin.css");
+  assert.match(css, /\.admin-mobile-cards\{display:grid[^}]*\}\n\.has-mobile-cards\{display:none!important\}/, "≤650px: table hidden, cards shown");
+  const orders = await read("../components/admin/sex/orders-board.tsx");
+  assert.match(orders, /sx-table-wrap\$\{seller \? " has-mobile-cards" : ""\}/);
+  const card = orders.slice(orders.indexOf('{seller && <ul className="admin-mobile-cards">'));
+  for (const needle of ["row.number", "row.day", "row.kind", "row.product", "row.note", "PriceLine", "step.label", "statusCell(row)", "actions(row)"]) assert.ok(card.includes(needle), `order card shows ${needle}`);
+  const purchases = await read("../app/admin/(seller)/my/purchase/page.tsx");
+  assert.match(purchases, /bk-table-wrap has-mobile-cards/);
+  const purchaseCard = purchases.slice(purchases.indexOf('<ul className="admin-mobile-cards">'));
+  for (const needle of ["row.customer.name", "row.amountUsd", "row.date", "row.regionCode", "PURCHASE_STATUS[row.status]"]) assert.ok(purchaseCard.includes(needle), `purchase card shows ${needle}`);
+  // No page-wide sideways scroll at 375px: wide tables only live in wrappers that scroll on their own.
+  assert.match(await read("../components/admin/bklead/bklead.css"), /\.bk-table-wrap\{overflow-x:auto/);
+  assert.match(await read("../components/admin/sex/sex.css"), /\.sx-table-wrap\{overflow-x:auto;min-width:0\}/);
+  for (const path of ["../app/admin/(seller)/my/purchase/page.tsx", "../components/admin/sex/orders-board.tsx", "../components/admin/sex/prays-board.tsx", "../components/admin/bklead/customer-forms.tsx", "../components/admin/bklead/customer-ranking.tsx", "../components/admin/bklead/customer-regions.tsx", "../components/admin/bklead/links-table.tsx", "../components/admin/bklead/sales-plan-client.tsx", "../components/admin/bklead/sales-plan-people.tsx", "../components/admin/bklead/workshop-section.tsx"]) {
+    const source = await read(path);
+    const tables = source.split("<table").length - 1;
+    assert.ok(tables <= (source.match(/(bk|sx|admin)-table-wrap/g) ?? []).length, `${path}: every table sits in a scrolling wrapper`);
+  }
+});

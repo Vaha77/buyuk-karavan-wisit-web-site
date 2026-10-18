@@ -69,6 +69,20 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
   const title = workshop ? `Mening vazifalarim · ${userName}` : seller ? "Mening zakazlarim" : `Seh zakazlari · ${month.label}`;
   const subtitle = workshop ? "Zapchast va agregat zakazlari · qabul qiling, chiqqach “Chiqib ketdi” bosing" : seller ? "Bergan zakazlaringiz va ularning holati" : boss ? "Hammasini ko‘rasiz · sizning tugmangiz faqat “Krimga oldim”" : "Hammasini ko‘rasiz · holatni seh va Super Admin o‘zgartiradi";
 
+  const shown = frameOnly ? rows.filter(row => row.frame) : rows;
+  // One status cell and one action cell for the table and the phone cards.
+  const statusCell = (row: OrderRow) => <>{row.status === "STARTED" ? <AcceptedBadge label={STATUS_LABEL.STARTED} dueDate={row.dueDate}/> : <span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{row.status === "ACCEPTED" ? queueLabel(row) : STATUS_LABEL[row.status]}</span>}{row.overdue && <div className="sx-muted" style={{ color: "#A41F15", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</>;
+  const actions = (row: OrderRow) => { const action = actionFor(role, row.status); return <>
+              {action ? <button type="button" className={`sx-btn is-md ${action === "receive" ? "is-red" : "is-primary"}`} disabled={pending} aria-busy={isBusy(`${row.id}:${action}`)} onClick={() => act(row, action)}><BusyLabel busy={isBusy(`${row.id}:${action}`)}>{ACTION_LABEL[action]}</BusyLabel></button>
+                : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id), undefined, `${row.id}:confirm`)}><BusyLabel busy={isBusy(`${row.id}:confirm`)}>Tasdiqlayman</BusyLabel></button>
+                : row.status !== "STARTED" && <span className="sx-muted">{WAIT_TEXT[row.status]}</span>}
+              {row.status === "STARTED" && row.startedAt && <WorkingStatus acceptedAt={row.startedAt} dueDate={row.dueDate}/>}
+              {row.cancelled && <div className="sx-muted" style={{ marginTop: 4 }}>{row.cancelled.by ?? "—"} · {row.cancelled.at}{row.cancelled.reason ? <><br/>Sabab: {row.cancelled.reason}</> : null}</div>}
+              {row.canCancel && <div style={{ marginTop: 6 }}><button type="button" className="sx-btn is-sm is-danger-ghost" disabled={pending} onClick={() => { setError(""); setCancelReason(""); setCancelling(row); }}>Bekor qilish</button></div>}
+              {row.canMarkTest && <div style={{ marginTop: 6 }}><button type="button" className="sx-btn is-sm" disabled={pending} onClick={() => run(() => setOrderTestAction({ id: row.id, isTest: !row.isTest }), undefined, `${row.id}:test`)}><BusyLabel busy={isBusy(`${row.id}:test`)}>{row.isTest ? "Testdan olib tashlash" : "Test deb belgilash"}</BusyLabel></button></div>}
+              {row.telegramFailed && (boss || role === "ADMIN") && <div className="sx-tg-fail">Telegramga yuborilmadi · <button type="button" className="sx-btn is-sm is-danger-ghost" disabled={pending} onClick={() => run(() => resendTelegramAction(row.id), undefined, `${row.id}:resend`)}><BusyLabel busy={isBusy(`${row.id}:resend`)} busyText="Yuborilmoqda…">qayta yuborish</BusyLabel></button></div>}
+  </>; };
+
   return <div className="sx">
     <div className="sx-head">
       <div><span className="sx-crumb">Seh / {workshop ? "Vazifalar" : "Zakazlar"}</span><h1>{title}</h1><p className="sx-lead">{subtitle}</p></div>
@@ -92,10 +106,9 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
     {error && <p className="sx-note is-error" role="alert">{error}</p>}
 
     <PendingArea pending={monthPending}><div className="sx-card">
-      <div className="sx-table-wrap"><table className="sx-table" style={{ minWidth: 1180 }}>
+      <div className={`sx-table-wrap${seller ? " has-mobile-cards" : ""}`}><table className="sx-table" style={{ minWidth: 1180 }}>
         <thead><tr><th>№</th><th>Sana</th><th>Turi</th><th>Mahsulot</th><th>Zayavka beruvchi</th><th>Kimga</th><th>Jarayon</th><th>Holat</th><th>Amal</th></tr></thead>
-        <tbody>{(frameOnly ? rows.filter(row => row.frame) : rows).map(row => {
-          const action = actionFor(role, row.status);
+        <tbody>{shown.map(row => {
           return <tr key={row.id} id={`order-${row.id}`} className={row.overdue ? "is-late" : row.isNew ? "is-new" : ""}>
             <td><b>{row.number}</b></td>
             <td style={{ color: "#3E4A60", whiteSpace: "nowrap" }}>{row.day}</td>
@@ -104,20 +117,21 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
             <td><div style={{ display: "grid", gap: 2 }}><b style={{ fontWeight: 600 }}>{row.sellerName}</b><span className="sx-muted">{row.sellerAt}</span></div></td>
             <td style={{ fontWeight: 700, color: row.purpose === "SHOP" ? "#3E4A60" : "#1E4E8C" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</td>
             <td style={{ minWidth: 230 }}><div className="sx-steps">{row.steps.map(step => <span key={step.label} className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>)}</div></td>
-            <td>{row.status === "STARTED" ? <AcceptedBadge label={STATUS_LABEL.STARTED} dueDate={row.dueDate}/> : <span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{row.status === "ACCEPTED" ? queueLabel(row) : STATUS_LABEL[row.status]}</span>}{row.overdue && <div className="sx-muted" style={{ color: "#A41F15", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</td>
-            <td style={{ minWidth: 210 }}>
-              {action ? <button type="button" className={`sx-btn is-md ${action === "receive" ? "is-red" : "is-primary"}`} disabled={pending} aria-busy={isBusy(`${row.id}:${action}`)} onClick={() => act(row, action)}><BusyLabel busy={isBusy(`${row.id}:${action}`)}>{ACTION_LABEL[action]}</BusyLabel></button>
-                : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id), undefined, `${row.id}:confirm`)}><BusyLabel busy={isBusy(`${row.id}:confirm`)}>Tasdiqlayman</BusyLabel></button>
-                : row.status !== "STARTED" && <span className="sx-muted">{WAIT_TEXT[row.status]}</span>}
-              {row.status === "STARTED" && row.startedAt && <WorkingStatus acceptedAt={row.startedAt} dueDate={row.dueDate}/>}
-              {row.cancelled && <div className="sx-muted" style={{ marginTop: 4 }}>{row.cancelled.by ?? "—"} · {row.cancelled.at}{row.cancelled.reason ? <><br/>Sabab: {row.cancelled.reason}</> : null}</div>}
-              {row.canCancel && <div style={{ marginTop: 6 }}><button type="button" className="sx-btn is-sm is-danger-ghost" disabled={pending} onClick={() => { setError(""); setCancelReason(""); setCancelling(row); }}>Bekor qilish</button></div>}
-              {row.canMarkTest && <div style={{ marginTop: 6 }}><button type="button" className="sx-btn is-sm" disabled={pending} onClick={() => run(() => setOrderTestAction({ id: row.id, isTest: !row.isTest }), undefined, `${row.id}:test`)}><BusyLabel busy={isBusy(`${row.id}:test`)}>{row.isTest ? "Testdan olib tashlash" : "Test deb belgilash"}</BusyLabel></button></div>}
-              {row.telegramFailed && (boss || role === "ADMIN") && <div className="sx-tg-fail">Telegramga yuborilmadi · <button type="button" className="sx-btn is-sm is-danger-ghost" disabled={pending} onClick={() => run(() => resendTelegramAction(row.id), undefined, `${row.id}:resend`)}><BusyLabel busy={isBusy(`${row.id}:resend`)} busyText="Yuborilmoqda…">qayta yuborish</BusyLabel></button></div>}
-            </td>
+            <td>{statusCell(row)}</td>
+            <td style={{ minWidth: 210 }}>{actions(row)}</td>
           </tr>;
         })}</tbody>
       </table>
+      {seller && <ul className="admin-mobile-cards">{shown.map(row => {
+        // The last step that has happened (or is waiting) is the one that matters on a phone.
+        const step = row.steps.filter(item => item.state === "done" || item.state === "wait").at(-1) ?? row.steps[0];
+        return <li key={row.id} className="admin-mobile-card">
+          <div className="admin-mobile-card-head"><div><strong>{row.number} · {row.day}</strong><small>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</small></div><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span></div>
+          <div style={{ fontWeight: 600, lineHeight: 1.35, overflowWrap: "anywhere" }}>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices}/>}</div>
+          {step && <span className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>}
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}><div>{statusCell(row)}</div><div>{actions(row)}</div></div>
+        </li>;
+      })}</ul>}
       {!rows.length && <p className="sx-muted" style={{ padding: 16, textAlign: "center" }}>{workshop ? "Hozircha vazifa yo‘q." : "Zakazlar yo‘q."}</p>}
       </div>
     </div></PendingArea>
