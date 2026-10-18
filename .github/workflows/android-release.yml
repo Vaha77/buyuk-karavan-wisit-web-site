@@ -37,6 +37,7 @@ jobs:
           aliases=$(echo "$out" | grep -i "entry," | cut -d, -f1 | tr '\n' ' ')
           echo "$aliases" | grep -qw -- "$A" || { echo "::error::ANDROID_KEY_ALIAS is not in the keystore; aliases there: $aliases"; exit 1; }
           echo "::notice::keystore opens, alias found: $aliases"
+          [ "$K" = "$P" ] || echo "::warning::ANDROID_KEY_PASSWORD differs from ANDROID_KEYSTORE_PASSWORD (a PKCS12 keystore uses one password)"
       - name: Build AAB and APK
         working-directory: mobile/android
         env:
@@ -44,7 +45,14 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: chmod +x gradlew && ./gradlew bundleRelease assembleRelease
+        # On failure the "What went wrong" part becomes an annotation (logs need a login, annotations do not).
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease assembleRelease 2>&1 | tee "$RUNNER_TEMP/gradle.log" || true
+          if [ "${PIPESTATUS[0]}" != "0" ] || ! ls app/build/outputs/bundle/release/*.aab >/dev/null 2>&1; then
+            echo "::error::$(grep -A8 'What went wrong' "$RUNNER_TEMP/gradle.log" | tr '\n' ' ' | cut -c1-900)"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: bk-admin-android
