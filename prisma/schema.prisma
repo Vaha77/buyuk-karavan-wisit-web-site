@@ -929,6 +929,9 @@ model CustomerPurchase {
   amountUzs       Decimal?               @db.Decimal(20, 2)
   amountUsd       Decimal                @db.Decimal(18, 2)
   note            String?
+  // Customer location at the time of the purchase, so a later move does not rewrite history.
+  country         String?                @db.VarChar(8)
+  regionCode      String?                @db.VarChar(16)
   status          CustomerPurchaseStatus @default(PENDING)
   rejectReason    String?
   createdByUserId String?

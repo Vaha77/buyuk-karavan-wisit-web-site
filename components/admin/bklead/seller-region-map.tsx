@@ -2,15 +2,12 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import uzView from "@/lib/dashboard/maps/uz.json";
 import { REGION_STATUS, STALE_DAYS, STATUS_ORDER, daysTone, type SellerMap } from "@/lib/customers/seller-map";
 import { formatInt, formatUsd, formatUsdK } from "@/lib/dashboard/format";
 import { Callout } from "./region-map";
+import { COUNTRY_NAMES, type CustomerCountry } from "@/lib/dashboard/regions";
 import { DaysBadge, NewCustomerButton } from "./seller";
-
-type MapView = { viewBox: string; regions: Array<{ code: string; d: string; x: number; y: number; small: boolean; point?: boolean }> };
-const map = uzView as MapView;
-const [VB_WIDTH, VB_HEIGHT] = map.viewBox.split(" ").slice(2).map(Number);
+import { COUNTRY_MAPS, CountryTabs, countryOf } from "./country-tabs";
 const shortName = (name: string) => name.replace(/ viloyati$/, "").replace(/ shahri$/, " sh.").replace(/ Respublikasi$/, "");
 const HATCH = "sl-hatch";
 const fillOf = (status: keyof typeof REGION_STATUS) => status === "empty" ? `url(#${HATCH})` : REGION_STATUS[status].color;
@@ -20,6 +17,10 @@ export function SellerRegionMap({ data, year }: { data: SellerMap; year: number 
   const byCode = useMemo(() => new Map(data.regions.map(region => [region.code, region])), [data.regions]);
   const [selected, setSelected] = useState<string | null>(data.strongest?.code ?? data.regions.find(region => region.customers > 0)?.code ?? null);
   const [hover, setHover] = useState<{ code: string; x: number; y: number } | null>(null);
+  const [country, setCountry] = useState<CustomerCountry>(selected ? countryOf(selected) : "UZ");
+  const map = COUNTRY_MAPS[country];
+  const [VB_WIDTH, VB_HEIGHT] = map.viewBox.split(" ").slice(2).map(Number);
+  const counts = useMemo(() => data.regions.reduce<Record<string, number>>((acc, row) => { const code = countryOf(row.code); acc[code] = (acc[code] ?? 0) + row.customers; return acc; }, {}), [data.regions]);
   const panelRef = useRef<HTMLDivElement>(null);
   const region = selected ? byCode.get(selected) : undefined;
   const hovered = hover ? byCode.get(hover.code) : undefined;
@@ -36,8 +37,10 @@ export function SellerRegionMap({ data, year }: { data: SellerMap; year: number 
       <div className="bk-legend" aria-label="Xarita belgilari">{STATUS_ORDER.map(status => <span key={status}><i className={status === "empty" ? "sl-legend-hatch" : undefined} style={status === "empty" ? undefined : { background: REGION_STATUS[status].color }}/>{REGION_STATUS[status].label}</span>)}</div>
     </div>
     <div className="sl-regions-grid">
-      <div className="bk-map sl-map" onMouseLeave={() => setHover(null)}>
-        <svg viewBox={map.viewBox} role="img" aria-label={`O‘zbekiston: mening mijozlarim viloyatlar bo‘yicha, ${year}`}>
+      <div style={{ display: "grid", gap: 10, minWidth: 0 }}>
+      <CountryTabs value={country} onChange={value => { setCountry(value); setHover(null); }} counts={counts} panelId="sl-map-panel"/>
+      <div className="bk-map sl-map" id="sl-map-panel" role="tabpanel" onMouseLeave={() => setHover(null)}>
+        <svg viewBox={map.viewBox} role="img" aria-label={`${COUNTRY_NAMES[country]}: mening mijozlarim viloyatlar bo‘yicha, ${year}`}>
           <defs>
             <pattern id={HATCH} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
               <rect width="7" height="7" fill={REGION_STATUS.empty.color}/><line x1="0" y1="0" x2="0" y2="7" stroke="#9DB8E0" strokeWidth="1.6"/>
@@ -48,15 +51,15 @@ export function SellerRegionMap({ data, year }: { data: SellerMap; year: number 
             if (!stat) return null;
             const empty = stat.status === "empty";
             return <path key={area.code} className={`bk-area${selected === area.code ? " is-selected" : ""}${empty ? " sl-area-empty" : ""}`} d={area.d} fill={fillOf(stat.status)} tabIndex={0} role="button" aria-pressed={selected === area.code}
-              aria-label={empty ? `${stat.name}: mijoz yo‘q — imkoniyat` : `${stat.name}: ${formatInt(stat.customers)} mijoz, ${formatUsd(stat.total)}`}
+              aria-label={!stat.customers ? `${stat.name}: mijoz yo‘q — imkoniyat` : `${stat.name}: ${formatInt(stat.customers)} mijoz, ${formatUsd(stat.total)}`}
               onMouseMove={event => { const box = (event.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect(); setHover({ code: area.code, x: ((event.clientX - box.left) / box.width) * 100, y: ((event.clientY - box.top) / box.height) * 100 }); }}
               onFocus={() => setHover({ code: area.code, x: (area.x / VB_WIDTH) * 100, y: (area.y / VB_HEIGHT) * 100 })} onBlur={() => setHover(null)}
               onClick={() => pick(area.code)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pick(area.code); } }}/>;
           })}
           {map.regions.map(area => {
             const stat = byCode.get(area.code);
-            if (!stat || area.point || !stat.customers) return null;
-            if (area.small) return <Callout key={area.code} x={area.x} y={area.y} text={`${shortName(stat.name)} ${stat.customers} · $${formatUsdK(stat.total)}`}/>;
+            if (!stat || !stat.customers) return null;
+            if (area.small || area.point) return <Callout key={area.code} x={area.x} y={area.y} text={`${shortName(stat.name)} ${stat.customers} · $${formatUsdK(stat.total)}`}/>;
             const tone = REGION_STATUS[stat.status].text === "light" ? "is-dark" : "is-light";
             return <g key={area.code}>
               <text className={`bk-map-label ${tone}`} x={area.x} y={area.y} textAnchor="middle">${formatUsdK(stat.total)}</text>
@@ -72,6 +75,7 @@ export function SellerRegionMap({ data, year }: { data: SellerMap; year: number 
           </> : <span>Mijoz yo‘q — imkoniyat</span>}
         </div>}
         <span className="bk-map-credit">Xarita: Natural Earth</span>
+      </div>
       </div>
 
       <div className="sl-regions-side" ref={panelRef}>

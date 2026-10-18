@@ -33,7 +33,7 @@ export default async function MyCustomerPage({ params }: { params: Promise<{ id:
       </section>
       <section className="bk-card" aria-labelledby="sl-buy-title" style={{ display: "grid", gap: 12, alignContent: "start" }}>
         <h2 id="sl-buy-title">Xarid kiritish</h2>
-        {customer.isActive ? <PurchaseForm customers={[{ id: customer.id, name: customer.name }]} fixedCustomerId={customer.id} uzsPerUsd={rate ? Number(rate.rate) : null}/> : <p className="bk-muted">Mijoz nofaol.</p>}
+        {customer.isActive ? <PurchaseForm customers={[{ id: customer.id, name: customer.name, country: customer.country, regionCode: customer.regionCode }]} fixedCustomerId={customer.id} uzsPerUsd={rate ? Number(rate.rate) : null}/> : <p className="bk-muted">Mijoz nofaol.</p>}
         {history.purchases.length > 0 && <div className="bk-list">{history.purchases.map(purchase => <div key={purchase.id}><div className="bk-grow"><b>{formatUsd(Number(purchase.amountUsd))} <small>({formatDecimal(Number(purchase.amount), 2)} {purchase.currency === "UZS" ? "so‘m" : "$"})</small></b><span>{purchase.date.toISOString().slice(0, 10)}{purchase.rejectReason ? ` · sabab: ${purchase.rejectReason}` : ""}</span></div><span className={`bk-badge${purchase.status === "APPROVED" ? "" : purchase.status === "REJECTED" ? " is-orange" : " is-soft"}`}>{PURCHASE_STATUS[purchase.status]}</span></div>)}</div>}
       </section>
     </div>

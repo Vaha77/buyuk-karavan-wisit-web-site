@@ -15,7 +15,7 @@ export default async function PurchasePage({ searchParams }: { searchParams: Pro
   if (!user.salesPersonId) return <NotLinked/>;
   const search = await searchParams;
   const [customers, purchases, rate] = await Promise.all([myCustomers(user), myPurchases(user), getUsdUzsRate()]);
-  const active = customers.filter(customer => customer.isActive).map(customer => ({ id: customer.id, name: customer.name }));
+  const active = customers.filter(customer => customer.isActive).map(customer => ({ id: customer.id, name: customer.name, country: customer.country, regionCode: customer.regionCode }));
   const preselected = active.find(customer => customer.id === search.customer);
   const ordered = preselected ? [preselected, ...active.filter(customer => customer.id !== preselected.id)] : active;
   return <div className="bk">

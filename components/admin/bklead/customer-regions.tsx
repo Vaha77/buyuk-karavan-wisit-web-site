@@ -2,16 +2,13 @@
 
 import { useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
-import uzView from "@/lib/dashboard/maps/uz.json";
 import type { RegionStat, RegionStats } from "@/lib/customers/region-stats";
 import { formatInt, formatPercent, formatUsd, formatUsdK, MONTHS_LONG } from "@/lib/dashboard/format";
-import { TONE_FILL, TONE_TEXT, uzbekistanTones, type Tone } from "@/lib/dashboard/rules";
+import { foreignTones, TONE_FILL, TONE_TEXT, uzbekistanTones, type Tone } from "@/lib/dashboard/rules";
+import { COUNTRY_NAMES, type CustomerCountry } from "@/lib/dashboard/regions";
 import { Callout } from "./region-map";
 import { MonthBars, RegionLines, SERIES_COLORS } from "./charts";
-
-type MapView = { viewBox: string; regions: Array<{ code: string; d: string; x: number; y: number; small: boolean; point?: boolean }> };
-const map = uzView as MapView;
-const [VB_WIDTH, VB_HEIGHT] = map.viewBox.split(" ").slice(2).map(Number);
+import { COUNTRY_MAPS, CountryTabs, countryOf } from "./country-tabs";
 const shortName = (name: string) => name.replace(/ viloyati$/, "").replace(/ shahri$/, " sh.").replace(/ Respublikasi$/, "");
 
 function GrowthBadge({ growth }: { growth: RegionStat["growth"] }) {
@@ -30,17 +27,21 @@ const COLUMNS: Array<{ key: SortKey; label: string; left?: boolean }> = [
 const growthValue = (region: RegionStat) => !region.growth ? -Infinity : !region.growth.relative ? Infinity : region.growth.direction === "down" ? -region.growth.value : region.growth.value;
 const sortValue = (region: RegionStat, key: SortKey) => key === "name" ? region.name : key === "growth" ? growthValue(region) : key === "lastMonth" ? region.lastMonth ?? 0 : region[key];
 
-/** Uzbekistan map coloured by regular customer sales, region detail, sortable region ranking and the top-5 monthly chart. */
+/** Per-country map coloured by regular customer sales, region detail, sortable region ranking and the top-5 monthly chart. */
 export function CustomerRegions({ stats }: { stats: RegionStats }) {
   const ranked = stats.regions;
   const [selected, setSelected] = useState<string>(ranked[0]?.code ?? "UZ-TK");
   const [hover, setHover] = useState<{ code: string; x: number; y: number } | null>(null);
+  const [country, setCountry] = useState<CustomerCountry>("UZ");
+  const map = COUNTRY_MAPS[country];
+  const [VB_WIDTH, VB_HEIGHT] = map.viewBox.split(" ").slice(2).map(Number);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "total", dir: -1 });
   const detailRef = useRef<HTMLElement>(null);
 
   const byCode = useMemo(() => new Map(ranked.map(region => [region.code, region])), [ranked]);
   const rankOf = useMemo(() => new Map(ranked.map((region, index) => [region.code, index + 1])), [ranked]);
-  const tones: Record<string, Tone> = useMemo(() => uzbekistanTones(ranked.map(region => ({ code: region.code, count: region.total }))), [ranked]);
+  const tones: Record<string, Tone> = useMemo(() => (country === "UZ" ? uzbekistanTones : foreignTones)(ranked.filter(region => countryOf(region.code) === country).map(region => ({ code: region.code, count: region.total }))), [ranked, country]);
+  const countryCounts = useMemo(() => ranked.reduce<Record<string, number>>((acc, region) => { const code = countryOf(region.code); acc[code] = (acc[code] ?? 0) + region.customers; return acc; }, {}), [ranked]);
   const rows = useMemo(() => [...ranked].sort((a, b) => {
     const left = sortValue(a, sort.key), right = sortValue(b, sort.key);
     const order = typeof left === "string" ? left.localeCompare(right as string) : (left as number) - (right as number);
@@ -64,8 +65,9 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
           <div><h2 id="bk-cmap-title">Viloyatlar bo‘yicha savdo — {stats.year}</h2><span className="bk-muted">Rang = yillik jami savdo · raqamlar: summa (k $) va mijozlar soni · viloyatni bosing</span></div>
           <div className="bk-legend" aria-hidden="true"><span><i style={{ background: TONE_FILL.top }}/>Eng ko‘p</span><span><i style={{ background: TONE_FILL.b1 }}/>Yuqori</span><span><i style={{ background: TONE_FILL.b2 }}/>O‘rta</span><span><i style={{ background: TONE_FILL.low }}/>Eng kam</span><span><i style={{ background: TONE_FILL.none }}/>Mijoz yo‘q (!)</span></div>
         </div>
-        <div className="bk-map" onMouseLeave={() => setHover(null)}>
-          <svg viewBox={map.viewBox} role="img" aria-label={`O‘zbekiston: viloyatlar bo‘yicha doimiy mijozlar savdosi, ${stats.year}`}>
+        <CountryTabs value={country} onChange={value => { setCountry(value); setHover(null); }} counts={countryCounts} panelId="bk-cmap-panel"/>
+        <div className="bk-map" id="bk-cmap-panel" role="tabpanel" onMouseLeave={() => setHover(null)}>
+          <svg viewBox={map.viewBox} role="img" aria-label={`${COUNTRY_NAMES[country]}: viloyatlar bo‘yicha doimiy mijozlar savdosi, ${stats.year}`}>
             {map.regions.filter(area => !area.point).map(area => {
               const stat = byCode.get(area.code);
               if (!stat) return null;
@@ -77,9 +79,9 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
             })}
             {map.regions.map(area => {
               const stat = byCode.get(area.code);
-              if (!stat || area.point) return null;
+              if (!stat || (area.point && !stat.customers)) return null;
               if (!stat.customers) return <g key={area.code} aria-hidden="true" className="bk-map-attention"><circle cx={area.x} cy={area.y} r="8" fill="#E07A2E" stroke="#fff" strokeWidth="1.5"/><text x={area.x} y={area.y + 4} textAnchor="middle">!</text></g>;
-              if (area.small) return <Callout key={area.code} x={area.x} y={area.y} text={`${shortName(stat.name)} ${formatUsdK(stat.total)} · ${stat.customers}`}/>;
+              if (area.small || area.point) return <Callout key={area.code} x={area.x} y={area.y} text={`${shortName(stat.name)} ${formatUsdK(stat.total)} · ${stat.customers}`}/>;
               const tone = tones[area.code] ?? "none", light = tone === "b2" || tone === "b3" || tone === "none";
               return <g key={area.code}>
                 <text className={`bk-map-label ${light ? "is-light" : "is-dark"}`} x={area.x} y={area.y} textAnchor="middle" style={{ fill: TONE_TEXT[tone] }}>{formatUsdK(stat.total)} $</text>

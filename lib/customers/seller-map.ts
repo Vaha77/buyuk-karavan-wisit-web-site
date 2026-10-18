@@ -1,6 +1,6 @@
-// "Mening hududlarim" on the seller dashboard: per Uzbekistan region status of the seller's OWN customers.
+// "Mening hududlarim" on the seller dashboard: per region status (5 Central Asian countries) of the seller's OWN customers.
 // Pure (no DB), tested. The input is already scoped on the server (ownerId = the seller's SalesPerson).
-import { regionsOf } from "../dashboard/regions";
+import { CUSTOMER_REGIONS } from "../dashboard/regions";
 
 export type RegionStatus = "strongest" | "strong" | "medium" | "low" | "stale" | "empty";
 /** Map colours and legend labels, in legend order. "empty" is drawn with a hatch pattern (see the map component). */
@@ -10,7 +10,7 @@ export const REGION_STATUS: Record<RegionStatus, { label: string; color: string;
   medium: { label: "O‘rta", color: "#A8D5A2", text: "dark" },
   low: { label: "Kam", color: "#F2C230", text: "dark" },
   stale: { label: "90+ kun xarid yo‘q", color: "#D2372B", text: "light" },
-  empty: { label: "Imkoniyat", color: "#DCE8F8", text: "dark" },
+  empty: { label: "Xarid yo‘q · imkoniyat", color: "#DCE8F8", text: "dark" },
 };
 export const STATUS_ORDER: RegionStatus[] = ["strongest", "strong", "medium", "low", "stale", "empty"];
 export const STALE_DAYS = 90;
@@ -24,7 +24,7 @@ export function daysTone(days: number): "red" | "yellow" | null {
 export type RegionInput = { code: string; customers: number; total: number; stale: number };
 
 /**
- * No customers → "empty" (Imkoniyat); every customer 90+ days without a purchase → "stale";
+ * No customers or no approved purchase this year → "empty" (uncoloured); every customer 90+ days without a purchase → "stale";
  * the rest are split into quarters by this year's approved total (highest quarter = "strongest").
  * Equal totals get the same status.
  */
@@ -32,7 +32,7 @@ export function regionStatuses(regions: RegionInput[]): Record<string, RegionSta
   const result: Record<string, RegionStatus> = {};
   const ranked: RegionInput[] = [];
   for (const region of regions) {
-    if (region.customers <= 0) result[region.code] = "empty";
+    if (region.customers <= 0 || region.total <= 0) result[region.code] = "empty";
     else if (region.stale >= region.customers) result[region.code] = "stale";
     else ranked.push(region);
   }
@@ -56,9 +56,9 @@ export type SellerMap = {
   attention: { code: string; name: string; stale: number } | null;
 };
 
-/** Region rows for the 14 regions of Uzbekistan, plus the two summary cards. */
+/** Region rows for every CUSTOMER_REGIONS region, plus the two summary cards. */
 export function buildSellerMap(customers: MapCustomer[]): SellerMap {
-  const regions = regionsOf("UZ").map(region => {
+  const regions = CUSTOMER_REGIONS.map(region => {
     const own = customers.filter(customer => customer.regionCode === region.code);
     return {
       code: region.code, name: region.name, customers: own.length,

@@ -48,10 +48,10 @@ export async function recordContactAsSeller(actor: Actor, customerId: string, in
   return saved;
 }
 
-export async function createPurchaseAsSeller(actor: Actor, customerId: string, input: { date: Date; amount: number; currency: "USD" | "UZS"; note: string | null }) {
+export async function createPurchaseAsSeller(actor: Actor, customerId: string, input: { date: Date; amount: number; currency: "USD" | "UZS"; note: string | null; country: string; regionCode: string }) {
   const rate = input.currency === "UZS" ? await getUsdUzsRate() : null;
   const saved = await createPurchase(getDb(), viewerOf(actor), actor.id, customerId, input, rate ? Number(rate.rate) : null);
-  await writeAudit(actor, { action: "CREATE", entityType: "CUSTOMER_PURCHASE", entityId: saved.id, entityName: saved.customer.name, summary: `Xarid kiritildi (tasdiqlash kutilmoqda): $${saved.amountUsd}`, after: { date: input.date.toISOString().slice(0, 10), amount: input.amount, currency: input.currency, amountUsd: saved.amountUsd } });
+  await writeAudit(actor, { action: "CREATE", entityType: "CUSTOMER_PURCHASE", entityId: saved.id, entityName: saved.customer.name, summary: `Xarid kiritildi (tasdiqlash kutilmoqda): $${saved.amountUsd}`, after: { date: input.date.toISOString().slice(0, 10), amount: input.amount, currency: input.currency, amountUsd: saved.amountUsd, country: input.country, regionCode: input.regionCode } });
   return saved;
 }
 

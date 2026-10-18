@@ -5,6 +5,8 @@ import { getDb } from "@/lib/db";
 import { COUNTRY_NAMES, regionName, type CountryCode } from "@/lib/dashboard/regions";
 import { customerHistory, dueCustomers, getCustomer, listCustomers, sellerMapCustomers, sellerPurchases, sellerStats } from "./seller-repo";
 import { buildSellerMap } from "./seller-map";
+import { buildLeaderboard } from "./leaderboard";
+import { getCustomerYear } from "./queries";
 import { daysWithoutPurchase, dueTone, isDue } from "./seller-rules";
 import { viewerOf } from "./seller-service";
 
@@ -29,3 +31,8 @@ export const myDueCustomers = (user: User) => dueCustomers(getDb(), viewerOf(use
 export const myPurchases = (user: User) => sellerPurchases(getDb(), viewerOf(user));
 /** "Mening hududlarim": built from the seller's own customers only (scoped query). */
 export const myRegionMap = async (user: User, year: number) => buildSellerMap(await sellerMapCustomers(getDb(), viewerOf(user), year));
+/** "Mijozlar reytingi": all sellers' customers, unscoped on purpose — buildLeaderboard drops every amount. */
+export async function customerLeaderboard(user: User, now: { year: number; month: number }) {
+  const [data, owners] = await Promise.all([getCustomerYear(now.year), getDb().regularCustomer.findMany({ where: { isActive: true }, select: { id: true, ownerId: true, owner: { select: { name: true } } } })]);
+  return buildLeaderboard(data.customers, new Map(owners.map(row => [row.id, { ownerId: row.ownerId, name: row.owner?.name ?? null }])), data.prizes, user.salesPersonId ?? "", now.year, now);
+}

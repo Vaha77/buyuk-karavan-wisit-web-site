@@ -82,6 +82,11 @@ export const REGIONS: RegionInfo[] = [
   { code: "AF-GHO", country: "AF", name: "G‘or" },
 ];
 
+/** Regular customers (seller cabinet, customer maps): Central Asia without Afghanistan. */
+export const CUSTOMER_COUNTRIES = ["UZ", "KZ", "KG", "TJ", "TM"] as const satisfies readonly CountryCode[];
+export type CustomerCountry = (typeof CUSTOMER_COUNTRIES)[number];
+export const CUSTOMER_REGIONS = REGIONS.filter(region => (CUSTOMER_COUNTRIES as readonly string[]).includes(region.country));
+
 export const REGION_BY_CODE = new Map(REGIONS.map(region => [region.code, region]));
 export function regionName(code: string | null | undefined) { return (code && REGION_BY_CODE.get(code)?.name) || "Aniqlanmagan"; }
 export function regionsOf(country: CountryCode) { return REGIONS.filter(region => region.country === country); }

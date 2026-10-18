@@ -19,8 +19,8 @@ const rows = [
 
 test("region totals, shares, averages and ranking", () => {
   const stats = buildRegionStats(rows, 2026, now);
-  assert.equal(stats.regions.length, 14);
-  assert.deepEqual(stats.regions.slice(0, 3).map(region => region.code), ["UZ-TK", "UZ-SA", "UZ-NG"]);
+  assert.equal(stats.regions.length, 49); // UZ 14 + KZ 17 + KG 8 + TJ 5 + TM 5
+  assert.deepEqual(stats.regions.slice(0, 4).map(region => region.code), ["UZ-TK", "UZ-SA", "KZ-AST", "UZ-NG"]);
   const sa = stats.regions.find(region => region.code === "UZ-SA");
   assert.equal(sa.customers, 2);
   assert.equal(sa.total, 3000);
@@ -52,15 +52,16 @@ test("missing months list the customers that have not been entered", () => {
   assert.deepEqual(ng.missing.map(item => item.month), [1, 2]);
 });
 
-test("KPIs count every active customer; unassigned and foreign customers stay off the map", () => {
+test("KPIs count every active customer; customers without a region stay off the map", () => {
   const { kpis, unassigned } = buildRegionStats(rows, 2026, now);
   assert.equal(kpis.activeCustomers, 6);
   assert.equal(kpis.total, 8500);
   assert.equal(Math.round(kpis.average), Math.round(8500 / 6));
-  assert.equal(kpis.regionsWithCustomers, 3);
-  assert.equal(kpis.regionCount, 14);
+  assert.equal(kpis.regionsWithCustomers, 4);
+  assert.equal(kpis.regionCount, 49);
   assert.equal(kpis.prevTotal, 1500);
-  assert.deepEqual(unassigned, { customers: 2, total: 500 });
+  assert.deepEqual(unassigned, { customers: 1, total: 300 });
+  assert.equal(buildRegionStats(rows, 2026, now).regions.find(region => region.code === "KZ-AST").total, 200);
 });
 
 test("past years use all 12 months and an empty input gives zeroed regions", () => {

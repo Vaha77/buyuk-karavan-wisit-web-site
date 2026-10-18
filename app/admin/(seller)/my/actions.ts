@@ -53,7 +53,7 @@ export async function recordContactAction(customerId: string, input: { result: s
   } catch (error) { return failure(error); }
 }
 
-export async function createPurchaseAction(input: { customerId: string; date: string; amount: string; currency: string; note: string }): Promise<SellerActionResult> {
+export async function createPurchaseAction(input: { customerId: string; date: string; amount: string; currency: string; note: string; country: string; regionCode: string }): Promise<SellerActionResult> {
   const seller = await requireSeller();
   try {
     const date = parseDay(input.date);
@@ -61,7 +61,7 @@ export async function createPurchaseAction(input: { customerId: string; date: st
     const amount = Number(text(input.amount, 30).replace(/[\s,]/g, ""));
     if (input.currency !== "USD" && input.currency !== "UZS") return { ok: false, error: "Valyutani tanlang." };
     // The DATE column stores the calendar day; keep it as UTC midnight of that day.
-    const saved = await createPurchaseAsSeller(seller.user, text(input.customerId, 40), { date: new Date(`${input.date}T00:00:00Z`), amount, currency: input.currency, note: text(input.note, 500) || null });
+    const saved = await createPurchaseAsSeller(seller.user, text(input.customerId, 40), { date: new Date(`${input.date}T00:00:00Z`), amount, currency: input.currency, note: text(input.note, 500) || null, country: text(input.country, 8), regionCode: text(input.regionCode, 16) });
     refresh(input.customerId); return { ok: true, id: saved.id };
   } catch (error) { return failure(error); }
 }

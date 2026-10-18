@@ -7,7 +7,7 @@ import { PhoneCall, Plus, Search } from "lucide-react";
 import { addMyCustomerAction, createPurchaseAction, recordContactAction, updateMyCustomerAction } from "@/app/admin/(seller)/my/actions";
 import { CALL_INTERVALS, CONTACT_RESULTS, type ContactResult } from "@/lib/customers/seller-rules";
 import { formatInt, formatUsd } from "@/lib/dashboard/format";
-import { COUNTRY_CODES, COUNTRY_NAMES, regionsOf, type CountryCode } from "@/lib/dashboard/regions";
+import { COUNTRY_NAMES, CUSTOMER_COUNTRIES, regionsOf, type CountryCode } from "@/lib/dashboard/regions";
 import { Dialog } from "./dialog";
 
 export type SellerCustomerRow = { id: string; name: string; phone: string | null; region: string; callIntervalDays: number; days: number; due: "red" | "yellow" | null; nextContact: string | null };
@@ -56,7 +56,7 @@ export function SellerCustomerForm({ customer, onDone, regionCode }: { customer?
       <label className="bk-field"><span>Telefon{customer ? "" : " (majburiy)"}</span><input value={values.phone} onChange={event => set("phone", event.target.value)} inputMode="tel" placeholder="+998 90 123 45 67" required={!customer} disabled={!!customer}/></label>
     </div>
     <div className="bk-row">
-      <label className="bk-field"><span>Davlat</span><select value={values.country} onChange={event => { set("country", event.target.value); set("regionCode", ""); }}>{COUNTRY_CODES.map(code => <option key={code} value={code}>{COUNTRY_NAMES[code]}</option>)}</select></label>
+      <label className="bk-field"><span>Davlat</span><select value={values.country} onChange={event => { set("country", event.target.value); set("regionCode", ""); }}>{CUSTOMER_COUNTRIES.map(code => <option key={code} value={code}>{COUNTRY_NAMES[code]}</option>)}</select></label>
       <label className="bk-field"><span>Viloyat</span><select value={values.regionCode} onChange={event => set("regionCode", event.target.value)}><option value="">Tanlanmagan</option>{regionsOf(values.country as CountryCode).map(region => <option key={region.code} value={region.code}>{region.name}</option>)}</select></label>
       <label className="bk-field"><span>Qo‘ng‘iroq oralig‘i</span><select value={values.callIntervalDays} onChange={event => set("callIntervalDays", Number(event.target.value))}>{CALL_INTERVALS.map(days => <option key={days} value={days}>{days} kun</option>)}</select></label>
     </div>
@@ -113,8 +113,12 @@ export function ContactButton({ customerId, customerName, compact = false }: { c
 }
 
 /** "Xarid kiritish": the purchase goes to the admin for approval (PENDING). */
-export function PurchaseForm({ customers, fixedCustomerId, uzsPerUsd }: { customers: Array<{ id: string; name: string }>; fixedCustomerId?: string; uzsPerUsd: number | null }) {
+type PurchaseCustomer = { id: string; name: string; country: string; regionCode: string | null };
+const locationOf = (customer?: PurchaseCustomer) => customer && (CUSTOMER_COUNTRIES as readonly string[]).includes(customer.country) ? { country: customer.country, regionCode: customer.regionCode ?? "" } : { country: "UZ", regionCode: "" };
+
+export function PurchaseForm({ customers, fixedCustomerId, uzsPerUsd }: { customers: PurchaseCustomer[]; fixedCustomerId?: string; uzsPerUsd: number | null }) {
   const router = useRouter();
+  const [location, setLocation] = useState(() => locationOf(customers.find(customer => customer.id === (fixedCustomerId ?? customers[0]?.id))));
   const [customerId, setCustomerId] = useState(fixedCustomerId ?? customers[0]?.id ?? ""), [date, setDate] = useState(todayKey()), [amount, setAmount] = useState(""), [currency, setCurrency] = useState<"USD" | "UZS">("USD"), [note, setNote] = useState("");
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null), [pending, startTransition] = useTransition();
   const number = Number(amount.replace(/[\s,]/g, "")), usd = currency === "USD" ? number : uzsPerUsd ? number / uzsPerUsd : 0;
@@ -122,7 +126,7 @@ export function PurchaseForm({ customers, fixedCustomerId, uzsPerUsd }: { custom
     event.preventDefault();
     startTransition(async () => {
       setMessage(null);
-      const result = await createPurchaseAction({ customerId, date, amount, currency, note });
+      const result = await createPurchaseAction({ customerId, date, amount, currency, note, ...location });
       if (!result.ok) { setMessage({ ok: false, text: result.error }); return; }
       setAmount(""); setNote(""); setMessage({ ok: true, text: "Xarid yuborildi — admin tasdiqlagach statistikaga qo‘shiladi." }); router.refresh();
     });
@@ -130,8 +134,12 @@ export function PurchaseForm({ customers, fixedCustomerId, uzsPerUsd }: { custom
   if (!customers.length) return <div className="bk-empty">Avval mijoz qo‘shing.</div>;
   return <form onSubmit={submit} style={{ display: "grid", gap: 12 }} aria-label="Xarid kiritish">
     <div className="bk-row">
-      {!fixedCustomerId && <label className="bk-field"><span>Mijoz</span><select value={customerId} onChange={event => setCustomerId(event.target.value)}>{customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>}
+      {!fixedCustomerId && <label className="bk-field"><span>Mijoz</span><select value={customerId} onChange={event => { setCustomerId(event.target.value); setLocation(locationOf(customers.find(customer => customer.id === event.target.value))); }}>{customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>}
       <label className="bk-field"><span>Sana</span><input type="date" value={date} max={todayKey()} onChange={event => setDate(event.target.value)} required/></label>
+    </div>
+    <div className="bk-row">
+      <label className="bk-field"><span>Davlat</span><select value={location.country} onChange={event => setLocation({ country: event.target.value, regionCode: "" })}>{CUSTOMER_COUNTRIES.map(code => <option key={code} value={code}>{COUNTRY_NAMES[code]}</option>)}</select></label>
+      <label className="bk-field"><span>Viloyat</span><select value={location.regionCode} onChange={event => setLocation({ ...location, regionCode: event.target.value })} required><option value="">Tanlang</option>{regionsOf(location.country as CountryCode).map(region => <option key={region.code} value={region.code}>{region.name}</option>)}</select></label>
     </div>
     <div className="bk-row">
       <label className="bk-field"><span>Summa</span><input value={amount} onChange={event => setAmount(event.target.value)} inputMode="decimal" placeholder={currency === "USD" ? "1 500" : "19 000 000"} required/></label>
@@ -140,6 +148,6 @@ export function PurchaseForm({ customers, fixedCustomerId, uzsPerUsd }: { custom
     {currency === "UZS" && number > 0 && <p className="bk-muted">{uzsPerUsd ? `≈ ${formatUsd(usd)} (CBU kursi ${formatInt(uzsPerUsd)})` : "CBU kursi hozir olinmadi — summani $ da kiriting."}</p>}
     <label className="bk-field"><span>Izoh</span><input value={note} onChange={event => setNote(event.target.value)} maxLength={500}/></label>
     {message && <p className={`bk-note${message.ok ? "" : " is-soft"}`} role="status">{message.text}</p>}
-    <div className="bk-actions" style={{ justifyContent: "flex-end" }}><button type="submit" className="bk-btn is-primary" disabled={pending || !(number > 0) || !customerId}>{pending ? "Yuborilmoqda…" : "Tasdiqlashga yuborish"}</button></div>
+    <div className="bk-actions" style={{ justifyContent: "flex-end" }}><button type="submit" className="bk-btn is-primary" disabled={pending || !(number > 0) || !customerId || !location.regionCode}>{pending ? "Yuborilmoqda…" : "Tasdiqlashga yuborish"}</button></div>
   </form>;
 }

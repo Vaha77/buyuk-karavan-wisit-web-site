@@ -1,6 +1,6 @@
-// Regular customer sales by Uzbekistan region for one year. Pure: the page loads the rows in one query and
-// builds the stats on the server, so the client only renders. Regions are the 14 UZ-XX codes in lib/dashboard/regions.
-import { regionsOf } from "../dashboard/regions";
+// Regular customer sales by region (UZ, KZ, KG, TJ, TM) for one year. Pure: the page loads the rows in one query and
+// builds the stats on the server, so the client only renders. Regions are CUSTOMER_REGIONS in lib/dashboard/regions.
+import { CUSTOMER_REGIONS } from "../dashboard/regions";
 import { delta, requiredMonths } from "../dashboard/rules";
 
 /** One row per (customer, monthly sale) from a LEFT JOIN; year/month/amountUsd are null for a customer without sales. */
@@ -39,10 +39,9 @@ export function buildRegionStats(rows: CustomerSaleRow[], year: number, now: { y
   const grandTotal = round(sum(all.flatMap(customer => customer.months)));
   const grandPrev = round(sum(all.flatMap(customer => customer.prev.slice(0, periodEnd))));
 
-  const uzRegions = regionsOf("UZ");
-  const regionCodes = new Set(uzRegions.map(region => region.code));
-  const regions = uzRegions.map((region): RegionStat => {
-    const members = all.filter(customer => customer.country === "UZ" && customer.regionCode === region.code);
+  const regionCodes = new Set(CUSTOMER_REGIONS.map(region => region.code));
+  const regions = CUSTOMER_REGIONS.map((region): RegionStat => {
+    const members = all.filter(customer => customer.country === region.country && customer.regionCode === region.code);
     const customerRows = members.map(customer => ({ id: customer.id, name: customer.name, total: round(sum(customer.months)), months: customer.months }))
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     const total = round(sum(customerRows.map(row => row.total)));
@@ -60,12 +59,12 @@ export function buildRegionStats(rows: CustomerSaleRow[], year: number, now: { y
     };
   }).sort((a, b) => b.total - a.total || b.customers - a.customers || a.name.localeCompare(b.name));
 
-  const outside = all.filter(customer => customer.country !== "UZ" || !customer.regionCode || !regionCodes.has(customer.regionCode));
+  const outside = all.filter(customer => !customer.regionCode || !regionCodes.has(customer.regionCode) || !customer.regionCode.startsWith(`${customer.country}-`));
   return {
     year, periodEnd,
     kpis: {
       activeCustomers: all.length, total: grandTotal, average: all.length ? grandTotal / all.length : 0,
-      regionsWithCustomers: regions.filter(region => region.customers > 0).length, regionCount: uzRegions.length,
+      regionsWithCustomers: regions.filter(region => region.customers > 0).length, regionCount: CUSTOMER_REGIONS.length,
       prevTotal: grandPrev, growth: grandPrev > 0 || grandTotal > 0 ? delta(grandTotal, grandPrev) : null,
     },
     regions,

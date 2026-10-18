@@ -5,6 +5,7 @@ import type { PrismaClient } from "../../generated/prisma/client";
 import { normalizeUzPhone } from "../auth/phone";
 import { CALL_INTERVALS, CONTACT_RESULTS, daysWithoutPurchase, defaultNextContact, isDue, purchaseUsd, type ContactResult } from "./seller-rules";
 import type { MapCustomer } from "./seller-map";
+import { CUSTOMER_COUNTRIES, isRegionOf } from "../dashboard/regions";
 
 export type Viewer = { role: string; salesPersonId: string | null };
 type Db = Pick<PrismaClient, "regularCustomer" | "customerContact" | "customerPurchase" | "regularCustomerMonthlySale">;
@@ -92,13 +93,18 @@ export async function recordContact(db: Db, viewer: Viewer, customerId: string, 
   return { id: contact.id, customer, nextContactAt: next };
 }
 
-/** Seller records a purchase; it stays PENDING (and out of every statistic) until an admin approves it. */
-export async function createPurchase(db: Db, viewer: Viewer, userId: string, customerId: string, input: { date: Date; amount: number; currency: "USD" | "UZS"; note: string | null }, uzsPerUsd: number | null) {
+/**
+ * Seller records a purchase; it stays PENDING (and out of every statistic) until an admin approves it.
+ * Country + region are required: saved on the purchase (history) and on the customer (current location).
+ */
+export async function createPurchase(db: Db, viewer: Viewer, userId: string, customerId: string, input: { date: Date; amount: number; currency: "USD" | "UZS"; note: string | null; country: string; regionCode: string }, uzsPerUsd: number | null) {
   const customer = await requireCustomer(db, viewer, customerId);
+  if (!(CUSTOMER_COUNTRIES as readonly string[]).includes(input.country) || !isRegionOf(input.regionCode, input.country)) throw new SellerError("Davlat va viloyatni tanlang.");
   if (!(input.amount > 0) || input.amount >= 1e15) throw new SellerError("Summani kiriting.");
   const amountUsd = purchaseUsd(input.amount, input.currency, uzsPerUsd);
   if (amountUsd === null) throw new SellerError("Markaziy bank kursi olinmadi. Summani $ da kiriting yoki keyinroq urinib ko‘ring.");
-  const purchase = await db.customerPurchase.create({ data: { customerId, sellerId: viewer.salesPersonId, date: input.date, amount: input.amount, currency: input.currency, amountUzs: input.currency === "UZS" ? input.amount : null, amountUsd, note: input.note, status: "PENDING", createdByUserId: userId }, select: { id: true } });
+  const purchase = await db.customerPurchase.create({ data: { customerId, sellerId: viewer.salesPersonId, date: input.date, amount: input.amount, currency: input.currency, amountUzs: input.currency === "UZS" ? input.amount : null, amountUsd, note: input.note, country: input.country, regionCode: input.regionCode, status: "PENDING", createdByUserId: userId }, select: { id: true } });
+  if (customer.country !== input.country || customer.regionCode !== input.regionCode) await db.regularCustomer.update({ where: { id: customerId }, data: { country: input.country, regionCode: input.regionCode } });
   return { id: purchase.id, customer, amountUsd };
 }
 

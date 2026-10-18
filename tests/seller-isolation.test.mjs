@@ -74,7 +74,7 @@ test("a seller cannot write to another seller's customer", async () => {
   const { db, b } = await setup();
   await assert.rejects(repo.customerHistory(db, sellerA, b), repo.CustomerNotFound);
   await assert.rejects(repo.recordContact(db, sellerA, b, { result: "CALLED", note: null, nextContactAt: null }), repo.CustomerNotFound);
-  await assert.rejects(repo.createPurchase(db, sellerA, "user-a", b, { date: new Date(), amount: 100, currency: "USD", note: null }, 12_800), repo.CustomerNotFound);
+  await assert.rejects(repo.createPurchase(db, sellerA, "user-a", b, { date: new Date(), amount: 100, currency: "USD", note: null, country: "UZ", regionCode: "UZ-SA" }, 12_800), repo.CustomerNotFound);
   await assert.rejects(repo.updateSellerCustomer(db, sellerA, b, { name: "X", country: "UZ", regionCode: null, note: null, callIntervalDays: 30 }), repo.CustomerNotFound);
   assert.equal(db.tables.customerContact.length, 0);
   assert.equal(db.tables.customerPurchase.length, 0);
@@ -116,7 +116,7 @@ test("duplicate phone: not saved, owner not revealed to the seller", async () =>
 
 test("PENDING purchases stay out of statistics until approved", async () => {
   const { db, a } = await setup();
-  const purchase = await repo.createPurchase(db, sellerA, "user-a", a, { date: new Date("2026-10-02"), amount: 12_800_000, currency: "UZS", note: null }, 12_800);
+  const purchase = await repo.createPurchase(db, sellerA, "user-a", a, { date: new Date("2026-10-02"), amount: 12_800_000, currency: "UZS", note: null, country: "UZ", regionCode: "UZ-SA" }, 12_800);
   assert.equal(purchase.amountUsd, 1000);
   assert.equal(db.tables.customerPurchase[0].status, "PENDING");
   const stats = await repo.sellerStats(db, sellerA, 2026);
@@ -171,7 +171,7 @@ test("region status: no customers → Imkoniyat, all 90+ days → stale, the res
     { code: "C", customers: 1, total: 2000, stale: 0 }, { code: "D", customers: 1, total: 1000, stale: 0 },
   ]);
   assert.deepEqual(statuses, { E: "empty", S: "stale", A: "strongest", B: "strong", C: "medium", D: "low" });
-  assert.deepEqual(sellerMap.regionStatuses([{ code: "X", customers: 1, total: 0, stale: 0 }]), { X: "strongest" });
+  assert.deepEqual(sellerMap.regionStatuses([{ code: "X", customers: 1, total: 0, stale: 0 }]), { X: "empty" }); // customers but no purchase → uncoloured
   const tie = sellerMap.regionStatuses([{ code: "P", customers: 1, total: 500, stale: 0 }, { code: "Q", customers: 1, total: 500, stale: 0 }, { code: "R", customers: 1, total: 100, stale: 0 }, { code: "T", customers: 1, total: 50, stale: 0 }]);
   assert.equal(tie.P, tie.Q, "equal totals share a status");
   assert.ok(!Object.values(sellerMap.REGION_STATUS).some(style => /^#(?:([0-9a-f]){2}|([0-9a-f]{2}){2})$/i.test(style.color)), "no grey fills");
@@ -190,11 +190,24 @@ test("the seller map is built from the seller's own customers only", async () =>
   assert.equal(region("UZ-SA").total, 1000); // B's 7000 in the same region is not counted
   assert.equal(region("UZ-NG").total, 500);
   assert.equal(region("UZ-BU").status, "empty"); // B's region is an opportunity for A
-  assert.equal(mapA.opened, 2); assert.equal(mapA.regionCount, 14);
+  assert.equal(mapA.opened, 2); assert.equal(mapA.regionCount, 49);
   assert.ok(!mapA.regions.flatMap(row => row.list).some(row => row.id === b));
   const mapB = sellerMap.buildSellerMap(await repo.sellerMapCustomers(db, sellerB, 2026, today));
   assert.equal(mapB.regions.find(row => row.code === "UZ-SA").total, 7000);
   assert.equal(mapB.regions.find(row => row.code === "UZ-NG").status, "empty");
+});
+
+test("a purchase needs a region of the chosen country and saves it on the purchase and the customer", async () => {
+  const { db, a } = await setup();
+  const base = { date: new Date("2026-10-02"), amount: 100, currency: "USD", note: null };
+  await assert.rejects(repo.createPurchase(db, sellerA, "user-a", a, { ...base, country: "UZ", regionCode: "" }, null), /viloyatni tanlang/);
+  await assert.rejects(repo.createPurchase(db, sellerA, "user-a", a, { ...base, country: "KZ", regionCode: "UZ-NG" }, null), /viloyatni tanlang/);
+  await assert.rejects(repo.createPurchase(db, sellerA, "user-a", a, { ...base, country: "AF", regionCode: "AF-KAB" }, null), /viloyatni tanlang/);
+  assert.equal(db.tables.customerPurchase.length, 0);
+  await repo.createPurchase(db, sellerA, "user-a", a, { ...base, country: "KZ", regionCode: "KZ-ALM" }, null);
+  assert.deepEqual([db.tables.customerPurchase[0].country, db.tables.customerPurchase[0].regionCode], ["KZ", "KZ-ALM"]);
+  const customer = db.tables.regularCustomer.find(row => row.id === a);
+  assert.deepEqual([customer.country, customer.regionCode], ["KZ", "KZ-ALM"]);
 });
 
 test("seller ranking carries only rank, name, percent and zone of other sellers", () => {
