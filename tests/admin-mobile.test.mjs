@@ -65,3 +65,21 @@ test("seller pages on phones: order and purchase tables become cards; every othe
     assert.ok(tables <= (source.match(/(bk|sx|admin)-table-wrap/g) ?? []).length, `${path}: every table sits in a scrolling wrapper`);
   }
 });
+
+test("phones: every admin table becomes cards — cells get their column header (colspan aware), page never wider than the screen", async () => {
+  const { register } = await import("node:module");
+  register("./ts-resolve.mjs", import.meta.url);
+  const { labelTables } = await import("../components/admin/table-cards.ts");
+  const el = (text = "", attrs = {}) => ({ textContent: text, attrs: { ...attrs }, getAttribute(name) { return this.attrs[name] ?? null; }, hasAttribute(name) { return name in this.attrs; }, setAttribute(name, value) { this.attrs[name] = value; } });
+  const cells = [el("Ali"), el("2", { colspan: "2" }), el("$5")], header = [el("Ism"), el("Soni", { colspan: "2" }), el("Summa")];
+  const classes = new Set();
+  const table = { classList: { add: name => classes.add(name) }, querySelectorAll: selector => selector.startsWith("thead") ? header : [{ children: cells }] };
+  labelTables({ querySelectorAll: () => [table] });
+  assert.deepEqual(cells.map(cell => cell.attrs["data-label"]), ["Ism", "Soni", "Summa"]);
+  assert.ok(classes.has("is-cards"));
+  const css = await read("../components/admin/admin.css");
+  assert.match(css, /table\.is-cards thead\{display:none\}/);
+  assert.match(css, /table\.is-cards td::before\{content:attr\(data-label\)/);
+  assert.match(await read("../components/admin/admin-shell.tsx"), /new MutationObserver\(run\)/);
+  assert.match(await read("../components/admin/bklead/bklead.css"), /\.bk\{[^}]*grid-template-columns:minmax\(0,1fr\)/, "the .bk grid column never takes a wide table's width");
+});

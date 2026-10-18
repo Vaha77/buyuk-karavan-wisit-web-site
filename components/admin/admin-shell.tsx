@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { labelTables } from "./table-cards";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
@@ -116,6 +117,18 @@ function NavigationPending() {
 
 export function AdminShell({ children, user, newLeads = 0, linksBadge = false, pendingPurchases = 0, dueToday = 0, sexBadge = 0 }: { children: React.ReactNode; user: { name: string; role: keyof typeof roleLabels }; newLeads?: number; linksBadge?: boolean; pendingPurchases?: number; dueToday?: number; sexBadge?: number }) {
   const [open, setOpen] = useState(false);
+  const workspace = useRef<HTMLDivElement>(null);
+  // Label table cells for the phone card layout, again whenever rows change (navigation, filters, refresh).
+  useEffect(() => {
+    const root = workspace.current;
+    if (!root) return;
+    let frame = 0;
+    const run = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => labelTables(root)); };
+    run();
+    const observer = new MutationObserver(run);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, []);
   const pathname = usePathname();
   const section = sectionOf(pathname);
   const homeContentRoute = pathname.startsWith("/admin/content/home");
@@ -145,7 +158,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
         <div className="admin-topbar-title"><strong>{section.title}</strong><span>{section.subtitle}</span></div>
         <div className="admin-topbar-actions"><div className="admin-topbar-search"><Search size={14}/><span>Qidirish...</span></div><Bell className="admin-bell" size={18}/><span className="admin-user"><span className="admin-avatar">{user.name.trim().charAt(0).toUpperCase()}</span><span className="admin-user-details"><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span></span><form action={logoutAction}><button className="admin-logout" type="submit" aria-label="Chiqish"><LogOut size={16}/><span>Chiqish</span></button></form><button className="admin-mobile-menu" aria-label="Menyuni ochish" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={21}/></button></div>
       </header>
-      <div className="admin-workspace">{children}</div>
+      <div className="admin-workspace" ref={workspace}>{children}</div>
     </div>
     {/* Phone: the first sections as a bottom bar (above the home indicator), the rest under "Menyu". */}
     <nav className="admin-tabbar" aria-label="Asosiy bo‘limlar">

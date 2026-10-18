@@ -171,3 +171,15 @@
 .admin-install-go{border:0;border-radius:9px;padding:8px 12px;background:#7cc4ff;color:#102c47;font:inherit;font-weight:700}
 .admin-install-close{border:0;background:none;color:#fff;opacity:.8;padding:6px;display:grid;place-items:center}
 @media(min-width:651px){.admin-install{bottom:20px}}
+/* Phones: tables as cards (cells labelled by components/admin/table-cards.ts); one card per row, "Header: value" per cell. */
+@media(max-width:650px){
+  .admin-workspace table.is-cards,.admin-workspace table.is-cards tbody,.admin-workspace table.is-cards tfoot,.admin-workspace table.is-cards tr,.admin-workspace table.is-cards td{display:block;width:auto!important;min-width:0!important;max-width:100%}
+  .admin-workspace table.is-cards thead{display:none}
+  .admin-workspace table.is-cards tr{margin:0 0 10px;padding:8px 12px;background:#fff;border:1px solid var(--admin-line,#d7e6f8);border-radius:14px;box-shadow:0 6px 18px #1b4a7608}
+  .admin-workspace table.is-cards td{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:6px 0!important;border:0!important;text-align:right!important;white-space:normal!important;overflow-wrap:anywhere;background:none!important}
+  .admin-workspace table.is-cards td+td{border-top:1px solid #eef3f9!important}
+  .admin-workspace table.is-cards td::before{content:attr(data-label);flex:0 0 40%;color:#6b7f95;font-size:12px;font-weight:600;text-align:left}
+  .admin-workspace table.is-cards td[data-label=""]{justify-content:flex-end}.admin-workspace table.is-cards td[data-label=""]::before{display:none}
+  .admin-workspace table.is-cards td>*{min-width:0;max-width:100%}
+  .admin-workspace .admin-table-wrap.is-scroll,.admin-workspace .bk-table-wrap,.admin-workspace .sx-table-wrap{overflow-x:visible}
+}

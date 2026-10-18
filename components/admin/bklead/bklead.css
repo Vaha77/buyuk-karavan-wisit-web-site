@@ -1,6 +1,6 @@
 /* BKLead dashboard, referral links and regular customers. Scoped under .bk so other admin pages keep their styles. */
 .bk{--bk-bg:#F3F6FB;--bk-card:#FFFFFF;--bk-border:#E3E9F2;--bk-text:#0F1E33;--bk-muted:#5B6B82;--bk-primary:#1D4E9E;--bk-navy:#123E7C;--bk-b1:#4F7FCC;--bk-b2:#8DB0E4;--bk-b3:#C7D8F1;--bk-light:#D9E3F3;--bk-none:#E6EBF2;--bk-orange:#E07A2E;--bk-orange-text:#2B1200;--bk-soft:#FDEEDF;--bk-soft-text:#8A4B12;--bk-gold:#E9C46A;--bk-silver:#C9D1DC;--bk-bronze:#D9A273;
-  color:var(--bk-text);font-family:var(--font-plex),"IBM Plex Sans",system-ui,sans-serif;display:grid;gap:16px;min-width:0}
+  color:var(--bk-text);font-family:var(--font-plex),"IBM Plex Sans",system-ui,sans-serif;display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0}
 .bk h1,.bk h2,.bk h3,.bk-num{font-family:var(--font-space),"Space Grotesk",var(--font-plex),system-ui,sans-serif}
 .bk h1{margin:0;font-size:24px;line-height:1.2;font-weight:700}.bk h2{margin:0;font-size:16px;font-weight:700}.bk h3{margin:0;font-size:14px;font-weight:700}
 .bk p{margin:0}.bk small{color:var(--bk-muted)}
