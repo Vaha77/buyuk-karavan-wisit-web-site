@@ -7,7 +7,7 @@ import { PhoneCall, Plus, Search } from "lucide-react";
 import { addMyCustomerAction, createPurchaseAction, recordContactAction, updateMyCustomerAction } from "@/app/admin/(seller)/my/actions";
 import { CALL_INTERVALS, CONTACT_RESULTS, type ContactResult } from "@/lib/customers/seller-rules";
 import { formatInt, formatUsd } from "@/lib/dashboard/format";
-import { COUNTRY_NAMES, CUSTOMER_COUNTRIES, regionsOf, type CountryCode } from "@/lib/dashboard/regions";
+import { COUNTRY_NAMES, CUSTOMER_COUNTRIES, customerRegionsOf, type CountryCode } from "@/lib/dashboard/regions";
 import { Dialog } from "./dialog";
 
 export type SellerCustomerRow = { id: string; name: string; phone: string | null; region: string; callIntervalDays: number; days: number; due: "red" | "yellow" | null; nextContact: string | null };
@@ -57,7 +57,7 @@ export function SellerCustomerForm({ customer, onDone, regionCode }: { customer?
     </div>
     <div className="bk-row">
       <label className="bk-field"><span>Davlat</span><select value={values.country} onChange={event => { set("country", event.target.value); set("regionCode", ""); }}>{CUSTOMER_COUNTRIES.map(code => <option key={code} value={code}>{COUNTRY_NAMES[code]}</option>)}</select></label>
-      <label className="bk-field"><span>Viloyat</span><select value={values.regionCode} onChange={event => set("regionCode", event.target.value)}><option value="">Tanlanmagan</option>{regionsOf(values.country as CountryCode).map(region => <option key={region.code} value={region.code}>{region.name}</option>)}</select></label>
+      <label className="bk-field"><span>Viloyat</span><select value={values.regionCode} onChange={event => set("regionCode", event.target.value)}><option value="">Tanlanmagan</option>{customerRegionsOf(values.country as CountryCode).map(region => <option key={region.code} value={region.code}>{region.name}</option>)}</select></label>
       <label className="bk-field"><span>Qo‘ng‘iroq oralig‘i</span><select value={values.callIntervalDays} onChange={event => set("callIntervalDays", Number(event.target.value))}>{CALL_INTERVALS.map(days => <option key={days} value={days}>{days} kun</option>)}</select></label>
     </div>
     <label className="bk-field"><span>Izoh</span><input value={values.note} onChange={event => set("note", event.target.value)} maxLength={500}/></label>
@@ -139,7 +139,7 @@ export function PurchaseForm({ customers, fixedCustomerId, uzsPerUsd }: { custom
     </div>
     <div className="bk-row">
       <label className="bk-field"><span>Davlat</span><select value={location.country} onChange={event => setLocation({ country: event.target.value, regionCode: "" })}>{CUSTOMER_COUNTRIES.map(code => <option key={code} value={code}>{COUNTRY_NAMES[code]}</option>)}</select></label>
-      <label className="bk-field"><span>Viloyat</span><select value={location.regionCode} onChange={event => setLocation({ ...location, regionCode: event.target.value })} required><option value="">Tanlang</option>{regionsOf(location.country as CountryCode).map(region => <option key={region.code} value={region.code}>{region.name}</option>)}</select></label>
+      <label className="bk-field"><span>Viloyat</span><select value={location.regionCode} onChange={event => setLocation({ ...location, regionCode: event.target.value })} required><option value="">Tanlang</option>{customerRegionsOf(location.country as CountryCode).map(region => <option key={region.code} value={region.code}>{region.name}</option>)}</select></label>
     </div>
     <div className="bk-row">
       <label className="bk-field"><span>Summa</span><input value={amount} onChange={event => setAmount(event.target.value)} inputMode="decimal" placeholder={currency === "USD" ? "1 500" : "19 000 000"} required/></label>

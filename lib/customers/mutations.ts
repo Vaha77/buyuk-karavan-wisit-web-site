@@ -6,7 +6,7 @@ import { getDb } from "@/lib/db";
 import { writeAudit } from "@/lib/audit/service";
 import { getUsdUzsRate } from "@/lib/currency/cbu";
 import { normalizeUzPhone } from "@/lib/auth/phone";
-import { isCountryCode, isRegionOf } from "@/lib/dashboard/regions";
+import { isCountryCode, isCustomerRegionOf } from "@/lib/dashboard/regions";
 import { expireDashboard } from "@/lib/referrals/tracking";
 
 export class CustomerError extends Error {}
@@ -21,7 +21,7 @@ export const customerInputSchema = z.object({
   isActive: z.boolean().default(true),
   ownerId: z.string().trim().max(40).transform(value => value || null).default(""),
   callIntervalDays: z.number().int().refine(value => [30, 60, 90].includes(value), "Qo‘ng‘iroq oralig‘ini tanlang.").default(60),
-}).refine(value => !value.regionCode || isRegionOf(value.regionCode, value.country), { message: "Viloyat tanlangan davlatga tegishli emas.", path: ["regionCode"] });
+}).refine(value => !value.regionCode || isCustomerRegionOf(value.regionCode, value.country), { message: "Viloyat tanlangan davlatga tegishli emas.", path: ["regionCode"] });
 export type CustomerInput = z.input<typeof customerInputSchema>;
 
 export async function saveRegularCustomer(id: string | null, raw: CustomerInput, actor: Actor) {

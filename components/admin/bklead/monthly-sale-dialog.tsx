@@ -7,7 +7,7 @@ import { Plus, X } from "lucide-react";
 import { loadCustomerYearAction, saveMonthlySaleAction } from "@/app/admin/(protected)/customers/actions";
 import type { CustomerYearData } from "@/lib/customers/queries";
 import { formatInt, formatUsd, MONTHS_LONG } from "@/lib/dashboard/format";
-import { regionName } from "@/lib/dashboard/regions";
+import { customerRegionName } from "@/lib/dashboard/regions";
 import { previewRank, rankCustomers } from "@/lib/dashboard/rules";
 
 const MONTH_LETTERS = ["Y", "F", "M", "A", "M", "I", "I", "A", "S", "O", "N", "D"];
@@ -73,7 +73,7 @@ function MonthlySaleDialog({ data, now, uzsPerUsd, onClose }: { data: CustomerYe
           {!data.customers.length ? <div className="bk-empty"><strong>Hali doimiy mijoz yo‘q</strong><Link className="bk-btn is-primary" href="/admin/customers?new=1">+ Yangi doimiy mijoz qo‘shish</Link></div> : <>
             <div className="bk-field"><span id="bk-customer-label">Doimiy mijoz</span>
               {data.customers.length > 8 && <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Mijozni qidirish…" aria-label="Mijozni qidirish"/>}
-              <select value={customerId} onChange={event => setCustomerId(event.target.value)} aria-labelledby="bk-customer-label">{filtered.map(customer => <option key={customer.id} value={customer.id}>{customer.name}{customer.regionCode ? ` — ${regionName(customer.regionCode).replace(/ viloyati$/, "")}` : ""}</option>)}</select>
+              <select value={customerId} onChange={event => setCustomerId(event.target.value)} aria-labelledby="bk-customer-label">{filtered.map(customer => <option key={customer.id} value={customer.id}>{customer.name}{customer.regionCode ? ` — ${customerRegionName(customer.regionCode).replace(/ viloyati$/, "")}` : ""}</option>)}</select>
             </div>
             <div className="bk-row">
               <label className="bk-field"><span>Yil</span><select value={year} onChange={event => setYear(Number(event.target.value))}>{[now.year, now.year - 1, now.year - 2].map(value => <option key={value} value={value}>{value}</option>)}</select></label>

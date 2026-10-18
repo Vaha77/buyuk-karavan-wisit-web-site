@@ -91,7 +91,9 @@ export const REGIONS: RegionInfo[] = [
 /** Regular customers (seller cabinet, customer maps): Central Asia without Afghanistan. */
 export const CUSTOMER_COUNTRIES = ["UZ", "KZ", "KG", "TJ", "TM"] as const satisfies readonly CountryCode[];
 export type CustomerCountry = (typeof CUSTOMER_COUNTRIES)[number];
-export const CUSTOMER_REGIONS = REGIONS.filter(region => (CUSTOMER_COUNTRIES as readonly string[]).includes(region.country));
+// Customers: Tashkent city and region are one "Toshkent" (UZ-TO); leads keep both codes.
+const asCustomerRegions = (list: RegionInfo[]) => list.filter(region => region.code !== "UZ-TK").map(region => region.code === "UZ-TO" ? { ...region, name: "Toshkent" } : region);
+export const CUSTOMER_REGIONS = asCustomerRegions(REGIONS.filter(region => (CUSTOMER_COUNTRIES as readonly string[]).includes(region.country)));
 
 export const REGION_BY_CODE = new Map(REGIONS.map(region => [region.code, region]));
 export function regionName(code: string | null | undefined) { return (code && REGION_BY_CODE.get(code)?.name) || "Aniqlanmagan"; }
@@ -99,6 +101,9 @@ export function regionsOf(country: CountryCode) { return REGIONS.filter(region =
 export function isCountryCode(value: unknown): value is CountryCode { return typeof value === "string" && (COUNTRY_CODES as readonly string[]).includes(value); }
 /** A customer in `regionCode` also counts for region `code` (itself or its parent). */
 export function countsFor(regionCode: string | null, code: string) { return !!regionCode && (regionCode === code || REGION_BY_CODE.get(regionCode)?.parent === code); }
+export const customerRegionsOf = (country: CountryCode) => asCustomerRegions(regionsOf(country));
+export const isCustomerRegionOf = (code: string, country: string) => code !== "UZ-TK" && isRegionOf(code, country);
+export const customerRegionName = (code: string | null | undefined) => code === "UZ-TO" ? "Toshkent" : regionName(code);
 export function isRegionOf(code: string, country: string) { return REGION_BY_CODE.get(code)?.country === country; }
 
 /** The Fergana valley callout on the Uzbekistan map. */

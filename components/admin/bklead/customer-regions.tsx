@@ -29,7 +29,7 @@ const sortValue = (region: RegionStat, key: SortKey) => key === "name" ? region.
 /** One 5-country map coloured by regular customer sales, region detail, sortable region ranking and the top-5 monthly chart. */
 export function CustomerRegions({ stats }: { stats: RegionStats }) {
   const ranked = stats.regions;
-  const [selected, setSelected] = useState<string>(ranked[0]?.code ?? "UZ-TK");
+  const [selected, setSelected] = useState<string>(ranked[0]?.code ?? "UZ-TO");
   const [hover, setHover] = useState<{ code: string; x: number; y: number } | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "total", dir: -1 });
   const detailRef = useRef<HTMLElement>(null);

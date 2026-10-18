@@ -13,7 +13,7 @@ import { presimplify, quantile, simplify } from "topojson-simplify";
 import { feature, merge } from "topojson-client";
 
 const source = process.argv[2], gbDir = process.argv[3];
-const GB_CITIES = [["UZB", "Tashkent", "UZ-TK"], ["KAZ", "Almaty", "KZ-ALM"], ["KAZ", "Astana", "KZ-AST"], ["TJK", "Dushanbe", "TJ-DU"], ["KAZ2", "Shymkent", "KZ-SHY"]];
+const GB_CITIES = [["KAZ", "Almaty", "KZ-ALM"], ["KAZ", "Astana", "KZ-AST"], ["TJK", "Dushanbe", "TJ-DU"], ["KAZ2", "Shymkent", "KZ-SHY"]];
 if (!source) { console.error("Usage: node scripts/build-region-maps.mjs <ne_10m_admin_1_states_provinces.geojson>"); process.exit(1); }
 const OUT = new URL("../lib/dashboard/maps/", import.meta.url);
 const COUNTRIES = ["UZ", "KZ", "KG", "TJ", "TM", "AF"];
@@ -79,6 +79,12 @@ function build(view, pick, width = 640) {
   for (const city of CITY_POINTS.filter(point => (view === point.country.toLowerCase() || view === "ca") && !cities.some(item => item.code === point.code))) {
     const [x, y] = projection(city.lonLat);
     regions.push({ code: city.code, d: "", x: +x.toFixed(1), y: +y.toFixed(1), small: true, point: true });
+  }
+  // Customer map: Tashkent city is part of one "Toshkent" area (UZ-TO).
+  if (view === "ca") {
+    const shape = merge(topo, geoms.filter(g => g.properties.code === "UZ-TO" || g.properties.code === "UZ-TK")), [x, y] = path.centroid(shape);
+    regions.splice(regions.findIndex(item => item.code === "UZ-TK"), 1);
+    Object.assign(regions.find(item => item.code === "UZ-TO"), { d: round(path(shape)), x: +x.toFixed(1), y: +y.toFixed(1), size: sizeOf(shape) });
   }
   // Cities are drawn over their parent region.
   regions.sort((a, b) => a.small - b.small);

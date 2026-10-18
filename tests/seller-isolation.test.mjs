@@ -190,7 +190,7 @@ test("the seller map is built from the seller's own customers only", async () =>
   assert.equal(region("UZ-SA").total, 1000); // B's 7000 in the same region is not counted
   assert.equal(region("UZ-NG").total, 500);
   assert.equal(region("UZ-BU").status, "empty"); // B's region is an opportunity for A
-  assert.equal(mapA.opened, 2); assert.equal(mapA.regionCount, 54);
+  assert.equal(mapA.opened, 2); assert.equal(mapA.regionCount, 53);
   assert.ok(!mapA.regions.flatMap(row => row.list).some(row => row.id === b));
   const mapB = sellerMap.buildSellerMap(await repo.sellerMapCustomers(db, sellerB, 2026, today));
   assert.equal(mapB.regions.find(row => row.code === "UZ-SA").total, 7000);

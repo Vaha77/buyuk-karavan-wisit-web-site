@@ -5,7 +5,7 @@ import { requireSeller } from "@/lib/auth/require-admin";
 import { CustomerNotFound, SellerError } from "@/lib/customers/seller-repo";
 import { addCustomerAsSeller, createPurchaseAsSeller, recordContactAsSeller, updateCustomerAsSeller } from "@/lib/customers/seller-service";
 import { CALL_INTERVALS, CONTACT_RESULTS, type ContactResult } from "@/lib/customers/seller-rules";
-import { isCountryCode, isRegionOf } from "@/lib/dashboard/regions";
+import { isCountryCode, isCustomerRegionOf } from "@/lib/dashboard/regions";
 
 // Every action starts with requireSeller(); the repository then scopes each query to the seller's own customers.
 export type SellerActionResult = { ok: true; id?: string } | { ok: false; error: string };
@@ -20,7 +20,7 @@ function refresh(customerId?: string) { revalidatePath("/admin/my"); revalidateP
 const text = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 function location(country: unknown, regionCode: unknown) {
   const code = isCountryCode(country) ? country : "UZ";
-  const region = typeof regionCode === "string" && regionCode && isRegionOf(regionCode, code) ? regionCode : null;
+  const region = typeof regionCode === "string" && regionCode && isCustomerRegionOf(regionCode, code) ? regionCode : null;
   return { country: code, regionCode: region };
 }
 const interval = (value: unknown) => (CALL_INTERVALS as readonly number[]).includes(Number(value)) ? Number(value) : 60;

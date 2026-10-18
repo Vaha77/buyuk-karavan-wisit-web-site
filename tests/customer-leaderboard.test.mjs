@@ -46,6 +46,9 @@ test("region lists follow the chosen country", async () => {
   assert.ok(regions.regionsOf("KZ").every(region => region.code.startsWith("KZ-")));
   assert.ok(regions.isRegionOf("KG-O", "KG") && !regions.isRegionOf("KG-O", "UZ"));
   assert.ok(!regions.CUSTOMER_REGIONS.some(region => region.country === "AF"));
+  const uz = regions.customerRegionsOf("UZ");
+  assert.deepEqual([uz.length, uz.filter(region => region.name.startsWith("Toshkent")).map(region => [region.code, region.name])], [13, [["UZ-TO", "Toshkent"]]]);
+  assert.ok(!regions.isCustomerRegionOf("UZ-TK", "UZ") && regions.isCustomerRegionOf("UZ-TO", "UZ") && regions.isRegionOf("UZ-TK", "UZ")); // leads keep the city
   const { readFileSync } = await import("node:fs");
   const ca = JSON.parse(readFileSync(new URL("../lib/dashboard/maps/ca.json", import.meta.url), "utf8"));
   assert.deepEqual(ca.regions.map(region => region.code).sort(), regions.CUSTOMER_REGIONS.map(region => region.code).sort(), "one map has every customer region");

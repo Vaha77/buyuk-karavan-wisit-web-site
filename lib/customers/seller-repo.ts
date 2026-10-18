@@ -5,7 +5,7 @@ import type { PrismaClient } from "../../generated/prisma/client";
 import { normalizeUzPhone } from "../auth/phone";
 import { CALL_INTERVALS, CONTACT_RESULTS, daysWithoutPurchase, defaultNextContact, isDue, purchaseUsd, type ContactResult } from "./seller-rules";
 import type { MapCustomer } from "./seller-map";
-import { CUSTOMER_COUNTRIES, isRegionOf } from "../dashboard/regions";
+import { CUSTOMER_COUNTRIES, isCustomerRegionOf } from "../dashboard/regions";
 
 export type Viewer = { role: string; salesPersonId: string | null };
 type Db = Pick<PrismaClient, "regularCustomer" | "customerContact" | "customerPurchase" | "regularCustomerMonthlySale">;
@@ -99,7 +99,7 @@ export async function recordContact(db: Db, viewer: Viewer, customerId: string, 
  */
 export async function createPurchase(db: Db, viewer: Viewer, userId: string, customerId: string, input: { date: Date; amount: number; currency: "USD" | "UZS"; note: string | null; country: string; regionCode: string }, uzsPerUsd: number | null) {
   const customer = await requireCustomer(db, viewer, customerId);
-  if (!(CUSTOMER_COUNTRIES as readonly string[]).includes(input.country) || !isRegionOf(input.regionCode, input.country)) throw new SellerError("Davlat va viloyatni tanlang.");
+  if (!(CUSTOMER_COUNTRIES as readonly string[]).includes(input.country) || !isCustomerRegionOf(input.regionCode, input.country)) throw new SellerError("Davlat va viloyatni tanlang.");
   if (!(input.amount > 0) || input.amount >= 1e15) throw new SellerError("Summani kiriting.");
   const amountUsd = purchaseUsd(input.amount, input.currency, uzsPerUsd);
   if (amountUsd === null) throw new SellerError("Markaziy bank kursi olinmadi. Summani $ da kiriting yoki keyinroq urinib ko‘ring.");

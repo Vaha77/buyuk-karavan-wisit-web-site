@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { deleteCustomerAction, saveCustomerAction, savePrizesAction, saveTipsAction } from "@/app/admin/(protected)/customers/actions";
 import { ConfirmDialog } from "./dialog";
-import { COUNTRY_CODES, COUNTRY_NAMES, regionName, regionsOf, type CountryCode } from "@/lib/dashboard/regions";
+import { COUNTRY_CODES, COUNTRY_NAMES, customerRegionName, customerRegionsOf, type CountryCode } from "@/lib/dashboard/regions";
 
 type Customer = { id: string; name: string; country: string; regionCode: string | null; phone: string | null; note: string | null; isActive: boolean; salesCount: number; ownerId: string | null; ownerName: string | null; callIntervalDays: number };
 type Seller = { id: string; name: string };
@@ -35,7 +35,7 @@ export function CustomersManager({ customers, sellers, canEdit, startNew }: { cu
     {shown.length ? <div className="bk-table-wrap"><table className="bk-table">
       <thead><tr><th>Mijoz</th><th className="is-left">Sotuvchi</th><th className="is-left">Hudud</th><th className="is-left">Telefon</th><th>Kiritilgan oylar</th><th className="is-left">Holat</th>{canEdit && <th><span className="bk-sr-only">Amallar</span></th>}</tr></thead>
       <tbody>{shown.map(customer => editing === customer.id ? <tr key={customer.id}><td colSpan={canEdit ? 7 : 6} className="is-left"><CustomerForm customer={customer} sellers={sellers} onDone={() => setEditing(null)}/></td></tr> : <tr key={customer.id}>
-        <td className="is-strong">{customer.name}</td><td className="is-left">{customer.ownerName ?? <span className="bk-badge is-soft">Biriktirilmagan</span>}</td><td className="is-left">{customer.regionCode ? regionName(customer.regionCode) : COUNTRY_NAMES[customer.country as CountryCode] ?? customer.country}</td>
+        <td className="is-strong">{customer.name}</td><td className="is-left">{customer.ownerName ?? <span className="bk-badge is-soft">Biriktirilmagan</span>}</td><td className="is-left">{customer.regionCode ? customerRegionName(customer.regionCode) : COUNTRY_NAMES[customer.country as CountryCode] ?? customer.country}</td>
         <td className="is-left bk-muted">{customer.phone || "—"}</td><td>{customer.salesCount}</td>
         <td className="is-left"><span className={`bk-badge${customer.isActive ? "" : " is-grey"}`}>{customer.isActive ? "Faol" : "Nofaol"}</span></td>
         {canEdit && <td><div className="bk-actions" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
@@ -67,7 +67,7 @@ function CustomerForm({ customer, sellers, onDone }: { customer?: Customer; sell
     <div className="bk-row">
       <label className="bk-field"><span>Mijoz nomi</span><input value={name} onChange={event => setName(event.target.value)} maxLength={120} placeholder="Mijoz A MChJ" required/></label>
       <label className="bk-field"><span>Davlat</span><select value={country} onChange={event => { setCountry(event.target.value as CountryCode); setRegionCode(""); }}>{COUNTRY_CODES.map(code => <option key={code} value={code}>{COUNTRY_NAMES[code]}</option>)}</select></label>
-      <label className="bk-field"><span>Viloyat / hudud</span><select value={regionCode} onChange={event => setRegionCode(event.target.value)}><option value="">Tanlanmagan</option>{regionsOf(country).map(region => <option key={region.code} value={region.code}>{region.name}</option>)}</select></label>
+      <label className="bk-field"><span>Viloyat / hudud</span><select value={regionCode} onChange={event => setRegionCode(event.target.value)}><option value="">Tanlanmagan</option>{customerRegionsOf(country).map(region => <option key={region.code} value={region.code}>{region.name}</option>)}</select></label>
     </div>
     <div className="bk-row">
       <label className="bk-field"><span>Telefon (ixtiyoriy)</span><input value={phone} onChange={event => setPhone(event.target.value)} maxLength={40} inputMode="tel"/></label>

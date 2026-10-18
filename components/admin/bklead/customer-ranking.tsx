@@ -1,12 +1,12 @@
 import Link from "next/link";
 import type { CustomerYearData } from "@/lib/customers/queries";
 import { formatUsd, formatUsdK, MONTHS_LONG } from "@/lib/dashboard/format";
-import { regionName } from "@/lib/dashboard/regions";
+import { customerRegionName } from "@/lib/dashboard/regions";
 import { rankCustomers, requiredMonths } from "@/lib/dashboard/rules";
 import { MonthlySaleButton } from "./monthly-sale-dialog";
 
 const PLACE_LABELS = { 1: "1-O‘RIN · OLTIN", 2: "2-O‘RIN · KUMUSH", 3: "3-O‘RIN · BRONZA" } as const;
-const shortRegion = (code: string | null) => code ? regionName(code).replace(/ viloyati$/, "") : "";
+const shortRegion = (code: string | null) => code ? customerRegionName(code).replace(/ viloyati$/, "") : "";
 
 /** "Doimiy mijozlar reytingi — {yil}": podium, monthly table and status per customer. */
 export function CustomerRanking({ data, now, canEdit, uzsPerUsd, yearHref }: { data: CustomerYearData; now: { year: number; month: number }; canEdit: boolean; uzsPerUsd: number | null; yearHref: (year: number) => string }) {
