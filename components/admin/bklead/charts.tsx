@@ -11,7 +11,7 @@ export function DailyBars({ days, highlight = 2, label }: { days: Array<{ day: s
     {days.map((day, index) => {
       const h = Math.max(day.clicks ? 3 : 1, ((height - top - bottom) * day.clicks) / max), x = index * (barWidth + gap);
       return <g key={day.day}>
-        <rect x={x} y={height - bottom - h} width={barWidth} height={h} rx="3" fill={peaks.has(day.day) ? "#123E7C" : day.clicks ? "#8DB0E4" : "#E6EBF2"}><title>{`${day.day}: ${formatInt(day.clicks)} klik`}</title></rect>
+        <rect x={x} y={height - bottom - h} width={barWidth} height={h} rx="3" fill={peaks.has(day.day) ? "var(--chart-bar, #123E7C)" : day.clicks ? "var(--chart-soft, #8DB0E4)" : "#E6EBF2"}><title>{`${day.day}: ${formatInt(day.clicks)} klik`}</title></rect>
         {index % every === 0 && <text x={x + barWidth / 2} y={height - 8} textAnchor="middle">{Number(day.day.slice(8))}</text>}
       </g>;
     })}
@@ -29,13 +29,13 @@ export function WeeklyLines({ weeks, label, unit = "lid" }: { weeks: Array<{ lab
   const last = weeks.at(-1), lastX = x(weeks.length - 1);
   const tagWidth = Math.max(56, 16 + `${formatInt(last?.leads ?? 0)} ${unit}`.length * 6.5);
   return <svg className="bk-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
-    {[0, 1, 2, 3].map(tick => <g key={tick}><line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} stroke="#E3E9F2"/><text x={left - 8} y={y(tick * step) + 4} textAnchor="end">{tick * step}</text></g>)}
-    <path d={`${line("leads")}L${lastX.toFixed(1)} ${y(0)}L${x(0)} ${y(0)}Z`} fill="#123E7C" opacity=".06"/>
-    <path d={line("leads")} fill="none" stroke="#123E7C" strokeWidth="2.2" strokeLinejoin="round"/>
+    {[0, 1, 2, 3].map(tick => <g key={tick}><line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} stroke="var(--k-bd-e3e9f2, #E3E9F2)"/><text x={left - 8} y={y(tick * step) + 4} textAnchor="end">{tick * step}</text></g>)}
+    <path d={`${line("leads")}L${lastX.toFixed(1)} ${y(0)}L${x(0)} ${y(0)}Z`} fill="var(--chart-bar, #123E7C)" opacity=".06"/>
+    <path d={line("leads")} fill="none" stroke="var(--chart-bar, #123E7C)" strokeWidth="2.2" strokeLinejoin="round"/>
     <path d={line("calculations")} fill="none" stroke="#E07A2E" strokeWidth="2" strokeLinejoin="round"/>
     {weeks.map((week, index) => index % 2 === 0 && <text key={week.label} x={x(index)} y={height - 6} textAnchor="middle">{week.label}</text>)}
     {last && <g>
-      <circle cx={lastX} cy={y(last.leads)} r="4.5" fill="#fff" stroke="#123E7C" strokeWidth="2"/><circle cx={lastX} cy={y(last.calculations)} r="4" fill="#fff" stroke="#E07A2E" strokeWidth="2"/>
+      <circle cx={lastX} cy={y(last.leads)} r="4.5" fill="var(--k-bg-ffffff, #fff)" stroke="var(--chart-bar, #123E7C)" strokeWidth="2"/><circle cx={lastX} cy={y(last.calculations)} r="4" fill="var(--k-bg-ffffff, #fff)" stroke="#E07A2E" strokeWidth="2"/>
       <rect x={lastX - tagWidth - 2} y={y(last.leads) - 30} width={tagWidth} height="20" rx="6" fill="#0F1E33"/><text x={lastX - 2 - tagWidth / 2} y={y(last.leads) - 16} textAnchor="middle" style={{ fill: "#fff", fontWeight: 700 }}>{formatInt(last.leads)} {unit}</text>
     </g>}
   </svg>;
@@ -47,12 +47,12 @@ export function MonthBars({ months, missing, label }: { months: number[]; missin
   const max = Math.max(1, ...months);
   const barWidth = (width - gap * 11) / 12, gaps = new Set(missing);
   return <svg className="bk-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
-    <line x1="0" x2={width} y1={height - bottom} y2={height - bottom} stroke="#E3E9F2"/>
+    <line x1="0" x2={width} y1={height - bottom} y2={height - bottom} stroke="var(--k-bd-e3e9f2, #E3E9F2)"/>
     {months.map((value, index) => {
       const h = value > 0 ? Math.max(3, ((height - top - bottom) * value) / max) : 0, x = index * (barWidth + gap);
       return <g key={index}>
         {gaps.has(index + 1) ? <rect x={x + 1} y={height - bottom - 18} width={barWidth - 2} height="17" rx="3" fill="none" stroke="#E07A2E" strokeDasharray="3 2"><title>{`${MONTHS_LONG[index]}: kiritilmagan`}</title></rect>
-          : <rect x={x} y={height - bottom - h} width={barWidth} height={h} rx="3" fill={value === max ? "#123E7C" : "#8DB0E4"}><title>{`${MONTHS_LONG[index]}: ${formatUsd(value)}`}</title></rect>}
+          : <rect x={x} y={height - bottom - h} width={barWidth} height={h} rx="3" fill={value === max ? "var(--chart-bar, #123E7C)" : "var(--chart-soft, #8DB0E4)"}><title>{`${MONTHS_LONG[index]}: ${formatUsd(value)}`}</title></rect>}
         <text x={x + barWidth / 2} y={height - 5} textAnchor="middle">{MONTHS_LONG[index].slice(0, 1)}</text>
       </g>;
     })}
@@ -67,15 +67,15 @@ export function PlanBars({ sales, plans, current, label }: { sales: number[]; pl
   const max = Math.max(1, ...sales, ...plans), barWidth = (width - gap * 11) / 12, best = sales.indexOf(Math.max(...sales));
   const y = (value: number) => height - bottom - (inner * value) / max;
   return <svg className="bk-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
-    <line x1="0" x2={width} y1={height - bottom} y2={height - bottom} stroke="#E3E9F2"/>
+    <line x1="0" x2={width} y1={height - bottom} y2={height - bottom} stroke="var(--k-bd-e3e9f2, #E3E9F2)"/>
     {sales.map((value, index) => {
       const x = index * (barWidth + gap), plan = plans[index], peak = Math.min(y(value), plan ? y(plan) : Infinity);
       const tip = `${monthLabel(index)}: ${formatUsd(value)}${plan ? ` · reja ${formatUsd(plan)} · ${formatInt((value / plan) * 100)}%` : ""}`, tipWidth = tip.length * 6.2 + 12;
       const tipX = Math.min(width - tipWidth, Math.max(0, x + barWidth / 2 - tipWidth / 2));
       return <g key={index} className="bk-bar" tabIndex={0} aria-label={tip}>
         <rect x={x - gap / 2} y={top} width={barWidth + gap} height={inner} fill="transparent"/>
-        <rect x={x} y={y(value)} width={barWidth} height={height - bottom - y(value)} rx="3" fill={index + 1 === current ? "#8DB0E4" : "#123E7C"}/>
-        {plan > 0 && <line x1={x - 2} x2={x + barWidth + 2} y1={y(plan)} y2={y(plan)} stroke="#0F1E33" strokeWidth="2.5"/>}
+        <rect x={x} y={y(value)} width={barWidth} height={height - bottom - y(value)} rx="3" fill={index + 1 === current ? "var(--chart-soft, #8DB0E4)" : "var(--chart-bar, #123E7C)"}/>
+        {plan > 0 && <line x1={x - 2} x2={x + barWidth + 2} y1={y(plan)} y2={y(plan)} stroke="var(--chart-ink, #0F1E33)" strokeWidth="2.5"/>}
         {value > 0 && (index === best || index + 1 === current) && <text x={x + barWidth / 2} y={peak - 5} textAnchor="middle" style={{ fill: "var(--bk-text)", fontWeight: 700 }}>{formatUsdK(value)}</text>}
         <text x={x + barWidth / 2} y={height - 5} textAnchor="middle">{monthLabel(index)}</text>
         <g className="bk-bar-tip"><rect x={tipX} y="0" width={tipWidth} height="20" rx="5" fill="#0F1E33"/><text x={tipX + 6} y="14" style={{ fill: "#fff", fontWeight: 600 }}>{tip}</text></g>
@@ -99,13 +99,13 @@ export function RegionLines({ series, lastMonth, label }: { series: Array<{ name
   const ends = series.map((item, index) => ({ index, y: y(item.months[count - 1] ?? 0) })).sort((a, b) => a.y - b.y);
   for (let index = 1; index < ends.length; index++) ends[index].y = Math.max(ends[index].y, ends[index - 1].y + 14);
   return <svg className="bk-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
-    {[0, 1, 2, 3].map(tick => <g key={tick}><line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} stroke="#E3E9F2"/><text x={left - 8} y={y(tick * step) + 4} textAnchor="end">{formatUsdK(tick * step)}</text></g>)}
+    {[0, 1, 2, 3].map(tick => <g key={tick}><line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} stroke="var(--k-bd-e3e9f2, #E3E9F2)"/><text x={left - 8} y={y(tick * step) + 4} textAnchor="end">{formatUsdK(tick * step)}</text></g>)}
     {Array.from({ length: count }, (_, index) => <text key={index} x={x(index)} y={height - 6} textAnchor="middle">{MONTHS_SHORT[index][0].toUpperCase() + MONTHS_SHORT[index].slice(1)}</text>)}
     {series.map((item, index) => <g key={item.name}>
       <path d={item.months.slice(0, count).map((value, month) => `${month ? "L" : "M"}${x(month).toFixed(1)} ${y(value).toFixed(1)}`).join("")} fill="none" stroke={SERIES_COLORS[index]} strokeWidth="2" strokeLinejoin="round"/>
-      {item.months.slice(0, count).map((value, month) => <circle key={month} cx={x(month)} cy={y(value)} r="4" fill="#fff" stroke={SERIES_COLORS[index]} strokeWidth="2"><title>{`${item.name}, ${MONTHS_LONG[month]}: ${formatUsd(value)}`}</title></circle>)}
+      {item.months.slice(0, count).map((value, month) => <circle key={month} cx={x(month)} cy={y(value)} r="4" fill="var(--k-bg-ffffff, #fff)" stroke={SERIES_COLORS[index]} strokeWidth="2"><title>{`${item.name}, ${MONTHS_LONG[month]}: ${formatUsd(value)}`}</title></circle>)}
     </g>)}
-    {ends.map(end => <text key={end.index} x={x(count - 1) + 10} y={end.y + 4} style={{ fill: "#0F1E33", fontWeight: 600 }}>{series[end.index].name}</text>)}
+    {ends.map(end => <text key={end.index} x={x(count - 1) + 10} y={end.y + 4} style={{ fill: "var(--k-fg-0f1e33, #0F1E33)", fontWeight: 600 }}>{series[end.index].name}</text>)}
   </svg>;
 }
 function niceStep(value: number) { const power = 10 ** Math.floor(Math.log10(Math.max(1, value))); const unit = value / power; return (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * power; }
@@ -121,11 +121,11 @@ export function DailyLines({ days, series, label, dayLabel }: { days: string[]; 
   const every = Math.max(1, Math.ceil(count / 8));
   return <figure style={{ margin: 0 }}>
     <svg className="bk-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
-      {[0, 1, 2, 3].map(tick => <g key={tick}><line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} stroke="#E3E9F2"/><text x={left - 8} y={y(tick * step) + 4} textAnchor="end">{formatInt(tick * step)}</text></g>)}
+      {[0, 1, 2, 3].map(tick => <g key={tick}><line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} stroke="var(--k-bd-e3e9f2, #E3E9F2)"/><text x={left - 8} y={y(tick * step) + 4} textAnchor="end">{formatInt(tick * step)}</text></g>)}
       {days.map((day, index) => index % every === 0 || index === count - 1 ? <text key={day} x={x(index)} y={height - 6} textAnchor="middle">{dayLabel(day)}</text> : null)}
       {series.map((item, index) => <g key={item.name}>
         <path d={item.values.map((value, day) => `${day ? "L" : "M"}${x(day).toFixed(1)} ${y(value).toFixed(1)}`).join("")} fill="none" stroke={SERIES_COLORS[index]} strokeWidth="2" strokeLinejoin="round"/>
-        {count <= 31 && item.values.map((value, day) => <circle key={day} cx={x(day)} cy={y(value)} r="3" fill="#fff" stroke={SERIES_COLORS[index]} strokeWidth="1.5"><title>{`${item.name}, ${dayLabel(days[day])}: ${formatInt(value)}`}</title></circle>)}
+        {count <= 31 && item.values.map((value, day) => <circle key={day} cx={x(day)} cy={y(value)} r="3" fill="var(--k-bg-ffffff, #fff)" stroke={SERIES_COLORS[index]} strokeWidth="1.5"><title>{`${item.name}, ${dayLabel(days[day])}: ${formatInt(value)}`}</title></circle>)}
       </g>)}
     </svg>
     <figcaption className="bk-legend" style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12 }}>{series.map((item, index) => <span key={item.name} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><i style={{ width: 10, height: 10, borderRadius: 3, background: SERIES_COLORS[index], display: "inline-block" }}/>{item.name}</span>)}</figcaption>

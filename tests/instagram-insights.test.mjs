@@ -191,7 +191,7 @@ test("Statistika design: block order, colours, map scale and audience switch as 
   const client = await read("../components/admin/instagram/stats-client.tsx");
   assert.match(client, />Obunachilar</);
   assert.match(client, />Reaksiya beruvchilar</);
-  assert.match(css, /--igs-navy:#1E4E8C/);
+  assert.match(css, /--igs-navy:(?:var\(--k-[\w-]+, )?#1E4E8C/); // dark theme: the design colour stays as the light fallback
   assert.match(board, /\["today", "7", "30", "90"\]/, "Bugun first");
   assert.doesNotMatch(board, /Namuna ma/, "real data, no sample badge");
 });

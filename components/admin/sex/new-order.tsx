@@ -62,7 +62,7 @@ function SentNote({ result, onResent }: { result: SentResult; onResent: (next: S
 function PriceBlock({ base, delta, negotiated = false }: { base: number; delta: number | null; negotiated?: boolean }) {
   return <>
     <div className="sx-total"><span>Prays narxi</span><strong>{negotiated ? "kelishiladi" : formatUsd(base)}</strong></div>
-    {delta !== null && delta !== 0 && <span className="sx-muted" style={{ fontWeight: 700, color: "#6E5200" }}>Standartdan {formatSignedUsd(Math.round(delta * 100) / 100)} (prays narxida)</span>}
+    {delta !== null && delta !== 0 && <span className="sx-muted" style={{ fontWeight: 700, color: "var(--k-fg-6e5200, #6E5200)" }}>Standartdan {formatSignedUsd(Math.round(delta * 100) / 100)} (prays narxida)</span>}
   </>;
 }
 
@@ -79,7 +79,7 @@ function DateField({ label, value, onChange }: { label: React.ReactNode; value: 
   return <label className="sx-field">{label}
     <input value={text} inputMode="numeric" placeholder="kk.oo.yyyy" maxLength={10} aria-invalid={invalid} style={invalid ? { borderColor: "#A41F15" } : undefined}
       onChange={event => { const digits = event.target.value.replace(/\D+/g, "").slice(0, 8); const next = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join("."); setText(next); onChange(parse(next)); }}/>
-    {invalid && <small style={{ color: "#A41F15" }}>Sanani kk.oo.yyyy ko‘rinishida kiriting (bugundan oldin emas)</small>}
+    {invalid && <small style={{ color: "var(--k-fg-a41f15, #A41F15)" }}>Sanani kk.oo.yyyy ko‘rinishida kiriting (bugundan oldin emas)</small>}
   </label>;
 }
 
@@ -172,12 +172,12 @@ function AgregatForm({ userName, catalog, customers }: Props) {
       <div className="sx-card" style={{ gap: 16 }}>
         <span className="sx-section-label">2 · Nima yig‘iladi</span>
         <div className="sx-tiles">{ASSEMBLIES.map(item => <button key={item.key} type="button" className="sx-tile" aria-pressed={effective === item.key} disabled={!available(item.key)} style={!available(item.key) ? { opacity: .45, cursor: "not-allowed" } : undefined} onClick={() => { setAssembly(item.key); setResult(null); }}><b>{item.name}</b><span>{available(item.key) ? item.sub : "praysda yo‘q"}</span></button>)}</div>
-        {effective === "ch" && <div style={{ display: "grid", gap: 12, borderTop: "1px solid #EEF1F6", paddingTop: 16 }}>
+        {effective === "ch" && <div style={{ display: "grid", gap: 12, borderTop: "1px solid var(--k-bd-eef1f6, #EEF1F6)", paddingTop: 16 }}>
           <p className="sx-note">Chillerning tayyor sxemasi yo‘q: tarkibini yozing. Narxni kiriting yoki bo‘sh qoldiring — “kelishiladi”.</p>
-          <label className="sx-field">Tarkibi <small>· majburiy</small><textarea value={composition} onChange={event => { setComposition(event.target.value); setResult(null); }} rows={4} maxLength={1000} required placeholder="Masalan: 2 × Bitzer 4FES-5Y, plastinkali isparitel 40 kVt, FNV200 kondensator, nasos, shit" style={{ minHeight: 96, padding: 12, borderRadius: 10, border: "1px solid #C9D3E6", font: "inherit", fontSize: 14 }}/></label>
+          <label className="sx-field">Tarkibi <small>· majburiy</small><textarea value={composition} onChange={event => { setComposition(event.target.value); setResult(null); }} rows={4} maxLength={1000} required placeholder="Masalan: 2 × Bitzer 4FES-5Y, plastinkali isparitel 40 kVt, FNV200 kondensator, nasos, shit" style={{ minHeight: 96, padding: 12, borderRadius: 10, border: "1px solid var(--k-bd-c9d3e6, #C9D3E6)", font: "inherit", fontSize: 14 }}/></label>
           <label className="sx-field">Narx, $ <small>· ixtiyoriy (prays narxi)</small><input value={manualPrice} onChange={event => { setManualPrice(event.target.value.replace(/[^\d.,\s]/g, "")); setResult(null); }} inputMode="decimal" placeholder="kelishiladi"/></label>
         </div>}
-        {parts.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid #EEF1F6", paddingTop: 16 }}>
+        {parts.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid var(--k-bd-eef1f6, #EEF1F6)", paddingTop: 16 }}>
           {parts.map(part => {
             const changed = part.value !== part.standard, delta = changed && part.table[part.value] !== undefined && part.table[part.standard] !== undefined ? part.table[part.value] - part.table[part.standard] : 0;
             return <div key={part.key} style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
@@ -282,10 +282,10 @@ function TelegramPreview({ order }: { order: PreviewOrder }) {
   const [head, ...lines] = personalMessage(message, null).replace("#0000", "#…").split("\n");
   const buttons = personalKeyboard("preview", "NEW").inline_keyboard.flat();
   return <div className="sx-tg">
-    <span className="sx-section-label" style={{ color: "#3E4A60" }}>Telegram · seh mas’uli</span>
-    <div className="sx-tg-msg"><b style={{ color: "#1E4E8C" }}>BK bot · shaxsiy xabar</b><b>{head}</b>{lines.map((line, index) => <span key={index}>{line}</span>)}
-      <div className="sx-tg-buttons">{buttons.map(button => <span key={button.callback_data} style={{ background: "#E2F3E8", color: "#1B6B43" }}>{button.text}</span>)}</div>
+    <span className="sx-section-label" style={{ color: "var(--k-fg-3e4a60, #3E4A60)" }}>Telegram · seh mas’uli</span>
+    <div className="sx-tg-msg"><b style={{ color: "var(--k-fg-1e4e8c, #1E4E8C)" }}>BK bot · shaxsiy xabar</b><b>{head}</b>{lines.map((line, index) => <span key={index}>{line}</span>)}
+      <div className="sx-tg-buttons">{buttons.map(button => <span key={button.callback_data} style={{ background: "var(--k-bg-e2f3e8, #E2F3E8)", color: "var(--k-fg-1b6b43, #1B6B43)" }}>{button.text}</span>)}</div>
     </div>
-    <span className="sx-muted" style={{ color: "#3E4A60" }}>Seh mas’uli botda qabul qiladi → navbat → terishni boshlaydi → “Chiqib ketdi”. Guruhga faqat yakuniy “✅ Sehdan chiqdi” boradi. Narx ko‘rinmaydi.</span>
+    <span className="sx-muted" style={{ color: "var(--k-fg-3e4a60, #3E4A60)" }}>Seh mas’uli botda qabul qiladi → navbat → terishni boshlaydi → “Chiqib ketdi”. Guruhga faqat yakuniy “✅ Sehdan chiqdi” boradi. Narx ko‘rinmaydi.</span>
   </div>;
 }

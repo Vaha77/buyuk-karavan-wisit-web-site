@@ -83,7 +83,7 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
               const stat = byCode.get(area.code);
               if (!stat || (area.point && !stat.customers)) return null;
               // "!" (no customers) only for Uzbekistan, the home market; elsewhere the area just stays uncoloured.
-              if (!stat.customers) return countryOf(area.code) !== "UZ" ? null : <g key={area.code} aria-hidden="true" className="bk-map-attention"><circle cx={area.x} cy={area.y} r={8 * s} fill="#E07A2E" stroke="#fff" strokeWidth={1.5 * s}/><text x={area.x} y={area.y + 4 * s} textAnchor="middle">!</text></g>;
+              if (!stat.customers) return countryOf(area.code) !== "UZ" ? null : <g key={area.code} aria-hidden="true" className="bk-map-attention"><circle cx={area.x} cy={area.y} r={8 * s} fill="var(--k-bg-e07a2e, #E07A2E)" stroke="var(--k-bd-ffffff, #fff)" strokeWidth={1.5 * s}/><text x={area.x} y={area.y + 4 * s} textAnchor="middle">!</text></g>;
               if (area.small || area.point) return <Callout key={area.code} x={area.x} y={area.y} text={calloutText(stat)} s={s} view={zoom.box}/>;
               const tone = tones[area.code] ?? "none", light = tone === "b2" || tone === "b3" || tone === "none";
               return <g key={area.code}>
@@ -146,7 +146,7 @@ function RegionDetail({ ref, region, rank, stats }: { ref: React.Ref<HTMLElement
       <div className="bk-tile"><span>Jami, {stats.year}</span><strong>{formatUsd(region.total)}</strong></div>
       <div className="bk-tile is-plain"><span>O‘rtacha / mijoz</span><strong>{region.customers ? formatUsd(region.average) : "—"}</strong></div>
     </div>
-    {!region.customers ? <div className="bk-empty"><AlertTriangle size={18} color="#8A4B12"/><strong>E’tibor kerak</strong><span>Bu viloyatda hali doimiy mijoz yo‘q.</span></div> : <>
+    {!region.customers ? <div className="bk-empty"><AlertTriangle size={18} color="var(--k-fg-8a4b12, #8A4B12)"/><strong>E’tibor kerak</strong><span>Bu viloyatda hali doimiy mijoz yo‘q.</span></div> : <>
       <div>
         <h3 style={{ marginBottom: 6 }}>Oylar bo‘yicha jami</h3>
         <MonthBars months={region.months} missing={missingMonths} label={`${region.name}: ${stats.year}-yil oylik savdo`}/>

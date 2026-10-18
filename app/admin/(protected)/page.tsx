@@ -75,7 +75,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
     <div className="bk-grid-main">
       <section className="bk-card" aria-labelledby="bk-weekly-title">
-        <div className="bk-card-head"><div><h2 id="bk-weekly-title">Lidlar dinamikasi</h2><span className="bk-muted">So‘nggi 12 hafta, haftalik</span></div><div className="bk-legend"><span><i style={{ background: "#123E7C", borderRadius: "50%" }}/>Lidlar</span><span><i style={{ background: "#E07A2E", borderRadius: "50%" }}/>Hisob-kitoblar</span></div></div>
+        <div className="bk-card-head"><div><h2 id="bk-weekly-title">Lidlar dinamikasi</h2><span className="bk-muted">So‘nggi 12 hafta, haftalik</span></div><div className="bk-legend"><span><i style={{ background: "#123E7C", borderRadius: "50%" }}/>Lidlar</span><span><i style={{ background: "var(--k-bg-e07a2e, #E07A2E)", borderRadius: "50%" }}/>Hisob-kitoblar</span></div></div>
         <WeeklyLines weeks={weekly.map(week => ({ label: formatDayMonth(new Date(`${week.week}T12:00:00+05:00`)), leads: week.leads, calculations: week.calculations }))} label="So‘nggi 12 haftadagi lidlar va hisob-kitoblar"/>
       </section>
       <section className="bk-card" aria-labelledby="bk-funnel-title" style={{ display: "grid", alignContent: "start", gap: 14 }}>
@@ -95,7 +95,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div><h2 id="bk-links-title">Linklar samaradorligi</h2><span className="bk-muted">Referal linklar orqali kelganlar va ularning oxirgi harakati · {period.label.toLocaleLowerCase("uz-UZ")} · zayavkalar bo‘yicha saralangan</span></div>
         <div className="bk-actions"><Link className="bk-btn" href={`/admin/links${query}`}>Barcha linklar</Link><Link className="bk-btn is-primary" href="/admin/links/new"><Plus size={15}/>Yangi link</Link></div>
       </div>
-      <div className="bk-legend" style={{ marginBottom: 10 }}><span><i style={{ background: "#D9E3F3" }}/>Ko‘rib chiqib ketdi</span><span><i style={{ background: "#8DB0E4" }}/>Qiziqdi (mahsulot ko‘rdi, 30 s+)</span><span><i style={{ background: "#4F7FCC" }}/>Bog‘lanishga urindi (tel / Telegram / Madina)</span><span><i style={{ background: "#123E7C" }}/>Zayavka qoldirdi</span></div>
+      <div className="bk-legend" style={{ marginBottom: 10 }}><span><i style={{ background: "var(--k-bg-d9e3f3, #D9E3F3)" }}/>Ko‘rib chiqib ketdi</span><span><i style={{ background: "var(--k-bg-8db0e4, #8DB0E4)" }}/>Qiziqdi (mahsulot ko‘rdi, 30 s+)</span><span><i style={{ background: "var(--k-bg-4f7fcc, #4F7FCC)" }}/>Bog‘lanishga urindi (tel / Telegram / Madina)</span><span><i style={{ background: "#123E7C" }}/>Zayavka qoldirdi</span></div>
       {linkRows.length ? <div className="bk-table-wrap"><table className="bk-table">
         <thead><tr><th>Link</th><th className="is-left">Tashrifchilar harakati</th><th>Klik</th><th>Zayavka</th><th>Sotuv</th><th>Konv.</th></tr></thead>
         <tbody>{linkRows.map(row => {

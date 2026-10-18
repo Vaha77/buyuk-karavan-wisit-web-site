@@ -66,8 +66,8 @@ function DailyChart({ daily }: { daily: Board["daily"] }) {
       <div className="igs-legend">{series.map(item => <span key={item.key}><i style={{ background: item.color }}/>{item.label}</span>)}</div>
     </div>
     <svg className="igs-chart" viewBox="0 0 1000 280" role="img" aria-label={`Kunlik like, komment va Direct xabarlar: ${daily.map(row => `${formatDayUz(row.day, true)} — ${row.likes} like, ${row.comments} komment, ${row.direct} Direct`).join("; ")}`}>
-      {[20, 135].map(line => <line key={line} x1="40" y1={line} x2="1000" y2={line} stroke="#E6ECF5"/>)}
-      <line x1="40" y1="250" x2="1000" y2="250" stroke="#C9D5E6"/>
+      {[20, 135].map(line => <line key={line} x1="40" y1={line} x2="1000" y2={line} stroke="var(--k-bd-e6ecf5, #E6ECF5)"/>)}
+      <line x1="40" y1="250" x2="1000" y2="250" stroke="var(--k-bd-c9d5e6, #C9D5E6)"/>
       <text x="0" y="24">{formatNumber(top)}</text><text x="0" y="139">{formatNumber(top / 2)}</text><text x="0" y="254">0</text>
       {series.map(item => daily.length > 1
         ? <polyline key={item.key} points={item.values.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ")} fill="none" stroke={item.color} strokeWidth="3" strokeDasharray={item.dash} strokeLinejoin="round" strokeLinecap="round"/>
@@ -132,11 +132,11 @@ function CountryMap({ board }: { board: Board }) {
     {!board.audience ? <div className="igs-empty">Demografiya hali yo‘q (100 dan kam obunachi yoki reaksiya bo‘lsa Instagram bermaydi)</div> : <div className="igs-geo-grid">
       <div className="igs-map-box">
         <svg className="igs-map" viewBox={`0 0 ${worldMap.width} ${worldMap.height}`} role="img" aria-label={`Xarita: ${MAP_COUNTRIES.map(code => `${nameOf(code)} — obunachilar ${formatNumber(shareOf(follower, code).percent, 1)}%, reaksiya ${formatNumber(shareOf(engaged, code).percent, 1)}%`).join("; ")}`}>
-          <rect width={worldMap.width} height={worldMap.height} fill="#EAF1F8"/>
-          {worldMap.neighbours.map(country => <path key={country.code} d={country.d} fill="#F7F9FC" stroke="#C9D5E6" strokeWidth="0.8"><title>{country.name}</title></path>)}
+          <rect width={worldMap.width} height={worldMap.height} fill="var(--k-bg-eaf1f8, #EAF1F8)"/>
+          {worldMap.neighbours.map(country => <path key={country.code} d={country.d} fill="var(--k-bg-f7f9fc, #F7F9FC)" stroke="var(--k-bd-c9d5e6, #C9D5E6)" strokeWidth="0.8"><title>{country.name}</title></path>)}
           {worldMap.countries.map(country => {
             const f = shareOf(follower, country.code), e = shareOf(engaged, country.code);
-            return <path key={country.code} className="igs-country" d={country.d} stroke="#fff" strokeWidth="1.2" style={{ "--f": fill(alpha(f.percent, maxF)), "--e": fill(alpha(e.percent, maxE)) } as CSSProperties}>
+            return <path key={country.code} className="igs-country" d={country.d} stroke="var(--k-bd-ffffff, #fff)" strokeWidth="1.2" style={{ "--f": fill(alpha(f.percent, maxF)), "--e": fill(alpha(e.percent, maxE)) } as CSSProperties}>
               <title>{`${country.name} — obunachilar: ${formatNumber(f.percent, 1)}% · ≈ ${formatNumber(f.value)}; reaksiya: ${formatNumber(e.percent, 1)}% · ≈ ${formatNumber(e.value)}`}</title>
             </path>;
           })}

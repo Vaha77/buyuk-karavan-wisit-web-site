@@ -7,7 +7,8 @@ import { VisitTracker } from "@/components/tracking/visit-tracker";
 import { MetaPixel } from "@/components/tracking/meta-pixel";
 import "@/components/tracking/tracking.css";
 import { SITE_URL } from "@/lib/site-url";
+import { THEME_SCRIPT } from "@/components/theme-toggle";
 
 const plex = IBM_Plex_Sans({ variable: "--font-plex", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 export const metadata: Metadata = { metadataBase: new URL(SITE_URL), title: "BUYUK KARAVAN — Sanoat sovutish tizimlari", description: "−40°C dan +5°C gacha professional sovutish yechimlari." };
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) { return <html lang="uz" className={plex.variable}><body>{children}<MadinaWidget/><VisitTracker/><MetaPixel/></body></html>; }
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) { return <html lang="uz" className={plex.variable} suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }}/></head><body>{children}<MadinaWidget/><VisitTracker/><MetaPixel/></body></html>; }

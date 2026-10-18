@@ -71,7 +71,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
 
   const shown = frameOnly ? rows.filter(row => row.frame) : rows;
   // One status cell and one action cell for the table and the phone cards.
-  const statusCell = (row: OrderRow) => <>{row.status === "STARTED" ? <AcceptedBadge label={STATUS_LABEL.STARTED} dueDate={row.dueDate}/> : <span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{row.status === "ACCEPTED" ? queueLabel(row) : STATUS_LABEL[row.status]}</span>}{row.overdue && <div className="sx-muted" style={{ color: "#A41F15", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</>;
+  const statusCell = (row: OrderRow) => <>{row.status === "STARTED" ? <AcceptedBadge label={STATUS_LABEL.STARTED} dueDate={row.dueDate}/> : <span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{row.status === "ACCEPTED" ? queueLabel(row) : STATUS_LABEL[row.status]}</span>}{row.overdue && <div className="sx-muted" style={{ color: "var(--k-fg-a41f15, #A41F15)", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</>;
   const actions = (row: OrderRow) => { const action = actionFor(role, row.status); return <>
               {action ? <button type="button" className={`sx-btn is-md ${action === "receive" ? "is-red" : "is-primary"}`} disabled={pending} aria-busy={isBusy(`${row.id}:${action}`)} onClick={() => act(row, action)}><BusyLabel busy={isBusy(`${row.id}:${action}`)}>{ACTION_LABEL[action]}</BusyLabel></button>
                 : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id), undefined, `${row.id}:confirm`)}><BusyLabel busy={isBusy(`${row.id}:confirm`)}>Tasdiqlayman</BusyLabel></button>
@@ -111,7 +111,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
         <tbody>{shown.map(row => {
           return <tr key={row.id} id={`order-${row.id}`} className={row.overdue ? "is-late" : row.isNew ? "is-new" : ""}>
             <td><b>{row.number}</b></td>
-            <td style={{ color: "#3E4A60", whiteSpace: "nowrap" }}>{row.day}</td>
+            <td style={{ color: "var(--k-fg-3e4a60, #3E4A60)", whiteSpace: "nowrap" }}>{row.day}</td>
             <td><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.isTest && <><br/><span className="sx-pill is-sm is-grey" style={{ marginTop: 4 }}>Test</span></>}{row.noRequest && <><br/><span className="sx-pill is-sm is-orange" style={{ marginTop: 4 }}>Zayavkasiz</span></>}{row.frame && <><br/><span className="sx-pill is-sm is-yellow" style={{ marginTop: 4, whiteSpace: "nowrap" }}>⚠️ Rama qo‘shilmagan · {row.frame}</span></>}</td>
             <td style={{ minWidth: 220, fontWeight: 600, lineHeight: 1.35 }}>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices}/>}{row.frame && <div className="sx-pill is-yellow" role="note" style={{ marginTop: 6, borderRadius: 8, padding: "6px 10px", whiteSpace: "normal", fontWeight: 600, lineHeight: 1.4 }}>{row.sellerName} zakazida kondensator turi o‘zgargan ({row.frame}). Rama narxi hisobga qo‘shilmagan — rama haqqini qo‘shib hisoblang.</div>}</td>
             <td><div style={{ display: "grid", gap: 2 }}><b style={{ fontWeight: 600 }}>{row.sellerName}</b><span className="sx-muted">{row.sellerAt}</span></div></td>
@@ -169,7 +169,7 @@ export function IssueForm({ row, busy, onSubmit }: { row: OrderRow; busy: boolea
   const parsed = Object.fromEntries(Object.entries(values).map(([id, value]) => [id, Number(value)]));
   const valid = Object.values(parsed).every(value => Number.isInteger(value) && value >= 0);
   return <form style={{ display: "grid", gap: 10 }} onSubmit={event => { event.preventDefault(); if (valid) onSubmit(parsed); }}>
-    {row.items.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 110px", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid #EEF1F6" }}>
+    {row.items.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 110px", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--k-bd-eef1f6, #EEF1F6)" }}>
       <span style={{ fontWeight: 600 }}>{item.title}</span><span className="sx-muted">so‘raldi: {item.qty}</span>
       <label className="sx-muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>berildi<input className="sx-input" style={{ width: 56, height: 34 }} value={values[item.id]} onChange={event => setValues({ ...values, [item.id]: event.target.value })} inputMode="numeric" aria-label={`${item.title} — berilgan soni`}/></label>
     </div>)}

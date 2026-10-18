@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   icons: { icon: "/admin-icons/favicon-32.png", apple: "/admin-icons/apple-touch-icon.png" },
 };
 // viewport-fit=cover: the app draws under the notch; the shell pads itself with env(safe-area-inset-*).
-export const viewport: Viewport = { themeColor: "#102c47", viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: [{ media: "(prefers-color-scheme: light)", color: "#102c47" }, { media: "(prefers-color-scheme: dark)", color: "#141A24" }], viewportFit: "cover" };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return <div className={spaceGrotesk.variable}>{children}<AdminPwa/></div>;

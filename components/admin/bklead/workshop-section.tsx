@@ -39,7 +39,7 @@ export async function WorkshopSection({ period }: { period: Period }) {
 
     <div className="bk-grid-main">
       <section className="bk-card" aria-labelledby="bk-sex-weekly-title">
-        <div className="bk-card-head"><div><h2 id="bk-sex-weekly-title">Seh dinamikasi</h2><span className="bk-muted">So‘nggi 12 hafta, haftalik</span></div><div className="bk-legend"><span><i style={{ background: "#123E7C", borderRadius: "50%" }}/>Kelgan zakazlar</span><span><i style={{ background: "#E07A2E", borderRadius: "50%" }}/>Chiqib ketgan</span></div></div>
+        <div className="bk-card-head"><div><h2 id="bk-sex-weekly-title">Seh dinamikasi</h2><span className="bk-muted">So‘nggi 12 hafta, haftalik</span></div><div className="bk-legend"><span><i style={{ background: "#123E7C", borderRadius: "50%" }}/>Kelgan zakazlar</span><span><i style={{ background: "var(--k-bg-e07a2e, #E07A2E)", borderRadius: "50%" }}/>Chiqib ketgan</span></div></div>
         <WeeklyLines unit="zakaz" weeks={weekly.map(week => ({ label: formatDayMonth(new Date(`${week.week}T12:00:00+05:00`)), leads: week.incoming, calculations: week.issued }))} label="So‘nggi 12 haftada kelgan va chiqib ketgan seh zakazlari"/>
       </section>
       <section className="bk-card" aria-labelledby="bk-sex-top-title" style={{ display: "grid", alignContent: "start", gap: 14 }}>

@@ -33,6 +33,6 @@ export function RestoreUserButton({ userId }: { userId: string }) {
   const [error, setError] = useState(""), [pending, startTransition] = useTransition();
   return <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
     <button type="button" className="admin-user-button is-outline" disabled={pending} onClick={() => startTransition(async () => { setError(""); const result = await restoreUserAction(userId); if (!result.ok) setError(result.error); else router.refresh(); })}>{pending ? "Tiklanmoqda…" : "Qayta tiklash"}</button>
-    {error && <small style={{ color: "#B42318" }} role="alert">{error}</small>}
+    {error && <small style={{ color: "var(--k-fg-b42318, #B42318)" }} role="alert">{error}</small>}
   </span>;
 }

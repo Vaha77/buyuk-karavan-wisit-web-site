@@ -274,7 +274,7 @@ function PlannerSvg({
             <path
               d="M 1 0 L 0 0 0 1"
               fill="none"
-              stroke="#b9d4ed"
+              stroke="var(--k-bd-b9d4ed, #b9d4ed)"
               strokeWidth=".025"
             />
           </pattern>

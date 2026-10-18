@@ -10,7 +10,7 @@ export const REGION_STATUS: Record<RegionStatus, { label: string; color: string;
   medium: { label: "O‘rta", color: "#A8D5A2", text: "dark" },
   low: { label: "Kam", color: "#F2C230", text: "dark" },
   stale: { label: "90+ kun xarid yo‘q", color: "#D2372B", text: "light" },
-  empty: { label: "Xarid yo‘q · imkoniyat", color: "#DCE8F8", text: "dark" },
+  empty: { label: "Xarid yo‘q · imkoniyat", color: "var(--map-none, #DCE8F8)", text: "dark" },
 };
 export const STATUS_ORDER: RegionStatus[] = ["strongest", "strong", "medium", "low", "stale", "empty"];
 export const STALE_DAYS = 90;

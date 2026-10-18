@@ -3,8 +3,8 @@ import { MONTHS_LONG } from "./format";
 // ---- Map colours -----------------------------------------------------------------------------
 // Blue vs orange plus lightness; never red/green only.
 export type Tone = "top" | "b1" | "b2" | "b3" | "low" | "none";
-export const TONE_FILL: Record<Tone, string> = { top: "#123E7C", b1: "#4F7FCC", b2: "#8DB0E4", b3: "#C7D8F1", low: "#E07A2E", none: "#E6EBF2" };
-export const TONE_TEXT: Record<Tone, string> = { top: "#FFFFFF", b1: "#FFFFFF", b2: "#0F1E33", b3: "#0F1E33", low: "#2B1200", none: "#5B6B82" };
+export const TONE_FILL: Record<Tone, string> = { top: "#123E7C", b1: "#4F7FCC", b2: "#8DB0E4", b3: "#C7D8F1", low: "#E07A2E", none: "var(--map-none, #E6EBF2)" };
+export const TONE_TEXT: Record<Tone, string> = { top: "#FFFFFF", b1: "#FFFFFF", b2: "#0F1E33", b3: "#0F1E33", low: "#2B1200", none: "var(--map-none-text, #5B6B82)" };
 
 type Counted = { code: string; count: number };
 const ranked = (items: Counted[]) => items.filter(item => item.count > 0).sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
