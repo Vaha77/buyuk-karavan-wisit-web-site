@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "134106566462",
+    "project_id": "bk-admin-4a2ec",
+    "storage_bucket": "bk-admin-4a2ec.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:134106566462:android:7c59717a64ed919137a66f",
+        "android_client_info": {
+          "package_name": "uz.buyukkaravan.admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAV5ovI8I4P2CYCk3ZURjwKcPa51k-DWNE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
