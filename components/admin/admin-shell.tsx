@@ -9,7 +9,7 @@ import { logoutAction } from "@/app/admin/login/actions";
 import { homeFor } from "@/lib/auth/seller-access";
 import { NavigationProgress } from "./feedback";
 
-type NavItem = { label: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; adminOnly?: boolean; badge?: "leads" | "new" | "purchases" | "due" | "sex"; soon?: boolean };
+type NavItem = { label: string; /** Phone bottom bar name */ short?: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; adminOnly?: boolean; badge?: "leads" | "new" | "purchases" | "due" | "sex"; soon?: boolean };
 // Grouped as in the BKLead design; items without a page yet are shown disabled with "Tez orada".
 const navigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "ASOSIY", items: [
@@ -89,9 +89,9 @@ function sectionOf(path: string) {
 const sellerNavigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "MENING BO‘LIMIM", items: [
     { label: "Dashboard", href: "/admin/my/dashboard", icon: LayoutDashboard },
-    { label: "Mening mijozlarim", href: "/admin/my", icon: Users },
-    { label: "Bugun qo‘ng‘iroq", href: "/admin/my/today", icon: PhoneCall, badge: "due" },
-    { label: "Xarid kiritish", href: "/admin/my/purchase", icon: ShoppingBag },
+    { label: "Mening mijozlarim", short: "Mijozlar", href: "/admin/my", icon: Users },
+    { label: "Bugun qo‘ng‘iroq", short: "Qo‘ng‘iroq", href: "/admin/my/today", icon: PhoneCall, badge: "due" },
+    { label: "Xarid kiritish", short: "Xarid", href: "/admin/my/purchase", icon: ShoppingBag },
     { label: "Tijorat taklifi", href: "/admin/my/offers", icon: FileText },
   ] },
   { group: "SEH", items: [
@@ -149,7 +149,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
     </div>
     {/* Phone: the first sections as a bottom bar (above the home indicator), the rest under "Menyu". */}
     <nav className="admin-tabbar" aria-label="Asosiy bo‘limlar">
-      {groups.flatMap(group => group.items).filter(item => visible(item) && !item.soon).slice(0, 4).map(item => { const Icon = item.icon; return <Link key={item.href} href={item.href} className={item.href === activeHref ? "is-active" : undefined} aria-current={item.href === activeHref ? "page" : undefined}><Icon size={20}/><span>{item.label}</span></Link>; })}
+      {groups.flatMap(group => group.items).filter(item => visible(item) && !item.soon).slice(0, 4).map(item => { const Icon = item.icon; return <Link key={item.href} href={item.href} className={item.href === activeHref ? "is-active" : undefined} aria-current={item.href === activeHref ? "page" : undefined}><Icon size={20}/><span>{item.short ?? item.label}</span></Link>; })}
       <button type="button" onClick={() => setOpen(true)}><Menu size={20}/><span>Menyu</span></button>
     </nav>
   </div>;
