@@ -12,7 +12,15 @@ const nextConfig: NextConfig = {
       { source: "/admin/sex/:path*", destination: "/admin/seh/:path*", permanent: true },
     ];
   },
-  outputFileTracingIncludes: { "/admin/calculations/*/pdf": ["./node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff"] },
+  // Android app link verification (fingerprints from env, see lib/pwa.ts).
+  async rewrites() {
+    return [{ source: "/.well-known/assetlinks.json", destination: "/api/assetlinks" }];
+  },
+  outputFileTracingIncludes: {
+    "/admin/calculations/*/pdf": ["./node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff"],
+    // Tijorat taklifi PDF (download route and the "Telegram’ga yuborish" action on the offers page) reads these by path.
+    "/admin/my/offers/**": ["./node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-{400,700}-normal.woff"],
+  },
 };
 
 export default nextConfig;
