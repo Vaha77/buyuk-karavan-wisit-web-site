@@ -122,6 +122,15 @@ function quoteChiller(model: ZborkaModel, brand: string, choice: ZborkaChoice): 
 /** Condenser series = the letters of its code ("FN160" → "FN", "FNV200" → "FNV"); another series needs another frame. */
 export const condenserSeries = (code: string | null | undefined) => (code ?? "").toUpperCase().match(/^[A-Z]+/)?.[0] ?? "";
 
+/** "FN → FNV" when a saved agregat item (its options: chosen fn + standard fn) changed the condenser series, else null. */
+export function frameChange(options: unknown) {
+  const saved = (options ?? {}) as { assembly?: string; fn?: string | null; standard?: { fn?: string | null } };
+  const from = condenserSeries(saved.standard?.fn), to = condenserSeries(saved.fn);
+  return saved.assembly === "vz" && from && to && from !== to ? `${from} → ${to}` : null;
+}
+/** Personal Telegram message to Super Admins about such an order. */
+export const frameAlertText = (number: string, seller: string, change: string) => `⚠️ ${number} · ${seller}: kondensator turi o‘zgargan (${change}), rama narxi qo‘shilmagan.`;
+
 /** Price and description of one configured assembly. A part can only be swapped when both its prices are known. */
 export function quoteZborka(model: ZborkaModel, group: Pick<ZborkaGroup, "label" | "hpTable" | "brand">, catalog: QuoteCatalog, choice: ZborkaChoice): ZborkaQuote {
   const receivers = catalog.receivers;

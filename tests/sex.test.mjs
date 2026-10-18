@@ -615,3 +615,10 @@ test("seller queue: assembling first, then accepted order; own rows marked; no c
   assert.ok(!/Mijoz X|999|priceSnapshot|customer/.test(JSON.stringify(queue)));
   assert.equal(sellerQueue([order("x", "ACCEPTED", "other", 1)], "me").me, null);
 });
+
+test("frame alert for admins: FN → FNV gives the badge text and the Telegram message, FN → FN nothing", () => {
+  const saved = (fn, assembly = "vz") => ({ assembly, fn, standard: { liters: "20", hp: "20", fn: "FN160" }, condenserId: "x" });
+  assert.equal(zborka.frameChange(saved("FNV200")), "FN → FNV");
+  assert.equal(zborka.frameAlertText("#0042", "Abdulvohid", zborka.frameChange(saved("FNV200"))), "⚠️ #0042 · Abdulvohid: kondensator turi o‘zgargan (FN → FNV), rama narxi qo‘shilmagan.");
+  for (const options of [saved("FN180"), saved("FN160"), saved("FNV200", "vd"), null, {}]) assert.equal(zborka.frameChange(options), null);
+});

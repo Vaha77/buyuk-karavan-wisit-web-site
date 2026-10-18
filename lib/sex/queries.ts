@@ -1,5 +1,6 @@
 import "server-only";
 import { orderTitle } from "./bot-text";
+import { frameChange } from "./zborka";
 import type { AdminUser, Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { canCancel, canMarkTest, DEFAULT_WORKSHOP_DAILY_LIMIT, isReceiveOverdue, isStaff, monthRange, orderKind, orderNumber, orderScope, processSteps, queuePositions, RECEIVE_OVERDUE_MS, sellerQueue, stripPrices, tashkentDayStart, when, shortDay, type OrderStatus, type PriceSnapshot, type StepView } from "./rules";
@@ -12,11 +13,13 @@ export type OrderRow = {
   overdue: boolean; acceptedAt: string | null; startedAt: string | null; queue: number | null; telegramFailed: boolean; canCancel: boolean; cancelled: { at: string; by: string | null; reason: string | null } | null; noRequest: boolean; sellerConfirmed: boolean; isNew: boolean; dueDate: string | null; note: string | null;
   items: Array<{ id: string; title: string; qty: number; issuedQty?: number | null }>;
   prices?: Partial<PriceSnapshot>;
+  /** "FN → FNV": condenser series changed, frame price not included (SUPER_ADMIN / ADMIN only). */
+  frame: string | null;
 };
 
 const include = {
   seller: { select: { name: true } }, acceptedBy: { select: { name: true } }, startedBy: { select: { name: true } }, cancelledBy: { select: { name: true } }, issuedBy: { select: { name: true } }, receivedBy: { select: { name: true } },
-  items: { orderBy: { order: "asc" as const }, select: { id: true, title: true, qty: true, issuedQty: true, baseUsd: true, partId: true, product: { select: { category: { select: { slug: true, name: true } } } } } },
+  items: { orderBy: { order: "asc" as const }, select: { id: true, title: true, qty: true, issuedQty: true, baseUsd: true, partId: true, options: true, product: { select: { category: { select: { slug: true, name: true } } } } } },
 } satisfies Prisma.WorkshopOrderInclude;
 type Loaded = Prisma.WorkshopOrderGetPayload<{ include: typeof include }>;
 
@@ -30,6 +33,7 @@ function toRow(order: Loaded, viewer: Viewer, now: Date, queue: Map<string, numb
     id: order.id, number: orderNumber(order.number), day: shortDay(order.createdAt), type: order.type, kind: kindOf(order), isTest: order.isTest, canMarkTest: canMarkTest(role), product, qty: order.qty,
     sellerName: order.seller.name, sellerAt: when(order.createdAt, now), purpose: order.purpose, customerName: order.customerName, status: order.status,
     steps: processSteps(order, now), overdue: isReceiveOverdue(order, now), acceptedAt: order.acceptedAt?.toISOString() ?? null, startedAt: order.startedAt?.toISOString() ?? null, queue: queue.get(order.id) ?? null, telegramFailed: !!order.telegramFailedAt, canCancel: canCancel(role, order.status, order.sellerId === viewer.id), cancelled: order.cancelledAt ? { at: when(order.cancelledAt, now), by: order.cancelledBy?.name ?? null, reason: order.cancelReason } : null, noRequest: order.noRequest, sellerConfirmed: !!order.sellerConfirmedAt,
+    frame: (role === "SUPER_ADMIN" || role === "ADMIN") && order.type === "AGREGAT" ? frameChange(order.items[0]?.options) : null,
     isNew: now.getTime() - order.createdAt.getTime() < 10 * 60_000, dueDate: order.dueDate?.toISOString().slice(0, 10) ?? null, note: order.note,
     priceSnapshot: order.priceSnapshot, items: order.items.map(item => ({ id: item.id, title: item.title, qty: item.qty, issuedQty: item.issuedQty, baseUsd: item.baseUsd === null ? null : Number(item.baseUsd) })),
   };

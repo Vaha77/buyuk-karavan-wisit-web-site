@@ -33,6 +33,8 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [issuing, setIssuing] = useState<OrderRow | null>(null);
+  // "Rama qo‘shilmagan": condenser series changed (row.frame is filled for SUPER_ADMIN / ADMIN only).
+  const [frameOnly, setFrameOnly] = useState(false), frameCount = rows.filter(row => row.frame).length;
   const [noRequestOpen, setNoRequestOpen] = useState(false);
   const [cancelling, setCancelling] = useState<OrderRow | null>(null);
   const [cancelReason, setCancelReason] = useState("");
@@ -83,6 +85,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
       <button type="button" className="sx-chip" aria-pressed={view === "active"} disabled={monthPending} onClick={() => showView("active")}>Faol</button>
       <button type="button" className="sx-chip" aria-pressed={cancelledView} disabled={monthPending} onClick={() => showView("cancelled")}>Bekor qilingan</button>
       {staff && <button type="button" className="sx-chip" aria-pressed={view === "test"} disabled={monthPending} onClick={() => showView("test")}>Test</button>}
+      {frameCount > 0 && <button type="button" className="sx-chip" aria-pressed={frameOnly} onClick={() => setFrameOnly(!frameOnly)}>⚠️ Rama qo‘shilmagan: {frameCount} ta</button>}
     </div>}
     {view === "test" && <p className="sx-note">Test zakazlari statistika, Excel eksport va navbat raqamlariga kirmaydi.</p>}
     {!seller && view === "active" && <div className="sx-stats">{stats.map(stat => <div key={stat.k} className={`sx-stat is-flat ${stat.tone}`}><span>{stat.k}</span><strong>{stat.v}</strong></div>)}</div>}
@@ -91,13 +94,13 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
     <PendingArea pending={monthPending}><div className="sx-card">
       <div className="sx-table-wrap"><table className="sx-table" style={{ minWidth: 1180 }}>
         <thead><tr><th>№</th><th>Sana</th><th>Turi</th><th>Mahsulot</th><th>Zayavka beruvchi</th><th>Kimga</th><th>Jarayon</th><th>Holat</th><th>Amal</th></tr></thead>
-        <tbody>{rows.map(row => {
+        <tbody>{(frameOnly ? rows.filter(row => row.frame) : rows).map(row => {
           const action = actionFor(role, row.status);
           return <tr key={row.id} id={`order-${row.id}`} className={row.overdue ? "is-late" : row.isNew ? "is-new" : ""}>
             <td><b>{row.number}</b></td>
             <td style={{ color: "#3E4A60", whiteSpace: "nowrap" }}>{row.day}</td>
-            <td><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.isTest && <><br/><span className="sx-pill is-sm is-grey" style={{ marginTop: 4 }}>Test</span></>}{row.noRequest && <><br/><span className="sx-pill is-sm is-orange" style={{ marginTop: 4 }}>Zayavkasiz</span></>}</td>
-            <td style={{ minWidth: 220, fontWeight: 600, lineHeight: 1.35 }}>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices}/>}</td>
+            <td><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.isTest && <><br/><span className="sx-pill is-sm is-grey" style={{ marginTop: 4 }}>Test</span></>}{row.noRequest && <><br/><span className="sx-pill is-sm is-orange" style={{ marginTop: 4 }}>Zayavkasiz</span></>}{row.frame && <><br/><span className="sx-pill is-sm is-yellow" style={{ marginTop: 4, whiteSpace: "nowrap" }}>⚠️ Rama qo‘shilmagan · {row.frame}</span></>}</td>
+            <td style={{ minWidth: 220, fontWeight: 600, lineHeight: 1.35 }}>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices}/>}{row.frame && <div className="sx-pill is-yellow" role="note" style={{ marginTop: 6, borderRadius: 8, padding: "6px 10px", whiteSpace: "normal", fontWeight: 600, lineHeight: 1.4 }}>{row.sellerName} zakazida kondensator turi o‘zgargan ({row.frame}). Rama narxi hisobga qo‘shilmagan — rama haqqini qo‘shib hisoblang.</div>}</td>
             <td><div style={{ display: "grid", gap: 2 }}><b style={{ fontWeight: 600 }}>{row.sellerName}</b><span className="sx-muted">{row.sellerAt}</span></div></td>
             <td style={{ fontWeight: 700, color: row.purpose === "SHOP" ? "#3E4A60" : "#1E4E8C" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</td>
             <td style={{ minWidth: 230 }}><div className="sx-steps">{row.steps.map(step => <span key={step.label} className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>)}</div></td>

@@ -9,7 +9,8 @@ import { DUPLICATE_WINDOW_MS, STATUS_LABEL, alreadyText, canMarkTest, checkCance
 import { notifyCancelled, notifyChanged, notifyCreated } from "./bot";
 import { createOnce } from "./idempotency";
 import type { DeliveryStatus } from "./bot-text";
-import { buildZborkaCatalog, quoteZborka, type Assembly } from "./zborka";
+import { buildZborkaCatalog, frameAlertText, frameChange, quoteZborka, type Assembly } from "./zborka";
+import { sendMessage } from "@/lib/telegram/client";
 
 type Actor = Pick<AdminUser, "id" | "name" | "role" | "salesPersonId">;
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -83,6 +84,8 @@ export async function createAgregatOrder(actor: Actor, input: AgregatInput, meta
   if (created.repeated) return { ok: true, id: created.value.id, number: created.value.number, telegram: "sent", repeated: true };
   const order = created.value;
   const telegram = await afterCreate(actor, order.id, `${orderNumber(order.number)} zborka zakazini berdi`, { title: quote.title, qty: input.qty, purpose: input.purpose, customer: customer.customerName, changes: quote.changes.length });
+  const change = frameChange({ assembly: input.assembly, fn: quote.options.fn, standard: { fn: model.fn } });
+  if (change) await notifyFrameChange(frameAlertText(orderNumber(order.number), actor.name, change));
   return { ok: true, id: order.id, number: order.number, telegram };
 }
 
@@ -125,6 +128,12 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
   const order = created.value;
   const telegram = await afterCreate(actor, order.id, noRequestFor ? `${orderNumber(order.number)} zayavkasiz chiqimni yozdi` : `${orderNumber(order.number)} zapchast zayavkasini berdi`, { items: input.items.length, purpose: input.purpose, customer: customer.customerName, noRequest: !!noRequestFor });
   return { ok: true, id: order.id, number: order.number, telegram };
+}
+
+/** Best effort: the order is already saved, a failed Telegram message only logs. */
+async function notifyFrameChange(text: string) {
+  const admins = await getDb().adminUser.findMany({ where: { role: "SUPER_ADMIN", isActive: true, archivedAt: null, telegramChatId: { not: null } }, select: { telegramChatId: true } });
+  await Promise.all(admins.map(admin => sendMessage(admin.telegramChatId!, text).catch(error => console.error("Seh frame alert failed", { name: error instanceof Error ? error.name : "UnknownError" }))));
 }
 
 async function afterCreate(actor: Actor, id: string, summary: string, after: Record<string, unknown>) {
