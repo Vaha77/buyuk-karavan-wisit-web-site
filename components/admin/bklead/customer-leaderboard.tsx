@@ -13,7 +13,7 @@ export function CustomerLeaderboard({ rows, year }: { rows: LeaderRow[]; year: n
       <div className="bk-seg" role="group" aria-label="Ko‘rsatish">{LEADERBOARD_SIZES.map(value => <button key={value} type="button" aria-pressed={size === value} onClick={() => setSize(value)}>Top {value}</button>)}</div>
     </div>
     {rows.length ? <ol className="bk-list" style={{ listStyle: "none", margin: 0, padding: 0 }}>{rows.slice(0, size).map(row => <li key={row.place} style={row.mine ? { background: "#EAF2FD", borderRadius: 8, padding: "10px 8px" } : undefined} aria-current={row.mine ? "true" : undefined}>
-      {row.place <= 3 ? <span className={`bk-trophy is-${row.place}`} aria-label={`${row.place}-o‘rin`}><Trophy size={18} aria-hidden="true"/><small>{row.place}</small></span> : <span className="bk-medal">{row.place}</span>}
+      {row.place <= 3 ? <span className={`bk-trophy is-${row.place}`} aria-label={`${row.place}-o‘rin`}><Trophy size={24} aria-hidden="true"/><small>{row.place}</small></span> : <span className="bk-medal">{row.place}</span>}
       <div className="bk-grow"><b>{row.name}</b><span>{row.seller ?? "Sotuvchi biriktirilmagan"}</span></div>
       {row.mine && <span className="bk-badge">Sizning mijozingiz</span>}
       {row.prize && <span className="bk-badge is-soft"><Gift size={11} style={{ marginRight: 4 }}/>{row.prize}</span>}

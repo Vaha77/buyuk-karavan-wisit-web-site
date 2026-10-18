@@ -3,7 +3,7 @@ import "server-only";
 import { getDb } from "@/lib/db";
 import { buildPlanBoard, monthKey, periodMonths, type PersonInput } from "./rules";
 import { parseThresholds } from "./zones";
-import { sellerRanking, type SellerRanking } from "./seller-ranking";
+import { sellerRanking } from "./seller-ranking";
 import { tashkentYearMonth } from "@/lib/dashboard/period";
 
 export type SalesPeriodRow = { id: string; name: string; startYear: number; startMonth: number; monthCount: number };
@@ -87,7 +87,8 @@ export async function getSalesPeople(periodId: string | null) {
 export async function getSellerRanking(salesPersonId: string | null) {
   const periods = await getSalesPeriods();
   const period = pickPeriod(periods, undefined, tashkentYearMonth());
-  if (!period) return { periodName: null, ranking: { rows: [], me: null } satisfies SellerRanking };
+  if (!period) return { periodName: null, me: null };
   const { board } = await getPlanBoardData(period, periods);
-  return { periodName: period.name, ranking: sellerRanking(board, salesPersonId) };
+  // Only the viewer's own place leaves this function; other sellers' rows are dropped here.
+  return { periodName: period.name, me: sellerRanking(board, salesPersonId).me };
 }
