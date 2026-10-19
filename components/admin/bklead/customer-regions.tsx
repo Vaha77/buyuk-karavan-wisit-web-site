@@ -306,21 +306,23 @@ function RegionPeriod({ region }: { region: RegionStat }) {
 
 /** Bars grow one after another, the biggest in navy; a smooth line on top for months / years; missing months framed in dashed orange. */
 function PeriodBars({ points, line, label }: { points: PeriodPoint[]; line: boolean; label: string }) {
-  const phone = usePhone();
+  // Drawn at the box's real width (1 unit = 1 px), so labels stay readable on a phone and on a wide screen.
+  const box = useRef<HTMLDivElement>(null), [boxWidth, setBoxWidth] = useState(700);
+  useEffect(() => { const observer = new ResizeObserver(([entry]) => setBoxWidth(Math.round(entry.contentRect.width))); if (box.current) observer.observe(box.current); return () => observer.disconnect(); }, []);
   const [tip, setTip] = useState<number | null>(null);
-  const W = phone ? 340 : 700, H = phone ? 280 : 260, font = phone ? 13 : 11, L = phone ? 42 : 50, R = W - 10, T = 12, B = H - 30;
+  const W = Math.max(260, boxWidth), phone = W < 480, H = phone ? 260 : 280, font = 12, L = 46, R = W - 8, T = 12, B = H - 28;
   const n = points.length, slot = (R - L) / Math.max(1, n), width = Math.max(2, slot * (n > 20 ? 0.62 : 0.56)), X = (i: number) => L + slot * i + slot / 2;
   const max = nice(Math.max(1, ...points.map(point => point.value ?? 0))), Y = (value: number) => B - ((B - T) * value) / max;
-  const peak = points.reduce((best, point, i) => ((point.value ?? 0) > (points[best].value ?? 0) ? i : best), 0), every = Math.ceil(n / (phone ? 6 : 12));
+  const peak = points.reduce((best, point, i) => ((point.value ?? 0) > (points[best].value ?? 0) ? i : best), 0), every = Math.ceil(n / Math.min(12, Math.floor(W / 56)));
   const path = line ? smooth(points.map((point, i) => [X(i), Y(point.value ?? 0)]), B) : "";
   const tipLeft = tip === null ? 0 : (X(tip) / W) * 100;
-  return <div className="bk-dyn-big" style={{ marginTop: 0 }} onPointerLeave={() => setTip(null)}>
+  return <div ref={box} className="bk-dyn-big" style={{ marginTop: 0 }} onPointerLeave={() => setTip(null)}>
     <svg key={points.map(point => `${point.key}${point.value}`).join()} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} style={{ fontSize: font }}>
       <defs><linearGradient id="bk-per-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style={{ stopColor: "var(--bk-b1)" }}/><stop offset="1" style={{ stopColor: "var(--bk-b2)" }} stopOpacity=".6"/></linearGradient>
         <linearGradient id="bk-per-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style={{ stopColor: "var(--bk-b1)" }} stopOpacity=".14"/><stop offset="1" style={{ stopColor: "var(--bk-b1)" }} stopOpacity="0"/></linearGradient></defs>
       {[0, 1, 2, 3, 4].map(step => { const y = B - ((B - T) * step) / 4; return <g key={step}><line className="bk-dyn-grid" x1={L} x2={R} y1={y} y2={y}/><text x={L - 8} y={y + font / 3} textAnchor="end">${formatUsdK((max * step) / 4)}</text></g>; })}
       {points.map((point, i) => point.missing && <rect key={`m${i}`} x={X(i) - width / 2} y={B - 36} width={width} height={36} rx={6} fill="none" strokeWidth={2} strokeDasharray="5 4" style={{ stroke: "var(--bk-orange)" }}/>)}
-      {points.map((point, i) => { if (!point.value) return null; const h = Math.max(3, B - Y(point.value)); return <rect key={i} className="bk-per-bar" x={X(i) - width / 2} y={B - h} width={width} height={h} rx={Math.min(6, width / 2)} fill={i === peak ? "var(--bk-navy)" : "url(#bk-per-grad)"} style={{ animationDelay: `${Math.min(i * 28, 700)}ms` }}/>; })}
+      {points.map((point, i) => { if (!point.value) return null; const h = Math.max(3, B - Y(point.value)); return <rect key={i} className="bk-per-bar" x={X(i) - width / 2} y={B - h} width={width} height={h} rx={Math.min(6, width / 2, h / 2)} fill={i === peak ? "var(--bk-navy)" : "url(#bk-per-grad)"} style={{ animationDelay: `${Math.min(i * 28, 700)}ms` }}/>; })}
       {points.map((point, i) => (n - 1 - i) % every === 0 && <text key={`l${i}`} x={X(i)} y={B + font + 6} textAnchor="middle">{point.label}</text>)}
       {line && <><path className="bk-dyn-area" d={`${path} L${X(n - 1)},${B} L${X(0)},${B}Z`} fill="url(#bk-per-area)"/><path className="bk-dyn-line" d={path} strokeWidth={2.5} pathLength={1} style={{ stroke: "var(--bk-navy)" }}/></>}
       {points.map((_, i) => <rect key={`h${i}`} x={X(i) - slot / 2} y={T} width={slot} height={B - T + 20} fill="transparent" onPointerEnter={() => setTip(i)} onPointerDown={() => setTip(i)}/>)}
