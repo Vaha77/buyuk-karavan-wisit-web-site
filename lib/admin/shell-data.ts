@@ -14,10 +14,11 @@ export async function getShellData(user: AdminUser) {
   }
   if (user.role === "WORKSHOP") return { sexBadge: await sexBadgeCount(user) };
   const canReview = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
-  const [newLeads, pendingPurchases, sexBadge] = await Promise.all([
+  const [newLeads, pendingPurchases, corrections, sexBadge] = await Promise.all([
     db.lead.count({ where: { status: "NEW" } }).catch(() => 0),
     canReview ? db.customerPurchase.count({ where: { status: "PENDING" } }).catch(() => 0) : 0,
+    user.role === "SUPER_ADMIN" ? db.workshopCorrectionRequest.count({ where: { status: "PENDING" } }).catch(() => 0) : 0,
     sexBadgeCount(user),
   ]);
-  return { newLeads, pendingPurchases, linksBadge: referralLinksAreNew(), sexBadge };
+  return { newLeads, pendingPurchases: pendingPurchases + corrections, linksBadge: referralLinksAreNew(), sexBadge };
 }

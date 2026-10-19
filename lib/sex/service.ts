@@ -5,9 +5,10 @@ import { writeAudit } from "@/lib/audit/service";
 import { getDb } from "@/lib/db";
 import { getPraysCategories, getPraysProducts, getSexParts, getStandardCondenserCategoryId } from "@/lib/prays/queries";
 import { isIssueCategory } from "./categories";
-import { DUPLICATE_WINDOW_MS, STATUS_LABEL, alreadyText, canMarkTest, checkCancel, checkTransition, duplicateWarning, findDuplicate, orderNumber, type FingerprintInput, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
+import { CLOSED_TEXT, DUPLICATE_WINDOW_MS, STATUS_LABEL, alreadyText, canEditOrder, canMarkTest, checkCorrection, checkCancel, checkTransition, duplicateWarning, findDuplicate, orderNumber, type FingerprintInput, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
 import { notifyCancelled, notifyChanged, notifyCreated } from "./bot";
 import { createOnce } from "./idempotency";
+import { closeMonths, createNumbered } from "./month";
 import type { DeliveryStatus } from "./bot-text";
 import { buildZborkaCatalog, frameAlertText, frameChange, quoteZborka, type Assembly } from "./zborka";
 import { sendMessage } from "@/lib/telegram/client";
@@ -41,21 +42,22 @@ const dueDateOf = (value: string | null) => (value ? new Date(`${value}T00:00:00
 
 /** requestId: one id per form submit; confirmDuplicate: the seller answered "Ha" to "Baribir yana yuborasizmi?". */
 export type SubmitMeta = { requestId: string | null; confirmDuplicate: boolean };
-export type CreateResult = { ok: true; id: string; number: number; telegram: DeliveryStatus; repeated?: boolean } | { ok: false; error: string; duplicate?: { number: number } };
+export type CreateResult = { ok: true; id: string; number: string; telegram: DeliveryStatus; repeated?: boolean } | { ok: false; error: string; duplicate?: { number: string } };
 
 /** The same submit again (double click, retry): the order it already created. */
 async function sameRequest(requestId: string | null): Promise<CreateResult | null> {
   const order = requestId ? await findByRequest(requestId) : null;
-  return order ? { ok: true, id: order.id, number: order.number, telegram: "sent", repeated: true } : null;
+  return order ? { ok: true, id: order.id, number: orderNumber(order), telegram: "sent", repeated: true } : null;
 }
-const findByRequest = (requestId: string) => getDb().workshopOrder.findUnique({ where: { requestId }, select: { id: true, number: true } });
+const numbered = { id: true, monthKey: true, monthNo: true } as const;
+const findByRequest = (requestId: string) => getDb().workshopOrder.findUnique({ where: { requestId }, select: numbered });
 /** Same seller, goods, recipient and quantity within 10 minutes → ask before creating another one. */
 async function recentDuplicate(candidate: FingerprintInput) {
   const recent = await getDb().workshopOrder.findMany({
     where: { sellerId: candidate.sellerId, createdAt: { gte: new Date(Date.now() - DUPLICATE_WINDOW_MS) }, status: { not: "CANCELLED" } },
-    select: { number: true, createdAt: true, status: true, sellerId: true, type: true, purpose: true, customerId: true, customerName: true, qty: true, items: { select: { productId: true, partId: true, title: true, qty: true } } },
+    select: { monthKey: true, monthNo: true, createdAt: true, status: true, sellerId: true, type: true, purpose: true, customerId: true, customerName: true, qty: true, items: { select: { productId: true, partId: true, title: true, qty: true } } },
   });
-  return findDuplicate(candidate, recent.map(order => ({ ...order, items: order.items.map(item => ({ ref: item.productId ?? item.partId, title: item.title, qty: item.qty })) })));
+  return findDuplicate(candidate, recent.map(order => ({ ...order, number: orderNumber(order), items: order.items.map(item => ({ ref: item.productId ?? item.partId, title: item.title, qty: item.qty })) })));
 }
 const isUniqueViolation = (error: unknown) => !!error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2002";
 
@@ -76,20 +78,20 @@ export async function createAgregatOrder(actor: Actor, input: AgregatInput, meta
     if (duplicate) return { ok: false, error: duplicateWarning(duplicate), duplicate: { number: duplicate.number } };
   }
   const snapshot: PriceSnapshot = { unitBaseUsd: quote.base, totalBaseUsd: Math.round(quote.base * input.qty * 100) / 100, standardBaseUsd: quote.negotiated ? null : quote.standard, ...(quote.negotiated ? { negotiated: true } : {}) };
-  const created = await createOnce(meta.requestId, findByRequest, () => getDb().workshopOrder.create({
+  const created = await createOnce(meta.requestId, findByRequest, () => createNumbered((tx, slot) => tx.workshopOrder.create({
     data: {
-      requestId: meta.requestId, type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, dueDate: dueDateOf(input.dueDate), note: input.note,
+      ...slot, requestId: meta.requestId, type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, dueDate: dueDateOf(input.dueDate), note: input.note,
       sellerId: actor.id, createdById: actor.id, priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
       items: { create: [{ kind: "PRODUCT", productId: quote.product.id, title: quote.title, qty: input.qty, baseUsd: quote.negotiated ? null : money(quote.base), changedFromStandard: quote.changes.length > 0, options: { assembly: input.assembly, ...quote.options, standard: { liters: model.liters, hp: model.hp, fn: model.fn }, changes: quote.telegram, priceList: group.label, ...(quote.negotiated ? { negotiated: true } : {}) } as Prisma.InputJsonValue }] },
     },
-    select: { id: true, number: true },
-  }), isUniqueViolation);
-  if (created.repeated) return { ok: true, id: created.value.id, number: created.value.number, telegram: "sent", repeated: true };
+    select: numbered,
+  })), isUniqueViolation);
+  if (created.repeated) return { ok: true, id: created.value.id, number: orderNumber(created.value), telegram: "sent", repeated: true };
   const order = created.value;
-  const telegram = await afterCreate(actor, order.id, `${orderNumber(order.number)} zborka zakazini berdi`, { title: quote.title, qty: input.qty, purpose: input.purpose, customer: customer.customerName, changes: quote.changes.length });
+  const telegram = await afterCreate(actor, order.id, `${orderNumber(order)} zborka zakazini berdi`, { title: quote.title, qty: input.qty, purpose: input.purpose, customer: customer.customerName, changes: quote.changes.length });
   const change = frameChange({ assembly: input.assembly, fn: quote.options.fn, standard: { fn: model.fn } });
-  if (change) await notifyFrameChange(frameAlertText(orderNumber(order.number), actor.name, change));
-  return { ok: true, id: order.id, number: order.number, telegram };
+  if (change) await notifySuperAdmins(frameAlertText(orderNumber(order), actor.name, change));
+  return { ok: true, id: order.id, number: orderNumber(order), telegram };
 }
 
 /** productId: goods of a "Sehdan alohida chiqadi" category (Prays → Kategoriyalar); the old part list is not used any more. */
@@ -118,25 +120,25 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
   const totalBase = Math.round(known.reduce((sum, item) => sum + Number(byId.get(item.productId)!.basePriceUsd) * item.qty, 0) * 100) / 100;
   const snapshot = { unitBaseUsd: totalBase, totalBaseUsd: totalBase, standardBaseUsd: null, missingPrices: input.items.length - known.length };
   const now = new Date();
-  const created = await createOnce(meta.requestId, findByRequest, () => getDb().workshopOrder.create({
+  const created = await createOnce(meta.requestId, findByRequest, () => createNumbered((tx, slot) => tx.workshopOrder.create({
     data: {
-      requestId: meta.requestId, type: "ZAPCHAST", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: 1, dueDate: dueDateOf(input.dueDate), note: input.note,
+      ...slot, requestId: meta.requestId, type: "ZAPCHAST", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: 1, dueDate: dueDateOf(input.dueDate), note: input.note,
       sellerId, createdById: actor.id, priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
       ...(noRequestFor ? { noRequest: true, status: "ISSUED" as const, acceptedById: actor.id, acceptedAt: now, startedById: actor.id, startedAt: now, issuedById: actor.id, issuedAt: now } : {}),
       items: { create: input.items.map((item, index) => { const product = byId.get(item.productId)!; return { kind: "PRODUCT" as const, productId: product.id, title: product.model && !product.name.toUpperCase().includes(product.model.toUpperCase()) ? `${product.name} ${product.model}` : product.name, qty: item.qty, baseUsd: product.basePriceUsd, order: index }; }) },
     },
-    select: { id: true, number: true },
-  }), isUniqueViolation);
-  if (created.repeated) return { ok: true, id: created.value.id, number: created.value.number, telegram: "sent", repeated: true };
+    select: numbered,
+  })), isUniqueViolation);
+  if (created.repeated) return { ok: true, id: created.value.id, number: orderNumber(created.value), telegram: "sent", repeated: true };
   const order = created.value;
-  const telegram = await afterCreate(actor, order.id, noRequestFor ? `${orderNumber(order.number)} zayavkasiz chiqimni yozdi` : `${orderNumber(order.number)} zapchast zayavkasini berdi`, { items: input.items.length, purpose: input.purpose, customer: customer.customerName, noRequest: !!noRequestFor });
-  return { ok: true, id: order.id, number: order.number, telegram };
+  const telegram = await afterCreate(actor, order.id, noRequestFor ? `${orderNumber(order)} zayavkasiz chiqimni yozdi` : `${orderNumber(order)} zapchast zayavkasini berdi`, { items: input.items.length, purpose: input.purpose, customer: customer.customerName, noRequest: !!noRequestFor });
+  return { ok: true, id: order.id, number: orderNumber(order), telegram };
 }
 
 /** Best effort: the order is already saved, a failed Telegram message only logs. */
-async function notifyFrameChange(text: string) {
+async function notifySuperAdmins(text: string) {
   const admins = await getDb().adminUser.findMany({ where: { role: "SUPER_ADMIN", isActive: true, archivedAt: null, telegramChatId: { not: null } }, select: { telegramChatId: true } });
-  await Promise.all(admins.map(admin => sendMessage(admin.telegramChatId!, text).catch(error => console.error("Seh frame alert failed", { name: error instanceof Error ? error.name : "UnknownError" }))));
+  await Promise.all(admins.map(admin => sendMessage(admin.telegramChatId!, text).catch(error => console.error("Seh super admin alert failed", { name: error instanceof Error ? error.name : "UnknownError" }))));
 }
 
 async function afterCreate(actor: Actor, id: string, summary: string, after: Record<string, unknown>) {
@@ -151,8 +153,10 @@ const ACTOR_FIELDS: Record<OrderAction, "accepted" | "started" | "issued" | "rec
 /** `via: "telegram"` marks the audit entry "Telegram orqali". */
 export async function transitionOrder(actor: Actor, id: string, action: OrderAction, issuedQty?: Record<string, number>, via: "site" | "telegram" = "site"): Promise<Result<{ status: OrderStatus }>> {
   const db = getDb();
-  const order = await db.workshopOrder.findUnique({ where: { id }, select: { id: true, number: true, status: true, items: { select: { id: true, qty: true } } } });
+  await closeMonths();
+  const order = await db.workshopOrder.findUnique({ where: { id }, select: { id: true, monthKey: true, monthNo: true, status: true, items: { select: { id: true, qty: true } } } });
   if (!order) return { ok: false, error: "Zakaz topilmadi." };
+  if (!canEditOrder(actor.role, order.monthKey)) return { ok: false, error: CLOSED_TEXT };
   const check = checkTransition(actor.role, order.status, action);
   if (!check.ok) return check;
   const field = ACTOR_FIELDS[action], now = new Date();
@@ -169,11 +173,11 @@ export async function transitionOrder(actor: Actor, id: string, action: OrderAct
     const current = await db.workshopOrder.findUnique({ where: { id }, select: { status: true } });
     return { ok: false, error: current ? alreadyText(current.status) : "Zakaz topilmadi." };
   }
-  await writeAudit(actor, { action: "STATUS_CHANGE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order.number), summary: `${orderNumber(order.number)}: ${STATUS_LABEL[order.status]} → ${STATUS_LABEL[check.to]}${via === "telegram" ? " (Telegram orqali)" : ""}`, metadata: { via }, before: { status: order.status }, after: { status: check.to, ...(corrections.length ? { issuedQty: Object.fromEntries(corrections.map(item => [item.id, issuedQty![item.id]])) } : {}) } });
+  await writeAudit(actor, { action: "STATUS_CHANGE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order), summary: `${orderNumber(order)}: ${STATUS_LABEL[order.status]} → ${STATUS_LABEL[check.to]}${via === "telegram" ? " (Telegram orqali)" : ""}`, metadata: { via }, before: { status: order.status }, after: { status: check.to, ...(corrections.length ? { issuedQty: Object.fromEntries(corrections.map(item => [item.id, issuedQty![item.id]])) } : {}) } });
   await notifyChanged(id, action === "start");
   if (check.to === "ISSUED") {
-    const issued = await db.workshopOrder.findUnique({ where: { id }, select: { number: true, sellerId: true, type: true, qty: true, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } } });
-    if (issued) await tellSeller({ userId: issued.sellerId }, orderIssuedText(orderNumber(issued.number), orderTitle(issued)));
+    const issued = await db.workshopOrder.findUnique({ where: { id }, select: { monthKey: true, monthNo: true, sellerId: true, type: true, qty: true, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } } });
+    if (issued) await tellSeller({ userId: issued.sellerId }, orderIssuedText(orderNumber(issued), orderTitle(issued)));
   }
   revalidatePath("/admin/seh");
   return { ok: true, status: check.to };
@@ -182,8 +186,10 @@ export async function transitionOrder(actor: Actor, id: string, action: OrderAct
 /** Soft cancel: status CANCELLED with who / when / why; the order stays in the list ("Bekor qilingan"). */
 export async function cancelOrder(actor: Actor, id: string, reason: string | null): Promise<Result> {
   const db = getDb();
-  const order = await db.workshopOrder.findUnique({ where: { id }, select: { id: true, number: true, status: true, sellerId: true } });
+  await closeMonths();
+  const order = await db.workshopOrder.findUnique({ where: { id }, select: { id: true, monthKey: true, monthNo: true, status: true, sellerId: true } });
   if (!order) return { ok: false, error: "Zakaz topilmadi." };
+  if (!canEditOrder(actor.role, order.monthKey)) return { ok: false, error: CLOSED_TEXT };
   const check = checkCancel(actor.role, order.status, order.sellerId === actor.id, reason);
   if (!check.ok) return check;
   const cleanReason = reason?.trim().slice(0, 300) || null;
@@ -192,7 +198,7 @@ export async function cancelOrder(actor: Actor, id: string, reason: string | nul
     const current = await db.workshopOrder.findUnique({ where: { id }, select: { status: true } });
     return { ok: false, error: current ? alreadyText(current.status) : "Zakaz topilmadi." };
   }
-  await writeAudit(actor, { action: "CANCEL", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order.number), summary: `${orderNumber(order.number)}: ${STATUS_LABEL[order.status]} → Bekor qilingan`, before: { status: order.status }, after: { status: "CANCELLED", reason: cleanReason } });
+  await writeAudit(actor, { action: "CANCEL", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order), summary: `${orderNumber(order)}: ${STATUS_LABEL[order.status]} → Bekor qilingan`, before: { status: order.status }, after: { status: "CANCELLED", reason: cleanReason } });
   await notifyCancelled(id);
   revalidatePath("/admin/seh");
   return { ok: true };
@@ -201,11 +207,11 @@ export async function cancelOrder(actor: Actor, id: string, reason: string | nul
 /** "Test deb belgilash / olib tashlash" (SUPER_ADMIN): only the flag changes; the order, its status and Telegram messages stay. */
 export async function setOrderTest(actor: Actor, id: string, isTest: boolean): Promise<Result> {
   if (!canMarkTest(actor.role)) return { ok: false, error: "Test belgisini faqat Super Admin qo‘yadi." };
-  const order = await getDb().workshopOrder.findUnique({ where: { id }, select: { number: true, isTest: true } });
+  const order = await getDb().workshopOrder.findUnique({ where: { id }, select: { monthKey: true, monthNo: true, isTest: true } });
   if (!order) return { ok: false, error: "Zakaz topilmadi." };
   if (order.isTest === isTest) return { ok: true };
   await getDb().workshopOrder.update({ where: { id }, data: { isTest } });
-  await writeAudit(actor, { action: "UPDATE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order.number), summary: `${orderNumber(order.number)}: ${isTest ? "test deb belgilandi" : "test belgisi olib tashlandi"}`, before: { isTest: order.isTest }, after: { isTest } });
+  await writeAudit(actor, { action: "UPDATE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order), summary: `${orderNumber(order)}: ${isTest ? "test deb belgilandi" : "test belgisi olib tashlandi"}`, before: { isTest: order.isTest }, after: { isTest } });
   revalidatePath("/admin/seh");
   revalidatePath("/admin");
   return { ok: true };
@@ -213,9 +219,71 @@ export async function setOrderTest(actor: Actor, id: string, isTest: boolean): P
 
 /** A seller confirms a "Zayavkasiz chiqim" written in their name. */
 export async function confirmNoRequest(actor: Actor, id: string): Promise<Result> {
+  const order = await getDb().workshopOrder.findUnique({ where: { id }, select: { monthKey: true } });
+  if (order && !canEditOrder(actor.role, order.monthKey)) return { ok: false, error: CLOSED_TEXT };
   const result = await getDb().workshopOrder.updateMany({ where: { id, sellerId: actor.id, noRequest: true, sellerConfirmedAt: null }, data: { sellerConfirmedAt: new Date() } });
   if (result.count !== 1) return { ok: false, error: "Zakaz topilmadi yoki allaqachon tasdiqlangan." };
   await writeAudit(actor, { action: "CONFIRM", entityType: "WORKSHOP_ORDER", entityId: id, summary: "Zayavkasiz chiqimni tasdiqladi", before: { sellerConfirmed: false }, after: { sellerConfirmed: true } });
   revalidatePath("/admin/seh");
+  return { ok: true };
+}
+
+// ---- Closed month: "Tuzatish so‘rash" and the SUPER_ADMIN edit -------------------------------------
+/** Anyone but SUPER_ADMIN asks for a fix of a closed-month order; SUPER_ADMIN gets Telegram and "Tasdiqlash kerak". */
+export async function requestCorrection(actor: Actor, id: string, reason: string): Promise<Result> {
+  const db = getDb();
+  const order = await db.workshopOrder.findUnique({ where: { id }, select: { monthKey: true, monthNo: true, sellerId: true } });
+  if (!order) return { ok: false, error: "Zakaz topilmadi." };
+  const check = checkCorrection(actor, order, reason);
+  if (!check.ok) return check;
+  if (await db.workshopCorrectionRequest.findFirst({ where: { orderId: id, requesterId: actor.id, status: "PENDING" }, select: { id: true } })) return { ok: false, error: "So‘rovingiz allaqachon yuborilgan — Super Admin ko‘rib chiqadi." };
+  const text = reason.trim().slice(0, 500), number = orderNumber(order);
+  await db.workshopCorrectionRequest.create({ data: { orderId: id, requesterId: actor.id, reason: text } });
+  await writeAudit(actor, { action: "CREATE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: number, summary: `${number}: tuzatish so‘raldi`, after: { reason: text } });
+  await notifySuperAdmins(`🔔 Tuzatish so‘rovi · ${number}\n${actor.name}: “${text}”\nAdmin → Tasdiqlash kerak`);
+  revalidatePath("/admin/customers/purchases");
+  return { ok: true };
+}
+
+export async function rejectCorrection(actor: Actor, requestId: string, reason: string): Promise<Result> {
+  if (actor.role !== "SUPER_ADMIN") return { ok: false, error: "Faqat Super Admin rad etadi." };
+  if (reason.trim().length < 3) return { ok: false, error: "Rad etish sababini yozing." };
+  const db = getDb();
+  const request = await db.workshopCorrectionRequest.findUnique({ where: { id: requestId }, select: { orderId: true, requesterId: true, order: { select: { monthKey: true, monthNo: true } } } });
+  if (!request) return { ok: false, error: "So‘rov topilmadi." };
+  const text = reason.trim().slice(0, 300), number = orderNumber(request.order);
+  const result = await db.workshopCorrectionRequest.updateMany({ where: { id: requestId, status: "PENDING" }, data: { status: "REJECTED", rejectReason: text, resolvedAt: new Date(), resolvedById: actor.id } });
+  if (result.count !== 1) return { ok: false, error: "So‘rov allaqachon ko‘rib chiqilgan." };
+  await writeAudit(actor, { action: "REJECT", entityType: "WORKSHOP_ORDER", entityId: request.orderId, entityName: number, summary: `${number}: tuzatish so‘rovi rad etildi`, after: { reason: text } });
+  await tellSeller({ userId: request.requesterId }, `❌ ${number} bo‘yicha tuzatish so‘rovingiz rad etildi · Sabab: ${text}`);
+  revalidatePath("/admin/customers/purchases");
+  return { ok: true };
+}
+
+export type OrderEdit = { customerName: string | null; note: string | null; qty: number; items: Array<{ id: string; qty: number; issuedQty: number | null }> };
+/** SUPER_ADMIN edit (any month); `requestId` closes that "Tuzatish so‘rash" as approved. Changed fields go to Faoliyat tarixi as before / after. */
+export async function editOrder(actor: Actor, id: string, input: OrderEdit, requestId: string | null): Promise<Result> {
+  if (actor.role !== "SUPER_ADMIN") return { ok: false, error: "Zakazni faqat Super Admin tahrirlaydi." };
+  const db = getDb();
+  const order = await db.workshopOrder.findUnique({ where: { id }, select: { monthKey: true, monthNo: true, customerName: true, note: true, qty: true, items: { select: { id: true, title: true, qty: true, issuedQty: true } } } });
+  if (!order) return { ok: false, error: "Zakaz topilmadi." };
+  const before: Record<string, unknown> = {}, after: Record<string, unknown> = {};
+  for (const key of ["customerName", "note", "qty"] as const) if (order[key] !== input[key]) { before[key] = order[key]; after[key] = input[key]; }
+  const items = input.items.flatMap(change => { const item = order.items.find(row => row.id === change.id); return item && (item.qty !== change.qty || item.issuedQty !== change.issuedQty) ? [{ item, change }] : []; });
+  for (const { item, change } of items) { before[item.title] = { qty: item.qty, issuedQty: item.issuedQty }; after[item.title] = { qty: change.qty, issuedQty: change.issuedQty }; }
+  if (!Object.keys(after).length && !requestId) return { ok: true };
+  const requests = await db.$transaction(async tx => {
+    await tx.workshopOrder.update({ where: { id }, data: { customerName: input.customerName, note: input.note, qty: input.qty } });
+    for (const { item, change } of items) await tx.workshopOrderItem.update({ where: { id: item.id }, data: { qty: change.qty, issuedQty: change.issuedQty } });
+    if (!requestId) return [];
+    const pending = await tx.workshopCorrectionRequest.findMany({ where: { id: requestId, orderId: id, status: "PENDING" }, select: { requesterId: true } });
+    await tx.workshopCorrectionRequest.updateMany({ where: { id: requestId, orderId: id, status: "PENDING" }, data: { status: "APPROVED", resolvedAt: new Date(), resolvedById: actor.id } });
+    return pending;
+  });
+  const number = orderNumber(order);
+  await writeAudit(actor, { action: "UPDATE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: number, summary: `${number}: Super Admin tahrirladi${requestId ? " (tuzatish so‘rovi bo‘yicha)" : ""}`, before, after, metadata: requestId ? { correctionRequestId: requestId } : null });
+  for (const request of requests) await tellSeller({ userId: request.requesterId }, `✅ ${number} bo‘yicha tuzatish so‘rovingiz bajarildi`);
+  revalidatePath("/admin/seh");
+  revalidatePath("/admin/customers/purchases");
   return { ok: true };
 }

@@ -185,7 +185,7 @@ test("process steps (4 steps) and the 24 h overdue mark", () => {
   assert.equal(rules.isReceiveOverdue(issued, now), true);
   assert.equal(rules.isReceiveOverdue({ ...issued, issuedAt: new Date("2026-10-05T01:00:00Z") }, now), false);
   assert.deepEqual(rules.processSteps({ status: "NEW", acceptedAt: null, issuedAt: null, receivedAt: null }, now).map(step => step.state), ["wait", "later", "later", "later"]);
-  assert.equal(rules.orderNumber(7), "#0007");
+  assert.equal(rules.orderNumber({ monthKey: "2026-11", monthNo: 7 }), "11-07");
 });
 
 test("every Seh action starts with a role guard; WORKSHOP-only and SELLER-only actions check the role", async () => {
@@ -297,7 +297,7 @@ test("daily “terish boshlandi” counter resets at the start of the Tashkent d
 });
 
 test("WORKSHOP panel payload: no price fields; the panel component never reads prices", async () => {
-  const row = { id: "o", number: "#0418", status: "STARTED", queue: null, priceSnapshot: { unitBaseUsd: 4541, totalBaseUsd: 4541, standardBaseUsd: 4123 }, items: [{ id: "i", title: "x", qty: 1, baseUsd: 4541 }] };
+  const row = { id: "o", number: "10-18", status: "STARTED", queue: null, priceSnapshot: { unitBaseUsd: 4541, totalBaseUsd: 4541, standardBaseUsd: 4123 }, items: [{ id: "i", title: "x", qty: 1, baseUsd: 4541 }] };
   assert.doesNotMatch(JSON.stringify(rules.stripPrices(row, "WORKSHOP")), /4541|4123|price|baseUsd|Usd/i);
   const board = await readFile(new URL("../components/admin/sex/workshop-board.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(board, /formatUsd|baseUsd|BaseUsd|priceSnapshot|\.prices/);
@@ -307,19 +307,19 @@ test("WORKSHOP panel payload: no price fields; the panel component never reads p
 
 
 const botOrder = (patch = {}) => ({
-  id: "abcdefghij12", number: 418, type: "AGREGAT", purpose: "CLIENT", customerName: "Rustam aka", qty: 1, dueDate: new Date("2026-10-12T00:00:00Z"), note: null,
+  id: "abcdefghij12", number: "10-18", type: "AGREGAT", purpose: "CLIENT", customerName: "Rustam aka", qty: 1, dueDate: new Date("2026-10-12T00:00:00Z"), note: null,
   sellerName: "Abduraxmon", noRequest: false, status: "NEW", startedAt: null, issuedAt: null, issuedByName: null,
   details: ["Resiver: 20 L"], items: [{ title: "BITZER 4NES+20 vazdushniy agregat · FNV200", qty: 1 }], ...patch,
 });
 
 test("seh bot: personal message and the one next button per stage; never a price", () => {
   const text = bot.personalMessage(botOrder(), null);
-  assert.equal(text, "🔧 Yangi zakaz #0418 · Agregat\nBITZER 4NES+20 vazdushniy agregat · FNV200 ×1\nResiver: 20 L\nKimga: Mijoz — Rustam aka · Sotuvchi: Abduraxmon · Muddat: 12-okt");
+  assert.equal(text, "🔧 Yangi zakaz 10-18 · Agregat\nBITZER 4NES+20 vazdushniy agregat · FNV200 ×1\nResiver: 20 L\nKimga: Mijoz — Rustam aka · Sotuvchi: Abduraxmon · Muddat: 12-okt");
   assert.match(bot.personalMessage(botOrder({ status: "ACCEPTED" }), 2), /\n\n📋 Navbatda: 2-o‘rin$/);
   assert.match(bot.personalMessage(botOrder({ status: "STARTED", startedAt: new Date("2026-10-09T04:40:00Z") }), null), /\n\n🔧 Terilmoqda · 09:40 dan$/);
   assert.match(bot.personalMessage(botOrder({ status: "ISSUED", issuedAt: new Date("2026-10-09T10:40:00Z") }), null), /\n\n✅ Chiqib ketdi 15:40$/);
   const zap = bot.personalMessage(botOrder({ type: "ZAPCHAST", note: "Shoshilinch", items: [{ title: "Vibro shlang F28", qty: 10 }, { title: "Glazok 3/8", qty: 2 }] }), null);
-  assert.match(zap, /^📦 Yangi zayavka #0418 · Zapchast\nVibro shlang F28 ×10\nGlazok 3\/8 ×2\n/);
+  assert.match(zap, /^📦 Yangi zayavka 10-18 · Zapchast\nVibro shlang F28 ×10\nGlazok 3\/8 ×2\n/);
   assert.match(zap, /\nIzoh: Shoshilinch$/);
   assert.doesNotMatch(zap + text, /Resiver: 20 L[\s\S]*Resiver/, "agregat details only for agregat");
   for (const message of [text, zap]) assert.doesNotMatch(message, /\$|narx|usd/i);
@@ -361,9 +361,9 @@ test("seh bot: an unlinked or non-WORKSHOP Telegram account is refused; every bo
 
 test("Seh group gets only the ISSUED report (no buttons, no price)", async () => {
   const report = bot.groupIssuedMessage(botOrder({ status: "ISSUED", issuedAt: new Date("2026-10-09T10:40:00Z"), issuedByName: "Ikromjon" }));
-  assert.equal(report, "✅ Sehdan chiqdi #0418\nBITZER 4NES+20 vazdushniy agregat · FNV200 ×1\nKimga: Mijoz — Rustam aka\nZayavka bergan: Abduraxmon\nSeh mas’uli: Ikromjon\nChiqdi: 09-okt 15:40");
+  assert.equal(report, "✅ Sehdan chiqdi 10-18\nBITZER 4NES+20 vazdushniy agregat · FNV200 ×1\nKimga: Mijoz — Rustam aka\nZayavka bergan: Abduraxmon\nSeh mas’uli: Ikromjon\nChiqdi: 09-okt 15:40");
   const zap = bot.groupIssuedMessage(botOrder({ status: "ISSUED", type: "ZAPCHAST", noRequest: true, purpose: "SHOP", issuedByName: "Ikromjon", items: [{ title: "Vibro shlang F28", qty: 10, issuedQty: 8 }, { title: "Glazok 3/8", qty: 2 }] }));
-  assert.equal(zap, "✅ Sehdan chiqdi #0418\nVibro shlang F28 ×8\nGlazok 3/8 ×2\nKimga: Magazin (vitrina)\nZayavka bergan: Abduraxmon\nSeh mas’uli: Ikromjon\n⚠️ Zayavkasiz chiqim");
+  assert.equal(zap, "✅ Sehdan chiqdi 10-18\nVibro shlang F28 ×8\nGlazok 3/8 ×2\nKimga: Magazin (vitrina)\nZayavka bergan: Abduraxmon\nSeh mas’uli: Ikromjon\n⚠️ Zayavkasiz chiqim");
   const delivery = await readFile(new URL("../lib/sex/bot.ts", import.meta.url), "utf8");
   assert.match(delivery, /if \(!chatId \|\| order\.status !== "ISSUED"\) return;/, "group report only for ISSUED");
   assert.equal((delivery.match(/telegramWorkshopChatId\(\)/g) ?? []).length, 2, "the group chat is used only by the report and its test");
@@ -397,7 +397,7 @@ test("Seh group send (mocked Telegram): sends once; on migrate_to_chat_id resend
     if (chatId === "-4313815181") throw Object.assign(new Error("Telegram sendMessage failed"), { name: "TelegramApiError", description: "Bad Request: group chat was upgraded to a supergroup chat", migrateToChatId: "-1001234567890" });
     return { chat: { id: Number(chatId) }, message_id: 78 };
   };
-  const moved = await group.sendToGroup(migrating, "-4313815181", "✅ Sehdan chiqdi #0418", message => logs.push(message));
+  const moved = await group.sendToGroup(migrating, "-4313815181", "✅ Sehdan chiqdi 10-18", message => logs.push(message));
   assert.deepEqual(moved, { ok: true, chatId: "-1001234567890", messageId: 78, migratedTo: "-1001234567890" });
   assert.deepEqual(calls.map(call => call[0]), ["-4313815181", "-1001234567890"], "resent once with the new id");
   assert.deepEqual(logs, ["Guruh ID o‘zgardi: -1001234567890 — Vercel'da yangilang (TELEGRAM_WORKSHOP_CHAT_ID)"]);
@@ -520,10 +520,10 @@ test("double submit: two fast clicks with the same requestId create one order", 
 test("the same order again within 10 minutes asks “Baribir yana yuborasizmi?”; after confirmation it is created", () => {
   const now = new Date("2026-10-09T11:55:00Z");
   const base = { sellerId: "s1", type: "AGREGAT", purpose: "CLIENT", customerId: null, customerName: "Rustam aka", qty: 1, items: [{ ref: "p1", title: "BITZER 4NES+20 vazdushniy agregat · FNV200", qty: 1 }] };
-  const earlier = { ...base, number: 2, status: "NEW", createdAt: new Date("2026-10-09T11:54:00Z"), customerName: "  rustam   AKA " };
+  const earlier = { ...base, number: "10-02", status: "NEW", createdAt: new Date("2026-10-09T11:54:00Z"), customerName: "  rustam   AKA " };
   const found = rules.findDuplicate(base, [earlier], now);
-  assert.equal(found?.number, 2, "same seller, goods, customer, quantity (name case/spaces ignored)");
-  assert.equal(rules.duplicateWarning(found, now), "⚠️ Bu zakaz 1 daqiqa oldin yuborilgan (#0002). Baribir yana yuborasizmi?");
+  assert.equal(found?.number, "10-02", "same seller, goods, customer, quantity (name case/spaces ignored)");
+  assert.equal(rules.duplicateWarning(found, now), "⚠️ Bu zakaz 1 daqiqa oldin yuborilgan (10-02). Baribir yana yuborasizmi?");
   assert.equal(rules.findDuplicate(base, [{ ...earlier, createdAt: new Date("2026-10-09T11:44:00Z") }], now), null, "older than 10 minutes");
   assert.equal(rules.findDuplicate({ ...base, qty: 2 }, [earlier], now), null, "different quantity");
   assert.equal(rules.findDuplicate({ ...base, sellerId: "s2" }, [earlier], now), null, "another seller");
@@ -547,8 +547,8 @@ test("cancel: seller only their own NEW order; SUPER_ADMIN until it leaves the w
   assert.equal(rules.canCancel("SELLER", "ACCEPTED", true), false);
 
   // Telegram: the personal message becomes "❌ #0003 bekor qilindi" without buttons; nothing to the group.
-  const cancelled = botOrder({ number: 3, status: "CANCELLED", cancelReason: "Mijoz fikridan qaytdi" });
-  assert.match(bot.personalMessage(cancelled, null), /\n\n❌ #0003 bekor qilindi · Sabab: Mijoz fikridan qaytdi$/);
+  const cancelled = botOrder({ number: "10-03", status: "CANCELLED", cancelReason: "Mijoz fikridan qaytdi" });
+  assert.match(bot.personalMessage(cancelled, null), /\n\n❌ 10-03 bekor qilindi · Sabab: Mijoz fikridan qaytdi$/);
   assert.deepEqual(bot.personalKeyboard(cancelled.id, "CANCELLED").inline_keyboard, []);
   assert.deepEqual(bot.deliveryPlan({ status: "CANCELLED", noRequest: false }, ["1001"], ["1001"]), { personal: [], group: false });
 
@@ -628,4 +628,51 @@ test("Prays label: a Briliant list without a freon reads Briliant R22; Briliant 
   assert.equal(zborka.priceListLabel("Briliant", "R404"), "Briliant R404");
   assert.equal(zborka.priceListLabel("Bitzer", null), "Bitzer");
   assert.equal(zborka.priceListLabel("Bitzer", "R22"), "Bitzer R22");
+});
+
+test("seh monthly number: MM-NN, Tashkent month boundary, carry-over order and idempotency", () => {
+  assert.equal(rules.orderNumber({ monthKey: "2026-11", monthNo: 1 }), "11-01");
+  assert.equal(rules.orderNumber({ monthKey: "2026-11", monthNo: 123 }), "11-123");
+  // Tashkent is UTC+5: Oct 31 23:59 local = 18:59 UTC; Nov 1 00:00 local = 19:00 UTC.
+  assert.equal(rules.monthKeyOf(new Date("2026-10-31T18:59:59Z")), "2026-10");
+  assert.equal(rules.monthKeyOf(new Date("2026-10-31T19:00:00Z")), "2026-11");
+  assert.equal(rules.monthKeyOf(new Date("2026-12-31T19:00:00Z")), "2027-01");
+  assert.equal(rules.isClosedMonth("2026-10", new Date("2026-10-31T18:59:59Z")), false);
+  assert.equal(rules.isClosedMonth("2026-10", new Date("2026-10-31T19:00:00Z")), true);
+  const open = [{ id: "c", monthKey: "2026-10", monthNo: 30 }, { id: "a", monthKey: "2026-10", monthNo: 21 }, { id: "b", monthKey: "2026-10", monthNo: 27 }, { id: "s", monthKey: "2026-09", monthNo: 40 }];
+  assert.deepEqual(rules.carryPlan(open, "2026-11", 0), [
+    { id: "s", monthNo: 1, carriedFrom: "09-40" }, { id: "a", monthNo: 2, carriedFrom: "10-21" }, { id: "b", monthNo: 3, carriedFrom: "10-27" }, { id: "c", monthNo: 4, carriedFrom: "10-30" },
+  ], "old queue order kept, 01 onwards");
+  assert.deepEqual(rules.carryPlan(open, "2026-11", 5).map(move => move.monthNo), [6, 7, 8, 9], "after numbers already taken");
+  // Running the close twice: after the first run every order is in the new month, so nothing moves again.
+  const moved = open.map(order => ({ ...order, monthKey: "2026-11", monthNo: rules.carryPlan(open, "2026-11", 0).find(move => move.id === order.id).monthNo }));
+  assert.deepEqual(rules.carryPlan(moved, "2026-11", 4), []);
+});
+
+test("closed month: only SUPER_ADMIN edits; others ask for a correction with a reason", () => {
+  const nov = new Date("2026-11-02T08:00:00Z"), order = { sellerId: "s1", monthKey: "2026-10" };
+  for (const role of ["SELLER", "WORKSHOP", "ADMIN", "MANAGER"]) assert.equal(rules.canEditOrder(role, "2026-10", nov), false, role);
+  assert.equal(rules.canEditOrder("SUPER_ADMIN", "2026-10", nov), true);
+  assert.equal(rules.canEditOrder("SELLER", "2026-11", nov), true, "current month is open");
+  assert.deepEqual(rules.checkCorrection({ id: "s1", role: "SELLER" }, order, "Soni 2 ta chiqqan", nov), { ok: true });
+  assert.equal(rules.checkCorrection({ id: "s2", role: "SELLER" }, order, "Soni 2 ta", nov).ok, false, "not their order");
+  assert.equal(rules.checkCorrection({ id: "a", role: "ADMIN" }, order, " ", nov).ok, false, "reason required");
+  assert.equal(rules.checkCorrection({ id: "x", role: "SUPER_ADMIN" }, order, "Soni 2 ta", nov).ok, false, "super admin edits directly");
+  assert.equal(rules.checkCorrection({ id: "a", role: "ADMIN" }, { ...order, monthKey: "2026-11" }, "Soni 2 ta", nov).ok, false, "open month needs no request");
+});
+
+test("closed month guard and correction flow are wired on the server", async () => {
+  const service = await readFile(new URL("../lib/sex/service.ts", import.meta.url), "utf8");
+  for (const fn of ["transitionOrder", "cancelOrder", "confirmNoRequest"]) assert.match(service.slice(service.indexOf(`function ${fn}`)), /^[^]*?canEditOrder\(actor\.role/, `${fn} checks the closed month`);
+  assert.match(service, /export async function editOrder[^]*?actor\.role !== "SUPER_ADMIN"[^]*?writeAudit\(actor, \{ action: "UPDATE"[^]*?before, after/, "SUPER_ADMIN only, audited with before / after");
+  assert.match(service, /export async function requestCorrection[^]*?checkCorrection[^]*?workshopCorrectionRequest\.create[^]*?notifySuperAdmins/);
+  assert.match(service, /export async function rejectCorrection[^]*?status: "PENDING"[^]*?REJECTED[^]*?tellSeller/);
+  const month = await readFile(new URL("../lib/sex/month.ts", import.meta.url), "utf8");
+  assert.match(month, /pg_advisory_xact_lock/, "numbering and month close share one lock");
+});
+
+test("order list search: number with or without dash, product, customer, seller", () => {
+  const row = { number: "11-04", product: "Briliant R22 resiver ustida 20L ×2", customerName: "Davlatbek", sellerName: "Abdusalom" };
+  for (const query of ["11-04", "1104", "briliant 20l", "davlat", "ABDUSALOM", ""]) assert.equal(rules.matchesOrder(row, query), true, query);
+  for (const query of ["11-05", "bitzer", "briliant bitzer"]) assert.equal(rules.matchesOrder(row, query), false, query);
 });

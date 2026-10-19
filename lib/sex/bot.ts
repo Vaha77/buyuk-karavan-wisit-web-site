@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 import { TelegramApiError, editMessageText, getMe, sendMessage, telegramErrorDetails, telegramWorkshopChatId } from "@/lib/telegram/client";
 import { LINK_PREFIX, LINK_TTL_MS, cancelledText, deliveryPlan, groupIssuedMessage, personalKeyboard, personalMessage, type BotOrder, type DeliveryStatus } from "./bot-text";
 import { sendToGroup } from "./group-send";
-import { queuePositions } from "./rules";
+import { orderNumber, queuePositions } from "./rules";
 
 // Seh bot delivery: personal messages to linked WORKSHOP users (edited on every status change) and the group report on ISSUED.
 // A Telegram failure never undoes a status change; it is logged and flagged on the order for "qayta yuborish".
@@ -19,7 +19,7 @@ export async function loadBotOrder(id: string): Promise<BotOrder | null> {
   if (!order) return null;
   const options = order.items[0]?.options as { changes?: unknown } | null;
   return {
-    id: order.id, number: order.number, type: order.type, purpose: order.purpose, customerName: order.customerName, qty: order.qty, dueDate: order.dueDate, note: order.note,
+    id: order.id, number: orderNumber(order), type: order.type, purpose: order.purpose, customerName: order.customerName, qty: order.qty, dueDate: order.dueDate, note: order.note,
     sellerName: order.seller.name, noRequest: order.noRequest, status: order.status, cancelReason: order.cancelReason, startedAt: order.startedAt, issuedAt: order.issuedAt, issuedByName: order.issuedBy?.name ?? null,
     details: Array.isArray(options?.changes) ? (options.changes as string[]) : [], items: order.items.map(item => ({ title: item.title, qty: item.qty, issuedQty: item.issuedQty })),
   };

@@ -1,9 +1,10 @@
 // Seh bot texts and buttons (personal chats of WORKSHOP users + the Seh group report). Pure; never contains a price.
-import { orderNumber, shortDay, clock, type OrderStatus } from "./rules";
+import { shortDay, clock, type OrderStatus } from "./rules";
 
 export type BotItem = { title: string; qty: number; issuedQty?: number | null };
 export type BotOrder = {
-  id: string; number: number; type: "AGREGAT" | "ZAPCHAST"; purpose: "SHOP" | "CLIENT"; customerName: string | null; qty: number;
+  /** Shown "MM-NN" (orderNumber). */
+  id: string; number: string; type: "AGREGAT" | "ZAPCHAST"; purpose: "SHOP" | "CLIENT"; customerName: string | null; qty: number;
   dueDate: Date | string | null; note: string | null; sellerName: string; noRequest: boolean; status: OrderStatus;
   startedAt: Date | string | null; issuedAt: Date | string | null; issuedByName: string | null;
   /** Agregat option lines as shown on the order ("Resiver: 20 L", "Kondensator: FNV200 (standart FN160 o‘rniga), rama bilan"). */
@@ -31,7 +32,7 @@ export function statusLine(order: Pick<BotOrder, "status" | "startedAt" | "issue
 
 /** Personal message to a WORKSHOP user; edited in place on every status change. */
 export function personalMessage(order: BotOrder, queue: number | null) {
-  const lines = [`${order.type === "AGREGAT" ? "🔧 Yangi zakaz" : "📦 Yangi zayavka"} ${orderNumber(order.number)} · ${typeLabel(order.type)}`, ...itemLines(order)];
+  const lines = [`${order.type === "AGREGAT" ? "🔧 Yangi zakaz" : "📦 Yangi zayavka"} ${order.number} · ${typeLabel(order.type)}`, ...itemLines(order)];
   if (order.type === "AGREGAT") lines.push(...order.details);
   lines.push([`Kimga: ${recipient(order)}`, `Sotuvchi: ${order.sellerName}`, order.dueDate && `Muddat: ${shortDay(order.dueDate)}`].filter(Boolean).join(" · "));
   if (order.note) lines.push(`Izoh: ${order.note}`);
@@ -42,7 +43,7 @@ export function personalMessage(order: BotOrder, queue: number | null) {
 
 /** "❌ #0003 bekor qilindi" (+ reason): the personal message is edited to this and loses its buttons. */
 export function cancelledText(order: Pick<BotOrder, "number" | "cancelReason">) {
-  return `❌ ${orderNumber(order.number)} bekor qilindi${order.cancelReason ? ` · Sabab: ${order.cancelReason}` : ""}`;
+  return `❌ ${order.number} bekor qilindi${order.cancelReason ? ` · Sabab: ${order.cancelReason}` : ""}`;
 }
 
 /** The one next step as a button: Qabul qildim → Terishni boshladim → Chiqib ketdi; nothing after that. */
@@ -68,7 +69,7 @@ export function parseSehCallback(data: string | undefined): { action: SehCallbac
 
 /** Seh group gets only this final report, once an order is ISSUED: number, goods, for whom, who ordered, who issued, when. No buttons, no price. */
 export function groupIssuedMessage(order: BotOrder) {
-  const lines = [`✅ Sehdan chiqdi ${orderNumber(order.number)}`, ...itemLines(order),
+  const lines = [`✅ Sehdan chiqdi ${order.number}`, ...itemLines(order),
     `Kimga: ${order.purpose === "CLIENT" ? `Mijoz — ${order.customerName ?? "—"}` : "Magazin (vitrina)"}`,
     `Zayavka bergan: ${order.sellerName}`, `Seh mas’uli: ${order.issuedByName ?? "—"}`];
   if (order.issuedAt) lines.push(`Chiqdi: ${shortDay(order.issuedAt)} ${clock(order.issuedAt)}`);
@@ -88,18 +89,18 @@ export function isBotCommand(text: string | undefined, command: "navbat" | "bugu
 }
 
 /** /navbat: queue in order, then what is being assembled now. */
-export function queueText(queued: Array<{ number: number; title: string; recipient: string }>, started: Array<{ number: number; title: string; since: string }>) {
+export function queueText(queued: Array<{ number: string; title: string; recipient: string }>, started: Array<{ number: string; title: string; since: string }>) {
   const lines = ["📋 Navbat"];
   if (!queued.length) lines.push("Navbat bo‘sh.");
-  queued.forEach((order, index) => lines.push(`${index + 1}. ${orderNumber(order.number)} · ${order.title} — ${order.recipient}`));
+  queued.forEach((order, index) => lines.push(`${index + 1}. ${order.number} · ${order.title} — ${order.recipient}`));
   lines.push("", "🔧 Terilmoqda");
   if (!started.length) lines.push("Hozir hech narsa terilmayapti.");
-  for (const order of started) lines.push(`${orderNumber(order.number)} · ${order.title} · ${order.since}`);
+  for (const order of started) lines.push(`${order.number} · ${order.title} · ${order.since}`);
   return lines.join("\n");
 }
 /** /bugun: today's started counter and issued orders. */
-export function todayText(started: number, limit: number, issued: number[]) {
-  return [`📅 Bugun`, `Terish boshlandi: ${started} / ${limit}${started >= limit ? " · kunlik limit" : ""}`, `Chiqib ketdi: ${issued.length ? issued.map(orderNumber).join(", ") : "hali yo‘q"}`].join("\n");
+export function todayText(started: number, limit: number, issued: string[]) {
+  return [`📅 Bugun`, `Terish boshlandi: ${started} / ${limit}${started >= limit ? " · kunlik limit" : ""}`, `Chiqib ketdi: ${issued.length ? issued.join(", ") : "hali yo‘q"}`].join("\n");
 }
 export const orderTitle = (order: Pick<BotOrder, "type" | "qty" | "items">) => itemLines(order).join(", ");
 export const orderRecipient = recipient;

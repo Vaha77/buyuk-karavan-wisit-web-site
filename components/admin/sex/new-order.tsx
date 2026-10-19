@@ -7,7 +7,6 @@ import { personalKeyboard, personalMessage, type BotOrder } from "@/lib/sex/bot-
 import { formatSignedUsd, formatUsd } from "@/lib/prays/rules";
 import { ASSEMBLIES, condenserWarning, quoteZborka, type Assembly, type ZborkaCatalog } from "@/lib/sex/zborka";
 import { standardCondenser } from "@/lib/sex/categories";
-import { orderNumber } from "@/lib/sex/rules";
 import { PartRows, PurposePicker } from "./orders-board";
 import { BusyLabel, LinkButton, PendingArea, startNavigationProgress } from "@/components/admin/feedback";
 
@@ -21,7 +20,7 @@ type SentResult = { ok: boolean; tone: "ok" | "warn" | "error"; text: string; or
 const sentText = (number: string) => `✓ ${number} seh mas’uliga yuborildi`;
 function sentResult(response: SexActionResult, label: "Zakaz" | "Zayavka"): SentResult {
   if (!response.ok) return { ok: false, tone: "error", text: response.error };
-  const number = orderNumber(response.number ?? 0), base = { ok: true, orderId: response.id, number };
+  const number = response.number ?? "", base = { ok: true, orderId: response.id, number };
   if (response.telegram === "no-recipients") return { ...base, tone: "warn", text: `⚠️ ${label} saytda saqlandi, lekin seh mas’uli Telegramga ulanmagan` };
   if (response.telegram === "failed") return { ...base, tone: "warn", text: "⚠️ Telegramga yuborilmadi", retry: true };
   return { ...base, tone: "ok", text: sentText(number) };
@@ -278,7 +277,7 @@ function ZapchastForm({ userName, parts, customers }: Props) {
 type PreviewOrder = Pick<BotOrder, "type" | "qty" | "purpose" | "customerName" | "dueDate" | "note" | "sellerName" | "details" | "items">;
 /** The personal message the Seh mas’uli receives in the bot (same text builder as the bot), with its first button. */
 function TelegramPreview({ order }: { order: PreviewOrder }) {
-  const message: BotOrder = { ...order, id: "preview", number: 0, noRequest: false, status: "NEW", startedAt: null, issuedAt: null, issuedByName: null };
+  const message: BotOrder = { ...order, id: "preview", number: "MM-NN", noRequest: false, status: "NEW", startedAt: null, issuedAt: null, issuedByName: null };
   const [head, ...lines] = personalMessage(message, null).replace("#0000", "#…").split("\n");
   const buttons = personalKeyboard("preview", "NEW").inline_keyboard.flat();
   return <div className="sx-tg">

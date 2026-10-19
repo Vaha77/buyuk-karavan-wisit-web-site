@@ -33,3 +33,8 @@ test("workshop: orders and goods only; admin: everything except offers (no admin
   assert.ok(admin.customers.AND[1].OR.some(part => part.phoneNormalized?.contains === "998901234567"));
   assert.ok(admin.leads && admin.orders && admin.products);
 });
+
+test("seh order search by monthly number \"11-04\" / \"1104\"", () => {
+  const user = { id: "w", role: "WORKSHOP", salesPersonId: null };
+  for (const query of ["11-04", "1104"]) assert.deepEqual(searchPlan(user, query, null).orders.AND[1].OR.find(item => item.monthNo), { monthKey: { endsWith: "-11" }, monthNo: 4 }, query);
+});

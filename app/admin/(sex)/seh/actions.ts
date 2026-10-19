@@ -3,13 +3,13 @@ import { z } from "zod";
 import { requireSexUser } from "@/lib/auth/require-admin";
 import { canCreateOrders } from "@/lib/sex/rules";
 import { transitionInputError, transitionInputSchema } from "@/lib/sex/validation";
-import { cancelOrder, confirmNoRequest, setOrderTest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
+import { cancelOrder, confirmNoRequest, editOrder, rejectCorrection, requestCorrection, setOrderTest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
 import { createLinkCode, resendOrder, sendPersonalTest } from "@/lib/sex/bot";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import type { DeliveryStatus } from "@/lib/sex/bot-text";
 
-export type SexActionResult = { ok: true; number?: number; id?: string; telegram?: DeliveryStatus; repeated?: boolean } | { ok: false; error: string; duplicate?: { number: number } };
+export type SexActionResult = { ok: true; number?: string; id?: string; telegram?: DeliveryStatus; repeated?: boolean } | { ok: false; error: string; duplicate?: { number: string } };
 
 const common = {
   purpose: z.enum(["SHOP", "CLIENT"]),
@@ -114,4 +114,33 @@ export async function setOrderTestAction(raw: unknown): Promise<SexActionResult>
   const parsed = z.object({ id: z.string().min(1, "Zakaz tanlanmagan.").max(40), isTest: z.boolean() }).safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
   return setOrderTest(user, parsed.data.id, parsed.data.isTest);
+}
+
+/** "Tuzatish so‘rash" on a closed-month order (everyone but SUPER_ADMIN; checked in requestCorrection). */
+export async function requestCorrectionAction(raw: unknown): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  const parsed = z.object({ id: z.string().min(1).max(40), reason: z.string().trim().min(3, "Sababni yozing.").max(500) }).safeParse(raw);
+  if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+  return requestCorrection(user, parsed.data.id, parsed.data.reason);
+}
+
+export async function rejectCorrectionAction(raw: unknown): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  const parsed = z.object({ id: z.string().min(1).max(40), reason: z.string().trim().min(3, "Sababni yozing.").max(300) }).safeParse(raw);
+  if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+  return rejectCorrection(user, parsed.data.id, parsed.data.reason);
+}
+
+/** SUPER_ADMIN "Tahrirlash" / "Ko‘rib tahrirlash" (checked again in editOrder). */
+export async function editOrderAction(raw: unknown): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  const count = z.number().int("Soni butun bo‘lsin.").min(0).max(9999);
+  const parsed = z.object({
+    id: z.string().min(1).max(40), requestId: z.string().max(40).nullable().default(null),
+    customerName: z.string().trim().max(160).nullable().transform(value => value || null), note: z.string().trim().max(500).nullable().transform(value => value || null), qty: count.min(1, "Soni kamida 1."),
+    items: z.array(z.object({ id: z.string().min(1).max(40), qty: count, issuedQty: count.nullable() })).max(50),
+  }).safeParse(raw);
+  if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+  const { id, requestId, ...input } = parsed.data;
+  return editOrder(user, id, input, requestId);
 }

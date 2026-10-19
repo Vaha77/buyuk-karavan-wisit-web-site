@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const read = path => readFile(new URL(path, import.meta.url), "utf8");
+// Windows checkouts have CRLF; the CSS patterns below are written with "\n".
+const read = async path => (await readFile(new URL(path, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 
 test("admin on phones: every table hidden at ≤650px has cards, or scrolls instead of disappearing", async () => {
   const css = await read("../components/admin/admin.css");

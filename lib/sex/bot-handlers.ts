@@ -5,7 +5,8 @@ import type { TelegramCallbackQuery, TelegramMessage } from "@/lib/telegram/type
 import { consumeLinkCode } from "./bot";
 import { isBotCommand, limitKeyboard, limitQuestion, orderRecipient, orderTitle, parseSehCallback, parseStartPayload, queueText, todayText } from "./bot-text";
 import { workshopDay } from "./queries";
-import { queuePositions, workingSince } from "./rules";
+import { closeMonths } from "./month";
+import { orderNumber, queuePositions, workingSince } from "./rules";
 import { transitionOrder } from "./service";
 import { linkedText } from "@/lib/telegram/start-rules";
 
@@ -75,19 +76,20 @@ export async function handleSehMessage(message: TelegramMessage) {
   if (!user) { await reply(DENIED.replace("bu tugma", "bu buyruq")); return true; }
   if (bugun) {
     const day = await workshopDay();
-    await reply(todayText(day.started, day.limit, day.issuedToday.map(number => Number(number.replace(/\D+/g, "")))));
+    await reply(todayText(day.started, day.limit, day.issuedToday));
     return true;
   }
+  await closeMonths();
   const open = await getDb().workshopOrder.findMany({
     where: { status: { in: ["ACCEPTED", "STARTED"] }, isTest: false }, orderBy: { acceptedAt: "asc" },
-    select: { id: true, number: true, type: true, qty: true, purpose: true, customerName: true, status: true, acceptedAt: true, startedAt: true, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } },
+    select: { id: true, monthKey: true, monthNo: true, type: true, qty: true, purpose: true, customerName: true, status: true, acceptedAt: true, startedAt: true, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } },
   });
   const positions = queuePositions(open), now = new Date();
   const queued = open.filter(order => order.status === "ACCEPTED").sort((a, b) => (positions.get(a.id) ?? 0) - (positions.get(b.id) ?? 0));
   const started = open.filter(order => order.status === "STARTED");
   await reply(queueText(
-    queued.map(order => ({ number: order.number, title: orderTitle(order), recipient: orderRecipient(order) })),
-    started.map(order => ({ number: order.number, title: orderTitle(order), since: order.startedAt ? workingSince(order.startedAt, now) : "—" })),
+    queued.map(order => ({ number: orderNumber(order), title: orderTitle(order), recipient: orderRecipient(order) })),
+    started.map(order => ({ number: orderNumber(order), title: orderTitle(order), since: order.startedAt ? workingSince(order.startedAt, now) : "—" })),
   ));
   return true;
 }

@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowDownRight, ArrowUpRight, Factory, PackageCheck, Tim
 import { formatDayMonth, formatInt, formatUsd } from "@/lib/dashboard/format";
 import { getWorkshopDashboard } from "@/lib/dashboard/workshop-queries";
 import { formatPrepTime, percentChange } from "@/lib/dashboard/workshop-rules";
-import { orderNumber, STATUS_LABEL, when } from "@/lib/sex/rules";
+import { STATUS_LABEL, when } from "@/lib/sex/rules";
 import { WeeklyLines } from "./charts";
 
 type Period = { from: Date; to: Date; prevFrom: Date; label: string };
@@ -64,7 +64,7 @@ export async function WorkshopSection({ period }: { period: Period }) {
         <div className="bk-card-head"><div><h2 id="bk-sex-alert-title">Diqqat talab</h2><span className="bk-muted">24 soatdan ortiq qabul qilinmagan va muddati o‘tgan</span></div>{attention.total > 0 && <span className="bk-badge is-red">{formatInt(attention.total)} ta</span>}</div>
         {attention.rows.length ? <div className="bk-list">{attention.rows.map(order => <Link key={order.id} href={orderHref(order.id)} style={{ color: "inherit", textDecoration: "none" }}>
           <span className="bk-alert-icon"><AlertTriangle size={15}/></span>
-          <span className="bk-grow"><b>{orderNumber(order.number)} · {order.product}</b>
+          <span className="bk-grow"><b>{order.number} · {order.product}</b>
             <span>{[order.seller, order.customerName, `berildi ${when(order.createdAt, now)}`].filter(Boolean).join(" · ")}</span>
             <span className="bk-alert-reasons">{order.reasons.includes("overdue") && <em>Muddat {order.dueDate!.split("-").reverse().join(".")} o‘tgan</em>}{order.reasons.includes("unaccepted") && <em>24 soatdan beri qabul qilinmagan</em>}</span>
           </span>

@@ -5,6 +5,7 @@
     { "path": "/api/cron/instagram", "schedule": "30 3 * * *" },
     { "path": "/api/cron/instagram-direct?at=morning", "schedule": "0 4 * * *" },
     { "path": "/api/cron/instagram-direct?at=evening", "schedule": "0 15 * * *" },
-    { "path": "/api/cron/instagram-insights", "schedule": "0 1 * * *" }
+    { "path": "/api/cron/instagram-insights", "schedule": "0 1 * * *" },
+    { "path": "/api/cron/seh-month", "schedule": "1 19 * * *" }
   ]
 }

@@ -3,12 +3,14 @@ import { orderTitle } from "./bot-text";
 import { frameChange } from "./zborka";
 import type { AdminUser, Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
-import { canCancel, canMarkTest, DEFAULT_WORKSHOP_DAILY_LIMIT, isReceiveOverdue, isStaff, monthRange, orderKind, orderNumber, orderScope, processSteps, queuePositions, RECEIVE_OVERDUE_MS, sellerQueue, stripPrices, tashkentDayStart, when, shortDay, type OrderStatus, type PriceSnapshot, type StepView } from "./rules";
+import { closeMonths } from "./month";
+import { canCancel, canMarkTest, isClosedMonth, monthKeyOf, DEFAULT_WORKSHOP_DAILY_LIMIT, isReceiveOverdue, isStaff, monthRange, orderKind, orderNumber, orderScope, processSteps, queuePositions, RECEIVE_OVERDUE_MS, sellerQueue, stripPrices, tashkentDayStart, when, shortDay, type OrderStatus, type PriceSnapshot, type StepView } from "./rules";
 
 type Viewer = Pick<AdminUser, "id" | "role" | "salesPersonId">;
 export type OrderRow = {
   // `type` = which form created it (drives the issue dialog); `kind` = the Agregat / Zapchast label from the goods' category.
-  id: string; number: string; day: string; type: "AGREGAT" | "ZAPCHAST"; kind: "AGREGAT" | "ZAPCHAST"; isTest: boolean; canMarkTest: boolean; product: string; qty: number;
+  /** number: "MM-NN"; closed: its month is closed (only SUPER_ADMIN changes it); carriedFrom: old "MM-NN" when moved from the previous month. */
+  id: string; number: string; monthKey: string; closed: boolean; carriedFrom: string | null; day: string; type: "AGREGAT" | "ZAPCHAST"; kind: "AGREGAT" | "ZAPCHAST"; isTest: boolean; canMarkTest: boolean; product: string; qty: number;
   sellerName: string; sellerAt: string; purpose: "SHOP" | "CLIENT"; customerName: string | null; status: OrderStatus; steps: StepView[];
   overdue: boolean; acceptedAt: string | null; startedAt: string | null; queue: number | null; telegramFailed: boolean; canCancel: boolean; cancelled: { at: string; by: string | null; reason: string | null } | null; noRequest: boolean; sellerConfirmed: boolean; isNew: boolean; dueDate: string | null; note: string | null;
   items: Array<{ id: string; title: string; qty: number; issuedQty?: number | null }>;
@@ -30,7 +32,7 @@ function toRow(order: Loaded, viewer: Viewer, now: Date, queue: Map<string, numb
   const role = viewer.role;
   const product = order.type === "AGREGAT" ? `${order.items[0]?.title ?? "—"}${order.qty > 1 ? ` ×${order.qty}` : ""}` : order.items.map(item => `${item.title} ×${item.issuedQty ?? item.qty}`).join(", ");
   const base = {
-    id: order.id, number: orderNumber(order.number), day: shortDay(order.createdAt), type: order.type, kind: kindOf(order), isTest: order.isTest, canMarkTest: canMarkTest(role), product, qty: order.qty,
+    id: order.id, number: orderNumber(order), monthKey: order.monthKey, closed: isClosedMonth(order.monthKey, now), carriedFrom: order.carriedFrom, day: shortDay(order.createdAt), type: order.type, kind: kindOf(order), isTest: order.isTest, canMarkTest: canMarkTest(role), product, qty: order.qty,
     sellerName: order.seller.name, sellerAt: when(order.createdAt, now), purpose: order.purpose, customerName: order.customerName, status: order.status,
     steps: processSteps(order, now), overdue: isReceiveOverdue(order, now), acceptedAt: order.acceptedAt?.toISOString() ?? null, startedAt: order.startedAt?.toISOString() ?? null, queue: queue.get(order.id) ?? null, telegramFailed: !!order.telegramFailedAt, canCancel: canCancel(role, order.status, order.sellerId === viewer.id), cancelled: order.cancelledAt ? { at: when(order.cancelledAt, now), by: order.cancelledBy?.name ?? null, reason: order.cancelReason } : null, noRequest: order.noRequest, sellerConfirmed: !!order.sellerConfirmedAt,
     frame: (role === "SUPER_ADMIN" || role === "ADMIN") && order.type === "AGREGAT" ? frameChange(order.items[0]?.options) : null,
@@ -47,27 +49,41 @@ function toRow(order: Loaded, viewer: Viewer, now: Date, queue: Map<string, numb
  */
 export type OrdersView = "active" | "cancelled" | "test";
 export async function listOrders(viewer: Viewer, month?: string, view: OrdersView = "active") {
-  const now = new Date(), range = monthRange(month, now);
+  await closeMonths();
+  const now = new Date(), range = monthRange(month, now), current = range.key === monthKeyOf(now);
   const where: Prisma.WorkshopOrderWhereInput = { ...orderScope(viewer) };
   const staff = isStaff(viewer.role), test = staff && view === "test", cancelled = view === "cancelled";
   if (viewer.role !== "WORKSHOP" && !test) where.AND = [{ status: cancelled ? "CANCELLED" : { not: "CANCELLED" } }];
   if (staff) {
     where.isTest = test;
-    where.OR = cancelled ? [{ createdAt: { gte: range.from, lt: range.to } }] : [{ createdAt: { gte: range.from, lt: range.to } }, { status: { in: ["NEW", "ACCEPTED", "STARTED", "ISSUED"] } }];
+    // The month's own orders (carried-in ones too) and those created in it that moved on ("→ noyabrga o‘tdi"); open ones only in the current month.
+    where.OR = cancelled ? [{ monthKey: range.key }] : [{ monthKey: range.key }, { createdAt: { gte: range.from, lt: range.to } }, ...(current ? [{ status: { in: ["NEW", "ACCEPTED", "STARTED", "ISSUED"] as OrderStatus[] } }] : [])];
   }
   // Queue numbers are global (a seller sees "2-navbat" even though they only list their own orders).
   const [orders, waiting] = await Promise.all([
-    getDb().workshopOrder.findMany({ where, include, orderBy: { createdAt: "desc" }, take: viewer.role === "SELLER" ? 200 : 500 }),
+    getDb().workshopOrder.findMany({ where, include, orderBy: [{ monthKey: "desc" }, { monthNo: "desc" }], take: viewer.role === "SELLER" ? 200 : 500 }),
     getDb().workshopOrder.findMany({ where: { status: "ACCEPTED", isTest: false }, select: { id: true, status: true, acceptedAt: true } }),
   ]);
   const queue = queuePositions(waiting);
-  return { range, rows: orders.map(order => toRow(order, viewer, now, queue)) };
+  // Closed month header: left the workshop / moved to the next month / cancelled — each order counted once, in its own month.
+  const summary = staff && !current ? await closedSummary(range) : null;
+  return { range, summary, rows: orders.map(order => toRow(order, viewer, now, queue)) };
 }
 
-/** Orders of one month for the Excel export (SUPER_ADMIN only — it carries prices). Test orders are left out. */
+async function closedSummary(range: { key: string; from: Date; to: Date }) {
+  const db = getDb(), real = { isTest: false };
+  const [issued, carried, cancelled] = await Promise.all([
+    db.workshopOrder.count({ where: { ...real, monthKey: range.key, status: { in: ["ISSUED", "RECEIVED"] } } }),
+    db.workshopOrder.count({ where: { ...real, monthKey: { gt: range.key }, createdAt: { gte: range.from, lt: range.to } } }),
+    db.workshopOrder.count({ where: { ...real, monthKey: range.key, status: "CANCELLED" } }),
+  ]);
+  return { issued, carried, cancelled };
+}
+
+/** Orders of one month (by monthKey: a carried order counts once, in the month it ended up in) for the Excel export (SUPER_ADMIN only — it carries prices). Test orders are left out. */
 export async function monthOrders(month?: string) {
   const range = monthRange(month);
-  const orders = await getDb().workshopOrder.findMany({ where: { createdAt: { gte: range.from, lt: range.to }, isTest: false }, include, orderBy: { number: "asc" } });
+  const orders = await getDb().workshopOrder.findMany({ where: { monthKey: range.key, isTest: false }, include, orderBy: { monthNo: "asc" } });
   return { range, orders };
 }
 
@@ -76,10 +92,10 @@ export async function workshopDay(now = new Date()) {
   const from = tashkentDayStart(now), db = getDb();
   const [started, issued, settings] = await Promise.all([
     db.workshopOrder.count({ where: { startedAt: { gte: from }, noRequest: false } }),
-    db.workshopOrder.findMany({ where: { issuedAt: { gte: from } }, select: { number: true }, orderBy: { issuedAt: "asc" }, take: 60 }),
+    db.workshopOrder.findMany({ where: { issuedAt: { gte: from } }, select: { monthKey: true, monthNo: true }, orderBy: { issuedAt: "asc" }, take: 60 }),
     db.siteSettings.findUnique({ where: { id: "global" }, select: { workshopDailyLimit: true } }).catch(() => null),
   ]);
-  return { started, limit: settings?.workshopDailyLimit ?? DEFAULT_WORKSHOP_DAILY_LIMIT, issuedToday: issued.map(order => orderNumber(order.number)) };
+  return { started, limit: settings?.workshopDailyLimit ?? DEFAULT_WORKSHOP_DAILY_LIMIT, issuedToday: issued.map(orderNumber) };
 }
 
 /** Sidebar badge: SUPER_ADMIN — "Chiqib ketdi" waiting for krim over 24 h; WORKSHOP — new orders to accept. */

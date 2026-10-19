@@ -18,10 +18,12 @@ export function searchPlan(user: SearchUser, query: string, agentId: string | nu
   const text = query.trim(), digits = phoneDigits(text), staff = STAFF.includes(user.role), seller = user.role === "SELLER", workshop = user.role === "WORKSHOP";
   const contains = (field: string) => ({ [field]: { contains: text, mode: "insensitive" as const } });
   const number = Number(text.replace(/^#|^kp-?/i, "")), byNumber = Number.isInteger(number) && number > 0 && number < 1e9 ? [{ number }] : [];
+  // Seh "11-04" / "1104": month and its own number.
+  const monthly = text.match(/^(\d{2})-?(\d{2,3})$/), byMonthNo = monthly ? [{ monthKey: { endsWith: `-${monthly[1]}` }, monthNo: Number(monthly[2]) }] : [];
   return {
     customers: staff || seller ? { AND: [customerScope({ role: user.role, salesPersonId: user.salesPersonId }), { OR: [contains("name"), ...(digits ? [{ phoneNormalized: { contains: digits } }] : [])] }] } : null,
     leads: staff || (seller && agentId) ? { AND: [seller ? { assignedAgentId: agentId } : {}, { OR: [contains("customerName"), ...(digits ? [{ phone: { contains: digits } }] : [])] }] } : null,
-    orders: staff || seller || workshop ? { AND: [seller ? { sellerId: user.id } : {}, { OR: [...byNumber, { items: { some: contains("title") } }, contains("customerName")] }] } : null,
+    orders: staff || seller || workshop ? { AND: [seller ? { sellerId: user.id } : {}, { OR: [...byNumber, ...byMonthNo, { items: { some: contains("title") } }, contains("customerName")] }] } : null,
     products: staff || workshop ? { archivedAt: null, OR: [contains("model"), contains("name")] } : null,
     // Offers have pages only in the seller cabinet.
     offers: seller ? { AND: [{ sellerId: user.id }, { OR: [...byNumber, contains("customerName")] }] } : null,

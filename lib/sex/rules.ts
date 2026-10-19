@@ -102,7 +102,34 @@ export function orderKind(order: { type: "AGREGAT" | "ZAPCHAST"; items: Array<{ 
 /** "Test deb belgilash": test orders stay in the list ("Test" filter) but never reach statistics, the Excel export or queue numbers. */
 export const canMarkTest = (role: string) => role === "SUPER_ADMIN";
 
-export const orderNumber = (number: number) => `#${String(number).padStart(4, "0")}`;
+/** "11-04": the month and its own number (01 again every month). The global `number` stays an id for audit. */
+export const orderNumber = (order: { monthKey: string; monthNo: number }) => `${order.monthKey.slice(5)}-${String(order.monthNo).padStart(2, "0")}`;
+/** Tashkent month of an instant: "2026-11". */
+export const monthKeyOf = (date: Date | string = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tashkent", year: "numeric", month: "2-digit" }).format(new Date(date)).slice(0, 7);
+export const monthName = (monthKey: string) => MONTH_NAMES[Number(monthKey.slice(5)) - 1] ?? monthKey;
+export const OPEN_STATUSES = ["NEW", "ACCEPTED", "STARTED"] as const satisfies readonly OrderStatus[];
+/** Month close: unfinished orders of earlier months move into `monthKey` in their old order (01, 02…), after the numbers already taken there. */
+export function carryPlan(open: Array<{ id: string; monthKey: string; monthNo: number }>, monthKey: string, lastNo: number) {
+  return open.filter(order => order.monthKey < monthKey).sort((a, b) => a.monthKey.localeCompare(b.monthKey) || a.monthNo - b.monthNo)
+    .map((order, index) => ({ id: order.id, monthNo: lastNo + index + 1, carriedFrom: orderNumber(order) }));
+}
+export const isClosedMonth = (monthKey: string, now = new Date()) => monthKey < monthKeyOf(now);
+/** A closed month's orders only SUPER_ADMIN changes; everyone else sends "Tuzatish so‘rash". */
+export const canEditOrder = (role: string, monthKey: string, now = new Date()) => role === "SUPER_ADMIN" || !isClosedMonth(monthKey, now);
+/** "Tuzatish so‘rash": anyone but SUPER_ADMIN (a seller only for their own order), only for a closed month, with a reason. */
+export function checkCorrection(viewer: Viewer, order: { sellerId: string; monthKey: string }, reason: string, now = new Date()): { ok: true } | { ok: false; error: string } {
+  if (viewer.role === "SUPER_ADMIN") return { ok: false, error: "Super Admin zakazni o‘zi tahrirlaydi." };
+  if (viewer.role === "SELLER" && order.sellerId !== viewer.id) return { ok: false, error: "Faqat o‘z zakazingiz uchun so‘rash mumkin." };
+  if (!isClosedMonth(order.monthKey, now)) return { ok: false, error: "Bu oy hali ochiq — so‘rov kerak emas." };
+  if (reason.trim().length < 3) return { ok: false, error: "Sababni yozing." };
+  return { ok: true };
+}
+export const CLOSED_TEXT = "Bu oy yopilgan — o‘zgartirishni faqat Super Admin qiladi. “Tuzatish so‘rash” ni bosing.";
+/** List search: number ("11-04" or "1104"), product, customer, seller; every word must match. */
+export function matchesOrder(row: { number: string; product: string; customerName: string | null; sellerName: string }, query: string) {
+  const text = `${row.number} ${row.number.replace(/\D/g, "")} ${row.product} ${row.customerName ?? ""} ${row.sellerName}`.toLowerCase();
+  return query.toLowerCase().split(/\s+/).filter(Boolean).every(word => text.includes(word));
+}
 export const isReceiveOverdue = (order: { status: OrderStatus; issuedAt: Date | string | null }, now = new Date()) => order.status === "ISSUED" && !!order.issuedAt && now.getTime() - new Date(order.issuedAt).getTime() > RECEIVE_OVERDUE_MS;
 
 const timeFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -207,15 +234,15 @@ export function orderFingerprint(order: FingerprintInput) {
   return [order.sellerId, order.type, order.purpose, customer, order.qty, items].join("#");
 }
 /** The most recent identical, not cancelled order within the window, if any. */
-export function findDuplicate<T extends FingerprintInput & { number: number; createdAt: Date | string; status: OrderStatus }>(candidate: FingerprintInput, recent: T[], now = new Date()) {
+export function findDuplicate<T extends FingerprintInput & { number: string; createdAt: Date | string; status: OrderStatus }>(candidate: FingerprintInput, recent: T[], now = new Date()) {
   const key = orderFingerprint(candidate);
   return recent
     .filter(order => order.status !== "CANCELLED" && now.getTime() - new Date(order.createdAt).getTime() <= DUPLICATE_WINDOW_MS && orderFingerprint(order) === key)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null;
 }
-export function duplicateWarning(order: { number: number; createdAt: Date | string }, now = new Date()) {
+export function duplicateWarning(order: { number: string; createdAt: Date | string }, now = new Date()) {
   const minutes = Math.max(1, Math.round((now.getTime() - new Date(order.createdAt).getTime()) / 60_000));
-  return `⚠️ Bu zakaz ${minutes} daqiqa oldin yuborilgan (${orderNumber(order.number)}). Baribir yana yuborasizmi?`;
+  return `⚠️ Bu zakaz ${minutes} daqiqa oldin yuborilgan (${order.number}). Baribir yana yuborasizmi?`;
 }
 
 /** "2026-10" → its first moment and the next month's first moment, Tashkent time (UTC+5). */

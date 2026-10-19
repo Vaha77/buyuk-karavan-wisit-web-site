@@ -471,6 +471,8 @@ model AdminUser {
   workshopOrdersIssued   WorkshopOrder[]            @relation("WorkshopOrderIssuer")
   workshopOrdersReceived WorkshopOrder[]            @relation("WorkshopOrderReceiver")
   workshopOrdersCancelled WorkshopOrder[]           @relation("WorkshopOrderCanceller")
+  workshopCorrectionsAsked    WorkshopCorrectionRequest[] @relation("WorkshopCorrectionRequester")
+  workshopCorrectionsResolved WorkshopCorrectionRequest[] @relation("WorkshopCorrectionResolver")
 
   @@index([approvalStatus, isActive])
 }
@@ -1139,8 +1141,12 @@ enum WorkshopItemKind {
 
 model WorkshopOrder {
   id                String               @id @default(cuid())
-  // Shown as #0001.
+  // Global id for audit; the shown number is "MM-NN" from monthKey / monthNo (01 again every month).
   number            Int                  @unique @default(autoincrement())
+  monthKey          String               @db.VarChar(7)
+  monthNo           Int
+  // Old "MM-NN" when an unfinished order moved into the next month.
+  carriedFrom       String?              @db.VarChar(8)
   type              WorkshopOrderType
   purpose           WorkshopOrderPurpose
   customerName      String?
@@ -1189,11 +1195,38 @@ model WorkshopOrder {
   cancelledBy       AdminUser?           @relation("WorkshopOrderCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
   items             WorkshopOrderItem[]
   messages          WorkshopOrderMessage[]
+  corrections       WorkshopCorrectionRequest[]
 
+  @@unique([monthKey, monthNo])
   @@index([status, createdAt])
   @@index([sellerId, createdAt])
   @@index([createdAt])
   @@index([startedAt])
+}
+
+enum WorkshopCorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// "Tuzatish so'rash": a closed-month order only SUPER_ADMIN edits; others ask with a reason.
+model WorkshopCorrectionRequest {
+  id           String                   @id @default(cuid())
+  orderId      String
+  requesterId  String
+  reason       String                   @db.VarChar(500)
+  status       WorkshopCorrectionStatus @default(PENDING)
+  rejectReason String?                  @db.VarChar(300)
+  createdAt    DateTime                 @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+  order        WorkshopOrder            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  requester    AdminUser                @relation("WorkshopCorrectionRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  resolvedBy   AdminUser?               @relation("WorkshopCorrectionResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([orderId])
 }
 
 model WorkshopOrderItem {

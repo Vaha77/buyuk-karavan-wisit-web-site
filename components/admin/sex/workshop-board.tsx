@@ -7,7 +7,7 @@ import { BusyLabel } from "@/components/admin/feedback";
 import { createNoRequestAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
 import type { OrderRow } from "@/lib/sex/queries";
 import { ACTION_LABEL, dailyCapView, daysPastDue, workingSince, type OrderAction } from "@/lib/sex/rules";
-import { IssueForm, NoRequestForm } from "./orders-board";
+import { CarriedNote, IssueForm, NoRequestForm, useOrderSearch } from "./orders-board";
 import { TelegramLink } from "./telegram-link";
 
 type Option = { id: string; name: string };
@@ -44,6 +44,7 @@ export function WorkshopBoard({ telegramLinked, userName, rows, started, limit, 
   const [confirmStart, setConfirmStart] = useState<OrderRow | null>(null);
   const [noRequestOpen, setNoRequestOpen] = useState(false);
   const cap = dailyCapView(started, limit);
+  const search = useOrderSearch(rows);
   const firstName = userName.trim().split(/\s+/)[0] || userName;
 
   const run = (task: () => Promise<{ ok: boolean; error?: string }>, key: string | null, after?: () => void) => {
@@ -75,9 +76,11 @@ export function WorkshopBoard({ telegramLinked, userName, rows, started, limit, 
       <TelegramLink linked={telegramLinked} compact/>
     </div>
     {error && <p className="sx-note is-error" role="alert">{error}</p>}
+    {search.input}
+    {search.empty && <div className="sx-panel-empty">Topilmadi</div>}
 
     {SECTIONS.map(section => {
-      const cards = rows.filter(row => row.status === section.status).sort((a, b) => section.status === "ACCEPTED" ? (a.queue ?? 0) - (b.queue ?? 0) : 0);
+      const cards = search.shown.filter(row => row.status === section.status).sort((a, b) => section.status === "ACCEPTED" ? (a.queue ?? 0) - (b.queue ?? 0) : 0);
       return <section key={section.status} className="sx-panel-section" aria-labelledby={`sx-sec-${section.status}`}>
         <div className="sx-panel-title"><span style={{ background: section.dot }}/><h2 id={`sx-sec-${section.status}`}>{section.title}</h2><b>{cards.length}</b><small>{section.hint}</small></div>
         {cards.length ? <div className="sx-receipts">{cards.map(row => {
@@ -86,7 +89,7 @@ export function WorkshopBoard({ telegramLinked, userName, rows, started, limit, 
           return <article key={row.id} className="sx-receipt">
             <div className="sx-receipt-body" style={{ borderTopColor: late ? "#D2372B" : stage.top }}>
               <div className="sx-receipt-head">
-                <div><span className="sx-mono sx-receipt-brand">BUYUK KARAVAN · SEH</span><b className="sx-mono sx-receipt-no">{row.number}</b></div>
+                <div><span className="sx-mono sx-receipt-brand">BUYUK KARAVAN · SEH</span><b className="sx-mono sx-receipt-no">{row.number}</b><CarriedNote row={row}/></div>
                 {section.status === "ACCEPTED" && row.queue && <span className="sx-queue"><b>{row.queue}</b><span>NAVBAT</span></span>}
                 <span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.isTest && <span className="sx-pill is-sm is-grey">Test</span>}
               </div>

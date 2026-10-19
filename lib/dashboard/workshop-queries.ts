@@ -3,7 +3,7 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { dayKey } from "./period";
-import { AGREGAT_CATEGORY_PATTERN } from "@/lib/sex/rules";
+import { AGREGAT_CATEGORY_PATTERN, orderNumber } from "@/lib/sex/rules";
 import { attentionReasons, fillWeeks, OPEN_STATUSES, UNACCEPTED_ALERT_MS, weekWindowStart } from "./workshop-rules";
 
 // Every block leaves out cancelled and test orders. Sums use the price-list total frozen on the order (priceSnapshot.totalBaseUsd).
@@ -95,7 +95,7 @@ async function loadAttention(now: Date, today: string) {
   const [orders, total] = await Promise.all([
     getDb().workshopOrder.findMany({
       where, orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }], take: 12,
-      select: { id: true, number: true, type: true, qty: true, status: true, createdAt: true, dueDate: true, customerName: true, seller: { select: { name: true } }, items: { orderBy: { order: "asc" }, take: 3, select: { title: true, qty: true } } },
+      select: { id: true, monthKey: true, monthNo: true, type: true, qty: true, status: true, createdAt: true, dueDate: true, customerName: true, seller: { select: { name: true } }, items: { orderBy: { order: "asc" }, take: 3, select: { title: true, qty: true } } },
     }),
     getDb().workshopOrder.count({ where }),
   ]);
@@ -104,7 +104,7 @@ async function loadAttention(now: Date, today: string) {
     rows: orders.map(order => {
       const dueDate = order.dueDate?.toISOString().slice(0, 10) ?? null;
       const product = order.type === "AGREGAT" ? `${order.items[0]?.title ?? "—"}${order.qty > 1 ? ` ×${order.qty}` : ""}` : order.items.map(item => `${item.title} ×${item.qty}`).join(", ");
-      return { id: order.id, number: order.number, status: order.status, createdAt: order.createdAt, dueDate, product, seller: order.seller.name, customerName: order.customerName, reasons: attentionReasons({ status: order.status, createdAt: order.createdAt, dueDate }, now) };
+      return { id: order.id, number: orderNumber(order), status: order.status, createdAt: order.createdAt, dueDate, product, seller: order.seller.name, customerName: order.customerName, reasons: attentionReasons({ status: order.status, createdAt: order.createdAt, dueDate }, now) };
     }),
   };
 }
