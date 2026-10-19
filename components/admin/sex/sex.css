@@ -232,6 +232,5 @@
 /* Per-row save state: Saqlanmoqda… → Saqlandi ✓ (or the error). */
 .sx-cat-saved{min-height:20px;font-size:13px;font-weight:800;text-align:right}.sx-cat-saved.is-saving{color:var(--k-fg-4f5a70, #4F5A70)}.sx-cat-saved.is-saved{color:var(--k-fg-1b6b43, #1B6B43)}.sx-cat-saved.is-error{color:var(--k-fg-a41f15, #A41F15)}
 @media(max-width:760px){.sx-cat-saved{text-align:left}}
-.sx-search{display:flex;gap:6px;align-items:center}.sx-search .sx-input{flex:1;min-width:0}
 .sx-month-tabs{flex-wrap:nowrap;overflow-x:auto}.sx-month-tabs .sx-chip{flex:none}
 .sx-carried{margin-top:4px;font-size:11px;font-weight:600;color:#8a6100}.sx-carried s{color:#94a3b8}

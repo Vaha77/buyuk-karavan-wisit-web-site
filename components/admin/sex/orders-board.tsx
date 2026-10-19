@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Search } from "lucide-react";
 import { Dialog } from "@/components/admin/bklead/dialog";
 import { cancelOrderAction, confirmNoRequestAction, createNoRequestAction, editOrderAction, requestCorrectionAction, resendTelegramAction, setOrderTestAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
 import type { OrderRow } from "@/lib/sex/queries";
@@ -30,7 +31,7 @@ export function useOrderSearch(rows: OrderRow[]) {
   const [query, setQuery] = useState(""), [applied, setApplied] = useState("");
   useEffect(() => { const timer = setTimeout(() => setApplied(query), 200); return () => clearTimeout(timer); }, [query]);
   const shown = applied.trim() ? rows.filter(row => matchesOrder(row, applied)) : rows;
-  const input = <div className="sx-search"><input className="sx-input" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Qidirish: 11-04, mahsulot, mijoz, sotuvchi" aria-label="Zakazlarni qidirish"/>{query && <button type="button" className="sx-btn is-sm" onClick={() => { setQuery(""); setApplied(""); }} aria-label="Tozalash">×</button>}</div>;
+  const input = <label className="sx-search" style={{ flex: "none" }}><Search size={15} color="var(--k-fg-4f5a70, #4F5A70)"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Qidirish: 11-04, mahsulot, mijoz, sotuvchi" aria-label="Zakazlarni qidirish"/>{query && <button type="button" className="sx-btn is-sm" onClick={() => { setQuery(""); setApplied(""); }} aria-label="Tozalash">×</button>}</label>;
   return { input, shown, empty: !!applied.trim() && !shown.length && rows.length > 0 };
 }
 const noSubscribe = () => () => {};
