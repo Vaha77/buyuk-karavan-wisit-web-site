@@ -55,7 +55,7 @@ function BigChart({ metric, weeks }: { metric: DynamicsMetric; weeks: string[] }
   const phone = useSyncExternalStore(onPhoneChange, () => matchMedia(PHONE).matches, () => false);
   const [tip, setTip] = useState<number | null>(null);
   // Taller and with larger letters on a phone (the SVG is scaled down to the screen width).
-  const W = phone ? 480 : 900, H = phone ? 320 : 230, font = phone ? 16 : 12, L = phone ? 52 : 56, R = W - 16, T = 14, B = H - (phone ? 34 : 30);
+  const W = phone ? 320 : 900, H = phone ? 300 : 230, font = phone ? 14 : 12, L = phone ? 44 : 56, R = W - (phone ? 10 : 16), T = 14, B = H - 30;
   const n = metric.values.length, X = (i: number) => L + ((R - L) * i) / Math.max(1, n - 1), slot = (R - L) / n;
   const max = nice(Math.max(1, ...metric.values, ...(metric.extra?.values ?? []))), Y = (v: number) => B - ((B - T) * v) / max;
   const line = smooth(metric.values.map((v, i) => [X(i), Y(v)]), B), every = phone ? 3 : 2;
