@@ -14,7 +14,7 @@ import { regionName } from "@/lib/dashboard/regions";
 import { getLinkSummary } from "@/lib/referrals/queries";
 import { RangeSelect, SourceIcon } from "@/components/admin/bklead/bits";
 import { WeeklyLines } from "@/components/admin/bklead/charts";
-import { RegionMap } from "@/components/admin/bklead/region-map";
+import { LazyRegionMap } from "@/components/admin/bklead/lazy";
 import { CustomerRanking } from "@/components/admin/bklead/customer-ranking";
 import { WorkshopSection } from "@/components/admin/bklead/workshop-section";
 import { WorkshopSectionSkeleton } from "@/components/admin/skeletons";
@@ -88,7 +88,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       </section>
     </div>
 
-    <RegionMap rows={regions} tips={tips}/>
+    <LazyRegionMap rows={regions} tips={tips}/>
 
     <section className="bk-card" aria-labelledby="bk-links-title">
       <div className="bk-card-head">

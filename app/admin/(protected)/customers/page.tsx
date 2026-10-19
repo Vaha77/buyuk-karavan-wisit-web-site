@@ -8,7 +8,7 @@ import { buildRegionStats } from "@/lib/customers/region-stats";
 import { tashkentYearMonth } from "@/lib/dashboard/period";
 import { formatInt, formatPercent, formatUsd, MONTHS_LONG } from "@/lib/dashboard/format";
 import { CustomerRanking } from "@/components/admin/bklead/customer-ranking";
-import { CustomerRegions } from "@/components/admin/bklead/customer-regions";
+import { LazyCustomerRegions } from "@/components/admin/bklead/lazy";
 import { CustomersManager } from "@/components/admin/bklead/customer-forms";
 
 export const metadata: Metadata = { title: "Doimiy mijozlar — Admin | BUYUK KARAVAN" };
@@ -43,7 +43,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         <span className="bk-kpi-foot">{growth?.relative && growth.direction !== "flat" && <span className={`bk-delta${growth.direction === "down" ? " is-down" : ""}`}>{growth.direction === "up" ? <ArrowUpRight size={12}/> : <ArrowDownRight size={12}/>}{formatUsd(Math.abs(kpis.total - kpis.prevTotal))}</span>}{growth?.relative ? periodLabel : `${periodLabel} solishtirish uchun ma’lumot yo‘q`}</span></div>
     </div>
 
-    <CustomerRegions stats={stats}/>
+    <LazyCustomerRegions stats={stats}/>
 
     <CustomerRanking data={data} now={today} canEdit={canEdit} uzsPerUsd={rate ? Number(rate.rate) : null} yearHref={yearHref}/>
     <CustomersManager canEdit={canEdit} startNew={search.new === "1"} sellers={sellers} customers={customers.map(customer => ({ id: customer.id, name: customer.name, country: customer.country, regionCode: customer.regionCode, phone: customer.phone, note: customer.note, isActive: customer.isActive, salesCount: customer._count.sales, ownerId: customer.ownerId, ownerName: customer.owner?.name ?? null, callIntervalDays: customer.callIntervalDays }))}/>
