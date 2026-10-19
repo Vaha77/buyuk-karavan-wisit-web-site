@@ -16,9 +16,9 @@ const onPhoneChange = (notify: () => void) => { const query = matchMedia(PHONE);
 const amount = (value: number, unit: string) => (unit ? formatUsd(value) : formatInt(value));
 const axis = (value: number, unit: string) => (unit ? `$${formatUsdK(value)}` : formatInt(value));
 /** Round axis maximum with 4 even steps. */
-const nice = (max: number) => { const power = 10 ** Math.floor(Math.log10(max || 1)); return [1, 2, 2.5, 5, 10].find(step => step * power * 4 >= max)! * power * 4; };
+export const nice = (max: number) => { const power = 10 ** Math.floor(Math.log10(max || 1)); return [1, 2, 2.5, 5, 10].find(step => step * power * 4 >= max)! * power * 4; };
 /** Smooth line through the points that never dips below the baseline. */
-function smooth(points: Array<[number, number]>, base: number) {
+export function smooth(points: Array<[number, number]>, base: number) {
   let path = `M${points[0][0]},${points[0][1]}`;
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i - 1] ?? points[i], b = points[i], c = points[i + 1], d = points[i + 2] ?? c;
@@ -26,6 +26,8 @@ function smooth(points: Array<[number, number]>, base: number) {
   }
   return path;
 }
+
+export const usePhone = () => useSyncExternalStore(onPhoneChange, () => matchMedia(PHONE).matches, () => false);
 
 function useCountUp(to: number) {
   const [value, setValue] = useState(0);
@@ -52,7 +54,7 @@ function Card({ metric, on, onPick }: { metric: DynamicsMetric; on: boolean; onP
 }
 
 function BigChart({ metric, weeks }: { metric: DynamicsMetric; weeks: string[] }) {
-  const phone = useSyncExternalStore(onPhoneChange, () => matchMedia(PHONE).matches, () => false);
+  const phone = usePhone();
   const [tip, setTip] = useState<number | null>(null);
   // Taller and with larger letters on a phone (the SVG is scaled down to the screen width).
   const W = phone ? 320 : 900, H = phone ? 300 : 230, font = phone ? 14 : 12, L = phone ? 44 : 56, R = W - (phone ? 10 : 16), T = 14, B = H - 30;

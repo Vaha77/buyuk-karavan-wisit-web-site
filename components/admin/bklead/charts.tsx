@@ -84,30 +84,8 @@ export function PlanBars({ sales, plans, current, label }: { sales: number[]; pl
   </svg>;
 }
 
-// Categorical order for the top-5 regions (validated: CVD ΔE ≥ 13, contrast ≥ 3:1 on white).
+// Categorical series colors (validated: CVD ΔE ≥ 13, contrast ≥ 3:1 on white).
 export const SERIES_COLORS = ["#2F5FAF", "#D06A1E", "#1F9E89", "#8E5BD0", "#B8860B"];
-
-/** Month-by-month lines for up to five regions, one y-axis in k USD, legend plus a label at each line's end. */
-export function RegionLines({ series, lastMonth, label }: { series: Array<{ name: string; months: number[] }>; lastMonth: number; label: string }) {
-  const width = 640, height = 240, left = 40, right = 110, top = 16, bottom = 24;
-  const count = Math.max(1, lastMonth);
-  const max = Math.max(1, ...series.flatMap(item => item.months.slice(0, count)));
-  const step = niceStep(max / 3), scaleMax = step * 3;
-  const x = (index: number) => left + (index * (width - left - right)) / Math.max(1, count - 1);
-  const y = (value: number) => top + (height - top - bottom) * (1 - value / scaleMax);
-  // End labels sorted by position and nudged apart so they never overlap.
-  const ends = series.map((item, index) => ({ index, y: y(item.months[count - 1] ?? 0) })).sort((a, b) => a.y - b.y);
-  for (let index = 1; index < ends.length; index++) ends[index].y = Math.max(ends[index].y, ends[index - 1].y + 14);
-  return <svg className="bk-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
-    {[0, 1, 2, 3].map(tick => <g key={tick}><line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} stroke="var(--k-bd-e3e9f2, #E3E9F2)"/><text x={left - 8} y={y(tick * step) + 4} textAnchor="end">{formatUsdK(tick * step)}</text></g>)}
-    {Array.from({ length: count }, (_, index) => <text key={index} x={x(index)} y={height - 6} textAnchor="middle">{MONTHS_SHORT[index][0].toUpperCase() + MONTHS_SHORT[index].slice(1)}</text>)}
-    {series.map((item, index) => <g key={item.name}>
-      <path d={item.months.slice(0, count).map((value, month) => `${month ? "L" : "M"}${x(month).toFixed(1)} ${y(value).toFixed(1)}`).join("")} fill="none" stroke={SERIES_COLORS[index]} strokeWidth="2" strokeLinejoin="round"/>
-      {item.months.slice(0, count).map((value, month) => <circle key={month} cx={x(month)} cy={y(value)} r="4" fill="var(--k-bg-ffffff, #fff)" stroke={SERIES_COLORS[index]} strokeWidth="2"><title>{`${item.name}, ${MONTHS_LONG[month]}: ${formatUsd(value)}`}</title></circle>)}
-    </g>)}
-    {ends.map(end => <text key={end.index} x={x(count - 1) + 10} y={end.y + 4} style={{ fill: "var(--k-fg-0f1e33, #0F1E33)", fontWeight: 600 }}>{series[end.index].name}</text>)}
-  </svg>;
-}
 function niceStep(value: number) { const power = 10 ** Math.floor(Math.log10(Math.max(1, value))); const unit = value / power; return (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * power; }
 
 /** Day-by-day lines for a few series (counts), one y-axis, legend underneath; x labels thinned to ~8. */

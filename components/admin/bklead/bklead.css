@@ -312,3 +312,19 @@
 @keyframes bk-dyn-draw{to{stroke-dashoffset:0}}@keyframes bk-dyn-grow{from{transform:scaleY(0)}}@keyframes bk-dyn-fade{to{opacity:1}}
 @media(max-width:720px){.bk-dyn-cards{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:78%;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px}.bk-dyn-card{scroll-snap-align:start}.bk-dyn-big{padding:10px 4px 4px}}
 @media(prefers-reduced-motion:reduce){.bk-dyn-spark,.bk-dyn-line,.bk-dyn-bar,.bk-dyn-area,.bk-dyn-dot{animation:none;stroke-dashoffset:0}.bk-dyn-area,.bk-dyn-dot{opacity:1}.bk-dyn-card{transition:none}}
+
+/* Doimiy mijozlar "Oylik dinamika — respublikalar va viloyatlar" (customer-regions.tsx RegionDynamics); cards and chart reuse .bk-dyn-* */
+.bk-rep-cards{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 2px 6px}.bk-rep-cards .bk-dyn-card{flex:0 0 172px;padding:13px 14px;scroll-snap-align:start}.bk-rep-cards .bk-dyn-card svg{height:30px}
+.bk-rep-crumb{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:22px;margin:12px 0 10px;font-size:13px;font-weight:600;color:var(--bk-muted)}
+.bk-rep-crumb button{all:unset;cursor:pointer;color:var(--bk-primary)}.bk-rep-crumb button:focus-visible{outline:2px solid var(--bk-b1)}.bk-rep-crumb b{color:var(--bk-text)}
+.bk-rep-body{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:22px}
+.bk-rep-title{padding:0 6px 4px;font-weight:700;font-size:14px;color:var(--bk-text)}.bk-rep-title small{display:block;font-weight:500;font-size:12px;color:var(--bk-muted)}
+.bk-rep-rank{display:grid;gap:6px;align-content:start}.bk-rep-rank h3{margin:0 0 4px;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--bk-muted)}
+.bk-rep-row{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:4px 8px;align-items:center;padding:8px 10px;border-radius:12px;transition:background .2s}
+.bk-rep-row:hover,.bk-rep-row.is-on{background:var(--bk-bg)}.bk-rep-row:focus-visible{outline:2px solid var(--bk-b1)}
+.bk-rep-row small{font-size:12px;font-weight:700;color:var(--bk-muted)}.bk-rep-row>span:not(.bk-rep-bar){min-width:0;font-size:13px;font-weight:600;color:var(--bk-text);overflow-wrap:anywhere}.bk-rep-row em{font-style:normal;font-size:11px;font-weight:700;color:var(--bk-b1)}.bk-rep-row b{font-size:13px;color:var(--bk-text);font-variant-numeric:tabular-nums}
+.bk-rep-bar{grid-column:2/4;height:6px;border-radius:3px;background:var(--bk-none);overflow:hidden}
+.bk-rep-bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--bk-b2),var(--bk-b1));transform-origin:left;animation:bk-rep-bar .8s cubic-bezier(.3,.9,.3,1) backwards}.bk-rep-row.is-on .bk-rep-bar i{background:var(--bk-navy)}
+@keyframes bk-rep-bar{from{transform:scaleX(0)}}
+@media(max-width:760px){.bk-rep-body{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.bk-rep-bar i{animation:none}}

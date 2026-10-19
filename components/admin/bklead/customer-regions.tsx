@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
-import type { RegionStat, RegionStats } from "@/lib/customers/region-stats";
-import { formatInt, formatPercent, formatUsd, formatUsdK, MONTHS_LONG } from "@/lib/dashboard/format";
+import { countryStats, type CountryRow, type RegionStat, type RegionStats } from "@/lib/customers/region-stats";
+import { formatInt, formatPercent, formatUsd, formatUsdK, MONTHS_LONG, MONTHS_SHORT } from "@/lib/dashboard/format";
 import { foreignTones, TONE_FILL, TONE_TEXT, uzbekistanTones, type Tone } from "@/lib/dashboard/rules";
 import { Callout } from "./region-map";
-import { MonthBars, RegionLines, SERIES_COLORS } from "./charts";
+import { MonthBars } from "./charts";
+import { nice, smooth, usePhone } from "./dynamics";
 import { CA_MAP as map, calloutBoxes, shapeOf, CountryBackground, CountryLayer, countryOf, tipAt, useMapZoom } from "./ca-map";
 const shortName = (name: string) => name.replace(/ viloyati$/, "").replace(/ shahri$/, " sh.").replace(/ Respublikasi$/, "");
 
@@ -43,7 +44,6 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
     const order = typeof left === "string" ? left.localeCompare(right as string) : (left as number) - (right as number);
     return order * sort.dir || (rankOf.get(a.code)! - rankOf.get(b.code)!);
   }), [ranked, sort, rankOf]);
-  const top5 = ranked.filter(region => region.total > 0).slice(0, 5);
   const region = byCode.get(selected) ?? ranked[0];
   const hovered = hover ? byCode.get(hover.code) : null;
   const zoom = useMapZoom(), s = zoom.s;
@@ -126,12 +126,7 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
       </table></div>
     </section>
 
-    <section className="bk-card" aria-labelledby="bk-region-lines-title">
-      <div className="bk-card-head"><div><h2 id="bk-region-lines-title">Oylik dinamika — top-5 viloyat</h2><span className="bk-muted">Oyma-oy jami savdo, USD</span></div>
-        {top5.length > 1 && <div className="bk-legend">{top5.map((item, index) => <span key={item.code}><i style={{ background: SERIES_COLORS[index], borderRadius: "50%" }}/>{shortName(item.name)}</span>)}</div>}</div>
-      {top5.length && stats.periodEnd ? <RegionLines series={top5.map(item => ({ name: shortName(item.name), months: item.months }))} lastMonth={stats.periodEnd} label={`Top-5 viloyatning ${stats.year}-yil oylik savdosi`}/>
-        : <div className="bk-empty">Bu yilda hali savdo kiritilmagan.</div>}
-    </section>
+    <RegionDynamics stats={stats}/>
   </>;
 }
 
@@ -165,4 +160,103 @@ function RegionDetail({ ref, region, rank, stats }: { ref: React.Ref<HTMLElement
       </div>
     </>}
   </section>;
+}
+
+/** Flag emoji from the ISO code (regional indicator letters); 🌐 for anything else. */
+const flag = (code: string) => /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map(letter => 0x1f1a5 + letter.charCodeAt(0))) : "🌐";
+const sumOf = (values: number[]) => values.reduce((total, value) => total + value, 0);
+
+/** "Oylik dinamika — respublikalar va viloyatlar": one line at a time (all / a country), a chosen region as a dashed line over it. */
+function RegionDynamics({ stats }: { stats: RegionStats }) {
+  const countries = useMemo(() => countryStats(stats), [stats]);
+  const months = stats.periodEnd || 12;
+  const [country, setCountry] = useState<string | null>(null), [regionCode, setRegionCode] = useState<string | null>(null);
+  const current = countries.find(item => item.code === country) ?? null;
+  const region = current?.regions.find(item => item.code === regionCode) ?? null;
+  const all = useMemo(() => Array.from({ length: 12 }, (_, index) => sumOf(countries.map(item => item.months[index]))), [countries]);
+  const values = useMemo(() => (current?.months ?? all).slice(0, months), [current, all, months]);
+  const highlight = useMemo(() => region?.months.slice(0, months) ?? null, [region, months]);
+  const go = (next: string | null, nextRegion: string | null = null) => { setCountry(next); setRegionCode(nextRegion); };
+  const rows: Array<CountryRow & { country?: boolean }> = current ? current.regions : countries.map(item => ({ ...item, country: true }));
+  const top = Math.max(1, ...rows.map(row => row.total));
+  const card = (code: string | null, name: string, icon: string, total: number, line: number[], note: string) => {
+    const max = Math.max(1, ...line), points = line.slice(0, months).map((value, index) => `${((index * 140) / Math.max(1, months - 1)).toFixed(1)},${(28 - (24 * value) / max).toFixed(1)}`).join(" ");
+    return <button key={code ?? "all"} type="button" className={`bk-dyn-card${country === code ? " is-on" : ""}`} aria-pressed={country === code} onClick={() => go(code)}>
+      <span className="bk-dyn-title"><span style={{ fontSize: 16 }}>{icon}</span>{name}</span><b style={{ fontSize: 20 }}>{formatUsd(total)}</b><small className="bk-muted">{note}</small>
+      <svg viewBox="0 0 140 30" aria-hidden><polyline className="bk-dyn-spark" points={points} pathLength={1}/></svg>
+    </button>;
+  };
+  return <section className="bk-card" aria-labelledby="bk-region-lines-title">
+    <div className="bk-card-head"><div><h2 id="bk-region-lines-title">Oylik dinamika — respublikalar va viloyatlar</h2><span className="bk-muted">Jami savdo, USD · {stats.year} · respublikani bosing → viloyatlari ochiladi</span></div></div>
+    {!countries.length || !stats.periodEnd ? <div className="bk-empty">Bu yilda hali savdo kiritilmagan.</div> : <>
+      <div className="bk-rep-cards" style={{ "--c": "var(--bk-b1)" } as React.CSSProperties}>
+        {card(null, "Hammasi", "🌍", sumOf(all), all, `${countries.length} respublika`)}
+        {countries.map(item => card(item.code, item.name, flag(item.code), item.total, item.months, `${item.regions.filter(row => row.code.slice(-1) !== "?").length} viloyat`))}
+      </div>
+      <nav className="bk-rep-crumb" aria-label="Tanlov">
+        {current ? <button type="button" onClick={() => go(null)}>🌍 Hammasi</button> : <b>🌍 Hammasi</b>}
+        {current && <><span>›</span>{region ? <button type="button" onClick={() => go(current.code)}>{flag(current.code)} {current.name}</button> : <b>{flag(current.code)} {current.name}</b>}</>}
+        {region && <><span>›</span><b>{shortName(region.name)}</b></>}
+      </nav>
+      <div className="bk-rep-body">
+        <div className="bk-dyn-big" style={{ "--c": "var(--bk-b1)", marginTop: 0 } as React.CSSProperties}>
+          <div className="bk-rep-title">{region ? shortName(region.name) : current?.name ?? "Barcha respublikalar"}<small>{region ? `${formatUsd(region.total)} · ${current!.name} jami ichida (punktir)` : `${formatUsd(sumOf(values))} · ${current ? "viloyatlar jami" : stats.year}`}</small></div>
+          <MorphChart values={values} highlight={highlight} highlightName={region ? shortName(region.name) : null} labels={MONTHS_SHORT.slice(0, months)}/>
+        </div>
+        <div className="bk-rep-rank" key={current?.code ?? "all"}>
+          <h3>{current ? "Viloyatlar reytingi" : "Respublikalar reytingi"}</h3>
+          {rows.map((row, index) => <button key={row.code} type="button" className={`bk-rep-row${region?.code === row.code ? " is-on" : ""}`} aria-pressed={region?.code === row.code}
+            onClick={() => (row.country ? go(row.code) : go(current!.code, region?.code === row.code ? null : row.code))}>
+            <small>{index + 1}</small><span>{row.country ? `${flag(row.code)} ${row.name}` : shortName(row.name)}{row.country && <em> → viloyatlar</em>}</span><b>{formatUsd(row.total)}</b>
+            <span className="bk-rep-bar"><i style={{ width: `${(100 * row.total) / top}%`, animationDelay: `${index * 60}ms` }}/></span>
+          </button>)}
+        </div>
+      </div>
+    </>}
+  </section>;
+}
+
+/** The line "flows" to new values (y tween, not redrawn); the highlighted region rises from it as a dashed line. */
+function MorphChart({ values, highlight, highlightName, labels }: { values: number[]; highlight: number[] | null; highlightName: string | null; labels: string[] }) {
+  const phone = usePhone();
+  const W = phone ? 320 : 640, H = phone ? 300 : 300, font = phone ? 14 : 11, L = phone ? 44 : 52, R = W - 12, T = 12, B = H - 30;
+  const n = values.length, X = (i: number) => L + ((R - L) * i) / Math.max(1, n - 1);
+  const max = nice(Math.max(1, ...values, ...(highlight ?? [])));
+  const [shown, setShown] = useState<{ ys: number[]; hs: number[] | null } | null>(null);
+  const last = useRef<{ ys: number[]; hs: number[] | null } | null>(null);
+  const [tip, setTip] = useState<number | null>(null);
+  useEffect(() => {
+    const Y = (value: number) => B - ((B - T) * value) / max;
+    const to = values.map(Y), hto = highlight?.map(Y) ?? null;
+    const from = last.current?.ys.length === to.length ? last.current.ys : to.map(() => B);
+    const hfrom = hto ? (last.current?.hs?.length === hto.length ? last.current.hs : from) : null;
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches, start = performance.now();
+    let frame = 0;
+    const step = (now: number) => {
+      const k = reduced ? 1 : 1 - (1 - Math.min(1, (now - start) / 800)) ** 3;
+      const next = { ys: from.map((y, i) => y + (to[i] - y) * k), hs: hto && hfrom ? hfrom.map((y, i) => y + (hto[i] - y) * k) : null };
+      last.current = next; setShown(next);
+      if (k < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [values, highlight, max, B]);
+  const ys = shown?.ys.length === n ? shown.ys : values.map(() => B), line = smooth(ys.map((y, i) => [X(i), y]), B), slot = (R - L) / Math.max(1, n - 1);
+  const tipLeft = tip === null ? 0 : (X(tip) / W) * 100;
+  return <div style={{ position: "relative" }} onPointerLeave={() => setTip(null)}>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Oylik savdo${highlightName ? `, ${highlightName} ajratilgan` : ""}`} style={{ fontSize: font }}>
+      <defs><linearGradient id="bk-rep-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style={{ stopColor: "var(--bk-b1)" }} stopOpacity=".22"/><stop offset="1" style={{ stopColor: "var(--bk-b1)" }} stopOpacity="0"/></linearGradient></defs>
+      {[0, 1, 2, 3, 4].map(step => { const y = B - ((B - T) * step) / 4; return <g key={step}><line className="bk-dyn-grid" x1={L} x2={R} y1={y} y2={y}/><text x={L - 8} y={y + font / 3} textAnchor="end">${formatUsdK((max * step) / 4)}</text></g>; })}
+      {labels.map((label, i) => (phone ? (n - 1 - i) % 2 === 0 : true) && <text key={label} x={X(i)} y={B + font + 6} textAnchor={i === n - 1 ? "end" : i === 0 ? "start" : "middle"}>{label}</text>)}
+      <path d={`${line} L${X(n - 1)},${B} L${L},${B}Z`} fill="url(#bk-rep-area)"/>
+      <path d={line} fill="none" strokeWidth={3} strokeLinecap="round" style={{ stroke: "var(--bk-b1)" }}/>
+      {shown?.hs && highlight && <path d={smooth(shown.hs.map((y, i) => [X(i), y]), B)} fill="none" strokeWidth={3} strokeDasharray="7 5" strokeLinecap="round" style={{ stroke: "var(--bk-navy)" }}/>}
+      {ys.map((y, i) => <circle key={i} cx={X(i)} cy={y} r={tip === i ? 6 : 4} strokeWidth={2.5} style={{ fill: "var(--bk-card)", stroke: "var(--bk-b1)" }}/>)}
+      {tip !== null && <line x1={X(tip)} x2={X(tip)} y1={T} y2={B} className="bk-dyn-grid" strokeDasharray="3 3"/>}
+      {values.map((_, i) => <rect key={i} x={X(i) - slot / 2} y={T} width={slot} height={B - T + 24} fill="transparent" onPointerEnter={() => setTip(i)} onPointerDown={() => setTip(i)}/>)}
+    </svg>
+    {tip !== null && <div className="bk-dyn-tip" role="status" style={{ left: `${tipLeft}%`, top: `${(ys[tip] / H) * 100}%`, transform: `translate(${tipLeft < 20 ? "-10%" : tipLeft > 80 ? "-90%" : "-50%"}, calc(-100% - 12px))` }}>
+      <b>{MONTHS_LONG[tip]}</b><span>{formatUsd(values[tip])}</span>{highlight && <small>{highlightName}: {formatUsd(highlight[tip])}</small>}
+    </div>}
+  </div>;
 }

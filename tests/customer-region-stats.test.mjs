@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 
 register("./ts-resolve.mjs", import.meta.url);
-const { buildRegionStats } = await import("../lib/customers/region-stats.ts");
+const { buildRegionStats, countryStats } = await import("../lib/customers/region-stats.ts");
 
 const now = { year: 2026, month: 3 }; // March 2026: January and February must be entered
 const sale = (id, name, regionCode, year, month, amountUsd, country = "UZ") => ({ id, name, country, regionCode, year, month, amountUsd });
@@ -60,7 +60,7 @@ test("KPIs count every active customer; customers without a region stay off the 
   assert.equal(kpis.regionsWithCustomers, 4);
   assert.equal(kpis.regionCount, 53);
   assert.equal(kpis.prevTotal, 1500);
-  assert.deepEqual(unassigned, { customers: 1, total: 300 });
+  assert.deepEqual(unassigned, { customers: 1, total: 300, byCountry: [{ country: "UZ", months: [300, ...Array(11).fill(0)] }] });
   assert.equal(buildRegionStats(rows, 2026, now).regions.find(region => region.code === "KZ-AST").total, 200);
 });
 
@@ -81,4 +81,26 @@ test("past years use all 12 months and an empty input gives zeroed regions", () 
   assert.equal(empty.kpis.activeCustomers, 0);
   assert.equal(empty.kpis.growth, null);
   assert.ok(empty.regions.every(region => region.total === 0 && region.customers === 0 && region.share === 0));
+});
+
+test("respublika view: regions (with Aniqlanmagan) add up to the country; Toshkent shahar + viloyat is one row", () => {
+  const extra = [...rows, sale("g", "Golf", "UZ-TK", 2026, 2, 700), sale("h", "Hotel", null, 2026, 2, 50, "KZ")];
+  const stats = buildRegionStats(extra, 2026, now), countries = countryStats(stats);
+  assert.deepEqual(countries.map(country => country.code), ["UZ", "KZ"], "only countries with customers, ranked by total");
+  for (const country of countries) {
+    assert.equal(country.total, country.regions.reduce((sum, region) => sum + region.total, 0), `${country.code}: regions = country total`);
+    country.months.forEach((value, index) => assert.equal(value, country.regions.reduce((sum, region) => sum + region.months[index], 0)));
+  }
+  const uz = countries[0];
+  assert.equal(uz.total, 9000, "all UZ sales incl. the one without a region");
+  assert.deepEqual(uz.regions.filter(region => region.name === "Toshkent").map(region => region.total), [5700], "city + region in one Toshkent");
+  assert.ok(!uz.regions.some(region => region.code === "UZ-TK"));
+  assert.deepEqual(uz.regions.find(region => region.name === "Aniqlanmagan"), { code: "UZ-?", name: "Aniqlanmagan", total: 300, months: [300, ...Array(11).fill(0)] });
+  assert.deepEqual(countries[1].regions.map(region => [region.code, region.total]), [["KZ-AST", 200], ["KZ-?", 50]]);
+});
+
+test("respublika view follows the chosen year", () => {
+  const past = countryStats(buildRegionStats(rows, 2025, now));
+  assert.equal(past.find(country => country.code === "UZ").total, 11499, "2025 sales only (1500 + 9999)");
+  assert.equal(countryStats(buildRegionStats(rows, 2026, now)).find(country => country.code === "UZ").total, 8300);
 });
