@@ -80,6 +80,9 @@ export function periodChange(values: number[]) {
   return { total, text: `${percent < 0 ? "▼" : "▲"} ${Math.abs(percent)}%`, down: percent < 0 };
 }
 
+/** Round axis maximum with 4 even steps of 1/2/2.5/5 × 10ⁿ, close to the data (162k → 200k, not 400k). */
+export const nice = (max: number) => { const power = 10 ** Math.max(0, Math.floor(Math.log10(max / 4 || 1))); return [1, 2, 2.5, 5, 10].find(step => step * power * 4 >= max)! * power * 4; };
+
 export function delta(current: number, previous: number) {
   if (!previous) return { value: current ? 100 : 0, direction: current ? "up" as const : "flat" as const, relative: false };
   const value = ((current - previous) / previous) * 100;

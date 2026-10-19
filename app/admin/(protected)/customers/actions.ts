@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
-import { requireRole } from "@/lib/auth/require-admin";
+import { requireAdmin, requireRole } from "@/lib/auth/require-admin";
+import { missingInPeriod, periodPoints, regionCodesFor, resolvePeriod, sumBuckets, type PeriodPoint, type ResolvedPeriod } from "@/lib/customers/region-period";
+import { CUSTOMER_REGIONS } from "@/lib/dashboard/regions";
 import { CustomerError, deleteRegularCustomer, saveDashboardTips, saveMonthlySale, saveRankingPrizes, saveRegularCustomer, type CustomerInput, type MonthlySaleInput } from "@/lib/customers/mutations";
-import { getCustomerYear } from "@/lib/customers/queries";
+import { getCustomerYear, regionDayRows, regionMonthRows } from "@/lib/customers/queries";
 import { approvePurchase, PurchaseReviewError, rejectPurchase } from "@/lib/customers/seller-service";
 
 export type CustomerActionResult = { ok: true; id?: string } | { ok: false; error: string };
@@ -50,4 +52,31 @@ export async function approvePurchaseAction(id: string): Promise<CustomerActionR
 export async function rejectPurchaseAction(id: string, reason: string): Promise<CustomerActionResult> {
   const actor = await requireRole("SUPER_ADMIN", "ADMIN");
   try { await rejectPurchase(actor, id, typeof reason === "string" ? reason : ""); revalidatePath("/admin/customers/purchases"); return { ok: true }; } catch (error) { return failure(error); }
+}
+
+export type RegionPeriodResult = ({ ok: true; points: PeriodPoint[]; total: number; missing: Array<{ key: string; label: string; names: string[] }> } & ResolvedPeriod) | { ok: false; error: string };
+/** Region panel "Davr" (read-only, whoever sees the page): daily from approved purchases, monthly / yearly from the monthly entries. */
+export async function regionPeriodAction(input: { region: string; period?: string | null; from?: string | null; to?: string | null }): Promise<RegionPeriodResult> {
+  await requireAdmin();
+  if (typeof input?.region !== "string" || !CUSTOMER_REGIONS.some(region => region.code === input.region)) return { ok: false, error: "Viloyat topilmadi." };
+  const now = new Date(), codes = regionCodesFor(input.region), asked = resolvePeriod(input, now);
+  if (!asked.ok) return asked;
+  try {
+    let period = asked.period;
+    if (period.grain === "day") {
+      const points = periodPoints(period, new Map((await regionDayRows(codes, period.from, period.to)).map(row => [row.key, Number(row.value)])), [], now);
+      return { ok: true, ...period, points, total: Math.round(points.reduce((sum, point) => sum + (point.value ?? 0), 0) * 100) / 100, missing: [] };
+    }
+    const rows = await regionMonthRows(codes, period.mode === "all" ? null : period.from, period.to);
+    if (period.mode === "all") {
+      const first = rows.flatMap(row => (row.year !== null && row.month !== null ? [`${row.year}-${String(row.month).padStart(2, "0")}`] : [])).sort()[0] ?? null;
+      const resolved = resolvePeriod({ period: "all" }, now, first);
+      if (resolved.ok) period = resolved.period;
+    }
+    const missing = missingInPeriod(rows, period, now), points = periodPoints(period, sumBuckets(rows, period.grain), missing.map(item => item.key), now);
+    return { ok: true, ...period, points, total: Math.round(points.reduce((sum, point) => sum + (point.value ?? 0), 0) * 100) / 100, missing };
+  } catch (error) {
+    console.error("[RegionPeriod]", { name: error instanceof Error ? error.name : "UnknownError" });
+    return { ok: false, error: "Ma’lumot olinmadi. Qayta urinib ko‘ring." };
+  }
 }

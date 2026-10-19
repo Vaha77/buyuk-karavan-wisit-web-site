@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { DASHBOARD_TAG } from "@/lib/referrals/tracking";
 import type { CustomerYear } from "@/lib/dashboard/rules";
 import type { CustomerSaleRow } from "./region-stats";
+import type { MonthEntry } from "./region-period";
 
 export type CustomerYearData = { year: number; customers: CustomerYear[]; prizes: Record<1 | 2 | 3, string>; years: number[] };
 
@@ -50,6 +51,30 @@ async function loadRegionRows(year: number): Promise<CustomerSaleRow[]> {
 }
 const cachedRegionRows = unstable_cache(loadRegionRows, ["regular-customer-regions-v2"], { revalidate: 300, tags: [DASHBOARD_TAG] });
 export async function getCustomerRegionRows(year: number) { return cachedRegionRows(year); }
+
+/** Region panel "Davr", daily: approved purchases summed per calendar day (the purchase's region, else the customer's). */
+export function regionDayRows(codes: string[], from: string, to: string) {
+  return getDb().$queryRaw<Array<{ key: string; value: number }>>(Prisma.sql`
+    SELECT to_char(cp.date, 'YYYY-MM-DD') AS key, sum(cp."amountUsd")::float8 AS value
+    FROM "CustomerPurchase" cp JOIN "RegularCustomer" c ON c.id = cp."customerId"
+    WHERE cp.status = 'APPROVED' AND c."isActive" AND COALESCE(cp."regionCode", c."regionCode") = ANY(${codes}) AND cp.date BETWEEN ${from}::date AND ${to}::date
+    GROUP BY 1`);
+}
+/** Region panel "Davr", monthly / yearly: the region's customers with their monthly entries in the range (located as in loadRegionRows); no entry = a null row. */
+export function regionMonthRows(codes: string[], from: string | null, to: string) {
+  const first = from ? Number(from.slice(0, 4)) * 100 + Number(from.slice(5, 7)) : 0, last = Number(to.slice(0, 4)) * 100 + Number(to.slice(5, 7));
+  return getDb().$queryRaw<MonthEntry[]>(Prisma.sql`
+    SELECT c.id, c.name, to_char(c."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM') AS since, s.year, s.month, s."amountUsd"::float8 AS "amountUsd"
+    FROM "RegularCustomer" c
+    LEFT JOIN "RegularCustomerMonthlySale" s ON s."customerId" = c.id AND s.year * 100 + s.month BETWEEN ${first} AND ${last}
+    LEFT JOIN LATERAL (
+      SELECT cp."regionCode" FROM "CustomerPurchase" cp
+      WHERE cp."customerId" = c.id AND cp.status = 'APPROVED' AND cp."regionCode" IS NOT NULL
+        AND EXTRACT(YEAR FROM cp.date) = s.year AND EXTRACT(MONTH FROM cp.date) = s.month
+      ORDER BY cp.date DESC, cp."createdAt" DESC LIMIT 1
+    ) p ON true
+    WHERE c."isActive" = true AND COALESCE(p."regionCode", c."regionCode") = ANY(${codes})`);
+}
 
 /** Sellers that customers can be assigned to (active SalesPerson rows). */
 export async function getAssignableSellers() {

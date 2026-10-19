@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { formatInt, formatUsd, formatUsdK } from "@/lib/dashboard/format";
+import { nice } from "@/lib/dashboard/rules";
 
 // Dashboard "Dinamika": one card per metric (count-up, sparkline); the chosen card opens in the big chart below.
 export type DynamicsMetric = {
@@ -15,8 +16,6 @@ const noSubscribe = () => () => {};
 const onPhoneChange = (notify: () => void) => { const query = matchMedia(PHONE); query.addEventListener("change", notify); return () => query.removeEventListener("change", notify); };
 const amount = (value: number, unit: string) => (unit ? formatUsd(value) : formatInt(value));
 const axis = (value: number, unit: string) => (unit ? `$${formatUsdK(value)}` : formatInt(value));
-/** Round axis maximum with 4 even steps. */
-export const nice = (max: number) => { const power = 10 ** Math.floor(Math.log10(max || 1)); return [1, 2, 2.5, 5, 10].find(step => step * power * 4 >= max)! * power * 4; };
 /** Smooth line through the points that never dips below the baseline. */
 export function smooth(points: Array<[number, number]>, base: number) {
   let path = `M${points[0][0]},${points[0][1]}`;
@@ -29,7 +28,7 @@ export function smooth(points: Array<[number, number]>, base: number) {
 
 export const usePhone = () => useSyncExternalStore(onPhoneChange, () => matchMedia(PHONE).matches, () => false);
 
-function useCountUp(to: number) {
+export function useCountUp(to: number) {
   const [value, setValue] = useState(0);
   useEffect(() => {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches, start = performance.now();
