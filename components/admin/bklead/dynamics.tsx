@@ -65,7 +65,7 @@ function BigChart({ metric, weeks }: { metric: DynamicsMetric; weeks: string[] }
       <defs><linearGradient id={`bk-dyn-${metric.key}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={metric.color} stopOpacity=".2"/><stop offset="1" stopColor={metric.color} stopOpacity="0"/></linearGradient></defs>
       {[0, 1, 2, 3, 4].map(step => { const y = B - ((B - T) * step) / 4; return <g key={step}><line className="bk-dyn-grid" x1={L} x2={R} y1={y} y2={y}/><text x={L - 8} y={y + font / 3} textAnchor="end">{axis((max * step) / 4, metric.unit)}</text></g>; })}
       {metric.values.map((v, i) => <rect key={i} className="bk-dyn-bar" x={X(i) - slot * 0.21} y={Y(v)} width={slot * 0.42} height={B - Y(v)} rx={5} style={{ animationDelay: `${i * 35}ms` }}/>)}
-      {weeks.map((week, i) => (i % every === 0 || i === n - 1) && <text key={week} x={X(i)} y={B + font + 8} textAnchor={i === n - 1 ? "end" : i === 0 ? "start" : "middle"}>{week}</text>)}
+      {weeks.map((week, i) => (n - 1 - i) % every === 0 && <text key={week} x={X(i)} y={B + font + 8} textAnchor={i === n - 1 ? "end" : i === 0 ? "start" : "middle"}>{week}</text>)}
       <path className="bk-dyn-area" d={`${line} L${R},${B} L${L},${B}Z`} fill={`url(#bk-dyn-${metric.key})`}/>
       {metric.extra && <path className="bk-dyn-line" d={smooth(metric.extra.values.map((v, i) => [X(i), Y(v)]), B)} stroke={metric.extra.color} pathLength={1}/>}
       <path className="bk-dyn-line" d={line} stroke={metric.color} pathLength={1}/>
