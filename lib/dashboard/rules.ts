@@ -70,6 +70,16 @@ export function funnelLevel(lead: { status: string; hasOffer: boolean; saleAppro
 }
 
 // ---- Deltas ----------------------------------------------------------------------------------
+/** "Dinamika" cards a role may see: Seh and the sales sum ($) only for SUPER_ADMIN / ADMIN. */
+export const dynamicsMetrics = (role: string): Array<"leads" | "seh" | "sales"> => (role === "SUPER_ADMIN" || role === "ADMIN" ? ["leads", "seh", "sales"] : ["leads"]);
+/** Last 12 weeks against the 12 before (`values` holds both, oldest first): total and "▲ 12%" / "▼ 5%" / "yangi" when nothing came before. */
+export function periodChange(values: number[]) {
+  const total = values.slice(-12).reduce((sum, value) => sum + value, 0), previous = values.slice(0, -12).reduce((sum, value) => sum + value, 0);
+  if (!previous) return { total, text: total ? "yangi" : "—", down: false };
+  const percent = Math.round(((total - previous) / previous) * 100);
+  return { total, text: `${percent < 0 ? "▼" : "▲"} ${Math.abs(percent)}%`, down: percent < 0 };
+}
+
 export function delta(current: number, previous: number) {
   if (!previous) return { value: current ? 100 : 0, direction: current ? "up" as const : "flat" as const, relative: false };
   const value = ((current - previous) / previous) * 100;

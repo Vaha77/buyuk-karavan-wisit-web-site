@@ -135,3 +135,30 @@ test("visit outcome is the furthest stage and never goes down", () => {
   assert.equal(referral.costPerLead(500, 38).toFixed(1), "13.2");
   assert.equal(referral.costPerLead(null, 38), null);
 });
+
+test("Dinamika: 24-week window on Tashkent Mondays (Sunday 23:59 vs Monday 00:00)", async () => {
+  const workshop = await import("../lib/dashboard/workshop-rules.ts");
+  // Sunday 11 Oct 2026 23:59 Tashkent = 18:59 UTC → current week is still Mon 5 Oct; 23 weeks earlier = Mon 27 Apr.
+  assert.equal(workshop.weekWindowStart(new Date("2026-10-11T18:59:00Z"), 24).toISOString(), "2026-04-26T19:00:00.000Z");
+  // Monday 12 Oct 00:00 Tashkent = 19:00 UTC Sunday → a new week; the window moves by one week.
+  assert.equal(workshop.weekWindowStart(new Date("2026-10-11T19:00:00Z"), 24).toISOString(), "2026-05-03T19:00:00.000Z");
+  assert.equal(workshop.weekWindowStart(new Date("2026-10-11T19:00:00Z")).toISOString(), "2026-07-26T19:00:00.000Z", "default stays 12 weeks");
+});
+
+test("Dinamika: last 12 weeks against the 12 before; 'yangi' when nothing came before", () => {
+  const weeks = (before, after) => [...Array(12).fill(before), ...Array(12).fill(after)];
+  assert.deepEqual(rules.periodChange(weeks(1, 2)), { total: 24, text: "▲ 100%", down: false });
+  assert.deepEqual(rules.periodChange(weeks(4, 3)), { total: 36, text: "▼ 25%", down: true });
+  assert.deepEqual(rules.periodChange(weeks(0, 5)), { total: 60, text: "yangi", down: false });
+  assert.deepEqual(rules.periodChange(weeks(0, 0)), { total: 0, text: "—", down: false });
+  assert.deepEqual(rules.periodChange(weeks(2, 2)), { total: 24, text: "▲ 0%", down: false });
+});
+
+test("Dinamika: Seh and the sales sum only for SUPER_ADMIN / ADMIN", async () => {
+  assert.deepEqual(rules.dynamicsMetrics("SUPER_ADMIN"), ["leads", "seh", "sales"]);
+  assert.deepEqual(rules.dynamicsMetrics("ADMIN"), ["leads", "seh", "sales"]);
+  assert.deepEqual(rules.dynamicsMetrics("MANAGER"), ["leads"]);
+  const { readFile } = await import("node:fs/promises");
+  const page = await readFile(new URL("../app/admin/(protected)/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /dynamicsMetrics\(user\.role\)\.map/, "the page sends only the role's metrics to the browser");
+});

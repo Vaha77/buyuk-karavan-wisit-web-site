@@ -8,10 +8,10 @@ export const UNACCEPTED_ALERT_MS = DAY;
 export const OPEN_STATUSES = ["NEW", "ACCEPTED", "STARTED"] as const;
 
 /** First Monday (Tashkent) of the 12-week window that ends with the current week, as "YYYY-MM-DD". */
-export function weekWindowStart(now = new Date()) {
+export function weekWindowStart(now = new Date(), weeks = 12) {
   const todayKey = dayKey(now);
   const weekday = (new Date(`${todayKey}T00:00:00Z`).getUTCDay() + 6) % 7; // Monday = 0
-  return new Date(Date.parse(`${todayKey}T00:00:00+05:00`) - weekday * DAY - 11 * 7 * DAY);
+  return new Date(Date.parse(`${todayKey}T00:00:00+05:00`) - weekday * DAY - (weeks - 1) * 7 * DAY);
 }
 
 /** 12 weekly buckets from DB rows ({ week: "YYYY-MM-DD" Monday, kind: "in" | "out", count }); missing weeks are 0. */

@@ -8,6 +8,7 @@ import { DASHBOARD_TAG } from "@/lib/referrals/tracking";
 import { funnelLevel } from "./rules";
 import { toUsd } from "./money";
 import { dayKey } from "./period";
+import { weekWindowStart } from "./workshop-rules";
 
 const DAY = 86_400_000;
 const OFFER_OUTCOMES = Prisma.sql`('OFFER_SENT', 'NEGOTIATING', 'SALE')`;
@@ -32,19 +33,21 @@ async function loadKpis(fromIso: string, toIso: string, prevFromIso: string) {
 }
 const cachedKpis = unstable_cache(loadKpis, ["dashboard-kpis-v1"], { revalidate: 300, tags: [DASHBOARD_TAG] });
 
-// ---- Weekly dynamics (last 12 weeks, Monday-based in Tashkent) --------------------------------
+// ---- Weekly dynamics (last 24 weeks = 12 shown + the 12 before for "o‘tgan davrga", Monday-based in Tashkent) ----
 async function loadWeekly(todayKey: string) {
-  const today = new Date(`${todayKey}T00:00:00+05:00`);
-  const weekday = (new Date(`${todayKey}T00:00:00Z`).getUTCDay() + 6) % 7; // Monday = 0
-  const thisMonday = new Date(today.getTime() - weekday * DAY);
-  const start = new Date(thisMonday.getTime() - 11 * 7 * DAY);
-  const week = (table: "Lead" | "Calculation") => getDb().$queryRaw<Array<{ week: string; count: bigint }>>(Prisma.sql`SELECT to_char(date_trunc('week', "createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tashkent'), 'YYYY-MM-DD') AS week, count(*)::bigint AS count FROM ${Prisma.raw(`"${table}"`)} WHERE "createdAt" >= ${start} GROUP BY 1`);
-  const [leads, calculations] = await Promise.all([week("Lead"), week("Calculation")]);
-  const lookup = (rows: Array<{ week: string; count: bigint }>) => new Map(rows.map(row => [row.week, Number(row.count)]));
-  const leadMap = lookup(leads), calcMap = lookup(calculations);
-  return Array.from({ length: 12 }, (_, index) => { const monday = dayKey(new Date(start.getTime() + index * 7 * DAY)); return { week: monday, leads: leadMap.get(monday) ?? 0, calculations: calcMap.get(monday) ?? 0 }; });
+  const start = weekWindowStart(new Date(`${todayKey}T12:00:00+05:00`), 24);
+  const monday = Prisma.sql`to_char(date_trunc('week', "createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tashkent'), 'YYYY-MM-DD')`;
+  const query = (sql: Prisma.Sql) => getDb().$queryRaw<Array<{ week: string; value: number }>>(sql).then(rows => new Map(rows.map(row => [row.week, Number(row.value)])));
+  const [leads, calculations, seh, sales] = await Promise.all([
+    query(Prisma.sql`SELECT ${monday} AS week, count(*)::float8 AS value FROM "Lead" WHERE "createdAt" >= ${start} GROUP BY 1`),
+    query(Prisma.sql`SELECT ${monday} AS week, count(*)::float8 AS value FROM "Calculation" WHERE "createdAt" >= ${start} GROUP BY 1`),
+    query(Prisma.sql`SELECT ${monday} AS week, count(*)::float8 AS value FROM "WorkshopOrder" WHERE "createdAt" >= ${start} AND NOT "isTest" AND status <> 'CANCELLED' GROUP BY 1`),
+    // Approved customer purchases ($) by their own date (a calendar day, already Tashkent).
+    query(Prisma.sql`SELECT to_char(date_trunc('week', "date"), 'YYYY-MM-DD') AS week, sum("amountUsd")::float8 AS value FROM "CustomerPurchase" WHERE status = 'APPROVED' AND "date" >= ${dayKey(start)}::date GROUP BY 1`),
+  ]);
+  return Array.from({ length: 24 }, (_, index) => { const week = dayKey(new Date(start.getTime() + index * 7 * DAY)); return { week, leads: leads.get(week) ?? 0, calculations: calculations.get(week) ?? 0, seh: seh.get(week) ?? 0, sales: sales.get(week) ?? 0 }; });
 }
-const cachedWeekly = unstable_cache(loadWeekly, ["dashboard-weekly-v1"], { revalidate: 300, tags: [DASHBOARD_TAG] });
+const cachedWeekly = unstable_cache(loadWeekly, ["dashboard-weekly-v2"], { revalidate: 300, tags: [DASHBOARD_TAG] });
 
 // ---- Funnel ----------------------------------------------------------------------------------
 async function loadFunnel(fromIso: string, toIso: string) {

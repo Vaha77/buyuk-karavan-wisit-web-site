@@ -7,13 +7,13 @@ import { getUsdUzsRate } from "@/lib/currency/cbu";
 import { getCustomerYear } from "@/lib/customers/queries";
 import { getDb } from "@/lib/db";
 import { getDashboardData, getPreviousConversion } from "@/lib/dashboard/queries";
-import { buildFunnel, delta } from "@/lib/dashboard/rules";
+import { buildFunnel, delta, dynamicsMetrics, periodChange } from "@/lib/dashboard/rules";
 import { dayKey, periodQuery, resolvePeriod, tashkentYearMonth } from "@/lib/dashboard/period";
 import { formatDayMonth, formatDecimal, formatInt, formatPercent, formatRelative, formatUsd, percentOf } from "@/lib/dashboard/format";
 import { regionName } from "@/lib/dashboard/regions";
 import { getLinkSummary } from "@/lib/referrals/queries";
 import { RangeSelect, SourceIcon } from "@/components/admin/bklead/bits";
-import { WeeklyLines } from "@/components/admin/bklead/charts";
+import { DynamicsCards, type DynamicsMetric } from "@/components/admin/bklead/dynamics";
 import { LazyRegionMap } from "@/components/admin/bklead/lazy";
 import { CustomerRanking } from "@/components/admin/bklead/customer-ranking";
 import { WorkshopSection } from "@/components/admin/bklead/workshop-section";
@@ -23,6 +23,7 @@ export const metadata: Metadata = { title: "BKLead Dashboard — Admin | BUYUK K
 type Search = { range?: string; from?: string; to?: string; cyear?: string };
 
 const DEFAULT_TIPS = { all: "Xorijdan kelgan lidlar uchun rus tilidagi reklama va Telegram orqali javob berish tavsiya etiladi." };
+const DYNAMICS = { leads: { name: "Lidlar", color: "#4F7CFF", unit: "" }, seh: { name: "Seh zakazlari", color: "#E9A23B", unit: "" }, sales: { name: "Sotuvlar", color: "#1F9E89", unit: "$" } } as const;
 const LEVEL_CHIPS = [{ label: "Yangi", tone: "is-orange" }, { label: "Bog‘lanildi", tone: "" }, { label: "Hisob-kitob", tone: "is-navy" }, { label: "Taklif yuborildi", tone: "" }, { label: "Sotuv", tone: "is-gold" }] as const;
 const initials = (name: string) => name.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
 
@@ -56,6 +57,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const now = new Date();
   const query = periodQuery(period);
   const boss = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
+  // 24 weeks come back: the last 12 are shown, the 12 before give "o‘tgan davrga". Only the metrics this role may see are sent.
+  const series = (key: "leads" | "calculations" | "seh" | "sales") => weekly.map(week => week[key]);
+  const dynamics: DynamicsMetric[] = dynamicsMetrics(user.role).map(key => {
+    const change = periodChange(series(key));
+    return { key, ...DYNAMICS[key], values: series(key).slice(-12), total: change.total, change, ...(key === "leads" ? { extra: { name: "Hisob-kitoblar", color: "#E07A2E", values: series("calculations").slice(-12) } } : {}) };
+  });
 
   return <div className="bk">
     <div className="bk-head">
@@ -75,8 +82,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
     <div className="bk-grid-main">
       <section className="bk-card" aria-labelledby="bk-weekly-title">
-        <div className="bk-card-head"><div><h2 id="bk-weekly-title">Lidlar dinamikasi</h2><span className="bk-muted">So‘nggi 12 hafta, haftalik</span></div><div className="bk-legend"><span><i style={{ background: "#123E7C", borderRadius: "50%" }}/>Lidlar</span><span><i style={{ background: "var(--k-bg-e07a2e, #E07A2E)", borderRadius: "50%" }}/>Hisob-kitoblar</span></div></div>
-        <WeeklyLines weeks={weekly.map(week => ({ label: formatDayMonth(new Date(`${week.week}T12:00:00+05:00`)), leads: week.leads, calculations: week.calculations }))} label="So‘nggi 12 haftadagi lidlar va hisob-kitoblar"/>
+        <div className="bk-card-head"><div><h2 id="bk-weekly-title">Dinamika</h2><span className="bk-muted">So‘nggi 12 hafta, haftalik · kartani bosing</span></div></div>
+        <DynamicsCards metrics={dynamics} weeks={weekly.slice(-12).map(week => formatDayMonth(new Date(`${week.week}T12:00:00+05:00`)))}/>
       </section>
       <section className="bk-card" aria-labelledby="bk-funnel-title" style={{ display: "grid", alignContent: "start", gap: 14 }}>
         <div className="bk-card-head" style={{ marginBottom: 0 }}><div><h2 id="bk-funnel-title">Sotuv voronkasi</h2><span className="bk-muted">{period.label}</span></div></div>
