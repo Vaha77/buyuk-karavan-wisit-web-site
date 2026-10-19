@@ -344,3 +344,4 @@
 @keyframes bk-per-in{from{opacity:0;transform:translateY(-4px)}}
 @media(max-width:600px){.bk-seg{justify-self:stretch}.bk-seg button{padding:8px 4px}.bk-per-range{display:grid;grid-template-columns:1fr}.bk-per-range label{justify-content:space-between}.bk-per-range input{flex:1}}
 @media(prefers-reduced-motion:reduce){.bk-seg-pill{transition:none}.bk-per-bar,.bk-per-range{animation:none}}
+.bk-flag{flex:none;display:inline-block;vertical-align:-2px;border-radius:2px;box-shadow:0 0 0 .5px rgba(15,31,58,.25);color:var(--bk-muted)}

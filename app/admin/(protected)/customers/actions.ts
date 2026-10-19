@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { requireAdmin, requireRole } from "@/lib/auth/require-admin";
-import { missingInPeriod, periodPoints, regionCodesFor, resolvePeriod, sumBuckets, type PeriodPoint, type ResolvedPeriod } from "@/lib/customers/region-period";
+import { missingInPeriod, monthTotal, periodPoints, regionCodesFor, resolvePeriod, sumBuckets, type PeriodPoint, type ResolvedPeriod } from "@/lib/customers/region-period";
 import { CUSTOMER_REGIONS } from "@/lib/dashboard/regions";
 import { CustomerError, deleteRegularCustomer, saveDashboardTips, saveMonthlySale, saveRankingPrizes, saveRegularCustomer, type CustomerInput, type MonthlySaleInput } from "@/lib/customers/mutations";
 import { getCustomerYear, regionDayRows, regionMonthRows } from "@/lib/customers/queries";
@@ -54,7 +54,8 @@ export async function rejectPurchaseAction(id: string, reason: string): Promise<
   try { await rejectPurchase(actor, id, typeof reason === "string" ? reason : ""); revalidatePath("/admin/customers/purchases"); return { ok: true }; } catch (error) { return failure(error); }
 }
 
-export type RegionPeriodResult = ({ ok: true; points: PeriodPoint[]; total: number; missing: Array<{ key: string; label: string; names: string[] }> } & ResolvedPeriod) | { ok: false; error: string };
+/** manual: "Bu oy" — monthly total minus the approved purchases drawn by day (amounts entered by hand, not split into days). */
+export type RegionPeriodResult = ({ ok: true; points: PeriodPoint[]; total: number; manual: number; missing: Array<{ key: string; label: string; names: string[] }> } & ResolvedPeriod) | { ok: false; error: string };
 /** Region panel "Davr" (read-only, whoever sees the page): daily from approved purchases, monthly / yearly from the monthly entries. */
 export async function regionPeriodAction(input: { region: string; period?: string | null; from?: string | null; to?: string | null }): Promise<RegionPeriodResult> {
   await requireAdmin();
@@ -64,8 +65,11 @@ export async function regionPeriodAction(input: { region: string; period?: strin
   try {
     let period = asked.period;
     if (period.grain === "day") {
-      const points = periodPoints(period, new Map((await regionDayRows(codes, period.from, period.to)).map(row => [row.key, Number(row.value)])), [], now);
-      return { ok: true, ...period, points, total: Math.round(points.reduce((sum, point) => sum + (point.value ?? 0), 0) * 100) / 100, missing: [] };
+      const month = period.mode === "month" ? period.from.slice(0, 7) : null;
+      const [days, monthRows] = await Promise.all([regionDayRows(codes, period.from, period.to), month ? regionMonthRows(codes, period.from, period.to) : null]);
+      const points = periodPoints(period, new Map(days.map(row => [row.key, Number(row.value)])), [], now);
+      const drawn = Math.round(points.reduce((sum, point) => sum + (point.value ?? 0), 0) * 100) / 100, total = month && monthRows ? monthTotal(monthRows, month) : drawn;
+      return { ok: true, ...period, points, total, manual: Math.max(0, Math.round((total - drawn) * 100) / 100), missing: [] };
     }
     const rows = await regionMonthRows(codes, period.mode === "all" ? null : period.from, period.to);
     if (period.mode === "all") {
@@ -74,7 +78,7 @@ export async function regionPeriodAction(input: { region: string; period?: strin
       if (resolved.ok) period = resolved.period;
     }
     const missing = missingInPeriod(rows, period, now), points = periodPoints(period, sumBuckets(rows, period.grain), missing.map(item => item.key), now);
-    return { ok: true, ...period, points, total: Math.round(points.reduce((sum, point) => sum + (point.value ?? 0), 0) * 100) / 100, missing };
+    return { ok: true, ...period, points, total: Math.round(points.reduce((sum, point) => sum + (point.value ?? 0), 0) * 100) / 100, manual: 0, missing };
   } catch (error) {
     console.error("[RegionPeriod]", { name: error instanceof Error ? error.name : "UnknownError" });
     return { ok: false, error: "Ma’lumot olinmadi. Qayta urinib ko‘ring." };

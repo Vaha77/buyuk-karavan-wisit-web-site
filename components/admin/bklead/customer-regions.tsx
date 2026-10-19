@@ -154,7 +154,21 @@ function RegionDetail({ ref, region, rank }: { ref: React.Ref<HTMLElement>; regi
 }
 
 /** Flag emoji from the ISO code (regional indicator letters); 🌐 for anything else. */
-const flag = (code: string) => /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map(letter => 0x1f1a5 + letter.charCodeAt(0))) : "🌐";
+const band = (fills: string[], vertical = false) => fills.map((fill, i) => <rect key={i} x={vertical ? (20 / fills.length) * i : 0} y={vertical ? 0 : (14 / fills.length) * i} width={vertical ? 20 / fills.length + 0.1 : 20} height={vertical ? 14 : 14 / fills.length + 0.1} fill={fill}/>);
+/** Simplified 20×14 flags (Windows shows no flag emoji); a neutral globe for "Hammasi" and unknown countries. */
+const FLAGS: Record<string, React.ReactNode> = {
+  UZ: <>{band(["#0099B5", "#FFFFFF", "#1EB53A"])}<rect y="4.4" width="20" height=".5" fill="#CE1126"/><rect y="9.1" width="20" height=".5" fill="#CE1126"/><circle cx="3.4" cy="2.4" r="1.5" fill="#fff"/><circle cx="4" cy="2.4" r="1.3" fill="#0099B5"/></>,
+  TJ: <>{band(["#CC0000", "#FFFFFF", "#006600"])}<circle cx="10" cy="7" r="1.4" fill="#F8C300"/></>,
+  KG: <><rect width="20" height="14" fill="#E8112D"/><circle cx="10" cy="7" r="3.4" fill="#FFEF00"/><circle cx="10" cy="7" r="1.6" fill="#E8112D"/></>,
+  KZ: <><rect width="20" height="14" fill="#00AFCA"/><circle cx="10.5" cy="6.4" r="2.6" fill="#FEC50C"/><rect x="1.5" y="1.5" width="1.2" height="11" fill="#FEC50C"/></>,
+  TM: <><rect width="20" height="14" fill="#00843D"/><rect x="2.5" width="3.5" height="14" fill="#D22630"/><circle cx="9.6" cy="3.6" r="1.6" fill="#fff"/><circle cx="10.2" cy="3.4" r="1.4" fill="#00843D"/></>,
+  AF: <>{band(["#000000", "#D32011", "#007A36"], true)}</>,
+  RU: <>{band(["#FFFFFF", "#0039A6", "#D52B1E"])}</>,
+};
+function Flag({ code }: { code: string | null }) {
+  const flag = code ? FLAGS[code] : null;
+  return <svg className="bk-flag" width="20" height="14" viewBox="0 0 20 14" aria-hidden>{flag ?? <g fill="none" stroke="currentColor" strokeWidth="1.2"><circle cx="10" cy="7" r="6"/><ellipse cx="10" cy="7" rx="2.6" ry="6"/><path d="M4 7h12"/></g>}</svg>;
+}
 const sumOf = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
 /** "Oylik dinamika — respublikalar va viloyatlar": one line at a time (all / a country), a chosen region as a dashed line over it. */
@@ -170,10 +184,10 @@ function RegionDynamics({ stats }: { stats: RegionStats }) {
   const go = (next: string | null, nextRegion: string | null = null) => { setCountry(next); setRegionCode(nextRegion); };
   const rows: Array<CountryRow & { country?: boolean }> = current ? current.regions : countries.map(item => ({ ...item, country: true }));
   const top = Math.max(1, ...rows.map(row => row.total));
-  const card = (code: string | null, name: string, icon: string, total: number, line: number[], note: string) => {
+  const card = (code: string | null, name: string, total: number, line: number[], note: string) => {
     const max = Math.max(1, ...line), points = line.slice(0, months).map((value, index) => `${((index * 140) / Math.max(1, months - 1)).toFixed(1)},${(28 - (24 * value) / max).toFixed(1)}`).join(" ");
     return <button key={code ?? "all"} type="button" className={`bk-dyn-card${country === code ? " is-on" : ""}`} aria-pressed={country === code} onClick={() => go(code)}>
-      <span className="bk-dyn-title"><span style={{ fontSize: 16 }}>{icon}</span>{name}</span><b style={{ fontSize: 20 }}>{formatUsd(total)}</b><small className="bk-muted">{note}</small>
+      <span className="bk-dyn-title"><Flag code={code}/>{name}</span><b style={{ fontSize: 20 }}>{formatUsd(total)}</b><small className="bk-muted">{note}</small>
       <svg viewBox="0 0 140 30" aria-hidden><polyline className="bk-dyn-spark" points={points} pathLength={1}/></svg>
     </button>;
   };
@@ -181,12 +195,12 @@ function RegionDynamics({ stats }: { stats: RegionStats }) {
     <div className="bk-card-head"><div><h2 id="bk-region-lines-title">Oylik dinamika — respublikalar va viloyatlar</h2><span className="bk-muted">Jami savdo, USD · {stats.year} · respublikani bosing → viloyatlari ochiladi</span></div></div>
     {!countries.length || !stats.periodEnd ? <div className="bk-empty">Bu yilda hali savdo kiritilmagan.</div> : <>
       <div className="bk-rep-cards" style={{ "--c": "var(--bk-b1)" } as React.CSSProperties}>
-        {card(null, "Hammasi", "🌍", sumOf(all), all, `${countries.length} respublika`)}
-        {countries.map(item => card(item.code, item.name, flag(item.code), item.total, item.months, `${item.regions.filter(row => row.code.slice(-1) !== "?").length} viloyat`))}
+        {card(null, "Hammasi", sumOf(all), all, `${countries.length} respublika`)}
+        {countries.map(item => card(item.code, item.name, item.total, item.months, `${item.regions.filter(row => row.code.slice(-1) !== "?").length} viloyat`))}
       </div>
       <nav className="bk-rep-crumb" aria-label="Tanlov">
-        {current ? <button type="button" onClick={() => go(null)}>🌍 Hammasi</button> : <b>🌍 Hammasi</b>}
-        {current && <><span>›</span>{region ? <button type="button" onClick={() => go(current.code)}>{flag(current.code)} {current.name}</button> : <b>{flag(current.code)} {current.name}</b>}</>}
+        {current ? <button type="button" onClick={() => go(null)}><Flag code={null}/> Hammasi</button> : <b><Flag code={null}/> Hammasi</b>}
+        {current && <><span>›</span>{region ? <button type="button" onClick={() => go(current.code)}><Flag code={current.code}/> {current.name}</button> : <b><Flag code={current.code}/> {current.name}</b>}</>}
         {region && <><span>›</span><b>{shortName(region.name)}</b></>}
       </nav>
       <div className="bk-rep-body">
@@ -198,7 +212,7 @@ function RegionDynamics({ stats }: { stats: RegionStats }) {
           <h3>{current ? "Viloyatlar reytingi" : "Respublikalar reytingi"}</h3>
           {rows.map((row, index) => <button key={row.code} type="button" className={`bk-rep-row${region?.code === row.code ? " is-on" : ""}`} aria-pressed={region?.code === row.code}
             onClick={() => (row.country ? go(row.code) : go(current!.code, region?.code === row.code ? null : row.code))}>
-            <small>{index + 1}</small><span>{row.country ? `${flag(row.code)} ${row.name}` : shortName(row.name)}{row.country && <em> → viloyatlar</em>}</span><b>{formatUsd(row.total)}</b>
+            <small>{index + 1}</small><span>{row.country ? <><Flag code={row.code}/> {row.name}</> : shortName(row.name)}{row.country && <em> → viloyatlar</em>}</span><b>{formatUsd(row.total)}</b>
             <span className="bk-rep-bar"><i style={{ width: `${(100 * row.total) / top}%`, animationDelay: `${index * 60}ms` }}/></span>
           </button>)}
         </div>
@@ -296,6 +310,7 @@ function RegionPeriod({ region }: { region: RegionStat }) {
     {data && <>
       <div className="bk-per-head"><b>{data.grain === "day" ? "Kunlar" : data.grain === "month" ? "Oylar" : "Yillar"} bo‘yicha · {data.label}</b><small>{data.grain === "day" ? "har kun · tasdiqlangan xaridlar" : data.grain === "month" ? "har oy" : "har yil"}</small></div>
       <PeriodBars points={data.points} line={data.grain !== "day" && data.points.length > 6} label={`${region.name}: ${data.label}`}/>
+      {data.manual > 0 && <p className="bk-muted" style={{ margin: 0 }}>+ {formatUsd(data.manual)} qo‘lda kiritilgan (kunlarga bo‘linmagan)</p>}
       {data.missing.length > 0 && <div className="bk-note is-soft" role="note">
         <strong>Kiritilmagan oylar:</strong>
         <ul className="bk-missing">{data.missing.map(item => <li key={item.key}><b>{item.label}</b> — {item.names.join(", ")}</li>)}</ul>

@@ -85,3 +85,17 @@ test("axis maximum: 1/2/2.5/5 × 10ⁿ in four steps, close to the data", () => 
   assert.equal(nice(1), 4);
   assert.equal(nice(0), 4);
 });
+
+test("Bu oy total comes from the monthly entries: equal to the current month in Hammasi", () => {
+  const now = new Date("2026-10-19T08:00:00Z");
+  const rows = [
+    { id: "h", name: "Huseyin", since: "2026-01", year: 2026, month: 9, amountUsd: 47100 },
+    { id: "h", name: "Huseyin", since: "2026-01", year: 2026, month: 10, amountUsd: 5530 },
+    { id: "d", name: "Davlat", since: "2026-01", year: 2026, month: 10, amountUsd: 309 },
+  ];
+  const all = ok(period.resolvePeriod({ period: "all" }, now, "2026-09"));
+  const hammasi = period.periodPoints(all, period.sumBuckets(rows, "month"), [], now);
+  assert.equal(period.monthTotal(rows, "2026-10"), hammasi.at(-1).value);
+  assert.equal(period.monthTotal(rows, "2026-10"), 5839);
+  assert.equal(period.monthTotal(rows, "2026-11"), 0);
+});

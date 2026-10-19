@@ -52,6 +52,9 @@ export function sumBuckets(rows: MonthEntry[], grain: Grain) {
   return sums;
 }
 
+/** One month's total from the monthly entries (manual ones included) — "Bu oy" KPI, equal to that month in "Hammasi". */
+export const monthTotal = (rows: MonthEntry[], month: string) => sumBuckets(rows, "month").get(month) ?? 0;
+
 /** "Kiritilmagan oylar" inside the period only: completed months (requiredMonths) since the customer was added, with no entry. Never in "Bu oy". */
 export function missingInPeriod(rows: MonthEntry[], period: ResolvedPeriod, now = new Date()) {
   if (period.mode === "month") return [];
