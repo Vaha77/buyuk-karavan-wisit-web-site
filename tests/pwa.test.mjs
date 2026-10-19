@@ -21,12 +21,15 @@ test("assetlinks: fingerprints from env, invalid ones dropped, none → empty li
   assert.deepEqual(pwa.assetLinks(undefined), []);
 });
 
-test("only login, register, manifest and service worker skip the session check; the worker never caches data", async () => {
+test("only login, register, manifest and service worker skip the session check; the worker caches static files and whole pages only", async () => {
   assert.deepEqual(pwa.PUBLIC_ADMIN_PATHS, ["/admin/login", "/admin/register", "/admin/manifest.webmanifest", "/admin/sw.js"]);
   const worker = await read("../app/admin/sw.js/route.ts");
   assert.match(worker, /\/_next\/static\//);
   assert.match(worker, /service-worker-allowed": "\/admin"/);
-  assert.equal((worker.match(/cache\.put/g) ?? []).length, 1, "only the static-file branch writes to the cache");
+  assert.equal((worker.match(/cache\.put/g) ?? []).length, 2, "only static files and whole pages are written");
+  assert.match(worker, /request\.mode === "navigate"[\s\S]{0,200}page\(request\)/, "pages only for full navigations (never RSC fetches)");
+  assert.match(worker, /request\.method !== "GET"/, "POST is never cached");
+  assert.match(worker, /\/admin\/login"\)\) event\.waitUntil\(caches\.delete\(PAGES\)\)/, "signing out clears the page copies");
   assert.ok(!worker.includes("/api/"), "API is never cached");
   assert.match(await read("../proxy.ts"), /PUBLIC_ADMIN_PATHS\.includes/);
 });
