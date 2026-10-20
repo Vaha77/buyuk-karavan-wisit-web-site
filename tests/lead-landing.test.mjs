@@ -195,3 +195,15 @@ test("wiring: lead page stays in place after sending, Pixel only on public pages
   const css = await read("../components/landing/lead-landing.css");
   assert.match(css, /\.landing-product\{display:grid;grid-template-columns:96px/, "compact product row on phones");
 });
+
+test("GA4: public pages only, contact_click channel, lead forms send generate_lead", async () => {
+  const pixel = await import("../lib/meta/pixel-rules.ts");
+  for (const path of ["/", "/products/x", "/projects/y", "/l/abc"]) assert.equal(pixel.pixelAllowed(path), true, path);
+  for (const path of ["/admin", "/admin/login", "/admin/my/dashboard", "/admin/seh", "/api/track"]) assert.equal(pixel.pixelAllowed(path), false, path);
+  const cases = [["tel:+998901234567", "phone"], ["https://t.me/buyukkaravan", "telegram"], ["https://wa.me/998901234567", "whatsapp"], ["https://api.whatsapp.com/send?phone=1", "whatsapp"], ["https://www.instagram.com/buyuk_karavan/", "instagram"], ["https://buyukkaravan.com/products", null], [undefined, null]];
+  for (const [href, method] of cases) assert.equal(pixel.contactMethod(href), method, String(href));
+  const ga = await readFile(new URL("../components/tracking/google-analytics.tsx", import.meta.url), "utf8");
+  assert.match(ga, /if \(!GA_ID \|\| !allowed\) return null;/, "nothing loads without the id or on /admin");
+  assert.match(ga, /ga-disable-\$\{GA_ID\}/);
+  for (const file of ["components/home/home-lead-form.tsx", "components/landing/landing-form.tsx", "components/products/product-consultation.tsx"]) assert.match(await readFile(new URL(`../${file}`, import.meta.url), "utf8"), /trackGa\("generate_lead"/, file);
+});

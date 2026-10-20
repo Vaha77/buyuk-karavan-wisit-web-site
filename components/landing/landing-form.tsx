@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { CheckCircle2, MessageCircle, Phone, Send } from "lucide-react";
 import { submitLandingLeadAction } from "@/app/lead-actions";
 import { newMetaEventId, trackMeta } from "@/components/tracking/meta-pixel";
+import { trackGa } from "@/components/tracking/google-analytics";
 import { UZ_REGIONS, checkLandingInput, formatLocalPhone, localDigits } from "@/lib/leads/landing-rules";
 
 const freshKey = () => typeof crypto !== "undefined" && "randomUUID" in crypto ? `landing-${crypto.randomUUID()}` : `landing-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -30,7 +31,7 @@ export function LandingForm({ productSlug, productName, handoff, phone, telegram
       const form = new FormData(event.currentTarget);
       const result = await submitLandingLeadAction({ productSlug, customerName: name, regionCode, phone: digits, handoff, website: String(form.get("website") || ""), idempotencyKey: key.current, metaEventId: eventId.current });
       if (!result.ok) { if (result.field) setErrors({ [result.field]: result.error }); else setError(result.error); return; }
-      if (!result.repeat) trackMeta("Lead", { content_name: productName }, eventId.current);
+      if (!result.repeat) { trackMeta("Lead", { content_name: productName }, eventId.current); trackGa("generate_lead", { form: "landing", product: productName }); }
       setDone({ name: result.customerName, price: result.priceText ?? priceBefore });
     } catch {
       setError("So‘rovni yuborib bo‘lmadi. Internet aloqasini tekshirib, qayta urinib ko‘ring.");

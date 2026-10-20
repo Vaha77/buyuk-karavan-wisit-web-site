@@ -6,6 +6,7 @@ import { CheckCircle2,Phone,X } from "lucide-react";
 import { submitLeadAction } from "@/app/lead-actions";
 import { LocationFields } from "@/components/leads/location-fields";
 import { newMetaEventId,trackMeta } from "@/components/tracking/meta-pixel";
+import { trackGa } from "@/components/tracking/google-analytics";
 
 const freshKey=()=>typeof crypto!=="undefined"&&"randomUUID" in crypto?`product-consultation-${crypto.randomUUID()}`:`product-consultation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -20,7 +21,7 @@ export function ProductConsultation({productId,productName,productSlug,className
     const form=new FormData(event.currentTarget),metaEventId=newMetaEventId();
     try{
       const result=await submitLeadAction({customerName:String(form.get("customerName")||""),phone:String(form.get("phone")||""),region:String(form.get("region")||""),country:String(form.get("country")||"")||undefined,regionCode:String(form.get("regionCode")||""),notes:String(form.get("notes")||""),productId,productSlug,source:"PRODUCT_CONSULTATION",requestType:"Mahsulot bo‘yicha maslahat",website:String(form.get("website")||""),idempotencyKey:submissionKey,metaEventId});
-      if(!result.ok){setError(result.error);return;}if(!("duplicate" in result))trackMeta("Lead",{content_name:productName},metaEventId);setSent(true);
+      if(!result.ok){setError(result.error);return;}if(!("duplicate" in result)){trackMeta("Lead",{content_name:productName},metaEventId);trackGa("generate_lead",{form:"product",product:productName});}setSent(true);
     }catch{setError("So‘rovni yuborib bo‘lmadi. Internet aloqasini tekshirib, qayta urinib ko‘ring.");}
     finally{setPending(false);}
   }

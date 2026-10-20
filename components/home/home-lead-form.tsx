@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { submitLeadAction } from "@/app/lead-actions";
 import { newMetaEventId, trackMeta } from "@/components/tracking/meta-pixel";
+import { trackGa } from "@/components/tracking/google-analytics";
 import type { HomeLeadOption } from "@/lib/home/lead-options";
 import { LocationFields } from "@/components/leads/location-fields";
 
@@ -67,7 +68,7 @@ export function HomeLeadForm({ compact = false, initialProduct = "", initialTemp
         setMessage(result.error);
         return;
       }
-      if (!("duplicate" in result)) trackMeta("Lead", { content_name: product }, metaEventId);
+      if (!("duplicate" in result)) { trackMeta("Lead", { content_name: product }, metaEventId); trackGa("generate_lead", { form: "home", product }); }
       setStatus("success");
       setMessage("So‘rovingiz qabul qilindi. Mutaxassisimiz siz bilan bog‘lanadi.");
     } catch {
