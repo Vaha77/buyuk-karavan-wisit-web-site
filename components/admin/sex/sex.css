@@ -234,3 +234,13 @@
 @media(max-width:760px){.sx-cat-saved{text-align:left}}
 .sx-month-tabs{flex-wrap:nowrap;overflow-x:auto}.sx-month-tabs .sx-chip{flex:none}
 .sx-carried{margin-top:4px;font-size:11px;font-weight:600;color:#8a6100}.sx-carried s{color:#94a3b8}
+.sx-picked{padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center}
+.sx-picked b,.sx-picked small{display:block;overflow-wrap:anywhere}
+.sx-stepper{display:flex;align-items:center;gap:6px}.sx-stepper input{width:56px;height:36px;text-align:center;font-weight:800}
+.sx-picker{padding:12px;display:grid;gap:10px}
+.sx-cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.sx-cat-grid button,.sx-pick-list button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:10px 12px;border:1px solid var(--sx-border);border-radius:10px;background:var(--k-bg-ffffff, #fff);color:inherit;font:inherit;cursor:pointer}
+.sx-cat-grid button:hover,.sx-pick-list button:hover,.sx-cat-grid button:focus-visible,.sx-pick-list button:focus-visible{border-color:var(--sx-primary);outline:2px solid var(--sx-primary);outline-offset:1px}
+.sx-cat-grid small,.sx-pick-list small{color:var(--sx-muted);font-size:12px}
+.sx-pick-list{display:grid;gap:6px;max-height:360px;overflow:auto}
+@media (max-width:640px){.sx-cat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sx-picked{grid-template-columns:minmax(0,1fr) auto}.sx-picked>div:last-child{grid-column:1/-1}}

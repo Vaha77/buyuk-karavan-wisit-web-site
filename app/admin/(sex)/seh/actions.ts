@@ -161,14 +161,14 @@ export async function storeStepAction(form: FormData): Promise<SexActionResult> 
   return result.ok ? { ok: true } : result;
 }
 
-/** Omborchi "Sehdan so‘rash": one spare part as an ordinary zapchast request, "Magazinga", placed by the omborchi. */
+/** Omborchi "Sehdan so‘rash": spare parts as an ordinary zapchast request, "Magazinga", placed by the omborchi. */
 export async function storeRequestAction(raw: unknown): Promise<SexActionResult> {
   const user = await requireSexUser();
   if (user.role !== "STOREKEEPER") return { ok: false, error: "Faqat omborchi uchun." };
-  const parsed = z.object({ productId: z.string().min(1, "Zapchastni tanlang.").max(40), qty: z.number().int("Soni butun bo‘lsin.").min(1, "Soni kamida 1.").max(9999), note: common.note, requestId: common.requestId, confirmDuplicate: common.confirmDuplicate }).safeParse(raw);
+  const parsed = zapchastSchema.pick({ items: true, note: true, requestId: true, confirmDuplicate: true }).safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
-  const { productId, qty, note, requestId, confirmDuplicate } = parsed.data;
-  const result = await createZapchastOrder(user, { purpose: "SHOP", customerId: null, customerName: null, dueDate: null, note, items: [{ productId, qty }] }, undefined, { requestId, confirmDuplicate });
+  const { items, note, requestId, confirmDuplicate } = parsed.data;
+  const result = await createZapchastOrder(user, { purpose: "SHOP", customerId: null, customerName: null, dueDate: null, note, items }, undefined, { requestId, confirmDuplicate });
   return result.ok ? { ok: true, number: result.number, id: result.id, telegram: result.telegram } : result;
 }
 

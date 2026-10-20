@@ -140,3 +140,9 @@ test("additive migration: new enum values and nullable columns only, nothing dro
   assert.doesNotMatch(sql, /^\s*(DROP|DELETE|UPDATE)\b|RENAME|ALTER COLUMN/im);
   for (const value of ["'STOREKEEPER'", "'RECEIVED_STORE'", "'CLIENT_LOADED'"]) assert.match(sql, new RegExp(`ADD VALUE ${value}`));
 });
+
+test("part picker search: every word, model numbers without dashes, category too", () => {
+  const part = { label: "BITZER 4NES-14 kompressor", group: "Bitzer Kompressor" };
+  for (const query of ["4nes", "4NES-14", "4nes14", "bitzer 14", "kompressor"]) assert.equal(rules.partMatches(part, query), true, query);
+  for (const query of ["4nes20", "glazok"]) assert.equal(rules.partMatches(part, query), false, query);
+});

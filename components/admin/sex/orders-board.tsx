@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { Dialog } from "@/components/admin/bklead/dialog";
 import { cancelOrderAction, confirmNoRequestAction, createNoRequestAction, editOrderAction, requestCorrectionAction, resendTelegramAction, setOrderTestAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
 import type { OrderRow } from "@/lib/sex/queries";
-import { ACTION_LABEL, STATUS_LABEL, STATUS_TONE, actionFor, isClosedMonth, matchesOrder, monthName, type OrderAction } from "@/lib/sex/rules";
+import { ACTION_LABEL, STATUS_LABEL, STATUS_TONE, actionFor, isClosedMonth, matchesOrder, monthName, partMatches, type OrderAction } from "@/lib/sex/rules";
 import { formatUsd } from "@/lib/prays/rules";
 import { AcceptedBadge, WorkingStatus } from "./working-progress";
 import { BusyLabel, DownloadButton, LinkButton, PendingArea, startNavigationProgress } from "@/components/admin/feedback";
@@ -268,40 +268,44 @@ export function NoRequestForm({ parts, sellers, customers, busy, onSubmit }: { p
 }
 
 /** Options grouped by category; the search keeps every word (name or category); a chosen item always stays in its list. */
-function PartOptions({ parts, query, selected }: { parts: PartOption[]; query: string; selected: string }) {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const shown = parts.filter(part => part.id === selected || words.every(word => `${part.label} ${part.group ?? ""}`.toLowerCase().includes(word)));
-  const groups = [...new Set(shown.map(part => part.group ?? ""))];
-  return <>{groups.map(group => group
-    ? <optgroup key={group} label={group}>{shown.filter(part => part.group === group).map(part => <option key={part.id} value={part.id}>{part.label}</option>)}</optgroup>
-    : shown.filter(part => !part.group).map(part => <option key={part.id} value={part.id}>{part.label}</option>))}</>;
-}
-
-/** Each row: [Kategoriya] [Mahsulot] [Soni] [×]. The category is UI only; the row still sends { partId, qty }. */
+/** Goods of a request: chosen ones as cards (qty − n +, "Almashtirish"), the open row as a picker — category tiles → tappable rows, with search. */
 export function PartRows({ parts, items, setItems, priceOf }: { parts: PartOption[]; items: Array<{ partId: string; qty: string }>; setItems: (items: Array<{ partId: string; qty: string }>) => void; priceOf?: (partId: string) => string | null }) {
-  const [query, setQuery] = useState("");
-  const [cats, setCats] = useState<string[]>([]); // chosen category per row, for rows without a product yet
-  const matches = query.trim() ? parts.filter(part => query.toLowerCase().split(/\s+/).filter(Boolean).every(word => `${part.label} ${part.group ?? ""}`.toLowerCase().includes(word))).length : parts.length;
+  const [query, setQuery] = useState(""), [cat, setCat] = useState<string | null>(null), [editing, setEditing] = useState<number | null>(null);
+  const byId = new Map(parts.map(part => [part.id, part]));
+  const picking = editing ?? items.findIndex(item => !item.partId);
   const groups = [...new Set(parts.map(part => part.group ?? ""))];
-  const groupOf = (index: number) => { const part = parts.find(item => item.id === items[index].partId); return part ? part.group ?? "" : cats[index] ?? ""; };
+  const shown = query.trim() ? parts.filter(part => partMatches(part, query)) : cat !== null ? parts.filter(part => (part.group ?? "") === cat) : [];
   const update = (index: number, patch: Partial<{ partId: string; qty: string }>) => setItems(items.map((row, i) => i === index ? { ...row, ...patch } : row));
+  const pick = (partId: string) => { update(picking, { partId }); setEditing(null); setQuery(""); setCat(null); };
+  const remove = (index: number) => { setEditing(null); setItems(items.length > 1 ? items.filter((_, i) => i !== index) : [{ partId: "", qty: "1" }]); };
   return <div style={{ display: "grid", gap: 8 }}>
-    <label className="sx-field">Qidirish <small>· nomi, modeli yoki kategoriyasi</small><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Masalan: klapan 3/8" aria-label="Seh mahsulotini qidirish"/>{query.trim() && <small className="sx-muted">{matches} ta topildi</small>}</label>
     {items.map((item, index) => {
-      const group = groupOf(index);
-      return <div key={index} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-        <select className="sx-input" style={{ flex: "1 1 150px", minWidth: 0, fontSize: 14 }} value={group} onChange={event => { setCats(Object.assign([...cats], { [index]: event.target.value })); update(index, { partId: "" }); }} aria-label="Kategoriya">
-          <option value="">Kategoriya</option>{groups.map(name => <option key={name} value={name}>{name || "Boshqa"}</option>)}
-        </select>
-        <div style={{ flex: "2 1 220px", display: "grid", gap: 2, minWidth: 0 }}>
-          <select className="sx-input" style={{ fontSize: 14, fontWeight: 600 }} value={item.partId} onChange={event => update(index, { partId: event.target.value })} aria-label="Mahsulot"><option value="">Mahsulot</option><PartOptions parts={group ? parts.filter(part => (part.group ?? "") === group) : parts} query={query} selected={item.partId}/></select>
-          {priceOf && item.partId && <span className="sx-muted">{priceOf(item.partId) ?? "narxi kiritilmagan"}</span>}
+      const part = byId.get(item.partId);
+      if (index === picking || !part) return null;
+      const qty = Number(item.qty) || 0;
+      return <div key={index} className="sx-card sx-picked">
+        <div style={{ minWidth: 0 }}><b>{part.label}</b><small className="sx-muted">{part.group}{priceOf ? ` · ${priceOf(part.id) ?? "narxi kiritilmagan"}` : ""}</small></div>
+        <div className="sx-stepper">
+          <button type="button" className="sx-btn is-md" onClick={() => update(index, { qty: String(Math.max(1, qty - 1)) })} aria-label={`${part.label} — kamaytirish`}>−</button>
+          <input className="sx-input" value={item.qty} onChange={event => update(index, { qty: event.target.value.replace(/\D+/g, "").slice(0, 4) })} inputMode="numeric" aria-label={`${part.label} — soni`}/>
+          <button type="button" className="sx-btn is-md" onClick={() => update(index, { qty: String(Math.min(9999, qty + 1)) })} aria-label={`${part.label} — ko‘paytirish`}>+</button>
         </div>
-        <input className="sx-input" style={{ width: 90, fontSize: 14 }} value={item.qty} onChange={event => update(index, { qty: event.target.value.replace(/\D+/g, "") })} inputMode="numeric" aria-label="Soni"/>
-        <button type="button" className="sx-btn is-danger-ghost" style={{ width: 44, padding: 0, fontSize: 18 }} onClick={() => { setCats(cats.filter((_, i) => i !== index)); setItems(items.length > 1 ? items.filter((_, i) => i !== index) : [{ partId: "", qty: "1" }]); }} aria-label="Qatorni o‘chirish">×</button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button type="button" className="sx-btn is-md" onClick={() => { setEditing(index); setCat(part.group ?? ""); }}>Almashtirish</button>
+          <button type="button" className="sx-btn is-md is-danger-ghost" onClick={() => remove(index)} aria-label={`${part.label} — olib tashlash`}>×</button>
+        </div>
       </div>;
     })}
-    <button type="button" className="sx-btn is-dashed" style={{ justifySelf: "start" }} onClick={() => setItems([...items, { partId: "", qty: "1" }])}>+ Mahsulot qo‘shish</button>
+    {picking >= 0 ? <div className="sx-card sx-picker">
+      <input className="sx-input" value={query} onChange={event => setQuery(event.target.value)} placeholder="Qidirish: nomi yoki modeli (masalan 4nes)" aria-label="Barcha tovardan qidirish"
+        onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); if (shown[0]) pick(shown[0].id); } }}/>
+      {!query.trim() && cat !== null && <button type="button" className="sx-btn is-md" style={{ justifySelf: "start" }} onClick={() => setCat(null)}>← Kategoriyalar</button>}
+      {!query.trim() && cat === null
+        ? <div className="sx-cat-grid">{groups.map(group => <button key={group} type="button" onClick={() => setCat(group)}><b>{group || "Boshqa"}</b><small>{parts.filter(part => (part.group ?? "") === group).length} ta</small></button>)}</div>
+        : <div className="sx-pick-list" role="list">{shown.length ? shown.map(part => <button key={part.id} type="button" role="listitem" onClick={() => pick(part.id)}><span>{part.label}</span>{query.trim() && <small>{part.group}</small>}</button>) : <span className="sx-muted">Topilmadi</span>}</div>}
+      {(editing !== null || items.some(item => item.partId)) && <button type="button" className="sx-btn is-md" style={{ justifySelf: "start" }} onClick={() => editing !== null ? setEditing(null) : remove(picking)}>Bekor qilish</button>}
+    </div>
+      : <button type="button" className="sx-btn is-dashed" style={{ justifySelf: "start" }} onClick={() => setItems([...items, { partId: "", qty: "1" }])}>+ Yana tovar qo‘shish</button>}
   </div>;
 }
 

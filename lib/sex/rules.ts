@@ -144,6 +144,13 @@ export function matchesOrder(row: { number: string; product: string; customerNam
   const text = `${row.number} ${row.number.replace(/\D/g, "")} ${row.product} ${row.customerName ?? ""} ${row.sellerName}`.toLowerCase();
   return query.toLowerCase().split(/\s+/).filter(Boolean).every(word => text.includes(word));
 }
+const compact = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+/** Every word of the query in the name / model / category; "4nes" also finds "4NES-14", "4nes14" too. */
+export const partMatches = (part: { label: string; group?: string | null }, query: string) => {
+  const text = `${part.label} ${part.group ?? ""}`.toLowerCase(), flat = compact(text);
+  return query.toLowerCase().split(/\s+/).filter(Boolean).every(word => text.includes(word) || flat.includes(compact(word)));
+};
+
 export const isReceiveOverdue = (order: { status: OrderStatus; issuedAt: Date | string | null }, now = new Date()) => order.status === "ISSUED" && !!order.issuedAt && now.getTime() - new Date(order.issuedAt).getTime() > RECEIVE_OVERDUE_MS;
 
 const timeFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", hour12: false });

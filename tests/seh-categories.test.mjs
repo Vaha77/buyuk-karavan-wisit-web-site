@@ -105,8 +105,8 @@ test("wiring: Prays categories panel (Super Admin), activity history, zayavka fr
   assert.match(form, /placeholder="kelishiladi"/);
   assert.match(form, /condenserWarning/);
   const rows = await read("../components/admin/sex/orders-board.tsx");
-  assert.match(rows, /<optgroup key=\{group\} label=\{group\}>/, "goods grouped by category");
-  assert.match(rows, /Seh mahsulotini qidirish/);
+  assert.match(rows, /className="sx-cat-grid">\{groups\.map\(group =>/, "goods grouped by category (tiles)");
+  assert.match(rows, /Barcha tovardan qidirish/);
   const css = await read("../components/admin/sex/sex.css");
   assert.match(css, /@media\(max-width:760px\)\{\.sx-cat-row\{grid-template-columns:1fr;gap:4px\}/, "category rows stack on phones");
   const migration = await read("../prisma/migrations/20261021090000_add_workshop_category_flags/migration.sql");

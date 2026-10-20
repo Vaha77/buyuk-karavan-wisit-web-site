@@ -8,6 +8,7 @@ import { storeRequestAction, storeStepAction } from "@/app/admin/(sex)/seh/actio
 import type { OrderRow } from "@/lib/sex/queries";
 import { STATUS_LABEL, STATUS_TONE, daysInStore, shortDay, when } from "@/lib/sex/rules";
 import { TelegramLink } from "./telegram-link";
+import { PartRows } from "./orders-board";
 
 // Omborchi (STOREKEEPER) screens of /admin/seh (design: Claude outputs/omborchi_rol.html). No prices anywhere.
 type Result = { ok: boolean; error?: string; duplicate?: { number: string } };
@@ -126,34 +127,24 @@ const newRequestId = () => crypto.randomUUID();
 /** "Sehdan so‘rash": a spare part for the shop → an ordinary zapchast request, "Magazinga". */
 export function StoreRequest({ parts, rows }: { parts: Array<{ id: string; label: string; group: string }>; rows: OrderRow[] }) {
   const { pending, error, run, isBusy } = useRun();
-  const [productId, setProductId] = useState(""), [qty, setQty] = useState(1), [note, setNote] = useState(""), [requestId, setRequestId] = useState(newRequestId);
+  const [items, setItems] = useState([{ partId: "", qty: "1" }]), [note, setNote] = useState(""), [requestId, setRequestId] = useState(newRequestId);
   const [duplicate, setDuplicate] = useState(false), [sent, setSent] = useState("");
-  const groups = [...new Set(parts.map(part => part.group))];
-  const send = (confirmDuplicate: boolean) => run("send", () => storeRequestAction({ productId, qty, note: note.trim() || null, requestId, confirmDuplicate }), result => {
+  const chosen = items.filter(item => item.partId), ready = chosen.length > 0 && chosen.every(item => Number(item.qty) >= 1);
+  const send = (confirmDuplicate: boolean) => run("send", () => storeRequestAction({ items: chosen.map(item => ({ productId: item.partId, qty: Number(item.qty) })), note: note.trim() || null, requestId, confirmDuplicate }), result => {
     setDuplicate(!!result.duplicate);
     if (!result.ok) return;
-    setSent(`✓ Sehga yuborildi${"number" in result && result.number ? ` · ${result.number}` : ""}`); setProductId(""); setQty(1); setNote(""); setRequestId(newRequestId());
+    setSent(`✓ Sehga yuborildi${"number" in result && result.number ? ` · ${result.number}` : ""}`); setItems([{ partId: "", qty: "1" }]); setNote(""); setRequestId(newRequestId());
   });
   const mine = rows.filter(row => row.mine);
   return <div className="sx sx-panel">
     <div className="sx-head"><div><span className="sx-crumb">Ombor · Sehdan so‘rash</span><h1>Sehdan so‘rash</h1><p className="sx-lead">Do‘konga sotuv uchun zapchast</p></div></div>
     <form className="sx-card" style={{ padding: 14, gap: 10 }} onSubmit={event => { event.preventDefault(); send(false); }}>
-      <label className="sx-field">Zapchast<select className="sx-input" value={productId} onChange={event => { setProductId(event.target.value); setDuplicate(false); }} required>
-        <option value="">Tanlang…</option>
-        {groups.map(group => <optgroup key={group} label={group}>{parts.filter(part => part.group === group).map(part => <option key={part.id} value={part.id}>{part.label}</option>)}</optgroup>)}
-      </select></label>
-      <div className="sx-field">Soni
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button type="button" className="sx-btn is-md" onClick={() => setQty(Math.max(1, qty - 1))} aria-label="Kamaytirish">−</button>
-          <input className="sx-input" style={{ width: 70, height: 38, textAlign: "center", fontSize: 18, fontWeight: 800 }} value={qty} onChange={event => setQty(Math.max(1, Math.min(9999, Math.floor(Number(event.target.value)) || 1)))} inputMode="numeric" aria-label="Soni"/>
-          <button type="button" className="sx-btn is-md" onClick={() => setQty(Math.min(9999, qty + 1))} aria-label="Ko‘paytirish">+</button>
-        </div>
-      </div>
+      <div className="sx-field">Zapchast<PartRows parts={parts} items={items} setItems={next => { setItems(next); setDuplicate(false); setSent(""); }}/></div>
       <label className="sx-field">Izoh (ixtiyoriy)<input className="sx-input" value={note} onChange={event => setNote(event.target.value)} maxLength={500} placeholder="masalan: vitrinaga"/></label>
       <p className="sx-muted" style={{ fontSize: 12 }}>Zayavka sehga “Magazinga” bo‘lib boradi. Seh chiqargach, “Qabul” ekranida “Qabul qildim” chiqadi.</p>
       {error && <p className="sx-note is-error" role="alert">{error}</p>}
       {sent && !error && <p className="sx-note is-ok" role="status">{sent}</p>}
-      <button type="submit" className="sx-btn is-primary" disabled={pending || !productId} style={{ height: 48, borderRadius: 12 }}><BusyLabel busy={isBusy("send") && !duplicate} busyText="Yuborilmoqda…">Sehga yuborish</BusyLabel></button>
+      <button type="submit" className="sx-btn is-primary" disabled={pending || !ready} style={{ height: 48, borderRadius: 12 }}><BusyLabel busy={isBusy("send") && !duplicate} busyText="Yuborilmoqda…">Sehga yuborish</BusyLabel></button>
       {duplicate && <button type="button" className="sx-btn" disabled={pending} onClick={() => send(true)}>Baribir yuborish</button>}
     </form>
     <section className="sx-panel-section" aria-labelledby="omb-mine">
