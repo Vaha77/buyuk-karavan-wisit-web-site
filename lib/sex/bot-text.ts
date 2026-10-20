@@ -10,6 +10,8 @@ export type BotOrder = {
   /** Agregat option lines as shown on the order ("Resiver: 20 L", "Kondensator: FNV200 (standart FN160 o‘rniga), rama bilan"). */
   details: string[]; items: BotItem[];
   cancelReason?: string | null;
+  /** Store stage (omborchi messages). */
+  receivedByName?: string | null; receivedAt?: Date | string | null; receivedQty?: number | null; receivedNote?: string | null; loadedByName?: string | null; loadedAt?: Date | string | null;
 };
 
 type Button = { text: string; callback_data: string };
@@ -27,6 +29,8 @@ export function statusLine(order: Pick<BotOrder, "status" | "startedAt" | "issue
   if (order.status === "STARTED") return `🔧 Terilmoqda · ${order.startedAt ? clock(order.startedAt) : "—"} dan`;
   if (order.status === "ISSUED") return `✅ Chiqib ketdi ${order.issuedAt ? clock(order.issuedAt) : ""}`.trim();
   if (order.status === "RECEIVED") return "📥 Krimga olindi";
+  if (order.status === "RECEIVED_STORE") return "📥 Omborga qabul qilindi";
+  if (order.status === "CLIENT_LOADED") return "🚚 Mijozga yuklandi";
   return null;
 }
 
@@ -115,3 +119,28 @@ export function deliveryPlan(order: Pick<BotOrder, "status" | "noRequest">, link
   return { personal, group: order.status === "ISSUED" };
 }
 export type DeliveryStatus = "sent" | "no-recipients" | "failed";
+
+// ---- Omborchi (STOREKEEPER) personal messages: "Sehdan keldi — qabul qiling"; the first press wins, every copy is edited. ----
+/** One text for every omborchi copy of an order; after a press it names who did it ("✓ Jasur qabul qildi"). */
+export function storeMessage(order: BotOrder) {
+  const lines = [`📦 ${order.number} sehdan chiqdi — qabul qiling`, ...itemLines(order), `Kimga: ${recipient(order)} · Sotuvchi: ${order.sellerName}`];
+  if (order.issuedAt) lines.push(`Seh: ${order.issuedByName ?? "—"} · ${shortDay(order.issuedAt)} ${clock(order.issuedAt)}`);
+  if (order.receivedAt && (order.status === "RECEIVED_STORE" || order.status === "CLIENT_LOADED")) {
+    lines.push("", `✓ ${order.receivedByName ?? "—"} qabul qildi · ${clock(order.receivedAt)}`);
+    if (order.receivedNote) lines.push(`⚠️ Keldi: ${order.receivedQty ?? "—"} ta · ${order.receivedNote}`);
+  }
+  if (order.status === "CLIENT_LOADED") lines.push(`🚚 ${order.loadedByName ?? "—"} mijozga yukladi${order.loadedAt ? ` · ${clock(order.loadedAt)}` : ""}`);
+  if (order.status === "RECEIVED") lines.push("", "📥 Krimga olindi (Super Admin)");
+  if (order.status === "CANCELLED") lines.push("", cancelledText(order));
+  return lines.join("\n");
+}
+/** ISSUED: [✓ Qabul qildim] [Kamchilik bor]; a "Mijozga" order in the store: [🚚 Mijozga yuklandi]; then nothing. */
+export function storeKeyboard(order: Pick<BotOrder, "id" | "status" | "purpose">): Keyboard {
+  if (order.status === "ISSUED") return { inline_keyboard: [[{ text: "✓ Qabul qildim", callback_data: `omb:store:${order.id}` }, { text: "Kamchilik bor", callback_data: `omb:diff:${order.id}` }]] };
+  if (order.status === "RECEIVED_STORE" && order.purpose === "CLIENT") return { inline_keyboard: [[{ text: "🚚 Mijozga yuklandi", callback_data: `omb:load:${order.id}` }]] };
+  return { inline_keyboard: [] };
+}
+export function parseStoreCallback(data: string | undefined): { action: "store" | "diff" | "load"; orderId: string } | null {
+  const match = data?.match(/^omb:(store|diff|load):([a-z0-9]{10,40})$/i);
+  return match ? { action: match[1].toLowerCase() as "store" | "diff" | "load", orderId: match[2] } : null;
+}

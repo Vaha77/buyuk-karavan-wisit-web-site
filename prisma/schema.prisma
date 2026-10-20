@@ -116,6 +116,8 @@ enum AdminRole {
   SELLER
   // Sex mas'uli: only /admin/sex (accepts and issues workshop orders).
   WORKSHOP
+  // Omborchi: only the store stage of /admin/seh (receives issued orders, loads client orders); never prices.
+  STOREKEEPER
 }
 
 enum AdminApprovalStatus {
@@ -471,6 +473,7 @@ model AdminUser {
   workshopOrdersIssued   WorkshopOrder[]            @relation("WorkshopOrderIssuer")
   workshopOrdersReceived WorkshopOrder[]            @relation("WorkshopOrderReceiver")
   workshopOrdersCancelled WorkshopOrder[]           @relation("WorkshopOrderCanceller")
+  workshopOrdersLoaded    WorkshopOrder[]           @relation("WorkshopOrderLoader")
   workshopCorrectionsAsked    WorkshopCorrectionRequest[] @relation("WorkshopCorrectionRequester")
   workshopCorrectionsResolved WorkshopCorrectionRequest[] @relation("WorkshopCorrectionResolver")
 
@@ -1130,6 +1133,10 @@ enum WorkshopOrderStatus {
   STARTED
   ISSUED
   RECEIVED
+  // Omborchi took it into the store ("Magazinga" ends here).
+  RECEIVED_STORE
+  // Omborchi loaded it to the customer ("Mijozga" ends here).
+  CLIENT_LOADED
   // "Bekor qilingan": kept in the list (soft), never deleted.
   CANCELLED
 }
@@ -1168,6 +1175,16 @@ model WorkshopOrder {
   issuedAt          DateTime?
   receivedById      String?
   receivedAt        DateTime?
+  // Store stage: receivedQty / receivedNote only when the omborchi reported "Kamchilik bor / Soni boshqa";
+  // receivedCheckedAt = Super Admin saw it ("Tasdiqlash kerak"); receiveRemindedAt = the 24 h reminder went out.
+  receivedQty       Int?
+  receivedNote      String?              @db.VarChar(300)
+  receivedCheckedAt DateTime?
+  receiveRemindedAt DateTime?
+  loadedById        String?
+  loadedAt          DateTime?
+  loadedCar         String?              @db.VarChar(20)
+  loadedPhotoUrl    String?              @db.VarChar(500)
   cancelledById     String?
   cancelledAt       DateTime?
   cancelReason      String?              @db.VarChar(300)
@@ -1193,6 +1210,7 @@ model WorkshopOrder {
   issuedBy          AdminUser?           @relation("WorkshopOrderIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
   receivedBy        AdminUser?           @relation("WorkshopOrderReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
   cancelledBy       AdminUser?           @relation("WorkshopOrderCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
+  loadedBy          AdminUser?           @relation("WorkshopOrderLoader", fields: [loadedById], references: [id], onDelete: SetNull)
   items             WorkshopOrderItem[]
   messages          WorkshopOrderMessage[]
   corrections       WorkshopCorrectionRequest[]
@@ -1260,6 +1278,8 @@ model WorkshopOrderMessage {
   orderId   String
   chatId    String        @db.VarChar(32)
   messageId Int
+  // Omborchi message ("Sehdan keldi — qabul qiling"); the workshop's own messages are false.
+  store     Boolean       @default(false)
   createdAt DateTime      @default(now())
   order     WorkshopOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 

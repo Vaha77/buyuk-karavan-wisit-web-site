@@ -5,8 +5,8 @@ import { writeAudit } from "@/lib/audit/service";
 import { getDb } from "@/lib/db";
 import { getPraysCategories, getPraysProducts, getSexParts, getStandardCondenserCategoryId } from "@/lib/prays/queries";
 import { isIssueCategory } from "./categories";
-import { CLOSED_TEXT, DUPLICATE_WINDOW_MS, STATUS_LABEL, alreadyText, canEditOrder, canMarkTest, checkCorrection, checkCancel, checkTransition, duplicateWarning, findDuplicate, orderNumber, type FingerprintInput, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
-import { notifyCancelled, notifyChanged, notifyCreated } from "./bot";
+import { CLOSED_TEXT, DUPLICATE_WINDOW_MS, RECEIVE_OVERDUE_MS, STATUS_LABEL, receiveReminderText, storeDiffText, storeExtra, type StoreInput, alreadyText, canEditOrder, canMarkTest, checkCorrection, checkCancel, checkTransition, duplicateWarning, findDuplicate, orderNumber, type FingerprintInput, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
+import { notifyCancelled, notifyChanged, notifyCreated, notifyStore } from "./bot";
 import { createOnce } from "./idempotency";
 import { closeMonths, createNumbered } from "./month";
 import type { DeliveryStatus } from "./bot-text";
@@ -148,22 +148,26 @@ async function afterCreate(actor: Actor, id: string, summary: string, after: Rec
   return telegram;
 }
 
-const ACTOR_FIELDS: Record<OrderAction, "accepted" | "started" | "issued" | "received"> = { accept: "accepted", start: "started", issue: "issued", receive: "received" };
+const ACTOR_FIELDS: Record<OrderAction, "accepted" | "started" | "issued" | "received" | "loaded"> = { accept: "accepted", start: "started", issue: "issued", receive: "received", store: "received", load: "loaded" };
 /** The only way an order changes status (site buttons and Telegram buttons both end here). */
 /** `via: "telegram"` marks the audit entry "Telegram orqali". */
-export async function transitionOrder(actor: Actor, id: string, action: OrderAction, issuedQty?: Record<string, number>, via: "site" | "telegram" = "site"): Promise<Result<{ status: OrderStatus }>> {
+export async function transitionOrder(actor: Actor, id: string, action: OrderAction, issuedQty?: Record<string, number>, via: "site" | "telegram" = "site", store: StoreInput = {}): Promise<Result<{ status: OrderStatus }>> {
   const db = getDb();
   await closeMonths();
-  const order = await db.workshopOrder.findUnique({ where: { id }, select: { id: true, monthKey: true, monthNo: true, status: true, items: { select: { id: true, qty: true } } } });
+  const order = await db.workshopOrder.findUnique({ where: { id }, select: { id: true, monthKey: true, monthNo: true, status: true, purpose: true, type: true, qty: true, sellerId: true, items: { orderBy: { order: "asc" }, select: { id: true, qty: true, issuedQty: true, title: true } } } });
   if (!order) return { ok: false, error: "Zakaz topilmadi." };
   if (!canEditOrder(actor.role, order.monthKey)) return { ok: false, error: CLOSED_TEXT };
-  const check = checkTransition(actor.role, order.status, action);
+  const check = checkTransition(actor.role, order.status, action, order.purpose);
   if (!check.ok) return check;
+  const stored = storeExtra(action, store);
+  if (!stored.ok) return stored;
+  const extra = stored.data, diff = "receivedNote" in extra ? extra : null;
+  const issuedTotal = order.type === "AGREGAT" ? order.qty : order.items.reduce((sum, item) => sum + (item.issuedQty ?? item.qty), 0);
   const field = ACTOR_FIELDS[action], now = new Date();
   const corrections = action === "issue" && issuedQty ? order.items.filter(item => issuedQty[item.id] !== undefined && issuedQty[item.id] !== item.qty) : [];
   if (corrections.some(item => !Number.isInteger(issuedQty![item.id]) || issuedQty![item.id] < 0 || issuedQty![item.id] > 9999)) return { ok: false, error: "Berilgan sonni to‘g‘ri kiriting." };
   const moved = await db.$transaction(async tx => {
-    const result = await tx.workshopOrder.updateMany({ where: { id, status: order.status }, data: { status: check.to, [`${field}ById`]: actor.id, [`${field}At`]: now } });
+    const result = await tx.workshopOrder.updateMany({ where: { id, status: order.status }, data: { status: check.to, [`${field}ById`]: actor.id, [`${field}At`]: now, ...extra } });
     if (result.count !== 1) return false;
     for (const item of corrections) await tx.workshopOrderItem.update({ where: { id: item.id }, data: { issuedQty: issuedQty![item.id] } });
     return true;
@@ -173,12 +177,16 @@ export async function transitionOrder(actor: Actor, id: string, action: OrderAct
     const current = await db.workshopOrder.findUnique({ where: { id }, select: { status: true } });
     return { ok: false, error: current ? alreadyText(current.status) : "Zakaz topilmadi." };
   }
-  await writeAudit(actor, { action: "STATUS_CHANGE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order), summary: `${orderNumber(order)}: ${STATUS_LABEL[order.status]} → ${STATUS_LABEL[check.to]}${via === "telegram" ? " (Telegram orqali)" : ""}`, metadata: { via }, before: { status: order.status }, after: { status: check.to, ...(corrections.length ? { issuedQty: Object.fromEntries(corrections.map(item => [item.id, issuedQty![item.id]])) } : {}) } });
+  await writeAudit(actor, { action: "STATUS_CHANGE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order), summary: `${orderNumber(order)}: ${STATUS_LABEL[order.status]} → ${STATUS_LABEL[check.to]}${via === "telegram" ? " (Telegram orqali)" : ""}`, metadata: { via }, before: { status: order.status }, after: { status: check.to, ...extra, ...(corrections.length ? { issuedQty: Object.fromEntries(corrections.map(item => [item.id, issuedQty![item.id]])) } : {}) } });
   await notifyChanged(id, action === "start");
   if (check.to === "ISSUED") {
     const issued = await db.workshopOrder.findUnique({ where: { id }, select: { monthKey: true, monthNo: true, sellerId: true, type: true, qty: true, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } } });
     if (issued) await tellSeller({ userId: issued.sellerId }, orderIssuedText(orderNumber(issued), orderTitle(issued)));
   }
+  // Omborchi copies: sent on ISSUED, edited after every later step (the first press wins, the rest see who did it).
+  if (action !== "accept" && action !== "start") await notifyStore(id);
+  if (diff) await notifySuperAdmins(storeDiffText(orderNumber(order), orderTitle(order), issuedTotal, diff.receivedQty, diff.receivedNote, actor.name));
+  if (action === "load") await tellSeller({ userId: order.sellerId }, `🚚 ${orderNumber(order)} mijozga yuklandi`);
   revalidatePath("/admin/seh");
   return { ok: true, status: check.to };
 }
@@ -286,4 +294,25 @@ export async function editOrder(actor: Actor, id: string, input: OrderEdit, requ
   revalidatePath("/admin/seh");
   revalidatePath("/admin/customers/purchases");
   return { ok: true };
+}
+
+/** "Tasdiqlash kerak" → "Ko‘rdim" on an omborchi "Kamchilik bor / Soni boshqa" report (SUPER_ADMIN). */
+export async function checkStoreDiff(actor: Actor, id: string): Promise<Result> {
+  if (actor.role !== "SUPER_ADMIN") return { ok: false, error: "Faqat Super Admin tasdiqlaydi." };
+  const order = await getDb().workshopOrder.findUnique({ where: { id }, select: { monthKey: true, monthNo: true, receivedQty: true, receivedNote: true } });
+  const result = await getDb().workshopOrder.updateMany({ where: { id, receivedNote: { not: null }, receivedCheckedAt: null }, data: { receivedCheckedAt: new Date() } });
+  if (!order || result.count !== 1) return { ok: false, error: "Allaqachon tasdiqlangan." };
+  await writeAudit(actor, { action: "CONFIRM", entityType: "WORKSHOP_ORDER", entityId: id, entityName: orderNumber(order), summary: `${orderNumber(order)}: ombordagi kamchilikni tasdiqladi`, after: { receivedQty: order.receivedQty, receivedNote: order.receivedNote } });
+  revalidatePath("/admin/customers/purchases");
+  return { ok: true };
+}
+
+/** Cron: orders issued over 24 h ago and still not taken into the store → one Telegram to Super Admin, once per order. */
+export async function remindUnreceived(now = new Date()) {
+  const db = getDb();
+  const orders = await db.workshopOrder.findMany({ where: { status: "ISSUED", noRequest: false, isTest: false, issuedAt: { lt: new Date(now.getTime() - RECEIVE_OVERDUE_MS) }, receiveRemindedAt: null }, orderBy: [{ monthKey: "asc" }, { monthNo: "asc" }], select: { id: true, monthKey: true, monthNo: true, type: true, qty: true, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } } });
+  if (!orders.length) return 0;
+  await notifySuperAdmins(receiveReminderText(orders.map(order => `${orderNumber(order)} ${orderTitle(order)}`)));
+  await db.workshopOrder.updateMany({ where: { id: { in: orders.map(order => order.id) } }, data: { receiveRemindedAt: now } });
+  return orders.length;
 }

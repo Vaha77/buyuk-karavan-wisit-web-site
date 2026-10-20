@@ -3,12 +3,13 @@ import { getDb } from "@/lib/db";
 import { answerCallbackQuery, editMessageText, sendMessage, telegramErrorDetails } from "@/lib/telegram/client";
 import type { TelegramCallbackQuery, TelegramMessage } from "@/lib/telegram/types";
 import { consumeLinkCode } from "./bot";
-import { isBotCommand, limitKeyboard, limitQuestion, orderRecipient, orderTitle, parseSehCallback, parseStartPayload, queueText, todayText } from "./bot-text";
+import { isBotCommand, limitKeyboard, limitQuestion, orderRecipient, orderTitle, parseSehCallback, parseStartPayload, parseStoreCallback, queueText, todayText } from "./bot-text";
 import { workshopDay } from "./queries";
 import { closeMonths } from "./month";
 import { orderNumber, queuePositions, workingSince } from "./rules";
 import { transitionOrder } from "./service";
 import { linkedText } from "@/lib/telegram/start-rules";
+import { SITE_URL } from "@/lib/site-url";
 
 // Seh bot input: buttons in the personal order messages and the /start seh_<code>, /navbat, /bugun commands.
 // The webhook route does not pre-acknowledge "seh:" buttons, so every reply here is the button's own answer.
@@ -27,7 +28,24 @@ async function staffUser(telegramUserId: number) {
   return user && ["SUPER_ADMIN", "ADMIN", "MANAGER"].includes(user.role) && user.isActive && user.approvalStatus === "APPROVED" ? user : null;
 }
 
+/** Omborchi buttons: [✓ Qabul qildim] / [🚚 Mijozga yuklandi] go through transitionOrder (first press wins); [Kamchilik bor] needs the count and reason on the site. */
+async function handleStoreCallback(callback: TelegramCallbackQuery, parsed: NonNullable<ReturnType<typeof parseStoreCallback>>) {
+  const answer = (text: string, alert = false) => answerCallbackQuery(callback.id, text, alert).catch(log("Ombor callback answer failed"));
+  const user = await getDb().adminUser.findUnique({ where: { telegramChatId: String(callback.from.id) } });
+  if (!user || user.role !== "STOREKEEPER" || !user.isActive || user.approvalStatus !== "APPROVED") { await answer("Ruxsat yo‘q: bu tugma faqat omborchi uchun.", true); return true; }
+  if (parsed.action === "diff") {
+    await answer("Saytda kiriting");
+    await sendMessage(user.telegramChatId!, "Kamchilik bor / Soni boshqa: haqiqiy son va sababni saytda kiriting.", { inline_keyboard: [[{ text: "Saytda ochish", url: `${SITE_URL}/admin/seh` }]] }).catch(log("Ombor diff link failed"));
+    return true;
+  }
+  const result = await transitionOrder(user, parsed.orderId, parsed.action, undefined, "telegram");
+  await answer(result.ok ? (parsed.action === "store" ? "✓ Qabul qilindi" : "🚚 Mijozga yuklandi") : result.error, !result.ok);
+  return true;
+}
+
 export async function handleSehCallback(callback: TelegramCallbackQuery) {
+  const store = parseStoreCallback(callback.data);
+  if (store) return handleStoreCallback(callback, store);
   const parsed = parseSehCallback(callback.data);
   if (!parsed) return false;
   const answer = (text: string, alert = false) => answerCallbackQuery(callback.id, text, alert).catch(log("Seh callback answer failed"));

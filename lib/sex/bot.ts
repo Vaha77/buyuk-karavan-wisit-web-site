@@ -2,7 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { TelegramApiError, editMessageText, getMe, sendMessage, telegramErrorDetails, telegramWorkshopChatId } from "@/lib/telegram/client";
-import { LINK_PREFIX, LINK_TTL_MS, cancelledText, deliveryPlan, groupIssuedMessage, personalKeyboard, personalMessage, type BotOrder, type DeliveryStatus } from "./bot-text";
+import { LINK_PREFIX, LINK_TTL_MS, cancelledText, deliveryPlan, groupIssuedMessage, personalKeyboard, personalMessage, storeKeyboard, storeMessage, type BotOrder, type DeliveryStatus } from "./bot-text";
 import { sendToGroup } from "./group-send";
 import { orderNumber, queuePositions } from "./rules";
 
@@ -10,7 +10,7 @@ import { orderNumber, queuePositions } from "./rules";
 // A Telegram failure never undoes a status change; it is logged and flagged on the order for "qayta yuborish".
 
 const include = {
-  seller: { select: { name: true } }, issuedBy: { select: { name: true } },
+  seller: { select: { name: true } }, issuedBy: { select: { name: true } }, receivedBy: { select: { name: true } }, loadedBy: { select: { name: true } },
   items: { orderBy: { order: "asc" as const }, select: { title: true, qty: true, issuedQty: true, options: true } },
 };
 
@@ -21,6 +21,7 @@ export async function loadBotOrder(id: string): Promise<BotOrder | null> {
   return {
     id: order.id, number: orderNumber(order), type: order.type, purpose: order.purpose, customerName: order.customerName, qty: order.qty, dueDate: order.dueDate, note: order.note,
     sellerName: order.seller.name, noRequest: order.noRequest, status: order.status, cancelReason: order.cancelReason, startedAt: order.startedAt, issuedAt: order.issuedAt, issuedByName: order.issuedBy?.name ?? null,
+    receivedByName: order.receivedBy?.name ?? null, receivedAt: order.receivedAt, receivedQty: order.receivedQty, receivedNote: order.receivedNote, loadedByName: order.loadedBy?.name ?? null, loadedAt: order.loadedAt,
     details: Array.isArray(options?.changes) ? (options.changes as string[]) : [], items: order.items.map(item => ({ title: item.title, qty: item.qty, issuedQty: item.issuedQty })),
   };
 }
@@ -57,7 +58,7 @@ async function deliver(orderId: string, queue?: Map<string, number>, sendMissing
   if (!order) return "failed";
   let failure: unknown = null;
   const positions = queue ?? await queueOf();
-  const [recipients, messages] = order.noRequest ? [[], []] : await Promise.all([workshopRecipients(), getDb().workshopOrderMessage.findMany({ where: { orderId } })]);
+  const [recipients, messages] = order.noRequest ? [[], []] : await Promise.all([workshopRecipients(), getDb().workshopOrderMessage.findMany({ where: { orderId, store: false } })]);
   const plan = deliveryPlan(order, recipients.map(user => user.telegramChatId!), messages.map(message => message.chatId), sendMissing);
   if (!order.noRequest) {
     const text = personalMessage(order, positions.get(order.id) ?? null), keyboard = personalKeyboard(order.id, order.status);
@@ -98,6 +99,24 @@ export async function notifyCancelled(orderId: string) {
     try { await sendMessage(message.chatId, cancelledText(order)); } catch (error) { failure = error; }
   }
   if (failure) await flag(orderId, failure);
+}
+
+/** Omborchi messages: on ISSUED one per linked active omborchi; on every later change all copies are edited (who pressed, next button). Best effort. */
+export async function notifyStore(orderId: string) {
+  const order = await loadBotOrder(orderId);
+  if (!order || order.noRequest) return;
+  const db = getDb(), text = storeMessage(order), keyboard = storeKeyboard(order);
+  const messages = await db.workshopOrderMessage.findMany({ where: { orderId, store: true } });
+  for (const message of messages) await editMessageText(message.chatId, message.messageId, text, keyboard).catch(error => { if (!notModified(error)) console.error("Ombor Telegram edit failed", telegramErrorDetails(error)); });
+  if (order.status !== "ISSUED") return;
+  const keepers = await db.adminUser.findMany({ where: { role: "STOREKEEPER", isActive: true, approvalStatus: "APPROVED", telegramChatId: { not: null } }, select: { telegramChatId: true } });
+  for (const { telegramChatId } of keepers) {
+    if (messages.some(message => message.chatId === telegramChatId)) continue;
+    try {
+      const sent = await sendMessage(telegramChatId!, text, keyboard);
+      await db.workshopOrderMessage.create({ data: { orderId, chatId: telegramChatId!, messageId: sent.message_id, store: true } });
+    } catch (error) { console.error("Ombor Telegram send failed", telegramErrorDetails(error)); }
+  }
 }
 
 /** "Telegramga yuborilmadi · qayta yuborish" on the site. */

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { OrdersBoard } from "@/components/admin/sex/orders-board";
 import { WorkshopBoard } from "@/components/admin/sex/workshop-board";
+import { StoreBoard } from "@/components/admin/sex/store-board";
 import { requireSexUser } from "@/lib/auth/require-admin";
 import { getIssueGroups } from "@/lib/prays/queries";
 import { customerOptions, getSellerQueue, listOrders, sellerOptions, workshopDay } from "@/lib/sex/queries";
@@ -10,11 +11,12 @@ import { getDb } from "@/lib/db";
 
 export const metadata: Metadata = { title: "Seh zakazlari — Admin | BUYUK KARAVAN" };
 
-/** One page, three views: SUPER_ADMIN/staff — all orders of a month; SELLER — their own; WORKSHOP — receipt cards of open tasks. */
+/** One page, four views: SUPER_ADMIN/staff — all orders of a month; SELLER — their own; WORKSHOP — receipt cards of open tasks; STOREKEEPER — the store stage. */
 export default async function SexOrdersPage({ searchParams }: { searchParams: Promise<{ month?: string; status?: string; fix?: string }> }) {
   const user = await requireSexUser();
   const { month, status, fix } = await searchParams;
   const view = status === "cancelled" ? "cancelled" : status === "test" ? "test" : "active";
+  if (user.role === "STOREKEEPER") return <StoreBoard rows={(await listOrders(user)).rows} userName={user.name} telegramLinked={!!user.telegramChatId}/>;
   const workshop = user.role === "WORKSHOP";
   const [{ range, rows, summary }, parts, sellers, customers, day, queue, correction] = await Promise.all([
     listOrders(user, month, view),

@@ -8,7 +8,7 @@ import { AdminSearch } from "./admin-search";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeCheck, Bell, FileText, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PhoneCall, PlusCircle, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wrench, X } from "lucide-react";
+import { BadgeCheck, Bell, FileText, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PackageCheck, PhoneCall, PlusCircle, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wrench, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 import { homeFor } from "@/lib/auth/seller-access";
 import { NavigationProgress } from "./feedback";
@@ -111,7 +111,16 @@ const workshopNavigation: Array<{ group: string; items: NavItem[] }> = [
   ] },
 ];
 
-const roleLabels = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer", SELLER: "Sotuvchi", WORKSHOP: "Seh mas‘uli" };
+// STOREKEEPER (Omborchi): the store stage of workshop orders only; the phone tab bar is Qabul · Sehdan so‘rash · Tarix · Menyu.
+const storeNavigation: Array<{ group: string; items: NavItem[] }> = [
+  { group: "OMBOR", items: [
+    { label: "Qabul", href: "/admin/seh", icon: PackageCheck, badge: "sex" },
+    { label: "Sehdan so‘rash", href: "/admin/seh/request", icon: PlusCircle },
+    { label: "Tarix", href: "/admin/seh/history", icon: History },
+  ] },
+];
+
+const roleLabels = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer", SELLER: "Sotuvchi", WORKSHOP: "Seh mas‘uli", STOREKEEPER: "Omborchi" };
 
 function NavigationPending() {
   const { pending } = useLinkStatus();
@@ -135,7 +144,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
   const pathname = usePathname();
   const section = sectionOf(pathname);
   const homeContentRoute = pathname.startsWith("/admin/content/home");
-  const groups = user.role === "SELLER" ? sellerNavigation : user.role === "WORKSHOP" ? workshopNavigation : navigation;
+  const groups = user.role === "SELLER" ? sellerNavigation : user.role === "WORKSHOP" ? workshopNavigation : user.role === "STOREKEEPER" ? storeNavigation : navigation;
   const home = homeFor(user.role);
   const isAdmin = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
   const visible = (item: NavItem) => (!item.superOnly || user.role === "SUPER_ADMIN") && (!item.adminOnly || isAdmin);
@@ -146,7 +155,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
     <button className={`admin-drawer-backdrop ${open ? "is-open" : ""}`} aria-label="Menyuni yopish" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}/>
     <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
       <div className="admin-sidebar-brand"><Link href={home} className="admin-brand-link" onClick={() => setOpen(false)}><BrandEmblem/><strong>BUYUK KARAVAN</strong></Link><button className="admin-sidebar-close" onClick={() => setOpen(false)} aria-label="Menyuni yopish"><X size={18}/></button><span className="admin-sidebar-collapse"><ChevronLeft size={15}/></span></div>
-      <span className="admin-sidebar-label">{user.role === "SELLER" ? "SOTUVCHI" : user.role === "WORKSHOP" ? "SEH" : "ADMIN"}</span>
+      <span className="admin-sidebar-label">{user.role === "SELLER" ? "SOTUVCHI" : user.role === "WORKSHOP" ? "SEH" : user.role === "STOREKEEPER" ? "OMBOR" : "ADMIN"}</span>
       <nav aria-label="Admin navigatsiya">{groups.map(section => <div className="admin-nav-group" key={section.group}><span className="admin-nav-group-label">{section.group}</span>{section.items.filter(visible).map(item => {
         const Icon = item.icon;
         const active = item.href === activeHref;

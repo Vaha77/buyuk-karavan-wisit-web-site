@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   // Start acknowledgement before database idempotency or any handler work. Seh buttons ("seh:" / old "ws:") and the
   // Instagram "Ko‘rib chiqildi" button ("igrev:") answer
   // themselves (e.g. "Ruxsat yo‘q" as an alert), so they are not pre-acknowledged here.
-  const sehButton = /^(?:seh|ws|igrev|igdm):/.test(update.callback_query?.data ?? "");
+  const sehButton = /^(?:seh|ws|omb|igrev|igdm):/.test(update.callback_query?.data ?? "");
   const callbackAck = update.callback_query && !sehButton
     ? answerCallbackQuery(update.callback_query.id, "So‘rov qabul qilindi.")
         .then(() => { timings.callback_ack_ms = Math.round(performance.now() - startedAt); })

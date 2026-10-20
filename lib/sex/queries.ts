@@ -14,13 +14,17 @@ export type OrderRow = {
   sellerName: string; sellerAt: string; purpose: "SHOP" | "CLIENT"; customerName: string | null; status: OrderStatus; steps: StepView[];
   overdue: boolean; acceptedAt: string | null; startedAt: string | null; queue: number | null; telegramFailed: boolean; canCancel: boolean; cancelled: { at: string; by: string | null; reason: string | null } | null; noRequest: boolean; sellerConfirmed: boolean; isNew: boolean; dueDate: string | null; note: string | null;
   items: Array<{ id: string; title: string; qty: number; issuedQty?: number | null }>;
+  /** Store stage (omborchi board): when it left the workshop / reached the store / was loaded, and a reported shortage. */
+  /** Placed by this viewer (the omborchi's own "Sehdan so‘rash" requests). */
+  mine: boolean;
+  store: { issuedBy: string | null; issuedAt: string | null; receivedAt: string | null; loadedAt: string | null; receivedQty: number | null; receivedNote: string | null };
   prices?: Partial<PriceSnapshot>;
   /** "FN → FNV": condenser series changed, frame price not included (SUPER_ADMIN / ADMIN only). */
   frame: string | null;
 };
 
 const include = {
-  seller: { select: { name: true } }, acceptedBy: { select: { name: true } }, startedBy: { select: { name: true } }, cancelledBy: { select: { name: true } }, issuedBy: { select: { name: true } }, receivedBy: { select: { name: true } },
+  seller: { select: { name: true } }, acceptedBy: { select: { name: true } }, startedBy: { select: { name: true } }, cancelledBy: { select: { name: true } }, issuedBy: { select: { name: true } }, receivedBy: { select: { name: true } }, loadedBy: { select: { name: true } },
   items: { orderBy: { order: "asc" as const }, select: { id: true, title: true, qty: true, issuedQty: true, baseUsd: true, partId: true, options: true, product: { select: { category: { select: { slug: true, name: true } } } } } },
 } satisfies Prisma.WorkshopOrderInclude;
 type Loaded = Prisma.WorkshopOrderGetPayload<{ include: typeof include }>;
@@ -36,6 +40,8 @@ function toRow(order: Loaded, viewer: Viewer, now: Date, queue: Map<string, numb
     sellerName: order.seller.name, sellerAt: when(order.createdAt, now), purpose: order.purpose, customerName: order.customerName, status: order.status,
     steps: processSteps(order, now), overdue: isReceiveOverdue(order, now), acceptedAt: order.acceptedAt?.toISOString() ?? null, startedAt: order.startedAt?.toISOString() ?? null, queue: queue.get(order.id) ?? null, telegramFailed: !!order.telegramFailedAt, canCancel: canCancel(role, order.status, order.sellerId === viewer.id), cancelled: order.cancelledAt ? { at: when(order.cancelledAt, now), by: order.cancelledBy?.name ?? null, reason: order.cancelReason } : null, noRequest: order.noRequest, sellerConfirmed: !!order.sellerConfirmedAt,
     frame: (role === "SUPER_ADMIN" || role === "ADMIN") && order.type === "AGREGAT" ? frameChange(order.items[0]?.options) : null,
+    mine: order.sellerId === viewer.id,
+    store: { issuedBy: order.issuedBy?.name ?? null, issuedAt: order.issuedAt?.toISOString() ?? null, receivedAt: order.receivedAt?.toISOString() ?? null, loadedAt: order.loadedAt?.toISOString() ?? null, receivedQty: order.receivedQty, receivedNote: order.receivedNote },
     isNew: now.getTime() - order.createdAt.getTime() < 10 * 60_000, dueDate: order.dueDate?.toISOString().slice(0, 10) ?? null, note: order.note,
     priceSnapshot: order.priceSnapshot, items: order.items.map(item => ({ id: item.id, title: item.title, qty: item.qty, issuedQty: item.issuedQty, baseUsd: item.baseUsd === null ? null : Number(item.baseUsd) })),
   };
@@ -57,7 +63,7 @@ export async function listOrders(viewer: Viewer, month?: string, view: OrdersVie
   if (staff) {
     where.isTest = test;
     // The month's own orders (carried-in ones too) and those created in it that moved on ("→ noyabrga o‘tdi"); open ones only in the current month.
-    where.OR = cancelled ? [{ monthKey: range.key }] : [{ monthKey: range.key }, { createdAt: { gte: range.from, lt: range.to } }, ...(current ? [{ status: { in: ["NEW", "ACCEPTED", "STARTED", "ISSUED"] as OrderStatus[] } }] : [])];
+    where.OR = cancelled ? [{ monthKey: range.key }] : [{ monthKey: range.key }, { createdAt: { gte: range.from, lt: range.to } }, ...(current ? [{ status: { in: ["NEW", "ACCEPTED", "STARTED", "ISSUED", "RECEIVED_STORE"] as OrderStatus[] } }] : [])];
   }
   // Queue numbers are global (a seller sees "2-navbat" even though they only list their own orders).
   const [orders, waiting] = await Promise.all([
@@ -73,7 +79,7 @@ export async function listOrders(viewer: Viewer, month?: string, view: OrdersVie
 async function closedSummary(range: { key: string; from: Date; to: Date }) {
   const db = getDb(), real = { isTest: false };
   const [issued, carried, cancelled] = await Promise.all([
-    db.workshopOrder.count({ where: { ...real, monthKey: range.key, status: { in: ["ISSUED", "RECEIVED"] } } }),
+    db.workshopOrder.count({ where: { ...real, monthKey: range.key, status: { in: ["ISSUED", "RECEIVED", "RECEIVED_STORE", "CLIENT_LOADED"] } } }),
     db.workshopOrder.count({ where: { ...real, monthKey: { gt: range.key }, createdAt: { gte: range.from, lt: range.to } } }),
     db.workshopOrder.count({ where: { ...real, monthKey: range.key, status: "CANCELLED" } }),
   ]);
@@ -98,10 +104,11 @@ export async function workshopDay(now = new Date()) {
   return { started, limit: settings?.workshopDailyLimit ?? DEFAULT_WORKSHOP_DAILY_LIMIT, issuedToday: issued.map(orderNumber) };
 }
 
-/** Sidebar badge: SUPER_ADMIN — "Chiqib ketdi" waiting for krim over 24 h; WORKSHOP — new orders to accept. */
+/** Sidebar badge: SUPER_ADMIN — "Chiqib ketdi" waiting for krim over 24 h; WORKSHOP — new orders to accept; STOREKEEPER — issued, to receive. */
 export async function sexBadgeCount(viewer: Viewer) {
   if (viewer.role === "SUPER_ADMIN") return getDb().workshopOrder.count({ where: { status: "ISSUED", issuedAt: { lt: new Date(Date.now() - RECEIVE_OVERDUE_MS) } } }).catch(() => 0);
   if (viewer.role === "WORKSHOP") return getDb().workshopOrder.count({ where: { status: "NEW" } }).catch(() => 0);
+  if (viewer.role === "STOREKEEPER") return getDb().workshopOrder.count({ where: { status: "ISSUED", noRequest: false } }).catch(() => 0);
   return 0;
 }
 

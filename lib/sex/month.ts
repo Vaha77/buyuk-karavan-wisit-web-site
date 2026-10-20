@@ -1,7 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
-import { carryPlan, monthKeyOf, OPEN_STATUSES } from "./rules";
+import { carryPlan, monthKeyOf, UNFINISHED_WHERE } from "./rules";
 
 type Tx = Prisma.TransactionClient;
 // One lock for numbering and the month close, so two requests never take the same "MM-NN".
@@ -9,7 +9,7 @@ const lock = (tx: Tx) => tx.$executeRaw`SELECT pg_advisory_xact_lock(735102)`;
 const lastNo = async (tx: Tx, monthKey: string) => (await tx.workshopOrder.aggregate({ where: { monthKey }, _max: { monthNo: true } }))._max.monthNo ?? 0;
 
 async function carryOver(tx: Tx, monthKey: string) {
-  const open = await tx.workshopOrder.findMany({ where: { monthKey: { lt: monthKey }, status: { in: [...OPEN_STATUSES] } }, select: { id: true, monthKey: true, monthNo: true } });
+  const open = await tx.workshopOrder.findMany({ where: { monthKey: { lt: monthKey }, ...UNFINISHED_WHERE }, select: { id: true, monthKey: true, monthNo: true } });
   if (!open.length) return 0;
   for (const move of carryPlan(open, monthKey, await lastNo(tx, monthKey))) await tx.workshopOrder.update({ where: { id: move.id }, data: { monthKey, monthNo: move.monthNo, carriedFrom: move.carriedFrom } });
   return open.length;
@@ -18,7 +18,7 @@ async function carryOver(tx: Tx, monthKey: string) {
 /** Month close (Tashkent 1st, 00:00): lazily on the first request of the new month and by the cron. A second run finds nothing to move. */
 export async function closeMonths(now = new Date()) {
   const monthKey = monthKeyOf(now), db = getDb();
-  if (!await db.workshopOrder.findFirst({ where: { monthKey: { lt: monthKey }, status: { in: [...OPEN_STATUSES] } }, select: { id: true } })) return 0;
+  if (!await db.workshopOrder.findFirst({ where: { monthKey: { lt: monthKey }, ...UNFINISHED_WHERE }, select: { id: true } })) return 0;
   return db.$transaction(async tx => { await lock(tx); return carryOver(tx, monthKey); });
 }
 

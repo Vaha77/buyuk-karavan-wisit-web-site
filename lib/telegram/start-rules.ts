@@ -15,13 +15,14 @@ export function startDecision(linked: LinkedProfile | null, agent: ExistingAgent
   return { kind: "register" };
 }
 
-export const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer", SELLER: "Sotuvchi", WORKSHOP: "Seh mas’uli" };
+export const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer", SELLER: "Sotuvchi", WORKSHOP: "Seh mas’uli", STOREKEEPER: "Omborchi" };
 export const roleLabel = (role: string) => ROLE_LABEL[role] ?? role;
 
 /** Reply to a plain /start from a chat already bound to a profile: that role's menu, no registration. */
 export function profileMenuText(profile: LinkedProfile, siteUrl: string) {
   const head = `👋 Salom, ${profile.name} (${roleLabel(profile.role)}). Bu Telegram profilingizga bog‘langan.`;
   if (profile.role === "WORKSHOP") return [head, "", "Yangi seh zakazlari shu yerga tugmalar bilan keladi: ✅ Qabul qildim → 🔧 Terishni boshladim → 📦 Chiqib ketdi.", "", "/navbat — navbatdagi zakazlar", "/bugun — bugungi hisob"].join("\n");
+  if (profile.role === "STOREKEEPER") return [head, "", "Sehdan chiqqan tovar shu yerga tugmalar bilan keladi: ✓ Qabul qildim · Kamchilik bor · 🚚 Mijozga yuklandi.", `Ombor: ${siteUrl}/admin/seh`].join("\n");
   if (profile.role === "SELLER") return [head, "", "Sotuvchi menyusi pastda.", `Doimiy mijozlar va xaridlar: ${siteUrl}/admin/my`].join("\n");
   return [head, "", "Admin menyu:", `• Admin panel: ${siteUrl}/admin`, `• Seh zakazlari: ${siteUrl}/admin/seh`, "/navbat — seh navbati", "/bugun — bugungi seh hisobi"].join("\n");
 }
@@ -36,5 +37,6 @@ export function linkedText(user: LinkedProfile, previousName: string | null) {
   const lines = [`✅ Ulandingiz: ${user.name}, ${roleLabel(user.role)}`];
   if (previousName) lines.push(`Bu Telegram avval ${previousName} ga bog‘langan edi, endi ${user.name} ga o‘tkazildi.`);
   if (user.role === "WORKSHOP") lines.push("", "Yangi seh zakazlari shu yerga keladi.", "/navbat — navbatdagilar", "/bugun — bugungi hisob");
+  if (user.role === "STOREKEEPER") lines.push("", "Sehdan chiqqan tovar shu yerga keladi: ✓ Qabul qildim / Kamchilik bor.");
   return lines.join("\n");
 }

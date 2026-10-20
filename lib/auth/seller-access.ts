@@ -17,11 +17,11 @@ export function isWorkshopPathAllowed(pathname: string) {
 }
 
 /** Roles limited to their own section; everyone else is admin-panel staff. */
-export const LIMITED_ROLES = ["SELLER", "WORKSHOP"] as const;
+export const LIMITED_ROLES = ["SELLER", "WORKSHOP", "STOREKEEPER"] as const;
 export function isLimitedRole(role: string) { return (LIMITED_ROLES as readonly string[]).includes(role); }
 
 /** Where a signed-in user lands after login (and where a limited role is sent from other pages). */
-export function homeFor(role: string) { return role === "SELLER" ? `${SELLER_HOME}/dashboard` : role === "WORKSHOP" ? SEX_HOME : "/admin"; }
+export function homeFor(role: string) { return role === "SELLER" ? `${SELLER_HOME}/dashboard` : role === "WORKSHOP" || role === "STOREKEEPER" ? SEX_HOME : "/admin"; }
 
 /** A GET/HEAD page visit (incl. client navigation), as opposed to a POST or a server action call. */
 export function isPageRequest(request: { method: string; headers: { has(name: string): boolean } }) {
@@ -39,6 +39,7 @@ export function sellerAccess(pathname: string, request: RequestLike): "allow" | 
 export function roleAccess(role: string, pathname: string, request: RequestLike): "allow" | "redirect" | "forbid" {
   if (pathname === PASSWORD_PAGE) return "allow";
   if (role === "SELLER") return sellerAccess(pathname, request);
-  if (role === "WORKSHOP") return isWorkshopPathAllowed(pathname) ? "allow" : isPageRequest(request) ? "redirect" : "forbid";
+  // The omborchi works only in /admin/seh too; each page there checks what the role may see.
+  if (role === "WORKSHOP" || role === "STOREKEEPER") return isWorkshopPathAllowed(pathname) ? "allow" : isPageRequest(request) ? "redirect" : "forbid";
   return "allow";
 }

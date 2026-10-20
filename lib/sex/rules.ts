@@ -1,17 +1,17 @@
 // Seh zakazlari rules: who sees which order, who may move it to the next status, what the workshop is shown.
 // Pure (no database, no "server-only"), so the tests run them directly.
 
-export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "SELLER" | "WORKSHOP";
-export type OrderStatus = "NEW" | "ACCEPTED" | "STARTED" | "ISSUED" | "RECEIVED" | "CANCELLED";
-export type OrderAction = "accept" | "start" | "issue" | "receive";
+export type Role = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "SELLER" | "WORKSHOP" | "STOREKEEPER";
+export type OrderStatus = "NEW" | "ACCEPTED" | "STARTED" | "ISSUED" | "RECEIVED" | "RECEIVED_STORE" | "CLIENT_LOADED" | "CANCELLED";
+export type OrderAction = "accept" | "start" | "issue" | "receive" | "store" | "load";
 /** Order of the stages; a transition only ever moves one step forward. */
 export const STATUS_ORDER: OrderStatus[] = ["NEW", "ACCEPTED", "STARTED", "ISSUED", "RECEIVED"];
 /** Stages a cancelled order may still be stopped from (never after it left the workshop). */
 export const CANCELLABLE: OrderStatus[] = ["NEW", "ACCEPTED", "STARTED"];
 export type Viewer = { id: string; role: Role | string };
 
-export const STATUS_LABEL: Record<OrderStatus, string> = { NEW: "Yangi", ACCEPTED: "Navbatda", STARTED: "Terilmoqda", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi", CANCELLED: "Bekor qilingan" };
-export const STATUS_TONE: Record<OrderStatus, "blue" | "slate" | "yellow" | "red" | "green" | "grey"> = { NEW: "blue", ACCEPTED: "slate", STARTED: "yellow", ISSUED: "red", RECEIVED: "green", CANCELLED: "grey" };
+export const STATUS_LABEL: Record<OrderStatus, string> = { NEW: "Yangi", ACCEPTED: "Navbatda", STARTED: "Terilmoqda", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi", RECEIVED_STORE: "Omborga qabul qilindi", CLIENT_LOADED: "Mijozga yuklandi", CANCELLED: "Bekor qilingan" };
+export const STATUS_TONE: Record<OrderStatus, "blue" | "slate" | "yellow" | "red" | "green" | "grey"> = { NEW: "blue", ACCEPTED: "slate", STARTED: "yellow", ISSUED: "red", RECEIVED: "green", RECEIVED_STORE: "green", CLIENT_LOADED: "green", CANCELLED: "grey" };
 export const PURPOSE_LABEL = { SHOP: "Magazinga (vitrina)", CLIENT: "Mijozga" } as const;
 export const TYPE_LABEL = { AGREGAT: "Agregat", ZAPCHAST: "Zapchast" } as const;
 /** An order still "Chiqib ketdi" after this long is highlighted in red and counted in the sidebar badge. */
@@ -23,16 +23,20 @@ export const TRANSITIONS: Record<OrderAction, { from: OrderStatus; to: OrderStat
   start: { from: "ACCEPTED", to: "STARTED", role: "WORKSHOP" },
   issue: { from: "STARTED", to: "ISSUED", role: "WORKSHOP" },
   receive: { from: "ISSUED", to: "RECEIVED", role: "SUPER_ADMIN" },
+  // Omborchi: takes the issued goods into the store; a "Mijozga" order is then loaded to the customer.
+  store: { from: "ISSUED", to: "RECEIVED_STORE", role: "STOREKEEPER" },
+  load: { from: "RECEIVED_STORE", to: "CLIENT_LOADED", role: "STOREKEEPER" },
 };
 
 /** Second press of the same button (site and bot at once): only the first one goes through. */
 export const alreadyText = (status: OrderStatus) => `Bu zakaz allaqachon “${STATUS_LABEL[status]}” holatida.`;
 
-export function checkTransition(role: string, status: OrderStatus, action: OrderAction): { ok: true; to: OrderStatus } | { ok: false; error: string } {
+export function checkTransition(role: string, status: OrderStatus, action: OrderAction, purpose?: "SHOP" | "CLIENT"): { ok: true; to: OrderStatus } | { ok: false; error: string } {
   const rule = TRANSITIONS[action];
   if (!rule) return { ok: false, error: "Noma’lum amal." };
-  if (role !== rule.role) return { ok: false, error: action === "receive" ? "Krimga olishni faqat Super Admin tasdiqlaydi." : "Bu tugma faqat seh mas’uli uchun." };
+  if (role !== rule.role) return { ok: false, error: action === "receive" ? "Krimga olishni faqat Super Admin tasdiqlaydi." : rule.role === "STOREKEEPER" ? "Bu tugma faqat omborchi uchun." : "Bu tugma faqat seh mas’uli uchun." };
   if (status !== rule.from) return { ok: false, error: alreadyText(status) };
+  if (action === "load" && purpose !== "CLIENT") return { ok: false, error: "“Magazinga” zakaz omborda yakunlanadi — yuklash kerak emas." };
   return { ok: true, to: rule.to };
 }
 
@@ -42,26 +46,30 @@ export function actionFor(role: string, status: OrderStatus): OrderAction | null
 }
 /** Every action a button can send; taken from TRANSITIONS so validation never falls behind a new stage. */
 export const ORDER_ACTIONS = Object.keys(TRANSITIONS) as OrderAction[];
-export const ACTION_LABEL: Record<OrderAction, string> = { accept: "Qabul qildim", start: "Terishni boshladim", issue: "Chiqib ketdi", receive: "Krimga oldim" };
+export const ACTION_LABEL: Record<OrderAction, string> = { accept: "Qabul qildim", start: "Terishni boshladim", issue: "Chiqib ketdi", receive: "Krimga oldim", store: "✓ Qabul qildim", load: "🚚 Mijozga yuklandi" };
 
 export const isStaff = (role: string) => role === "SUPER_ADMIN" || role === "ADMIN" || role === "MANAGER";
 export const canCreateOrders = (role: string) => role === "SELLER" || isStaff(role);
 
-/** Prisma `where` for the orders a viewer may list: a seller only their own, the workshop only open tasks, staff everything. */
-export function orderScope(viewer: Viewer): { sellerId?: string; status?: { in: OrderStatus[] } } {
+/** Statuses of the store stage: what the omborchi lists (besides their own requests). */
+export const STORE_STATUSES = ["ISSUED", "RECEIVED_STORE", "CLIENT_LOADED"] as const satisfies readonly OrderStatus[];
+/** Prisma `where` for the orders a viewer may list: a seller only their own, the workshop only open tasks, the omborchi the store stage (no "Zayavkasiz chiqim") and their own requests, staff everything. */
+export function orderScope(viewer: Viewer): { sellerId?: string; status?: { in: OrderStatus[] }; OR?: Array<{ sellerId: string } | { status: { in: OrderStatus[] }; noRequest: false }> } {
   if (viewer.role === "SELLER") return { sellerId: viewer.id };
   if (viewer.role === "WORKSHOP") return { status: { in: ["NEW", "ACCEPTED", "STARTED"] } };
+  if (viewer.role === "STOREKEEPER") return { OR: [{ sellerId: viewer.id }, { status: { in: [...STORE_STATUSES] }, noRequest: false }] };
   return {};
 }
-export function canViewOrder(viewer: Viewer, order: { sellerId: string; status: OrderStatus }) {
+export function canViewOrder(viewer: Viewer, order: { sellerId: string; status: OrderStatus; noRequest?: boolean }) {
   if (viewer.role === "SELLER") return order.sellerId === viewer.id;
   if (viewer.role === "WORKSHOP") return order.status === "NEW" || order.status === "ACCEPTED" || order.status === "STARTED";
+  if (viewer.role === "STOREKEEPER") return order.sellerId === viewer.id || ((STORE_STATUSES as readonly string[]).includes(order.status) && !order.noRequest);
   return isStaff(viewer.role);
 }
 
-/** Price visibility: everyone who orders sees the price-list price; the workshop sees no price at all. */
+/** Price visibility: everyone who orders sees the price-list price; the workshop and the omborchi see no price at all. */
 export function priceAccess(role: string): "base" | "none" {
-  return role === "WORKSHOP" ? "none" : "base";
+  return role === "WORKSHOP" || role === "STOREKEEPER" ? "none" : "base";
 }
 
 /** Workshop orders carry only price-list prices: the workshop hands goods to the seller at prays price, the seller adds their own markup. */
@@ -108,6 +116,12 @@ export const orderNumber = (order: { monthKey: string; monthNo: number }) => `${
 export const monthKeyOf = (date: Date | string = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tashkent", year: "numeric", month: "2-digit" }).format(new Date(date)).slice(0, 7);
 export const monthName = (monthKey: string) => MONTH_NAMES[Number(monthKey.slice(5)) - 1] ?? monthKey;
 export const OPEN_STATUSES = ["NEW", "ACCEPTED", "STARTED"] as const satisfies readonly OrderStatus[];
+/** A "Mijozga" order is finished only once loaded to the customer: until then it is carried into the next month too. */
+const CLIENT_PENDING = ["ISSUED", "RECEIVED_STORE"] as const satisfies readonly OrderStatus[];
+export const isUnfinished = (order: { status: OrderStatus; purpose: "SHOP" | "CLIENT" }) =>
+  (OPEN_STATUSES as readonly string[]).includes(order.status) || (order.purpose === "CLIENT" && (CLIENT_PENDING as readonly string[]).includes(order.status));
+/** isUnfinished as a Prisma `where` (month close). */
+export const UNFINISHED_WHERE = { OR: [{ status: { in: [...OPEN_STATUSES] } }, { purpose: "CLIENT" as const, status: { in: [...CLIENT_PENDING] } }] };
 /** Month close: unfinished orders of earlier months move into `monthKey` in their old order (01, 02…), after the numbers already taken there. */
 export function carryPlan(open: Array<{ id: string; monthKey: string; monthNo: number }>, monthKey: string, lastNo: number) {
   return open.filter(order => order.monthKey < monthKey).sort((a, b) => a.monthKey.localeCompare(b.monthKey) || a.monthNo - b.monthNo)
@@ -153,19 +167,44 @@ export function fullDate(date: Date | string) { return fullDayFormat.format(new 
 
 export type StepView = { label: string; text: string; state: "done" | "wait" | "later" };
 type Person = { name: string } | null | undefined;
-type StepOrder = { status: OrderStatus; acceptedAt: Date | string | null; startedAt?: Date | string | null; issuedAt: Date | string | null; receivedAt: Date | string | null; acceptedBy?: Person; startedBy?: Person; issuedBy?: Person; receivedBy?: Person };
-/** "Jarayon": green = done, red = what is awaited now, grey = not yet its turn. */
+type StepOrder = { status: OrderStatus; purpose?: "SHOP" | "CLIENT"; acceptedAt: Date | string | null; startedAt?: Date | string | null; issuedAt: Date | string | null; receivedAt: Date | string | null; loadedAt?: Date | string | null; loadedCar?: string | null; acceptedBy?: Person; startedBy?: Person; issuedBy?: Person; receivedBy?: Person; loadedBy?: Person };
+/** "Jarayon": green = done, red = what is awaited now, grey = not yet its turn. Store stage: Omborga qabul qildi → (Mijozga) yukladi. */
 export function processSteps(order: StepOrder, now = new Date()): StepView[] {
-  const index = STATUS_ORDER.indexOf(order.status);
+  const index = order.status === "RECEIVED_STORE" ? 4 : order.status === "CLIENT_LOADED" ? 5 : STATUS_ORDER.indexOf(order.status);
   const step = (label: string, at: number, by: Person, time: Date | string | null | undefined, waiting: string): StepView =>
     index >= at ? { label, text: `${by?.name ?? "—"} · ${time ? when(time, now) : ""}`.trim(), state: "done" } : index === at - 1 ? { label, text: waiting, state: "wait" } : { label, text: "—", state: "later" };
-  return [
+  const steps = [
     step("Qabul qildi", 1, order.acceptedBy, order.acceptedAt, "kutilmoqda"),
     step("Terishni boshladi", 2, order.startedBy, order.startedAt, "navbatda"),
     step("Chiqarib yubordi", 3, order.issuedBy, order.issuedAt, "kutilmoqda"),
-    step("Krimga oldi", 4, order.receivedBy, order.receivedAt, "tasdiqlash kutilmoqda"),
+    order.status === "RECEIVED" ? step("Krimga oldi", 4, order.receivedBy, order.receivedAt, "tasdiqlash kutilmoqda") : step("Omborga qabul qildi", 4, order.receivedBy, order.receivedAt, "omborchi kutilmoqda"),
   ];
+  if (order.purpose !== "CLIENT" || order.status === "RECEIVED") return steps;
+  const loaded = step("Mijozga yukladi", 5, order.loadedBy, order.loadedAt, "yuklash kutilmoqda");
+  return [...steps, order.loadedCar && loaded.state === "done" ? { ...loaded, text: `${loaded.text} · ${order.loadedCar}` } : loaded];
 }
+
+/** Omborchi extras: "Kamchilik bor / Soni boshqa" (actual count + reason) on store; car number / photo on load. */
+export type StoreInput = { receivedQty?: number; note?: string | null; car?: string | null; photoUrl?: string | null };
+/** A count without a reason (or a bad count) is refused; a plain "Qabul qildim" carries nothing. */
+export function storeExtra(action: OrderAction, input: StoreInput):
+  { ok: true; data: { receivedQty: number; receivedNote: string } | { loadedCar: string | null; loadedPhotoUrl: string | null } | Record<string, never> } | { ok: false; error: string } {
+  if (action === "load") return { ok: true, data: { loadedCar: input.car?.trim().slice(0, 20) || null, loadedPhotoUrl: input.photoUrl ?? null } };
+  if (action !== "store") return { ok: true, data: {} };
+  const note = input.note?.trim() || null;
+  if (input.receivedQty === undefined && !note) return { ok: true, data: {} };
+  if (!note || note.length < 3) return { ok: false, error: "Sababni yozing (majburiy)." };
+  const qty = input.receivedQty;
+  if (qty === undefined || !Number.isInteger(qty) || qty < 0 || qty > 9999) return { ok: false, error: "Kelgan sonni to‘g‘ri kiriting." };
+  return { ok: true, data: { receivedQty: qty, receivedNote: note.slice(0, 300) } };
+}
+/** Whole days an order has been in the store ("omborda 1 kun"). */
+export const daysInStore = (receivedAt: Date | string, now = new Date()) => Math.max(0, Math.floor((now.getTime() - new Date(receivedAt).getTime()) / 86_400_000));
+/** Super Admin reminder: issued by the workshop, not taken into the store within 24 h. */
+export const receiveReminderText = (orders: string[]) => `⏰ Sehdan chiqqan, 24 soatda omborga qabul qilinmagan:\n${orders.join("\n")}`;
+/** Super Admin alert for "Kamchilik bor / Soni boshqa" (also listed under "Tasdiqlash kerak"). */
+export const storeDiffText = (number: string, title: string, issued: number, received: number, note: string, by: string) =>
+  `⚠️ ${number} ${title}: omborga kamchilik bilan qabul qilindi\nSeh chiqardi: ${issued} ta · Keldi: ${received} ta${received !== issued ? ` (${received > issued ? "+" : ""}${received - issued})` : ""}\nSabab: ${note}\nOmborchi: ${by}`;
 
 /** Queue numbers of "Navbatda" orders: 1, 2, 3… by acceptance time; starting one renumbers the rest. Test orders get none. */
 export function queuePositions(orders: Array<{ id: string; status: OrderStatus | string; acceptedAt: Date | string | null; isTest?: boolean }>) {

@@ -12,12 +12,12 @@ export async function getShellData(user: AdminUser) {
     const due = user.salesPersonId ? (await myDueCustomers(user).catch(() => [])).length : 0;
     return { dueToday: due };
   }
-  if (user.role === "WORKSHOP") return { sexBadge: await sexBadgeCount(user) };
+  if (user.role === "WORKSHOP" || user.role === "STOREKEEPER") return { sexBadge: await sexBadgeCount(user) };
   const canReview = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
   const [newLeads, pendingPurchases, corrections, sexBadge] = await Promise.all([
     db.lead.count({ where: { status: "NEW" } }).catch(() => 0),
     canReview ? db.customerPurchase.count({ where: { status: "PENDING" } }).catch(() => 0) : 0,
-    user.role === "SUPER_ADMIN" ? db.workshopCorrectionRequest.count({ where: { status: "PENDING" } }).catch(() => 0) : 0,
+    user.role === "SUPER_ADMIN" ? Promise.all([db.workshopCorrectionRequest.count({ where: { status: "PENDING" } }), db.workshopOrder.count({ where: { receivedNote: { not: null }, receivedCheckedAt: null } })]).then(([a, b]) => a + b).catch(() => 0) : 0,
     sexBadgeCount(user),
   ]);
   return { newLeads, pendingPurchases: pendingPurchases + corrections, linksBadge: referralLinksAreNew(), sexBadge };

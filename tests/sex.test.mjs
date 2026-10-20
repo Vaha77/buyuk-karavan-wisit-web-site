@@ -118,8 +118,8 @@ test("status machine: NEW→ACCEPTED (Navbatda)→STARTED (Terilmoqda)→ISSUED�
   assert.deepEqual(rules.checkTransition("WORKSHOP", "ACCEPTED", "start"), { ok: true, to: "STARTED" });
   assert.deepEqual(rules.checkTransition("WORKSHOP", "STARTED", "issue"), { ok: true, to: "ISSUED" });
   assert.deepEqual(rules.checkTransition("SUPER_ADMIN", "ISSUED", "receive"), { ok: true, to: "RECEIVED" });
-  // Every action is allowed from exactly one status, and moves exactly one step forward.
-  for (const [action, rule] of Object.entries(rules.TRANSITIONS)) {
+  // Every workshop action is allowed from exactly one status, and moves exactly one step forward (the store stage: tests/omborchi.test.mjs).
+  for (const [action, rule] of Object.entries(rules.TRANSITIONS).filter(([, rule]) => rule.role !== "STOREKEEPER")) {
     assert.equal(rules.STATUS_ORDER.indexOf(rule.to), rules.STATUS_ORDER.indexOf(rule.from) + 1, action);
     for (const status of rules.STATUS_ORDER) if (status !== rule.from) assert.equal(ok(rule.role, status, action), false, `${action} from ${status}`);
   }
@@ -131,7 +131,7 @@ test("status machine: NEW→ACCEPTED (Navbatda)→STARTED (Terilmoqda)→ISSUED�
   for (const status of ["NEW", "ACCEPTED", "STARTED"]) assert.equal(rules.actionFor("SUPER_ADMIN", status), null, `SUPER_ADMIN has no workshop button on ${status}`);
   assert.deepEqual(["NEW", "ACCEPTED", "STARTED", "ISSUED"].map(status => rules.actionFor("WORKSHOP", status)), ["accept", "start", "issue", null]);
   assert.equal(rules.actionFor("SELLER", "NEW"), null);
-  assert.deepEqual(rules.STATUS_LABEL, { NEW: "Yangi", ACCEPTED: "Navbatda", STARTED: "Terilmoqda", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi", CANCELLED: "Bekor qilingan" });
+  assert.deepEqual(rules.STATUS_LABEL, { NEW: "Yangi", ACCEPTED: "Navbatda", STARTED: "Terilmoqda", ISSUED: "Chiqib ketdi", RECEIVED: "Krimga olindi", RECEIVED_STORE: "Omborga qabul qilindi", CLIENT_LOADED: "Mijozga yuklandi", CANCELLED: "Bekor qilingan" });
 });
 
 test("visibility: a seller sees only their own orders, the workshop only open tasks", () => {
@@ -177,7 +177,7 @@ test("process steps (4 steps) and the 24 h overdue mark", () => {
   const now = new Date("2026-10-05T12:00:00Z");
   const issued = { status: "ISSUED", acceptedAt: new Date("2026-10-04T05:00:00Z"), startedAt: new Date("2026-10-04T05:30:00Z"), issuedAt: new Date("2026-10-04T06:00:00Z"), receivedAt: null, acceptedBy: { name: "Ikromjon" }, startedBy: { name: "Ikromjon" }, issuedBy: { name: "Ikromjon" } };
   const steps = rules.processSteps(issued, now);
-  assert.deepEqual(steps.map(step => step.label), ["Qabul qildi", "Terishni boshladi", "Chiqarib yubordi", "Krimga oldi"]);
+  assert.deepEqual(steps.map(step => step.label), ["Qabul qildi", "Terishni boshladi", "Chiqarib yubordi", "Omborga qabul qildi"]);
   assert.deepEqual(steps.map(step => step.state), ["done", "done", "done", "wait"]);
   assert.equal(steps[0].text, "Ikromjon · kecha 10:00");
   assert.equal(steps[1].text, "Ikromjon · kecha 10:30");

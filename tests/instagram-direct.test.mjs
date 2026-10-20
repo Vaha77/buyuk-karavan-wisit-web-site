@@ -159,7 +159,7 @@ test("wiring: echo before card, private-reply text saved before sending, Telegra
   const service = await read("../lib/instagram/service.ts");
   assert.ok(service.indexOf("await update({ dmText: dm, dmSentAt: new Date() });") < service.indexOf("await sendPrivateReply("), "the price DM text is known before its echo can arrive");
   const bot = await read("../app/api/telegram/webhook/route.ts");
-  assert.match(bot, /\^\(\?:seh\|ws\|igrev\|igdm\):/);
+  assert.match(bot, /\^\(\?:seh\|ws\|omb\|igrev\|igdm\):/);
   assert.match(bot, /after\(\(\) => directTick\(\)/);
   const vercel = JSON.parse(await read("../vercel.json"));
   for (const cron of vercel.crons) assert.match(cron.schedule, /^\d+ \d+ \* \* \*$/, "Hobby: daily crons only");

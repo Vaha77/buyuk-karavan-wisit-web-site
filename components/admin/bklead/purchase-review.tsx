@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, X } from "lucide-react";
 import { approvePurchaseAction, rejectPurchaseAction } from "@/app/admin/(protected)/customers/actions";
-import { rejectCorrectionAction } from "@/app/admin/(sex)/seh/actions";
+import { checkStoreDiffAction, rejectCorrectionAction } from "@/app/admin/(sex)/seh/actions";
 import { LinkButton } from "@/components/admin/feedback";
 import { Dialog } from "./dialog";
 
@@ -56,5 +56,22 @@ export function CorrectionReviewButtons({ id, href, label }: { id: string; href:
         <div className="bk-actions" style={{ justifyContent: "flex-end" }}><button type="button" className="bk-btn" onClick={() => setRejecting(false)} disabled={pending}>Bekor qilish</button><button type="submit" className="bk-btn is-danger" disabled={pending || reason.trim().length < 3}>Rad etish</button></div>
       </form>
     </Dialog>}
+  </div>;
+}
+
+/** Omborchi shortage report: Super Admin marks it seen ("Tasdiqlash"). */
+export function StoreDiffButton({ id, label }: { id: string; label: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const check = () => startTransition(async () => {
+    setError("");
+    const result = await checkStoreDiffAction(id);
+    if (!result.ok) { setError(result.error); return; }
+    router.refresh();
+  });
+  return <div className="bk-actions" style={{ justifyContent: "flex-end" }}>
+    <button type="button" className="bk-btn is-primary" disabled={pending} onClick={check} aria-label={`${label} — tasdiqlash`}><Check size={15}/>Tasdiqlash</button>
+    {error && <span className="bk-muted" role="alert">{error}</span>}
   </div>;
 }

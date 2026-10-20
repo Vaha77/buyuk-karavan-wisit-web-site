@@ -15,7 +15,7 @@ const KIND_JOIN = Prisma.sql`LEFT JOIN LATERAL (
   WHERE i."orderId" = o.id) k ON true`;
 const IS_AGREGAT = Prisma.sql`(CASE WHEN k.agregat THEN true WHEN k.known THEN false ELSE o.type = 'AGREGAT' END)`;
 const TOTAL_USD = Prisma.sql`CASE WHEN jsonb_typeof(o."priceSnapshot"->'totalBaseUsd') = 'number' THEN (o."priceSnapshot"->>'totalBaseUsd')::numeric ELSE 0 END`;
-const OUT = Prisma.sql`o.status IN ('ISSUED', 'RECEIVED')`;
+const OUT = Prisma.sql`o.status IN ('ISSUED', 'RECEIVED', 'RECEIVED_STORE', 'CLIENT_LOADED')`;
 // "Zayavkasiz chiqim" is accepted and issued in the same moment, so it would pull the preparation average to zero.
 const PREP_SECONDS = Prisma.sql`CASE WHEN NOT o."noRequest" AND o."acceptedAt" IS NOT NULL AND o."issuedAt" IS NOT NULL THEN extract(epoch FROM o."issuedAt" - o."acceptedAt") END`;
 const n = (value: bigint | number | string | null) => (value === null ? 0 : Number(value));

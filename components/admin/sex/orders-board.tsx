@@ -42,7 +42,7 @@ export function CarriedNote({ row }: { row: OrderRow }) {
   return <div className="sx-carried"><span className="sx-pill is-sm is-yellow">{monthName(`0000-${row.carriedFrom.slice(0, 2)}`)}dan o‘tdi</span> <small>eski raqam: <s>{row.carriedFrom}</s></small></div>;
 }
 
-const WAIT_TEXT = { NEW: "Seh qabul qilishi kutilmoqda", ACCEPTED: "Navbatda · terish kutilmoqda", STARTED: "Sehda terilmoqda", ISSUED: "Krimga olish kutilmoqda", RECEIVED: "✓ Yopildi", CANCELLED: "Bekor qilingan" } as const;
+const WAIT_TEXT = { NEW: "Seh qabul qilishi kutilmoqda", ACCEPTED: "Navbatda · terish kutilmoqda", STARTED: "Sehda terilmoqda", ISSUED: "Omborga qabul kutilmoqda", RECEIVED: "✓ Yopildi", RECEIVED_STORE: "Omborda · mijozga yuklash kutilmoqda", CLIENT_LOADED: "✓ Mijozga yuklandi", CANCELLED: "Bekor qilingan" } as const;
 const queueLabel = (row: OrderRow) => (row.queue ? `${STATUS_LABEL.ACCEPTED} (${row.queue}-navbat)` : STATUS_LABEL.ACCEPTED);
 
 export function OrdersBoard({ view = "active", role, userName, rows, month, months, parts, sellers, customers, top, summary, fix }: Props) {
@@ -94,7 +94,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
   const count = (status: OrderRow["status"]) => rows.filter(row => row.status === status).length;
   const stats = workshop
     ? [{ k: "Qabul qilishim kerak", v: count("NEW"), tone: "is-blue" }, { k: "Ishlanmoqda · chiqarishim kerak", v: count("ACCEPTED"), tone: "is-yellow" }]
-    : [{ k: "Yangi · qabul kutmoqda", v: count("NEW"), tone: "is-blue" }, { k: "Navbatda", v: count("ACCEPTED"), tone: "is-slate" }, { k: "Terilmoqda", v: count("STARTED"), tone: "is-yellow" }, { k: "Chiqib ketdi · krim kutmoqda", v: count("ISSUED"), tone: "is-red" }, { k: "Krimga olindi", v: count("RECEIVED"), tone: "is-green" }];
+    : [{ k: "Yangi · qabul kutmoqda", v: count("NEW"), tone: "is-blue" }, { k: "Navbatda", v: count("ACCEPTED"), tone: "is-slate" }, { k: "Terilmoqda", v: count("STARTED"), tone: "is-yellow" }, { k: "Chiqib ketdi · qabul kutmoqda", v: count("ISSUED"), tone: "is-red" }, { k: "Qabul qilindi", v: count("RECEIVED") + count("RECEIVED_STORE") + count("CLIENT_LOADED"), tone: "is-green" }];
   const title = workshop ? `Mening vazifalarim · ${userName}` : seller ? "Mening zakazlarim" : `Seh zakazlari · ${month.label}`;
   const subtitle = workshop ? "Zapchast va agregat zakazlari · qabul qiling, chiqqach “Chiqib ketdi” bosing" : seller ? "Bergan zakazlaringiz va ularning holati" : boss ? "Hammasini ko‘rasiz · sizning tugmangiz faqat “Krimga oldim”" : "Hammasini ko‘rasiz · holatni seh va Super Admin o‘zgartiradi";
 
@@ -107,7 +107,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
               {row.closed && boss && <div style={{ marginBottom: 6 }}><button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => { setError(""); setEditing({ row, requestId: null }); }}>Tahrirlash</button></div>}
               {action ? <button type="button" className={`sx-btn is-md ${action === "receive" ? "is-red" : "is-primary"}`} disabled={pending} aria-busy={isBusy(`${row.id}:${action}`)} onClick={() => act(row, action)}><BusyLabel busy={isBusy(`${row.id}:${action}`)}>{ACTION_LABEL[action]}</BusyLabel></button>
                 : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id), undefined, `${row.id}:confirm`)}><BusyLabel busy={isBusy(`${row.id}:confirm`)}>Tasdiqlayman</BusyLabel></button>
-                : row.status !== "STARTED" && <span className="sx-muted">{WAIT_TEXT[row.status]}</span>}
+                : row.status !== "STARTED" && <span className="sx-muted">{row.status === "RECEIVED_STORE" && row.purpose === "SHOP" ? "✓ Omborda" : WAIT_TEXT[row.status]}</span>}
               {row.status === "STARTED" && row.startedAt && <WorkingStatus acceptedAt={row.startedAt} dueDate={row.dueDate}/>}
               {row.cancelled && <div className="sx-muted" style={{ marginTop: 4 }}>{row.cancelled.by ?? "—"} · {row.cancelled.at}{row.cancelled.reason ? <><br/>Sabab: {row.cancelled.reason}</> : null}</div>}
               {row.canCancel && <div style={{ marginTop: 6 }}><button type="button" className="sx-btn is-sm is-danger-ghost" disabled={pending} onClick={() => { setError(""); setCancelReason(""); setCancelling(row); }}>Bekor qilish</button></div>}

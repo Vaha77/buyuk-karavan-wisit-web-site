@@ -3,11 +3,12 @@ import { z } from "zod";
 import { requireSexUser } from "@/lib/auth/require-admin";
 import { canCreateOrders } from "@/lib/sex/rules";
 import { transitionInputError, transitionInputSchema } from "@/lib/sex/validation";
-import { cancelOrder, confirmNoRequest, editOrder, rejectCorrection, requestCorrection, setOrderTest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
+import { checkStoreDiff, cancelOrder, confirmNoRequest, editOrder, rejectCorrection, requestCorrection, setOrderTest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
 import { createLinkCode, resendOrder, sendPersonalTest } from "@/lib/sex/bot";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import type { DeliveryStatus } from "@/lib/sex/bot-text";
+import { ProjectImageError, uploadProjectImage } from "@/lib/projects/storage";
 
 export type SexActionResult = { ok: true; number?: string; id?: string; telegram?: DeliveryStatus; repeated?: boolean } | { ok: false; error: string; duplicate?: { number: string } };
 
@@ -143,4 +144,37 @@ export async function editOrderAction(raw: unknown): Promise<SexActionResult> {
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
   const { id, requestId, ...input } = parsed.data;
   return editOrder(user, id, input, requestId);
+}
+
+/** Omborchi: "✓ Qabul qildim", "Kamchilik bor / Soni boshqa" (actual count + reason, checked in transitionOrder) and "🚚 Mijozga yuklandi" (optional car number / photo). */
+export async function storeStepAction(form: FormData): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  if (user.role !== "STOREKEEPER") return { ok: false, error: "Bu tugma faqat omborchi uchun." };
+  const id = String(form.get("id") ?? ""), action = form.get("action"), qty = form.get("qty"), photo = form.get("photo");
+  if (!id || id.length > 40 || (action !== "store" && action !== "load")) return { ok: false, error: "So‘rov noto‘g‘ri." };
+  let photoUrl: string | null = null;
+  if (action === "load" && photo instanceof File && photo.size > 0) {
+    try { photoUrl = await uploadProjectImage(`ombor-${id}`, photo); }
+    catch (error) { return { ok: false, error: error instanceof ProjectImageError ? error.message : "Rasm yuklanmadi." }; }
+  }
+  const result = await transitionOrder(user, id, action, undefined, "site", { receivedQty: qty === null || qty === "" ? undefined : Number(qty), note: String(form.get("note") ?? "") || null, car: String(form.get("car") ?? "") || null, photoUrl });
+  return result.ok ? { ok: true } : result;
+}
+
+/** Omborchi "Sehdan so‘rash": one spare part as an ordinary zapchast request, "Magazinga", placed by the omborchi. */
+export async function storeRequestAction(raw: unknown): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  if (user.role !== "STOREKEEPER") return { ok: false, error: "Faqat omborchi uchun." };
+  const parsed = z.object({ productId: z.string().min(1, "Zapchastni tanlang.").max(40), qty: z.number().int("Soni butun bo‘lsin.").min(1, "Soni kamida 1.").max(9999), note: common.note, requestId: common.requestId, confirmDuplicate: common.confirmDuplicate }).safeParse(raw);
+  if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+  const { productId, qty, note, requestId, confirmDuplicate } = parsed.data;
+  const result = await createZapchastOrder(user, { purpose: "SHOP", customerId: null, customerName: null, dueDate: null, note, items: [{ productId, qty }] }, undefined, { requestId, confirmDuplicate });
+  return result.ok ? { ok: true, number: result.number, id: result.id, telegram: result.telegram } : result;
+}
+
+/** "Tasdiqlash kerak" → "Ko‘rdim" on an omborchi shortage report (SUPER_ADMIN, checked in checkStoreDiff). */
+export async function checkStoreDiffAction(id: unknown): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  if (typeof id !== "string" || !id) return { ok: false, error: "Zakaz tanlanmagan." };
+  return checkStoreDiff(user, id);
 }
