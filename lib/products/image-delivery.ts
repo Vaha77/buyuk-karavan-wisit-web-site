@@ -12,4 +12,3 @@ export function isPublicNeonImage(src: string): boolean {
   }
 }
 
-export const isPublicNeonProductImage = isPublicNeonImage;

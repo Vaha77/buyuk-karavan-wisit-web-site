@@ -103,17 +103,27 @@ async function loadAttention(now: Date, today: string) {
     total,
     rows: orders.map(order => {
       const dueDate = order.dueDate?.toISOString().slice(0, 10) ?? null;
-      const product = order.type === "AGREGAT" ? `${order.items[0]?.title ?? "—"}${order.qty > 1 ? ` ×${order.qty}` : ""}` : order.items.map(item => `${item.title} ×${item.qty}`).join(", ");
-      return { id: order.id, number: orderNumber(order), status: order.status, createdAt: order.createdAt, dueDate, product, seller: order.seller.name, customerName: order.customerName, reasons: attentionReasons({ status: order.status, createdAt: order.createdAt, dueDate }, now) };
+      return { id: order.id, number: orderNumber(order), status: order.status, createdAt: order.createdAt, dueDate, product: productLabel(order), seller: order.seller.name, customerName: order.customerName, reasons: attentionReasons({ status: order.status, createdAt: order.createdAt, dueDate }, now) };
     }),
   };
 }
 
+const productLabel = (order: { type: string; qty: number; items: Array<{ title: string; qty: number }> }) => order.type === "AGREGAT" ? `${order.items[0]?.title ?? "—"}${order.qty > 1 ? ` ×${order.qty}` : ""}` : order.items.map(item => `${item.title} ×${item.qty}`).join(", ");
+
+/** Desktop dashboard table: the 5 newest real orders, only the shown fields (read-only; listOrders closes months and loads 500 rows). */
+async function loadLatest() {
+  const orders = await getDb().workshopOrder.findMany({
+    where: { isTest: false, status: { not: "CANCELLED" } }, orderBy: { createdAt: "desc" }, take: 5,
+    select: { id: true, monthKey: true, monthNo: true, type: true, qty: true, status: true, customerName: true, priceSnapshot: true, seller: { select: { name: true } }, items: { orderBy: { order: "asc" }, take: 3, select: { title: true, qty: true } } },
+  });
+  return orders.map(order => { const total = (order.priceSnapshot as { totalBaseUsd?: unknown } | null)?.totalBaseUsd; return { id: order.id, number: orderNumber(order), product: productLabel(order), customerName: order.customerName, seller: order.seller.name, totalUsd: typeof total === "number" ? total : null, status: order.status }; });
+}
+
 export async function getWorkshopDashboard(period: { from: Date; to: Date; prevFrom: Date }, now = new Date()) {
   const today = dayKey(now);
-  const [kpis, weekly, sellers, products, attention] = await Promise.all([
-    loadKpis(period.from, period.to, period.prevFrom, today), loadWeekly(now), loadSellers(period.from, period.to), loadTopProducts(period.from, period.to), loadAttention(now, today),
+  const [kpis, weekly, sellers, products, attention, latest] = await Promise.all([
+    loadKpis(period.from, period.to, period.prevFrom, today), loadWeekly(now), loadSellers(period.from, period.to), loadTopProducts(period.from, period.to), loadAttention(now, today), loadLatest(),
   ]);
-  return { kpis, weekly, sellers, products, attention };
+  return { kpis, weekly, sellers, products, attention, latest };
 }
 export type WorkshopDashboard = Awaited<ReturnType<typeof getWorkshopDashboard>>;

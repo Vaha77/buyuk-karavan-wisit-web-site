@@ -368,3 +368,4 @@
 .sp-podium .is-2 .sp-podium-base{height:60px;background:rgba(34,211,238,.18)}.sp-podium .is-3 .sp-podium-avatar{background:linear-gradient(160deg,#ec4899,#9d174d)}
 .sp-rank-list{display:grid}.sp-rank-list>div{display:grid;gap:7px;padding:10px 0;border-top:1px solid rgba(255,255,255,.05)}.sp-rank-list>div>div:first-child{display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:700}.sp-rank-list b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sp-rank-list span{white-space:nowrap}
 .bk-head>.chips{display:flex;max-width:100%}
+.bk-latest-orders{margin-top:14px}@media(max-width:767px){.bk-latest-orders{display:none}}

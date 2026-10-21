@@ -15,7 +15,7 @@ const PILL_TONE = { blue: "info", slate: "wait", yellow: "gold", red: "red", gre
 /** "Seh zakazlari" block of the dashboard (SUPER_ADMIN / ADMIN). Streams in on its own behind <WorkshopSectionSkeleton/>. */
 export async function WorkshopSection({ period }: { period: Period }) {
   const now = new Date();
-  const { kpis, weekly, sellers, products, attention } = await getWorkshopDashboard(period, now);
+  const { kpis, weekly, sellers, products, attention, latest } = await getWorkshopDashboard(period, now);
   const change = percentChange(kpis.total, kpis.prev);
   const DeltaIcon = change.direction === "down" ? ArrowDownRight : change.direction === "flat" ? null : ArrowUpRight;
   const inShop = kpis.now.new + kpis.now.accepted + kpis.now.started;
@@ -75,5 +75,14 @@ export async function WorkshopSection({ period }: { period: Period }) {
         {attention.total > attention.rows.length && <p className="bk-muted" style={{ marginTop: 10 }}>Yana {formatInt(attention.total - attention.rows.length)} ta — <Link href="/admin/seh">barchasini ko‘rish</Link></p>}
       </section>
     </div>
+
+    {latest.length > 0 && <section className="bk-card bk-latest-orders" aria-labelledby="bk-sex-latest-title">
+      <div className="bk-card-head"><h2 id="bk-sex-latest-title">So‘nggi zakazlar</h2><Link href="/admin/seh">Hammasi →</Link></div>
+      <div className="bk-table-wrap"><table className="bk-table"><thead><tr><th>№</th><th>Mahsulot</th><th>Mijoz</th><th>Sotuvchi</th><th>Summa</th><th>Holat</th></tr></thead>
+        <tbody>{latest.map(order => <tr key={order.id}>
+          <td><Link href={orderHref(order.id)} className="num-g">{order.number}</Link></td><td>{order.product}</td><td>{order.customerName ?? "—"}</td><td>{order.seller}</td>
+          <td><b>{order.totalUsd === null ? "—" : formatUsd(order.totalUsd)}</b></td><td><Pill tone={PILL_TONE[STATUS_TONE[order.status]]}>{STATUS_LABEL[order.status]}</Pill></td>
+        </tr>)}</tbody></table></div>
+    </section>}
   </section>;
 }

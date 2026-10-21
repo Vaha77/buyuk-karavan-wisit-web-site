@@ -8,13 +8,15 @@ import "./hero.css";
 
 const blade = "M0-6C10-30 34-34 40-22C30-16 16-10 4 2Z";
 function Fan({ defs = false }: { defs?: boolean }) {
-  return <svg className="hero-fan" viewBox="-50 -50 100 100" aria-hidden="true">
-    {defs && <defs><linearGradient id="hero-blade" x1="0" x2="1"><stop stopColor="#5b6178"/><stop offset="1" stopColor="#9aa1bb"/></linearGradient><radialGradient id="hero-hub"><stop stopColor="#cfd4e6"/><stop offset="1" stopColor="#4a4f63"/></radialGradient></defs>}
-    <circle r="47" fill="#0c0d13" stroke="#3b3f52" strokeWidth="2"/>
-    <g className="hero-fan-rot">{[0, 72, 144, 216, 288].map(angle => <path key={angle} d={blade} transform={`rotate(${angle})`} fill="url(#hero-blade)"/>)}</g>
-    <circle r="8" fill="url(#hero-hub)"/>
-    <g fill="none" stroke="rgba(255,255,255,.13)" strokeWidth="1.2"><circle r="44"/><circle r="34"/><circle r="24"/><path d="M-47 0H47M0-47V47"/></g>
-  </svg>;
+  // Blades are their own <svg> so the whole element rotates on the compositor (an inner <g> would repaint every frame).
+  return <span className="hero-fan" aria-hidden="true">
+    <svg viewBox="-50 -50 100 100"><circle r="47" fill="#0c0d13" stroke="#3b3f52" strokeWidth="2"/></svg>
+    <svg className="hero-fan-rot" viewBox="-50 -50 100 100">
+      {defs && <defs><linearGradient id="hero-blade" x1="0" x2="1"><stop stopColor="#5b6178"/><stop offset="1" stopColor="#9aa1bb"/></linearGradient><radialGradient id="hero-hub"><stop stopColor="#cfd4e6"/><stop offset="1" stopColor="#4a4f63"/></radialGradient></defs>}
+      {[0, 72, 144, 216, 288].map(angle => <path key={angle} d={blade} transform={`rotate(${angle})`} fill="url(#hero-blade)"/>)}
+    </svg>
+    <svg viewBox="-50 -50 100 100"><circle r="8" fill="url(#hero-hub)"/><g fill="none" stroke="rgba(255,255,255,.13)" strokeWidth="1.2"><circle r="44"/><circle r="34"/><circle r="24"/><path d="M-47 0H47M0-47V47"/></g></svg>
+  </span>;
 }
 
 /** First word of the second headline line (or of the only line) gets the gradient. */

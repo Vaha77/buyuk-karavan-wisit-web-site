@@ -20,7 +20,7 @@
 .hero-ring-2{width:290px;height:290px;border-color:rgba(124,92,255,.35)}
 .hero-ring-3{width:180px;height:180px;border:0;background:radial-gradient(circle,rgba(34,211,238,.35),rgba(124,92,255,.15) 60%,transparent 70%);animation:hero-breath 4s ease-in-out infinite}
 .hero-unit{position:absolute;left:50%;top:50%;width:210px;height:150px;transform:translate(-50%,-50%);border-radius:22px;background:linear-gradient(160deg,#2a2d3c,#14151d);border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 60px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.12);display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px;animation:hero-hover 5s ease-in-out infinite}
-.hero-fan{width:100%;height:100%;display:block}
+.hero-fan{width:100%;height:100%;display:block;position:relative}.hero-fan>svg{position:absolute;inset:0;width:100%;height:100%}.hero-fan-rot{will-change:transform}
 .hero-fan-rot{animation:hero-fan 2.6s linear infinite}.hero-fan+.hero-fan .hero-fan-rot{animation-duration:3s}
 .hero-float{position:absolute;padding:11px 14px;border-radius:16px;font-size:12px;animation:hero-bob 6s ease-in-out infinite}
 .hero-float span{color:var(--muted)}.hero-float b{display:block;font-size:16px}.hero-cold{color:#67e8f9}.hero-ok{color:var(--ok)}

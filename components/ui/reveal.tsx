@@ -41,7 +41,11 @@ export function useReveal() {
     scan();
     // Rows added later (filters, client navigation inside a page) are picked up once per frame.
     let frame = 0;
-    const mutations = new MutationObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(scan); });
+    // Counters only swap text nodes; skip those so a count-up doesn't rescan the page every frame.
+    const mutations = new MutationObserver(records => {
+      if (!records.some(record => [...record.addedNodes].some(node => node.nodeType === Node.ELEMENT_NODE))) return;
+      cancelAnimationFrame(frame); frame = requestAnimationFrame(scan);
+    });
     mutations.observe(document.body, { childList: true, subtree: true });
     return () => { observer.disconnect(); mutations.disconnect(); cancelAnimationFrame(frame); };
   }, [pathname]);
