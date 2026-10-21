@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { isPublicNeonProductImage } from "@/lib/products/image-delivery";
 import { Activity, ArrowRight, CircuitBoard, DoorClosed, PanelsTopLeft, Radio, Snowflake, Waves } from "lucide-react";
 import type { Product } from "@/lib/products/types";
 import { ProductPrice } from "./product-price";
@@ -15,12 +16,12 @@ const iconByCategory = {
   accessories: Radio,
 } as const;
 
-export function ProductCard({ product, exchangeRate, priority = false }: { product: Product; exchangeRate: string|null; priority?: boolean }) {
+export function ProductCard({ product, exchangeRate }: { product: Product; exchangeRate: string|null }) {
   const Icon = iconByCategory[product.category as keyof typeof iconByCategory] ?? Radio;
   return <Link className="catalog-card" href={`/products/${product.slug}`} aria-label={`${product.name} ${product.model} — batafsil`}>
     <div className="catalog-card-image">
       <span className="catalog-card-badge">{product.badge}</span>
-      {product.image ? <Image priority={priority} className="catalog-card-real-image" src={product.image} alt={`${product.name} ${product.model}`} fill sizes="(max-width: 767px) 50vw, 380px" /> : <span className="catalog-card-placeholder"><Icon className="catalog-card-icon" size={34} strokeWidth={1.5} aria-hidden="true"/><small>Rasm tez orada</small></span>}
+      {product.image ? <Image unoptimized={isPublicNeonProductImage(product.image)} className="catalog-card-real-image" src={product.image} alt={`${product.name} ${product.model}`} fill sizes="(max-width: 767px) 50vw, 380px" /> : <span className="catalog-card-placeholder"><Icon className="catalog-card-icon" size={34} strokeWidth={1.5} aria-hidden="true"/><small>Rasm tez orada</small></span>}
     </div>
     <div className="catalog-card-body">
       <div className="catalog-card-identification"><h2>{product.name}</h2><p>{product.model}</p></div>

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Phone } from "lucide-react";
 import type { Product } from "@/lib/products/types";
+import { isPublicNeonProductImage } from "@/lib/products/image-delivery";
 import { ProductCard } from "@/components/products/product-card";
 import { MetaViewContent } from "@/components/tracking/meta-pixel";
 import { LandingForm } from "./landing-form";
@@ -28,7 +29,7 @@ export function LeadLanding({ product, related, exchangeRate, priceText, priceUz
       <section className="landing-hero" aria-labelledby="landing-title">
         <div className="landing-product">
           <div className="landing-image">
-            {product.image ? <Image src={product.image} alt={title} fill priority sizes="(max-width: 760px) 96px, 520px"/> : <span aria-hidden="true">✳</span>}
+            {product.image ? <Image unoptimized={isPublicNeonProductImage(product.image)} src={product.image} alt={title} fill priority sizes="(max-width: 760px) 96px, 520px"/> : <span aria-hidden="true">✳</span>}
           </div>
           <div className="landing-name">
             {product.categoryName && <span className="landing-category">{product.categoryName}</span>}
