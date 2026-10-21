@@ -6,15 +6,14 @@ import { LoginForm } from "./login-form";
 import "./login.css";
 import Link from "next/link";
 import { BrandEmblem } from "@/components/admin/brand-emblem";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export const metadata: Metadata = { title: "Kirish — Admin | BUYUK KARAVAN" };
 
 export default async function AdminLoginPage() {
   const session = await getAdminSession();
   if (session) redirect(session.user.mustPasswordChange ? PASSWORD_PAGE : homeFor(session.user.role));
-  return <main className="admin-login"><div className="admin-login-card">
-    <ThemeToggle className="theme-toggle-corner"/><div className="admin-login-brand"><BrandEmblem/><strong>BUYUK KARAVAN</strong></div>
+  return <main className="admin-login"><div className="admin-login-card glass glass-blur">
+    <div className="admin-login-brand"><BrandEmblem/><strong>Buyuk Karavan</strong></div>
     <div className="admin-login-intro"><span>HIMOYALANGAN HUDUD</span><h1>Admin Panel</h1><p>Davom etish uchun hisobingizga kiring.</p></div>
     <LoginForm /><p className="admin-login-forgot">Parolni unutdingizmi? Admin bilan bog‘laning.</p><Link className="admin-register-link" href="/admin/register">Ro‘yxatdan o‘tish</Link>
   </div></main>;

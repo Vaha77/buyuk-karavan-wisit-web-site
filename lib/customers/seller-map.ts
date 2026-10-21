@@ -5,12 +5,12 @@ import { countsFor, CUSTOMER_REGIONS } from "../dashboard/regions";
 export type RegionStatus = "strongest" | "strong" | "medium" | "low" | "stale" | "empty";
 /** Map colours and legend labels, in legend order. "empty" is drawn with a hatch pattern (see the map component). */
 export const REGION_STATUS: Record<RegionStatus, { label: string; color: string; text: "dark" | "light" }> = {
-  strongest: { label: "Eng kuchli", color: "#0F6B3A", text: "light" },
-  strong: { label: "Kuchli", color: "#45B36B", text: "dark" },
-  medium: { label: "O‘rta", color: "#A8D5A2", text: "dark" },
-  low: { label: "Kam", color: "#F2C230", text: "dark" },
-  stale: { label: "90+ kun xarid yo‘q", color: "#D2372B", text: "light" },
-  empty: { label: "Xarid yo‘q · imkoniyat", color: "var(--map-none, #DCE8F8)", text: "dark" },
+  strongest: { label: "Eng kuchli", color: "#22d3ee", text: "dark" },
+  strong: { label: "Kuchli", color: "#7c5cff", text: "light" },
+  medium: { label: "O‘rta", color: "#a78bfa", text: "dark" },
+  low: { label: "Kam", color: "#ecc96b", text: "dark" },
+  stale: { label: "90+ kun xarid yo‘q", color: "#fb7185", text: "dark" },
+  empty: { label: "Xarid yo‘q · imkoniyat", color: "var(--map-none, #DCE8F8)", text: "light" },
 };
 export const STATUS_ORDER: RegionStatus[] = ["strongest", "strong", "medium", "low", "stale", "empty"];
 export const STALE_DAYS = 90;

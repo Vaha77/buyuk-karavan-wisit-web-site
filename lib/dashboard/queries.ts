@@ -17,18 +17,21 @@ async function uzsRate() { const rate = await getUsdUzsRate(); return rate ? Num
 // ---- KPIs ------------------------------------------------------------------------------------
 async function loadKpis(fromIso: string, toIso: string, prevFromIso: string) {
   const from = new Date(fromIso), to = new Date(toIso), prevFrom = new Date(prevFromIso);
-  const db = getDb(), dayAgo = new Date(Date.now() - DAY);
-  const [leads, prevLeads, byCountry, fresh, stale, sales, prevSales] = await Promise.all([
-    db.lead.count({ where: { createdAt: { gte: from, lt: to } } }),
-    db.lead.count({ where: { createdAt: { gte: prevFrom, lt: from } } }),
-    db.lead.groupBy({ by: ["country"], where: { createdAt: { gte: from, lt: to } }, _count: { _all: true } }),
-    db.lead.count({ where: { status: "NEW" } }),
-    db.lead.count({ where: { status: "NEW", createdAt: { lt: dayAgo } } }),
-    db.sale.count({ where: { status: "APPROVED", approvedAt: { gte: from, lt: to } } }),
-    db.sale.count({ where: { status: "APPROVED", approvedAt: { gte: prevFrom, lt: from } } }),
-  ]);
-  const uz = byCountry.find(row => row.country === "UZ")?._count._all ?? 0;
-  const foreign = byCountry.filter(row => row.country && row.country !== "UZ").reduce((sum, row) => sum + row._count._all, 0);
+  const dayAgo = new Date(Date.now() - DAY);
+  // One round-trip instead of seven separate counts.
+  const [row] = await getDb().$queryRaw<Array<Record<"leads" | "prevLeads" | "uz" | "foreign" | "fresh" | "stale" | "sales" | "prevSales", number>>>(Prisma.sql`
+    SELECT l.*, s.* FROM (
+      SELECT count(*) FILTER (WHERE "createdAt" >= ${from} AND "createdAt" < ${to})::int AS leads,
+        count(*) FILTER (WHERE "createdAt" >= ${prevFrom} AND "createdAt" < ${from})::int AS "prevLeads",
+        count(*) FILTER (WHERE "createdAt" >= ${from} AND "createdAt" < ${to} AND country = 'UZ')::int AS uz,
+        count(*) FILTER (WHERE "createdAt" >= ${from} AND "createdAt" < ${to} AND country <> '' AND country <> 'UZ')::int AS "foreign",
+        count(*) FILTER (WHERE status = 'NEW')::int AS fresh,
+        count(*) FILTER (WHERE status = 'NEW' AND "createdAt" < ${dayAgo})::int AS stale
+      FROM "Lead" WHERE "createdAt" >= ${prevFrom} OR status = 'NEW') l,
+    (SELECT count(*) FILTER (WHERE "approvedAt" >= ${from} AND "approvedAt" < ${to})::int AS sales,
+        count(*) FILTER (WHERE "approvedAt" >= ${prevFrom} AND "approvedAt" < ${from})::int AS "prevSales"
+      FROM "Sale" WHERE status = 'APPROVED' AND "approvedAt" >= ${prevFrom}) s`);
+  const { leads, prevLeads, uz, foreign, fresh, stale, sales, prevSales } = row;
   return { leads, prevLeads, uz, foreign, unknown: leads - uz - foreign, fresh, stale, sales, prevSales };
 }
 const cachedKpis = unstable_cache(loadKpis, ["dashboard-kpis-v1"], { revalidate: 300, tags: [DASHBOARD_TAG] });
@@ -37,14 +40,15 @@ const cachedKpis = unstable_cache(loadKpis, ["dashboard-kpis-v1"], { revalidate:
 async function loadWeekly(todayKey: string) {
   const start = weekWindowStart(new Date(`${todayKey}T12:00:00+05:00`), 24);
   const monday = Prisma.sql`to_char(date_trunc('week', "createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tashkent'), 'YYYY-MM-DD')`;
-  const query = (sql: Prisma.Sql) => getDb().$queryRaw<Array<{ week: string; value: number }>>(sql).then(rows => new Map(rows.map(row => [row.week, Number(row.value)])));
-  const [leads, calculations, seh, sales] = await Promise.all([
-    query(Prisma.sql`SELECT ${monday} AS week, count(*)::float8 AS value FROM "Lead" WHERE "createdAt" >= ${start} GROUP BY 1`),
-    query(Prisma.sql`SELECT ${monday} AS week, count(*)::float8 AS value FROM "Calculation" WHERE "createdAt" >= ${start} GROUP BY 1`),
-    query(Prisma.sql`SELECT ${monday} AS week, count(*)::float8 AS value FROM "WorkshopOrder" WHERE "createdAt" >= ${start} AND NOT "isTest" AND status <> 'CANCELLED' GROUP BY 1`),
-    // Approved customer purchases ($) by their own date (a calendar day, already Tashkent).
-    query(Prisma.sql`SELECT to_char(date_trunc('week', "date"), 'YYYY-MM-DD') AS week, sum("amountUsd")::float8 AS value FROM "CustomerPurchase" WHERE status = 'APPROVED' AND "date" >= ${dayKey(start)}::date GROUP BY 1`),
-  ]);
+  // One UNION ALL round-trip for the four series.
+  const rows = await getDb().$queryRaw<Array<{ kind: string; week: string; value: number }>>(Prisma.sql`
+    SELECT 'leads' AS kind, ${monday} AS week, count(*)::float8 AS value FROM "Lead" WHERE "createdAt" >= ${start} GROUP BY 2
+    UNION ALL SELECT 'calculations', ${monday}, count(*)::float8 FROM "Calculation" WHERE "createdAt" >= ${start} GROUP BY 2
+    UNION ALL SELECT 'seh', ${monday}, count(*)::float8 FROM "WorkshopOrder" WHERE "createdAt" >= ${start} AND NOT "isTest" AND status <> 'CANCELLED' GROUP BY 2
+    UNION ALL SELECT 'sales', to_char(date_trunc('week', "date"), 'YYYY-MM-DD'), sum("amountUsd")::float8 FROM "CustomerPurchase" WHERE status = 'APPROVED' AND "date" >= ${dayKey(start)}::date GROUP BY 2`);
+  // Approved customer purchases ($) are by their own date (a calendar day, already Tashkent).
+  const series = (kind: string) => new Map(rows.filter(row => row.kind === kind).map(row => [row.week, Number(row.value)]));
+  const leads = series("leads"), calculations = series("calculations"), seh = series("seh"), sales = series("sales");
   return Array.from({ length: 24 }, (_, index) => { const week = dayKey(new Date(start.getTime() + index * 7 * DAY)); return { week, leads: leads.get(week) ?? 0, calculations: calculations.get(week) ?? 0, seh: seh.get(week) ?? 0, sales: sales.get(week) ?? 0 }; });
 }
 const cachedWeekly = unstable_cache(loadWeekly, ["dashboard-weekly-v2"], { revalidate: 300, tags: [DASHBOARD_TAG] });

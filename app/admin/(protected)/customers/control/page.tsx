@@ -31,7 +31,7 @@ export default async function ControlPage() {
         <tbody>{rows.map(row => <tr key={row.id ?? "none"}>
           <td className="is-strong">{row.name}</td><td>{formatInt(row.total)}</td><td>{formatInt(row.due)}</td>
           <td className={row.overdue ? "is-orange" : undefined}>{formatInt(row.overdue)}</td><td className={row.notCalled.length ? "is-orange" : undefined}>{formatInt(row.notCalled.length)}</td>
-          <td className="is-left">{row.id ? <>{row.hasLogin ? <span className="bk-badge">login bor</span> : <span className="bk-badge is-grey">login yo‘q</span>} {row.hasTelegram ? <span className="bk-badge">Telegram</span> : <span className="bk-badge is-grey">Telegram yo‘q</span>}</> : <span className="bk-muted">faqat admin</span>}</td>
+          <td className="is-left">{row.id ? <>{row.hasLogin ? <span className="pill pill-ok">login bor</span> : <span className="bk-badge is-grey">login yo‘q</span>} {row.hasTelegram ? <span className="pill pill-info">Telegram</span> : <span className="bk-badge is-grey">Telegram yo‘q</span>}</> : <span className="bk-muted">faqat admin</span>}</td>
         </tr>)}</tbody>
       </table></div>
     </section>

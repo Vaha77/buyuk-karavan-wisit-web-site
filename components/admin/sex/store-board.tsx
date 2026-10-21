@@ -34,9 +34,10 @@ function useRun() {
 
 function Card({ row, meta, children }: { row: OrderRow; meta: string; children?: React.ReactNode }) {
   return <article className="sx-card" style={{ padding: "11px 12px", gap: 4 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}><b className="sx-mono" style={{ fontSize: 17 }}>{row.number}</b>{row.isTest && <span className="sx-pill is-sm is-grey">Test</span>}<span className={`sx-pill is-sm ${row.purpose === "CLIENT" ? "is-blue" : "is-slate"}`} style={{ marginLeft: "auto" }}>{purposeText(row)}</span></div>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}><b className="num-g" style={{ fontSize: 18 }}>{row.number}</b>{row.isTest && <span className="sx-pill is-sm is-grey">Test</span>}<span className={`sx-pill is-sm ${row.purpose === "CLIENT" ? "is-blue" : "is-slate"}`} style={{ marginLeft: "auto" }}>{purposeText(row)}</span></div>
     <div style={{ fontWeight: 600 }}>{row.product}</div>
     <div className="sx-muted" style={{ fontSize: 12 }}>{meta}</div>
+    <div className="steps" aria-hidden="true">{row.steps.map(step => <i key={step.label} className={step.state === "done" ? "f" : undefined}/>)}</div>
     {children}
   </article>;
 }
@@ -67,17 +68,17 @@ export function StoreBoard({ rows, userName, telegramLinked }: { rows: OrderRow[
     {error && !diff && !loading && <p className="sx-note is-error" role="alert">{error}</p>}
 
     <section className="sx-panel-section" aria-labelledby="omb-in">
-      <div className="sx-panel-title"><span style={{ background: "#D2372B" }}/><h2 id="omb-in">Sehdan keldi — qabul qiling</h2><b>{issued.length}</b></div>
+      <div className="sx-panel-title"><span style={{ background: "#fb7185" }}/><h2 id="omb-in">Sehdan keldi — qabul qiling</h2><b>{issued.length}</b></div>
       {issued.length ? issued.map(row => <Card key={row.id} row={row} meta={`${row.store.issuedBy ?? "Seh"} chiqardi · ${row.store.issuedAt ? when(row.store.issuedAt, now) : "—"}${row.customerName ? ` · mijoz: ${row.customerName}` : ""}`}>
         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-          <button type="button" className="sx-btn is-md is-primary" style={{ flex: 1, background: "#15803d", borderColor: "#15803d" }} disabled={pending} aria-busy={isBusy(`${row.id}:store`)} onClick={() => step(row, "store")}><BusyLabel busy={isBusy(`${row.id}:store`)}>✓ Qabul qildim</BusyLabel></button>
+          <button type="button" className="btn-g" style={{ flex: 1 }} disabled={pending} aria-busy={isBusy(`${row.id}:store`)} onClick={() => step(row, "store")}><BusyLabel busy={isBusy(`${row.id}:store`)}>✓ Qabul qildim</BusyLabel></button>
           <button type="button" className="sx-btn is-md" style={{ flex: 1 }} disabled={pending} onClick={() => { setError(""); setDiff(row); }}>{row.purpose === "CLIENT" ? "Kamchilik bor" : "Soni boshqa"}</button>
         </div>
       </Card>) : <div className="sx-panel-empty">Hozir qabul qilinadigan tovar yo‘q</div>}
     </section>
 
     <section className="sx-panel-section" aria-labelledby="omb-load">
-      <div className="sx-panel-title"><span style={{ background: "#c2410c" }}/><h2 id="omb-load">Mijozga yuklash kutilmoqda</h2><b>{waiting.length}</b></div>
+      <div className="sx-panel-title"><span style={{ background: "#ecc96b" }}/><h2 id="omb-load">Mijozga yuklash kutilmoqda</h2><b>{waiting.length}</b></div>
       {waiting.length ? waiting.map(row => <Card key={row.id} row={row} meta={`Mijoz: ${row.customerName ?? "—"} · sotuvchi ${row.sellerName} · omborda ${row.store.receivedAt ? daysInStore(row.store.receivedAt, now) : 0} kun`}>
         <button type="button" className="sx-btn is-md is-primary" style={{ marginTop: 8 }} disabled={pending} onClick={() => { setError(""); setLoading(row); }}>🚚 Mijozga yuklandi</button>
       </Card>) : <div className="sx-panel-empty">Yuklanadigan mijoz zakazi yo‘q</div>}
@@ -148,9 +149,9 @@ export function StoreRequest({ parts, rows }: { parts: Array<{ id: string; label
       {duplicate && <button type="button" className="sx-btn" disabled={pending} onClick={() => send(true)}>Baribir yuborish</button>}
     </form>
     <section className="sx-panel-section" aria-labelledby="omb-mine">
-      <div className="sx-panel-title"><span style={{ background: "#2457a6" }}/><h2 id="omb-mine">Mening so‘rovlarim</h2><b>{mine.length}</b></div>
+      <div className="sx-panel-title"><span style={{ background: "#22d3ee" }}/><h2 id="omb-mine">Mening so‘rovlarim</h2><b>{mine.length}</b></div>
       {mine.length ? mine.map(row => <article key={row.id} className="sx-card" style={{ padding: "11px 12px", gap: 4 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><b className="sx-mono" style={{ fontSize: 17 }}>{row.number}</b><span className={`sx-pill is-sm is-${STATUS_TONE[row.status]}`} style={{ marginLeft: "auto" }}>{STATUS_LABEL[row.status]}</span></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><b className="num-g" style={{ fontSize: 18 }}>{row.number}</b><span className={`sx-pill is-sm is-${STATUS_TONE[row.status]}`} style={{ marginLeft: "auto" }}>{STATUS_LABEL[row.status]}</span></div>
         <div style={{ fontWeight: 600 }}>{row.product}</div>
       </article>) : <div className="sx-panel-empty">Hali so‘rov yo‘q</div>}
     </section>

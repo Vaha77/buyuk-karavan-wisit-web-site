@@ -61,13 +61,15 @@ function mapRow(row: { hero: unknown; selector: unknown; solutions: unknown; fea
   return normalizeHomeContent({ hero: row.hero, selector: row.selector, solutions: row.solutions, featuredProducts: row.featuredProducts, temperature: row.temperatureRange, projects: row.projects, reasons: row.reasons, cta: row.cta, footer: row.footer });
 }
 
+const contentSelect = { hero: true, selector: true, solutions: true, featuredProducts: true, temperatureRange: true, projects: true, reasons: true, cta: true, footer: true } as const;
+
 function columns(content: HomeContent) {
   return { hero: content.hero as unknown as Prisma.InputJsonValue, selector: content.selector as unknown as Prisma.InputJsonValue, solutions: content.solutions as unknown as Prisma.InputJsonValue, featuredProducts: content.featuredProducts as unknown as Prisma.InputJsonValue, temperatureRange: content.temperature as unknown as Prisma.InputJsonValue, projects: content.projects as unknown as Prisma.InputJsonValue, reasons: content.reasons as unknown as Prisma.InputJsonValue, cta: content.cta as unknown as Prisma.InputJsonValue, footer: content.footer as unknown as Prisma.InputJsonValue };
 }
 
 export async function getHomeContent(): Promise<HomeContent> {
   const db = getDb();
-  const existing = await db.homeContent.findFirst({ orderBy: { createdAt: "asc" } });
+  const existing = await db.homeContent.findFirst({ orderBy: { createdAt: "asc" }, select: contentSelect });
   if (existing) return mapRow(existing);
   const defaults = cloneDefaults();
   const products = await db.product.findMany({ where: { isVisible: true }, orderBy: [{ order: "asc" }, { createdAt: "desc" }], select: { id: true }, take: 4 });

@@ -14,7 +14,7 @@ export function WorkshopLimitForm({ limit }: { limit: number }) {
     <form className="bk-actions" onSubmit={event => { event.preventDefault(); startTransition(async () => { const result = await saveWorkshopLimitAction(Number(value)); setMessage(result.ok ? { ok: true, text: "Saqlandi ✓" } : { ok: false, text: result.error }); }); }}>
       <label className="bk-field" style={{ width: 140 }}><span>Kuniga</span><input value={value} onChange={event => { setValue(event.target.value.replace(/\D+/g, "")); setMessage(null); }} inputMode="numeric" aria-label="Seh kunlik limiti"/></label>
       <button type="submit" className="bk-btn is-primary" style={{ alignSelf: "end", minHeight: 44 }} disabled={pending || !value}><BusyLabel busy={pending}>Saqlash</BusyLabel></button>
-      {message && <span className={`bk-muted`} role={message.ok ? "status" : "alert"} style={{ alignSelf: "end", paddingBottom: 12, color: message.ok ? "#1B6B43" : "#B42318", fontWeight: 700 }}>{message.text}</span>}
+      {message && <span className={`bk-muted`} role={message.ok ? "status" : "alert"} style={{ alignSelf: "end", paddingBottom: 12, color: message.ok ? "#34d399" : "#fb7185", fontWeight: 700 }}>{message.text}</span>}
     </form>
   </section>;
 }

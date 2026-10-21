@@ -59,7 +59,7 @@ export default async function PurchasesReviewPage() {
         <thead><tr><th>Sana</th><th className="is-left">Mijoz</th><th className="is-left">Sotuvchi</th><th>$</th><th className="is-left">Holat</th><th className="is-left">Kim</th></tr></thead>
         <tbody>{recent.map(row => <tr key={row.id}>
           <td>{row.date.toISOString().slice(0, 10)}</td><td className="is-left">{row.customer.name}</td><td className="is-left">{row.seller?.name ?? "—"}</td><td>{formatUsd(Number(row.amountUsd))}</td>
-          <td className="is-left"><span className={`bk-badge${row.status === "APPROVED" ? "" : " is-orange"}`}>{PURCHASE_STATUS[row.status]}</span>{row.rejectReason && <small style={{ display: "block", whiteSpace: "normal" }}>{row.rejectReason}</small>}</td>
+          <td className="is-left"><span className={`pill ${row.status === "APPROVED" ? "pill-ok" : row.status === "REJECTED" ? "pill-red" : "pill-wait"}`}>{PURCHASE_STATUS[row.status]}</span>{row.rejectReason && <small style={{ display: "block", whiteSpace: "normal" }}>{row.rejectReason}</small>}</td>
           <td className="is-left bk-muted">{row.reviewedBy?.name ?? "—"}</td>
         </tr>)}</tbody>
       </table></div>

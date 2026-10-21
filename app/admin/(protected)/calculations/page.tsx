@@ -27,7 +27,7 @@ export default async function CalculationsPage({ searchParams }: { searchParams:
           <p>Mijoz uchun loyiha va tijorat hisob-kitoblarini tayyorlash</p>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          <Link className="admin-primary-button" style={{ background: "var(--k-bg-ffffff, #fff)", color: "var(--k-fg-245487, #245487)" }} href="/admin/calculations/configurator">
+          <Link className="btn-ghost" href="/admin/calculations/configurator">
             Komplekt konfiguratori
           </Link>
           <Link className="admin-primary-button" href="/admin/calculations/new">
@@ -54,8 +54,8 @@ export default async function CalculationsPage({ searchParams }: { searchParams:
                     <th>№</th>
                     <th>Mijoz</th>
                     <th>Loyiha</th>
-                    <th>Jami</th>
                     <th>Sotuvchi</th>
+                    <th>Jami</th>
                     <th>Holat</th>
                     <th>Sana</th>
                     <th />

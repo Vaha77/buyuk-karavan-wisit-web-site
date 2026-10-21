@@ -3,12 +3,14 @@ import { AlertTriangle, ArrowDownRight, ArrowUpRight, Factory, PackageCheck, Tim
 import { formatDayMonth, formatInt, formatUsd } from "@/lib/dashboard/format";
 import { getWorkshopDashboard } from "@/lib/dashboard/workshop-queries";
 import { formatPrepTime, percentChange } from "@/lib/dashboard/workshop-rules";
-import { STATUS_LABEL, when } from "@/lib/sex/rules";
+import { STATUS_LABEL, STATUS_TONE, when } from "@/lib/sex/rules";
+import { Pill } from "@/components/ui/aurora";
 import { WeeklyLines } from "./charts";
 
 type Period = { from: Date; to: Date; prevFrom: Date; label: string };
 const initials = (name: string) => name.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
 const orderHref = (id: string) => `/admin/seh#order-${id}`;
+const PILL_TONE = { blue: "info", slate: "wait", yellow: "gold", red: "red", green: "ok", grey: "wait" } as const;
 
 /** "Seh zakazlari" block of the dashboard (SUPER_ADMIN / ADMIN). Streams in on its own behind <WorkshopSectionSkeleton/>. */
 export async function WorkshopSection({ period }: { period: Period }) {
@@ -39,7 +41,7 @@ export async function WorkshopSection({ period }: { period: Period }) {
 
     <div className="bk-grid-main">
       <section className="bk-card" aria-labelledby="bk-sex-weekly-title">
-        <div className="bk-card-head"><div><h2 id="bk-sex-weekly-title">Seh dinamikasi</h2><span className="bk-muted">So‘nggi 12 hafta, haftalik</span></div><div className="bk-legend"><span><i style={{ background: "#123E7C", borderRadius: "50%" }}/>Kelgan zakazlar</span><span><i style={{ background: "var(--k-bg-e07a2e, #E07A2E)", borderRadius: "50%" }}/>Chiqib ketgan</span></div></div>
+        <div className="bk-card-head"><div><h2 id="bk-sex-weekly-title">Seh dinamikasi</h2><span className="bk-muted">So‘nggi 12 hafta, haftalik</span></div><div className="bk-legend"><span><i style={{ background: "var(--chart-bar)", borderRadius: "50%" }}/>Kelgan zakazlar</span><span><i style={{ background: "#22d3ee", borderRadius: "50%" }}/>Chiqib ketgan</span></div></div>
         <WeeklyLines unit="zakaz" weeks={weekly.map(week => ({ label: formatDayMonth(new Date(`${week.week}T12:00:00+05:00`)), leads: week.incoming, calculations: week.issued }))} label="So‘nggi 12 haftada kelgan va chiqib ketgan seh zakazlari"/>
       </section>
       <section className="bk-card" aria-labelledby="bk-sex-top-title" style={{ display: "grid", alignContent: "start", gap: 14 }}>
@@ -64,11 +66,11 @@ export async function WorkshopSection({ period }: { period: Period }) {
         <div className="bk-card-head"><div><h2 id="bk-sex-alert-title">Diqqat talab</h2><span className="bk-muted">24 soatdan ortiq qabul qilinmagan va muddati o‘tgan</span></div>{attention.total > 0 && <span className="bk-badge is-red">{formatInt(attention.total)} ta</span>}</div>
         {attention.rows.length ? <div className="bk-list">{attention.rows.map(order => <Link key={order.id} href={orderHref(order.id)} style={{ color: "inherit", textDecoration: "none" }}>
           <span className="bk-alert-icon"><AlertTriangle size={15}/></span>
-          <span className="bk-grow"><b>{order.number} · {order.product}</b>
+          <span className="bk-grow"><b><span className="num-g">{order.number}</span> · {order.product}</b>
             <span>{[order.seller, order.customerName, `berildi ${when(order.createdAt, now)}`].filter(Boolean).join(" · ")}</span>
             <span className="bk-alert-reasons">{order.reasons.includes("overdue") && <em>Muddat {order.dueDate!.split("-").reverse().join(".")} o‘tgan</em>}{order.reasons.includes("unaccepted") && <em>24 soatdan beri qabul qilinmagan</em>}</span>
           </span>
-          <span className="bk-badge is-grey">{STATUS_LABEL[order.status]}</span>
+          <Pill tone={PILL_TONE[STATUS_TONE[order.status]]}>{STATUS_LABEL[order.status]}</Pill>
         </Link>)}</div> : <div className="bk-empty">Hammasi joyida — kechikkan zakaz yo‘q.</div>}
         {attention.total > attention.rows.length && <p className="bk-muted" style={{ marginTop: 10 }}>Yana {formatInt(attention.total - attention.rows.length)} ta — <Link href="/admin/seh">barchasini ko‘rish</Link></p>}
       </section>

@@ -23,14 +23,14 @@ export function WorkshopTelegramCell({ userId, linked, hint = "Seh mas’uliga y
   const copy = async () => { if (!link) return; try { await navigator.clipboard.writeText(link); setCopied(true); } catch { setCopied(false); } };
   return <div className="admin-user-seller" style={{ display: "grid", gap: 4, fontSize: 12 }}>
     {linked
-      ? <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}><b style={{ color: "var(--k-fg-1b6b43, #1B6B43)" }}>✅ Telegram ulangan</b><button type="button" className="admin-user-button is-danger" onClick={unlink} disabled={pending}>{pending ? "…" : "Uzish"}</button></span>
+      ? <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}><b style={{ color: "#34d399" }}>✅ Telegram ulangan</b><button type="button" className="admin-user-button is-danger" onClick={unlink} disabled={pending}>{pending ? "…" : "Uzish"}</button></span>
       : <button type="button" className="admin-user-button is-outline" onClick={makeLink} disabled={pending}>{pending ? "Tayyorlanmoqda…" : "Telegram bog‘lash"}</button>}
     {link && <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
       {link.startsWith("http") ? <a href={link} target="_blank" rel="noopener noreferrer" style={{ wordBreak: "break-all" }}>{link}</a> : <code>{link}</code>}
       <button type="button" className="admin-user-button is-outline" onClick={copy}>{copied ? "Nusxalandi ✓" : "Nusxalash"}</button>
-      <small style={{ color: "var(--k-fg-5b6b82, #5B6B82)" }}>{hint} · 15 daqiqa amal qiladi · u botda START bosadi</small>
+      <small style={{ color: "#8b90a6" }}>{hint} · 15 daqiqa amal qiladi · u botda START bosadi</small>
     </span>}
-    {error && <span role="alert" style={{ color: "var(--k-fg-b42318, #B42318)" }}>{error}</span>}
+    {error && <span role="alert" style={{ color: "#fb7185" }}>{error}</span>}
   </div>;
 }
 
@@ -48,7 +48,7 @@ export function InstagramDirectCell({ userId, linked, enabled }: { userId: strin
   return <div className="admin-user-seller" style={{ display: "grid", gap: 4, fontSize: 12 }}>
     <label style={{ display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={checked} disabled={pending} onChange={event => toggle(event.target.checked)}/> Instagram so‘rovlarini oladi</label>
     {(checked || linked) && <WorkshopTelegramCell userId={userId} linked={linked} hint="Xodimga yuboring"/>}
-    {checked && !linked && <small style={{ color: "var(--k-fg-b42318, #B42318)" }}>Telegram ulanmagan — xabar bormaydi</small>}
-    {error && <span role="alert" style={{ color: "var(--k-fg-b42318, #B42318)" }}>{error}</span>}
+    {checked && !linked && <small style={{ color: "#fb7185" }}>Telegram ulanmagan — xabar bormaydi</small>}
+    {error && <span role="alert" style={{ color: "#fb7185" }}>{error}</span>}
   </div>;
 }

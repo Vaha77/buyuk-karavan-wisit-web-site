@@ -16,6 +16,6 @@ export function LoginForm() {
     <label htmlFor="admin-password">Parol</label>
     <PasswordInput id="admin-password" name="password" autoComplete="current-password" disabled={pending}/>
     {state.error && <p className="admin-login-error" role="alert">{state.error}</p>}
-    <button type="submit" disabled={pending}>{pending ? "Tekshirilmoqda..." : "Kirish"}</button>
+    <button className="btn-g" type="submit" disabled={pending}>{pending ? "Tekshirilmoqda..." : "Kirish"}</button>
   </form>;
 }

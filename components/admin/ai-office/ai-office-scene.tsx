@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { desktopOfficeLayout, IDLE_SPOTS, mobileOfficeLayout, type IdleSpot, type OfficeLayout } from "./office-layout";
 import { OfficeCooler } from "./office-cooler";
 import { OfficeDesk } from "./office-desk";
@@ -8,8 +9,9 @@ import { OfficePlant } from "./office-plant";
 import { OfficeTennis } from "./office-tennis";
 import { OfficeWc } from "./office-wc";
 import { OfficeAgent } from "./office-agent";
-import { ProductAgentChat } from "./product-agent-chat";
-import { FotoAgentChat } from "./photo-agent-chat";
+// The chat panels load on first open; once mounted they stay so the conversation survives closing.
+const ProductAgentChat = dynamic(() => import("./product-agent-chat").then(m => m.ProductAgentChat), { ssr: false });
+const FotoAgentChat = dynamic(() => import("./photo-agent-chat").then(m => m.FotoAgentChat), { ssr: false });
 import type { ProductAgentStatus } from "@/lib/ai-office/product-agent";
 
 function OfficeWalls({ layout }: { layout: OfficeLayout }) {
@@ -21,9 +23,9 @@ function OfficeWalls({ layout }: { layout: OfficeLayout }) {
   // The leaf stands open at 90° inside the room and the swing arc ends on the inner wall face, so neither crosses the wall.
   const inner = bottom - 7, radius = opening - 10;
   return <g aria-hidden="true">
-    <path d={`M${bounds.x} ${bottom}V${bounds.y}H${right}V${bottom}H${spots.entrance.x + opening / 2}M${leftDoor} ${bottom}H${bounds.x}`} fill="none" stroke="#0b2a5b" strokeWidth="14" strokeLinecap="square" strokeLinejoin="round"/>
-    <rect x={leftDoor + 1} y={inner - radius} width="7" height={radius} rx="3" fill="#7892aa"/>
-    <path d={`M${leftDoor + 4} ${inner - radius}A${radius} ${radius} 0 0 1 ${leftDoor + 4 + radius} ${inner}`} fill="none" stroke="#7892aa" strokeWidth="2" strokeDasharray="7 6"/>
+    <path d={`M${bounds.x} ${bottom}V${bounds.y}H${right}V${bottom}H${spots.entrance.x + opening / 2}M${leftDoor} ${bottom}H${bounds.x}`} fill="none" stroke="#2b2b40" strokeWidth="14" strokeLinecap="square" strokeLinejoin="round"/>
+    <rect x={leftDoor + 1} y={inner - radius} width="7" height={radius} rx="3" fill="#5d6178"/>
+    <path d={`M${leftDoor + 4} ${inner - radius}A${radius} ${radius} 0 0 1 ${leftDoor + 4 + radius} ${inner}`} fill="none" stroke="#5d6178" strokeWidth="2" strokeDasharray="7 6"/>
     <text x={spots.entrance.x} y={bottom - 18} textAnchor="middle" className="office-entrance-label">Kirish</text>
   </g>;
 }
@@ -39,14 +41,14 @@ function OfficeSvg({ layout, product, photo }: { layout: OfficeLayout; product: 
     <title id={titleId}>BUYUK KARAVAN AI Ofis</title>
     <desc id={descriptionId}>To‘rtta ish stoli (01 — Mahsulot agenti, 02 — Foto agent, 03 va 04 bo‘sh), suv kuleri, stol tennisi, WC, o‘simliklar va kirish eshigi bo‘lgan yuqoridan ko‘rinishdagi ofis.</desc>
     <defs>
-      <pattern id={gridId} width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#bdd0e5" strokeWidth="1" opacity=".35"/></pattern>
-      <filter id={`office-shadow-${layout.name}`} x="-20%" y="-30%" width="140%" height="170%"><feDropShadow dx="0" dy="7" stdDeviation="8" floodColor="#12365a" floodOpacity=".12"/></filter>
+      <pattern id={gridId} width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#fff" strokeWidth="1" opacity=".05"/></pattern>
+      <filter id={`office-shadow-${layout.name}`} x="-20%" y="-30%" width="140%" height="170%"><feDropShadow dx="0" dy="7" stdDeviation="8" floodColor="#000" floodOpacity=".45"/></filter>
     </defs>
-    <rect width="100%" height="100%" fill="#eaf1f9"/>
-    <rect x={layout.bounds.x} y={layout.bounds.y} width={layout.bounds.width} height={layout.bounds.height} fill="#f5f8fd"/>
+    <rect width="100%" height="100%" fill="#08080f"/>
+    <rect x={layout.bounds.x} y={layout.bounds.y} width={layout.bounds.width} height={layout.bounds.height} fill="#0e0e18"/>
     <rect x={layout.bounds.x} y={layout.bounds.y} width={layout.bounds.width} height={layout.bounds.height} fill={`url(#${gridId})`}/>
-    <rect x={layout.workZone.x} y={layout.workZone.y} width={layout.workZone.width} height={layout.workZone.height} rx="28" fill="#eaf3ff" stroke="#8cb3dd" strokeWidth="2" strokeDasharray="10 9"/>
-    <rect x={layout.workZone.x + 22} y={layout.workZone.y + 18} width="118" height="30" rx="10" fill="#fff" stroke="#d2e2f3"/>
+    <rect x={layout.workZone.x} y={layout.workZone.y} width={layout.workZone.width} height={layout.workZone.height} rx="28" fill="#7c5cff" fillOpacity=".07" stroke="#7c5cff" strokeOpacity=".55" strokeWidth="2" strokeDasharray="10 9"/>
+    <rect x={layout.workZone.x + 22} y={layout.workZone.y + 18} width="118" height="30" rx="10" fill="#161624" stroke="#2b2b40"/>
     <text x={layout.workZone.x + 81} y={layout.workZone.y + 38} textAnchor="middle" className="office-zone-title">ISH ZONASI</text>
     <g filter={`url(#office-shadow-${layout.name})`}>{layout.desks.map((desk, index) => <OfficeDesk key={desk.id} desk={desk} vacant={index >= 2} compact={compact}/>)}</g>
     <OfficeCooler position={layout.spots.cooler}/>
@@ -97,13 +99,15 @@ export function AiOfficeScene() {
   const [photoStatus, setPhotoStatus] = useState<ProductAgentStatus>("idle");
   const [productOpen, setProductOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [productSeen, setProductSeen] = useState(false);
+  const [photoSeen, setPhotoSeen] = useState(false);
   const isBusy = (status: ProductAgentStatus, open: boolean) => open || (status !== "idle" && status !== "success" && status !== "error");
   const productSpot = useIdleWander(isBusy(productStatus, productOpen), null);
   const photoSpot = useIdleWander(isBusy(photoStatus, photoOpen), productSpot);
-  const product: AgentView = { status: productStatus, spot: productSpot, onOpen: () => setProductOpen(true) };
-  const photo: AgentView = { status: photoStatus, spot: photoSpot, onOpen: () => setPhotoOpen(true) };
+  const product: AgentView = { status: productStatus, spot: productSpot, onOpen: () => { setProductSeen(true); setProductOpen(true); } };
+  const photo: AgentView = { status: photoStatus, spot: photoSpot, onOpen: () => { setPhotoSeen(true); setPhotoOpen(true); } };
   return <><section className="ai-office-frame" aria-label="AI Ofis sahnasi">
     <div className={`ai-office-canvas product-status-${productStatus} photo-status-${photoStatus}`}><OfficeSvg layout={desktopOfficeLayout} product={product} photo={photo}/><OfficeSvg layout={mobileOfficeLayout} product={product} photo={photo}/></div>
     <div className="ai-office-status" aria-label="Ofis holati"><span className="ai-office-status-dot" aria-hidden="true"/>Stollar: 4 <span aria-hidden="true">·</span> Agentlar: 2</div>
-  </section><ProductAgentChat open={productOpen} onClose={() => setProductOpen(false)} status={productStatus} onStatus={setProductStatus}/><FotoAgentChat open={photoOpen} onClose={() => setPhotoOpen(false)} status={photoStatus} onStatus={setPhotoStatus}/></>;
+  </section>{productSeen && <ProductAgentChat open={productOpen} onClose={() => setProductOpen(false)} status={productStatus} onStatus={setProductStatus}/>}{photoSeen && <FotoAgentChat open={photoOpen} onClose={() => setPhotoOpen(false)} status={photoStatus} onStatus={setPhotoStatus}/>}</>;
 }

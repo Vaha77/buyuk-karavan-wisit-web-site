@@ -41,7 +41,7 @@ export function LeadLanding({ product, related, exchangeRate, priceText, priceUz
         <LandingForm productSlug={product.slug} productName={title} handoff={handoff} phone={contacts.phone} telegram={contacts.telegram} priceBefore={showPriceFirst ? priceText : null}/>
       </section>
 
-      <section className="landing-section" aria-labelledby="landing-specs">
+      <section className="landing-section rv" aria-labelledby="landing-specs">
         <h2 id="landing-specs">Tarkibi va xususiyatlari</h2>
         <dl className="landing-specs">{rows.map(row => <div key={row.id}><dt>{row.name}</dt><dd>{row.value}</dd></div>)}</dl>
         {(product.shortDescription || product.description) && <div className="landing-copy">
@@ -51,7 +51,7 @@ export function LeadLanding({ product, related, exchangeRate, priceText, priceUz
         </div>}
       </section>
 
-      {related.length > 0 && <section className="landing-section" aria-labelledby="landing-related">
+      {related.length > 0 && <section className="landing-section rv" aria-labelledby="landing-related">
         <h2 id="landing-related">{product.categoryName ? `${product.categoryName}: boshqa mahsulotlar` : "Shu turdagi boshqa mahsulotlar"}</h2>
         <div className="landing-related">{related.map(item => <ProductCard key={item.id} product={item} exchangeRate={exchangeRate}/>)}</div>
       </section>}

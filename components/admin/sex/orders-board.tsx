@@ -31,7 +31,7 @@ export function useOrderSearch(rows: OrderRow[]) {
   const [query, setQuery] = useState(""), [applied, setApplied] = useState("");
   useEffect(() => { const timer = setTimeout(() => setApplied(query), 200); return () => clearTimeout(timer); }, [query]);
   const shown = applied.trim() ? rows.filter(row => matchesOrder(row, applied)) : rows;
-  const input = <label className="sx-search" style={{ flex: "none" }}><Search size={15} color="var(--k-fg-4f5a70, #4F5A70)"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Qidirish: 11-04, mahsulot, mijoz, sotuvchi" aria-label="Zakazlarni qidirish"/>{query && <button type="button" className="sx-btn is-sm" onClick={() => { setQuery(""); setApplied(""); }} aria-label="Tozalash">×</button>}</label>;
+  const input = <label className="sx-search" style={{ flex: "none" }}><Search size={15} color="#8b90a6"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Qidirish: 11-04, mahsulot, mijoz, sotuvchi" aria-label="Zakazlarni qidirish"/>{query && <button type="button" className="sx-btn is-sm" onClick={() => { setQuery(""); setApplied(""); }} aria-label="Tozalash">×</button>}</label>;
   return { input, shown, empty: !!applied.trim() && !shown.length && rows.length > 0 };
 }
 const noSubscribe = () => () => {};
@@ -43,6 +43,15 @@ export function CarriedNote({ row }: { row: OrderRow }) {
 }
 
 const WAIT_TEXT = { NEW: "Seh qabul qilishi kutilmoqda", ACCEPTED: "Navbatda · terish kutilmoqda", STARTED: "Sehda terilmoqda", ISSUED: "Omborga qabul kutilmoqda", RECEIVED: "✓ Yopildi", RECEIVED_STORE: "Omborda · mijozga yuklash kutilmoqda", CLIENT_LOADED: "✓ Mijozga yuklandi", CANCELLED: "Bekor qilingan" } as const;
+// Phone screen "Seh zakazlari": Navbatda / Terilmoqda / Tayyor over the statuses.
+const STAGES = [
+  { key: "all", label: "Hammasi", has: () => true },
+  { key: "queue", label: "Navbatda", has: (status: OrderRow["status"]) => status === "NEW" || status === "ACCEPTED" },
+  { key: "work", label: "Terilmoqda", has: (status: OrderRow["status"]) => status === "STARTED" },
+  { key: "done", label: "Tayyor", has: (status: OrderRow["status"]) => status === "ISSUED" || status === "RECEIVED" || status === "RECEIVED_STORE" || status === "CLIENT_LOADED" },
+] as const;
+/** Filled bar per process step (design `.steps`). */
+export const StepBar = ({ row }: { row: OrderRow }) => <div className="steps" aria-hidden="true">{row.steps.map(step => <i key={step.label} className={step.state === "done" ? "f" : undefined}/>)}</div>;
 const queueLabel = (row: OrderRow) => (row.queue ? `${STATUS_LABEL.ACCEPTED} (${row.queue}-navbat)` : STATUS_LABEL.ACCEPTED);
 
 export function OrdersBoard({ view = "active", role, userName, rows, month, months, parts, sellers, customers, top, summary, fix }: Props) {
@@ -62,6 +71,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
   const [asking, setAsking] = useState<OrderRow | null>(null), [askReason, setAskReason] = useState(""), [asked, setAsked] = useState("");
   const [editing, setEditing] = useState<{ row: OrderRow; requestId: string | null } | null>(() => { const row = fix && rows.find(item => item.id === fix.orderId); return row ? { row, requestId: fix.requestId } : null; });
   const search = useOrderSearch(rows);
+  const [stage, setStage] = useState<(typeof STAGES)[number]["key"]>("all");
   // "Oktabrdan N ta zakaz o‘tdi": shown once per month on this device.
   const carried = rows.filter(row => row.monthKey === month.key && row.carriedFrom), bannerKey = `seh-carried-${month.key}`;
   const seen = useSyncExternalStore(noSubscribe, () => { try { return !!localStorage.getItem(bannerKey); } catch { return false; } }, () => true);
@@ -92,15 +102,14 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
     run(() => transitionOrderAction({ id: row.id, action }), undefined, `${row.id}:${action}`);
   };
   const count = (status: OrderRow["status"]) => rows.filter(row => row.status === status).length;
-  const stats = workshop
-    ? [{ k: "Qabul qilishim kerak", v: count("NEW"), tone: "is-blue" }, { k: "Ishlanmoqda · chiqarishim kerak", v: count("ACCEPTED"), tone: "is-yellow" }]
-    : [{ k: "Yangi · qabul kutmoqda", v: count("NEW"), tone: "is-blue" }, { k: "Navbatda", v: count("ACCEPTED"), tone: "is-slate" }, { k: "Terilmoqda", v: count("STARTED"), tone: "is-yellow" }, { k: "Chiqib ketdi · qabul kutmoqda", v: count("ISSUED"), tone: "is-red" }, { k: "Qabul qilindi", v: count("RECEIVED") + count("RECEIVED_STORE") + count("CLIENT_LOADED"), tone: "is-green" }];
+  const stats = [{ k: "Qabul qilishim kerak", v: count("NEW"), tone: "is-blue" }, { k: "Ishlanmoqda · chiqarishim kerak", v: count("ACCEPTED"), tone: "is-yellow" }];
   const title = workshop ? `Mening vazifalarim · ${userName}` : seller ? "Mening zakazlarim" : `Seh zakazlari · ${month.label}`;
   const subtitle = workshop ? "Zapchast va agregat zakazlari · qabul qiling, chiqqach “Chiqib ketdi” bosing" : seller ? "Bergan zakazlaringiz va ularning holati" : boss ? "Hammasini ko‘rasiz · sizning tugmangiz faqat “Krimga oldim”" : "Hammasini ko‘rasiz · holatni seh va Super Admin o‘zgartiradi";
 
-  const shown = frameOnly ? search.shown.filter(row => row.frame) : search.shown;
+  const inStage = STAGES.find(item => item.key === stage)!.has;
+  const shown = (frameOnly ? search.shown.filter(row => row.frame) : search.shown).filter(row => view !== "active" || inStage(row.status));
   // One status cell and one action cell for the table and the phone cards.
-  const statusCell = (row: OrderRow) => <>{row.status === "STARTED" ? <AcceptedBadge label={STATUS_LABEL.STARTED} dueDate={row.dueDate}/> : <span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{row.status === "ACCEPTED" ? queueLabel(row) : STATUS_LABEL[row.status]}</span>}{row.overdue && <div className="sx-muted" style={{ color: "var(--k-fg-a41f15, #A41F15)", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</>;
+  const statusCell = (row: OrderRow) => <>{row.status === "STARTED" ? <AcceptedBadge label={STATUS_LABEL.STARTED} dueDate={row.dueDate}/> : <span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{row.status === "ACCEPTED" ? queueLabel(row) : STATUS_LABEL[row.status]}</span>}{row.overdue && <div className="sx-muted" style={{ color: "#fb7185", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</>;
   const actions = (row: OrderRow) => {
     if (row.closed && !boss) return asked === row.id ? <span className="sx-muted">✓ So‘rov yuborildi</span> : <button type="button" className="sx-btn is-md" disabled={pending} onClick={() => { setError(""); setAskReason(""); setAsking(row); }}>✏️ Tuzatish so‘rash</button>;
     const action = actionFor(role, row.status); return <>
@@ -136,7 +145,8 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
       {frameCount > 0 && <button type="button" className="sx-chip" aria-pressed={frameOnly} onClick={() => setFrameOnly(!frameOnly)}>⚠️ Rama qo‘shilmagan: {frameCount} ta</button>}
     </div>}
     {view === "test" && <p className="sx-note">Test zakazlari statistika, Excel eksport va navbat raqamlariga kirmaydi.</p>}
-    {!seller && view === "active" && <div className="sx-stats">{stats.map(stat => <div key={stat.k} className={`sx-stat is-flat ${stat.tone}`}><span>{stat.k}</span><strong>{stat.v}</strong></div>)}</div>}
+    {!workshop && view === "active" && <div className="seg" role="group" aria-label="Bosqich">{STAGES.map(item => <button key={item.key} type="button" className={stage === item.key ? "on" : undefined} aria-pressed={stage === item.key} onClick={() => setStage(item.key)}>{item.label} · {rows.filter(row => item.has(row.status)).length}</button>)}</div>}
+    {workshop && view === "active" && <div className="sx-stats">{stats.map(stat => <div key={stat.k} className={`sx-stat is-flat ${stat.tone}`}><span>{stat.k}</span><strong>{stat.v}</strong></div>)}</div>}
     {error && <p className="sx-note is-error" role="alert">{error}</p>}
     {search.input}
 
@@ -146,12 +156,12 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
         <tbody>{shown.map(row => {
           return <tr key={row.id} id={`order-${row.id}`} className={row.overdue ? "is-late" : row.isNew ? "is-new" : ""}>
             <td><NumberCell row={row} month={month.key}/></td>
-            <td style={{ color: "var(--k-fg-3e4a60, #3E4A60)", whiteSpace: "nowrap" }}>{row.day}</td>
+            <td style={{ color: "#f4f5fb", whiteSpace: "nowrap" }}>{row.day}</td>
             <td><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.isTest && <><br/><span className="sx-pill is-sm is-grey" style={{ marginTop: 4 }}>Test</span></>}{row.noRequest && <><br/><span className="sx-pill is-sm is-orange" style={{ marginTop: 4 }}>Zayavkasiz</span></>}{row.frame && <><br/><span className="sx-pill is-sm is-yellow" style={{ marginTop: 4, whiteSpace: "nowrap" }}>⚠️ Rama qo‘shilmagan · {row.frame}</span></>}</td>
             <td style={{ minWidth: 220, fontWeight: 600, lineHeight: 1.35 }}>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices}/>}{row.frame && <div className="sx-pill is-yellow" role="note" style={{ marginTop: 6, borderRadius: 8, padding: "6px 10px", whiteSpace: "normal", fontWeight: 600, lineHeight: 1.4 }}>{row.sellerName} zakazida kondensator turi o‘zgargan ({row.frame}). Rama narxi hisobga qo‘shilmagan — rama haqqini qo‘shib hisoblang.</div>}</td>
             <td><div style={{ display: "grid", gap: 2 }}><b style={{ fontWeight: 600 }}>{row.sellerName}</b><span className="sx-muted">{row.sellerAt}</span></div></td>
-            <td style={{ fontWeight: 700, color: row.purpose === "SHOP" ? "#3E4A60" : "#1E4E8C" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</td>
-            <td style={{ minWidth: 230 }}><div className="sx-steps">{row.steps.map(step => <span key={step.label} className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>)}</div></td>
+            <td style={{ fontWeight: 700, color: row.purpose === "SHOP" ? "#8b90a6" : "#b3a4ff" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</td>
+            <td style={{ minWidth: 230 }}><StepBar row={row}/><div className="sx-steps" style={{ marginTop: 8 }}>{row.steps.map(step => <span key={step.label} className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>)}</div></td>
             <td>{statusCell(row)}</td>
             <td style={{ minWidth: 210 }}>{actions(row)}</td>
           </tr>;
@@ -161,8 +171,9 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
         // The last step that has happened (or is waiting) is the one that matters on a phone.
         const step = row.steps.filter(item => item.state === "done" || item.state === "wait").at(-1) ?? row.steps[0];
         return <li key={row.id} className="admin-mobile-card">
-          <div className="admin-mobile-card-head"><div><strong>{row.number} · {row.day}</strong><NumberCell row={row} month={month.key} note/><small>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</small></div><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span></div>
+          <div className="admin-mobile-card-head"><div><strong><span className="num-g" style={{ fontSize: 20 }}>{row.number}</span> · {row.day}</strong><NumberCell row={row} month={month.key} note/><small>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</small></div><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span></div>
           <div style={{ fontWeight: 600, lineHeight: 1.35, overflowWrap: "anywhere" }}>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices}/>}</div>
+          <StepBar row={row}/>
           {step && <span className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>}
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}><div>{statusCell(row)}</div><div>{actions(row)}</div></div>
         </li>;
@@ -210,8 +221,8 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
 
 /** Its "MM-NN" (+ carried note); in a closed month an order that moved on shows its old number and where it went. `note`: the note only (phone card head). */
 function NumberCell({ row, month, note = false }: { row: OrderRow; month: string; note?: boolean }) {
-  if (row.monthKey > month) return <>{!note && <b>{row.carriedFrom ?? row.number}</b>}<div className="sx-muted">→ {lower(row.monthKey)}ga o‘tdi ({row.number})</div></>;
-  return <>{!note && <b>{row.number}</b>}<CarriedNote row={row}/></>;
+  if (row.monthKey > month) return <>{!note && <b className="num-g">{row.carriedFrom ?? row.number}</b>}<div className="sx-muted">→ {lower(row.monthKey)}ga o‘tdi ({row.number})</div></>;
+  return <>{!note && <b className="num-g" style={{ fontSize: 17 }}>{row.number}</b>}<CarriedNote row={row}/></>;
 }
 
 /** SUPER_ADMIN edit: recipient, note, quantity, and per item "so‘raldi" / "berildi". */
@@ -245,7 +256,7 @@ export function IssueForm({ row, busy, onSubmit }: { row: OrderRow; busy: boolea
   const parsed = Object.fromEntries(Object.entries(values).map(([id, value]) => [id, Number(value)]));
   const valid = Object.values(parsed).every(value => Number.isInteger(value) && value >= 0);
   return <form style={{ display: "grid", gap: 10 }} onSubmit={event => { event.preventDefault(); if (valid) onSubmit(parsed); }}>
-    {row.items.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 110px", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--k-bd-eef1f6, #EEF1F6)" }}>
+    {row.items.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 110px", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid rgba(255,255,255,.09)" }}>
       <span style={{ fontWeight: 600 }}>{item.title}</span><span className="sx-muted">so‘raldi: {item.qty}</span>
       <label className="sx-muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>berildi<input className="sx-input" style={{ width: 56, height: 34 }} value={values[item.id]} onChange={event => setValues({ ...values, [item.id]: event.target.value })} inputMode="numeric" aria-label={`${item.title} — berilgan soni`}/></label>
     </div>)}

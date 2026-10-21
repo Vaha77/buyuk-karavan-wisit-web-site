@@ -17,14 +17,14 @@ const MONTHS = ["yan", "fev", "mar", "apr", "may", "iyun", "iyul", "avg", "sen",
 const dueLabel = (date: string) => { const [, month, day] = date.split("-"); return `${day}-${MONTHS[Number(month) - 1]}`; };
 // Stage colours of the receipt's top stripe and its button (design seh-panel.dc.html).
 const STAGE: Record<"NEW" | "ACCEPTED" | "STARTED", { action: OrderAction; top: string; button: string }> = {
-  NEW: { action: "accept", top: "#1E4E8C", button: "#1E4E8C" },
-  ACCEPTED: { action: "start", top: "#7B97C4", button: "#B8860B" },
-  STARTED: { action: "issue", top: "#F2C230", button: "#1B6B43" },
+  NEW: { action: "accept", top: "#22d3ee", button: "var(--g)" },
+  ACCEPTED: { action: "start", top: "#7c5cff", button: "var(--g)" },
+  STARTED: { action: "issue", top: "#ecc96b", button: "linear-gradient(100deg,#34d399,#22d3ee)" },
 };
 const SECTIONS = [
-  { status: "NEW" as const, title: "Yangi zakazlar", dot: "#1E4E8C", hint: "Ko‘rib chiqib qabul qiling", empty: "Yangi zakaz yo‘q" },
-  { status: "ACCEPTED" as const, title: "Navbatda", dot: "#7B97C4", hint: "Qabul qilingan · navbat bilan terasiz", empty: "Navbat bo‘sh" },
-  { status: "STARTED" as const, title: "Terilmoqda", dot: "#F2C230", hint: "Tayyor bo‘lgach “Chiqib ketdi”", empty: "Hozir hech narsa terilmayapti" },
+  { status: "NEW" as const, title: "Yangi zakazlar", dot: "#22d3ee", hint: "Ko‘rib chiqib qabul qiling", empty: "Yangi zakaz yo‘q" },
+  { status: "ACCEPTED" as const, title: "Navbatda", dot: "#7c5cff", hint: "Qabul qilingan · navbat bilan terasiz", empty: "Navbat bo‘sh" },
+  { status: "STARTED" as const, title: "Terilmoqda", dot: "#ecc96b", hint: "Tayyor bo‘lgach “Chiqib ketdi”", empty: "Hozir hech narsa terilmayapti" },
 ];
 
 function useMinuteClock() {
@@ -87,9 +87,9 @@ export function WorkshopBoard({ telegramLinked, userName, rows, started, limit, 
           const stage = STAGE[section.status], late = daysPastDue(row.dueDate, now) > 0, key = `${row.id}:${stage.action}`;
           const items = row.type === "AGREGAT" ? [{ id: row.items[0]?.id ?? row.id, title: row.items[0]?.title ?? row.product, qty: row.qty }] : row.items.map(item => ({ id: item.id, title: item.title, qty: item.qty }));
           return <article key={row.id} className="sx-receipt">
-            <div className="sx-receipt-body" style={{ borderTopColor: late ? "#D2372B" : stage.top }}>
+            <div className="sx-receipt-body" style={{ borderTopColor: late ? "#fb7185" : stage.top }}>
               <div className="sx-receipt-head">
-                <div><span className="sx-mono sx-receipt-brand">BUYUK KARAVAN · SEH</span><b className="sx-mono sx-receipt-no">{row.number}</b><CarriedNote row={row}/></div>
+                <div><span className="sx-mono sx-receipt-brand">BUYUK KARAVAN · SEH</span><b className="num-g sx-receipt-no">{row.number}</b><CarriedNote row={row}/></div>
                 {section.status === "ACCEPTED" && row.queue && <span className="sx-queue"><b>{row.queue}</b><span>NAVBAT</span></span>}
                 <span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.isTest && <span className="sx-pill is-sm is-grey">Test</span>}
               </div>
@@ -98,9 +98,9 @@ export function WorkshopBoard({ telegramLinked, userName, rows, started, limit, 
               {row.note && <div className="sx-receipt-note">Izoh: {row.note}</div>}
               <hr className="sx-dash"/>
               <dl className="sx-receipt-meta">
-                <dt>Kimga</dt><dd style={{ color: row.purpose === "SHOP" ? "#3E4A60" : "#1E4E8C" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</dd>
+                <dt>Kimga</dt><dd style={{ color: row.purpose === "SHOP" ? "#8b90a6" : "#7c5cff" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</dd>
                 <dt>Sotuvchi</dt><dd>{row.sellerName}</dd>
-                <dt>Muddat</dt><dd style={{ color: late ? "#A41F15" : undefined }}>{row.dueDate ? dueLabel(row.dueDate) : "—"}</dd>
+                <dt>Muddat</dt><dd style={{ color: late ? "#fb7185" : undefined }}>{row.dueDate ? dueLabel(row.dueDate) : "—"}</dd>
                 <dt>Keldi</dt><dd style={{ fontWeight: 400 }}>{row.sellerAt}</dd>
               </dl>
               {section.status === "STARTED" && row.startedAt && <div className={`sx-receipt-working${late ? " is-late" : ""}`}>

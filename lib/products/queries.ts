@@ -70,7 +70,7 @@ export async function getPublicCatalogPage(input: { category?: string; q?: strin
   return { products: rows.map(mapRawCard), total, nextCursor: offset + rows.length < total ? String(offset + rows.length) : null, seed };
 }
 
-const loadProductBySlug = unstable_cache(async (slug: string) => { const row = await getDb().product.findFirst({ where: { slug, isVisible: true, category: { isActive: true } }, include: { category: true } }); return row ? mapProduct(row) : null; }, ["public-product-detail-v3"], { revalidate: 300, tags: ["public-products"] });
+const loadProductBySlug = unstable_cache(async (slug: string) => { const row = await getDb().product.findFirst({ where: { slug, isVisible: true, category: { isActive: true } }, include: { category: { select: { name: true, slug: true } } } }); return row ? mapProduct(row) : null; }, ["public-product-detail-v3"], { revalidate: 300, tags: ["public-products"] });
 export async function getProductBySlug(slug: string) { return loadProductBySlug(slug); }
 export async function getAdminProducts() { const rows = await getDb().product.findMany({ select: cardSelect, orderBy }); return rows.map(mapProductCard); }
 export type AdminCatalogPage = { products: Product[]; total: number; page: number; pageCount: number; summary: { total: number; available: number; order: number; hidden: number } };
@@ -78,16 +78,16 @@ export async function getAdminProductsPage(input: { q?: string; category?: strin
   const q = (input.q || "").trim().slice(0, 120), normalized = normalizeCatalogSearch(q), category = (input.category || "all").slice(0, 120), status = input.status || "all";
   const page = Math.max(1, Math.trunc(input.page || 1)), limit = 24, offset = (page - 1) * limit;
   const where = Prisma.sql`true ${category !== "all" ? Prisma.sql`AND p."categoryId"=${category}` : Prisma.empty} ${status === "hidden" ? Prisma.sql`AND p."isVisible"=false` : status === "available" ? Prisma.sql`AND p.availability='AVAILABLE' AND p."isVisible"=true` : status === "order" ? Prisma.sql`AND p.availability='ORDER' AND p."isVisible"=true` : Prisma.empty} ${q ? Prisma.sql`AND (lower(coalesce(p.name,'')||' '||coalesce(p.brand,'')||' '||coalesce(p.model,'')||' '||coalesce(p.slug,'')) LIKE lower(${`%${q}%`}) OR regexp_replace(lower(p.name||p.brand||p.model||p.slug),'[^a-z0-9]+','','g') LIKE ${`%${normalized}%`})` : Prisma.empty}`;
-  const [rows, countRows, total, available, ordered, hidden] = await Promise.all([
+  const [rows, countRows] = await Promise.all([
     getDb().$queryRaw<RawCardRow[]>(Prisma.sql`SELECT p.id,p.slug,p.name,p.brand,p.model,p."categoryId",p."priceUsd",p.images,p.specifications,p.tags,p.availability,p."isVisible",p."order",p."updatedAt",c.name AS "categoryName",c.slug AS "categorySlug" FROM "Product" p JOIN "ProductCategory" c ON c.id=p."categoryId" WHERE ${where} ORDER BY p."order",p."updatedAt" DESC,p.id LIMIT ${limit} OFFSET ${offset}`),
-    getDb().$queryRaw<Array<{ count: bigint }>>(Prisma.sql`SELECT count(*)::bigint AS count FROM "Product" p WHERE ${where}`),
-    getDb().product.count(), getDb().product.count({ where: { availability: "AVAILABLE", isVisible: true } }), getDb().product.count({ where: { availability: "ORDER", isVisible: true } }), getDb().product.count({ where: { isVisible: false } }),
+    // The filtered count and the four summary counts in one scan.
+    getDb().$queryRaw<Array<{ count: number; total: number; available: number; ordered: number; hidden: number }>>(Prisma.sql`SELECT count(*) FILTER (WHERE ${where})::int AS count, count(*)::int AS total, count(*) FILTER (WHERE p.availability='AVAILABLE' AND p."isVisible")::int AS available, count(*) FILTER (WHERE p.availability='ORDER' AND p."isVisible")::int AS ordered, count(*) FILTER (WHERE NOT p."isVisible")::int AS hidden FROM "Product" p`),
   ]);
-  const count = Number(countRows[0]?.count || 0);
+  const { count, total, available, ordered, hidden } = countRows[0];
   return { products: rows.map(mapRawCard), total: count, page, pageCount: Math.max(1, Math.ceil(count / limit)), summary: { total, available, order: ordered, hidden } };
 }
 export async function getAdminProductOptions() { return getDb().product.findMany({ select: { id: true, name: true, model: true }, orderBy }); }
-export async function getAdminProductById(id: string) { const row = await getDb().product.findUnique({ where: { id }, include: { category: true } }); return row ? mapProduct(row) : null; }
+export async function getAdminProductById(id: string) { const row = await getDb().product.findUnique({ where: { id }, include: { category: { select: { name: true, slug: true } } } }); return row ? mapProduct(row) : null; }
 
 export async function getRelatedProducts(productId: string, category: string) {
   const seed = randomBytes(12).toString("hex");

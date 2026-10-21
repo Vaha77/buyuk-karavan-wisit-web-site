@@ -68,7 +68,7 @@ function NavigationProgressBar() {
     return () => { document.removeEventListener("click", onClick, true); document.removeEventListener("submit", onSubmit, true); window.removeEventListener("popstate", onPop); window.removeEventListener(START_EVENT, start); clear(); };
   }, [start]);
 
-  return <div className={`admin-nav-progress${visible ? " is-visible" : ""}`} style={{ width: `${width}%` }} role="progressbar" aria-hidden={!visible} aria-label="Sahifa yuklanmoqda"/>;
+  return <div className={`admin-nav-progress${visible ? " is-visible" : ""}`} style={{ transform: `scaleX(${width / 100})` }} role="progressbar" aria-hidden={!visible} aria-label="Sahifa yuklanmoqda"/>;
 }
 export function NavigationProgress() {
   return <Suspense fallback={null}><NavigationProgressBar/></Suspense>;

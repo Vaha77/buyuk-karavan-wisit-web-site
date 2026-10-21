@@ -6,6 +6,7 @@ import type { myDashboardAgent, myDashboardCore } from "@/lib/customers/seller-q
 import { PlanBars } from "./charts";
 import type { MyPlace } from "@/lib/sales-plan/seller-ranking";
 import { zoneStyle } from "@/lib/sales-plan/zones";
+import { ProgressBar, StatCounter } from "@/components/ui/aurora";
 
 /** "Sotuv rejasi reytingida siz N-o‘rindasiz" card on top of /admin/my. */
 export function RankCard({ me, periodName }: { me: MyPlace | null; periodName: string | null }) {
@@ -29,10 +30,10 @@ const Head = ({ id, title, note }: { id: string; title: string; note?: string })
 
 /** 1. REJA: this month's share of the period plan. */
 export function PlanBlock({ plan, month }: { plan: Core["plan"]; month: number }) {
-  return <section className="bk-card" aria-labelledby="md-plan"><Head id="md-plan" title={`Reja — ${MONTHS_LONG[month - 1]}`} note="Davr rejasining shu oyga to‘g‘ri keladigan qismi · tasdiqlangan xaridlar"/>
+  return <section className="bk-card glass-blur rv" aria-labelledby="md-plan"><Head id="md-plan" title={`Reja — ${MONTHS_LONG[month - 1]}`} note="Davr rejasining shu oyga to‘g‘ri keladigan qismi · tasdiqlangan xaridlar"/>
     {plan ? <div style={{ display: "grid", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}><strong>{formatUsd(plan.done)} / {formatUsd(plan.plan)}</strong><strong>{formatPercent(plan.percent)}</strong></div>
-      <div className="bk-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(Math.min(100, plan.percent))} aria-label="Oylik reja bajarilishi"><i style={{ width: `${Math.min(100, plan.percent)}%`, background: "var(--bk-primary)" }}/></div>
+      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}><strong className="bk-hero-big"><StatCounter value={plan.done} prefix="$"/> <small>/ {formatUsd(plan.plan)}</small></strong><strong className="g-text">{formatPercent(plan.percent)}</strong></div>
+      <ProgressBar value={plan.percent / 100}/>
       <span className="bk-muted">{plan.remaining > 0 ? <>Oy oxirigacha {plan.daysLeft} kun · kuniga <b>{formatUsd(plan.dailyNeeded)}</b> kerak (qolgan {formatUsd(plan.remaining)})</> : <b>Oylik reja bajarildi!</b>}</span>
     </div> : <div className="bk-empty">Bu oy uchun reja kiritilmagan.</div>}
   </section>;

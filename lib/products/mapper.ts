@@ -30,7 +30,7 @@ export function readSpecifications(value: unknown): StoredSpecifications {
   };
 }
 
-export function mapProduct(row: DbProduct & { category: DbProductCategory }): Product {
+export function mapProduct(row: DbProduct & { category: Pick<DbProductCategory, "name" | "slug"> }): Product {
   const stored = readSpecifications(row.specifications);
   const specs = stored.cardSpecs?.length ? stored.cardSpecs : row.tags.length ? row.tags : stored.rows.map(item => item.value).filter(Boolean).slice(0, 2);
   return {

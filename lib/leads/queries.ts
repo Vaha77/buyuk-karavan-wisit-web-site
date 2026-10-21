@@ -19,7 +19,8 @@ function conversation(value: unknown): ConversationMessage[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item,index) => item && typeof item === "object" && "role" in item && "text" in item && (item.role === "madina" || item.role === "customer") && typeof item.text === "string" ? [{ id:`message-${index}`, role:item.role, text:item.text }] : []);
 }
-function seller(agent: SalesAgent | null) { return agent ? [agent.firstName,agent.lastName].filter(Boolean).join(" ") : ""; }
+const agentName = { firstName:true, lastName:true } as const;
+function seller(agent: Pick<SalesAgent,"firstName"|"lastName"> | null) { return agent ? [agent.firstName,agent.lastName].filter(Boolean).join(" ") : ""; }
 function metadata(value: unknown) { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string,unknown> : {}; }
 function timelineDetail(type: LeadActivityType, comment: string | null, value: unknown) {
   if (comment) return comment;
@@ -37,11 +38,13 @@ export async function getAdminLeads(filter:{region?:string}={}) {
   const [rows, instagram] = await Promise.all([getDb().lead.findMany({
     where,
     orderBy:{createdAt:"desc"},
-    include:{
+    select:{
+      id:true, customerName:true, phone:true, telegram:true, requestType:true, product:true, dimensions:true, capacity:true, temperature:true, region:true, regionCode:true,
+      status:true, source:true, notes:true, aiSummary:true, chatHistory:true, managerNote:true, createdAt:true, claimedAt:true, telegramPrivateDeliveryFailedAt:true, instagramAccountId:true,
       referralLink:{ select:{ name:true } },
-      assignedAgent:true,
-      activities:{ orderBy:{createdAt:"asc"}, include:{agent:true} },
-      followUps:{ where:{status:{in:["SCHEDULED","REMINDER_RESERVED","REMINDER_SENT"]}}, orderBy:{scheduledFor:"asc"}, take:1 },
+      assignedAgent:{ select:agentName },
+      activities:{ orderBy:{createdAt:"asc"}, select:{ id:true, type:true, comment:true, metadata:true, createdAt:true, agent:{ select:agentName } } },
+      followUps:{ where:{status:{in:["SCHEDULED","REMINDER_RESERVED","REMINDER_SENT"]}}, orderBy:{scheduledFor:"asc"}, take:1, select:{ scheduledFor:true } },
     },
   }), getDb().instagramAccount.findMany({ select:{ id:true, username:true } })]);
   // "Instagram · @eshikmaster": which Instagram account the lead came from.

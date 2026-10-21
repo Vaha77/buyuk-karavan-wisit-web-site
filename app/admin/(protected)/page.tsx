@@ -9,8 +9,11 @@ import { getDb } from "@/lib/db";
 import { getDashboardData, getPreviousConversion } from "@/lib/dashboard/queries";
 import { buildFunnel, delta, dynamicsMetrics, periodChange } from "@/lib/dashboard/rules";
 import { dayKey, periodQuery, resolvePeriod, tashkentYearMonth } from "@/lib/dashboard/period";
-import { formatDayMonth, formatDecimal, formatInt, formatPercent, formatRelative, formatUsd, percentOf } from "@/lib/dashboard/format";
+import { formatDayMonth, formatDecimal, formatInt, formatPercent, formatRelative, formatUsd, MONTHS_LONG, percentOf } from "@/lib/dashboard/format";
 import { regionName } from "@/lib/dashboard/regions";
+import { monthlyPlan } from "@/lib/sales-plan/rules";
+import { getPlanBoardData, getSalesPeriods, pickPeriod } from "@/lib/sales-plan/queries";
+import { Chip, ChipGroup, GlassCard, Pill, ProgressBar, StatCounter } from "@/components/ui/aurora";
 import { getLinkSummary } from "@/lib/referrals/queries";
 import { RangeSelect, SourceIcon } from "@/components/admin/bklead/bits";
 import { DynamicsCards, type DynamicsMetric } from "@/components/admin/bklead/dynamics";
@@ -23,8 +26,23 @@ export const metadata: Metadata = { title: "BKLead Dashboard — Admin | BUYUK K
 type Search = { range?: string; from?: string; to?: string; cyear?: string };
 
 const DEFAULT_TIPS = { all: "Xorijdan kelgan lidlar uchun rus tilidagi reklama va Telegram orqali javob berish tavsiya etiladi." };
-const DYNAMICS = { leads: { name: "Lidlar", color: "#4F7CFF", unit: "" }, seh: { name: "Seh zakazlari", color: "#E9A23B", unit: "" }, sales: { name: "Sotuvlar", color: "#1F9E89", unit: "$" } } as const;
-const LEVEL_CHIPS = [{ label: "Yangi", tone: "is-orange" }, { label: "Bog‘lanildi", tone: "" }, { label: "Hisob-kitob", tone: "is-navy" }, { label: "Taklif yuborildi", tone: "" }, { label: "Sotuv", tone: "is-gold" }] as const;
+const DYNAMICS = { leads: { name: "Lidlar", color: "#7c5cff", unit: "" }, seh: { name: "Seh zakazlari", color: "#ecc96b", unit: "" }, sales: { name: "Sotuvlar", color: "#22d3ee", unit: "$" } } as const;
+const LEVEL_CHIPS = [{ label: "Yangi", tone: "info" }, { label: "Bog‘lanildi", tone: "wait" }, { label: "Hisob-kitob", tone: "wait" }, { label: "Taklif yuborildi", tone: "gold" }, { label: "Sotuv", tone: "ok" }] as const;
+const PERIOD_CHIPS = [{ key: "month", label: "Bu oy" }, { key: "7d", label: "Hafta" }, { key: "today", label: "Bugun" }] as const;
+
+/** This month of the current sales-plan period: entered sales vs the monthly plan of every seller with a plan. */
+async function monthPlan() {
+  const today = tashkentYearMonth(), periods = await getSalesPeriods(), period = pickPeriod(periods, undefined, today);
+  if (!period) return null;
+  const people = (await getPlanBoardData(period, periods)).board.groups.flatMap(group => group.people);
+  let plan = 0, done = 0, reached = 0;
+  for (const person of people) {
+    const cell = person.months.find(item => item.year === today.year && item.month === today.month);
+    if (!cell) continue;
+    plan += monthlyPlan(person.plan, period.monthCount); done += cell.amount ?? 0; if (cell.percent >= 100) reached++;
+  }
+  return plan > 0 ? { plan, done, reached, sellers: people.length, month: MONTHS_LONG[today.month - 1].toLocaleLowerCase("uz-UZ") } : null;
+}
 const initials = (name: string) => name.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
 
 function Delta({ current, previous, suffix = "oldingi davrga nisbatan" }: { current: number; previous: number; suffix?: string }) {
@@ -39,11 +57,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const search = await searchParams;
   const period = resolvePeriod(search);
   const today = tashkentYearMonth();
+  const boss = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
   const rankingYear = /^20\d{2}$/.test(search.cyear ?? "") && Number(search.cyear) <= today.year ? Number(search.cyear) : today.year;
-  const [data, previousConversion, links, settings, customerYear, rate] = await Promise.all([
+  const [data, previousConversion, links, settings, customerYear, rate, plan] = await Promise.all([
     getDashboardData(period), getPreviousConversion(period), getLinkSummary(period),
     getDb().siteSettings.findUnique({ where: { id: "global" }, select: { dashboardTips: true } }).catch(() => null),
-    getCustomerYear(rankingYear), getUsdUzsRate(),
+    getCustomerYear(rankingYear), getUsdUzsRate(), boss ? monthPlan() : null,
   ]);
   const { kpis, weekly, funnel, regions, people } = data;
   const conversion = percentOf(kpis.sales, kpis.leads), conversionChange = conversion - previousConversion;
@@ -56,7 +75,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const maxClicks = Math.max(1, ...linkRows.map(row => row.clicks));
   const now = new Date();
   const query = periodQuery(period);
-  const boss = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
+  const topRegions = Object.entries(regions.reduce<Record<string, number>>((sum, row) => { if (row.country === "UZ" && row.regionCode) sum[row.regionCode] = (sum[row.regionCode] ?? 0) + row.count; return sum; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 6);
   // 24 weeks come back: the last 12 are shown, the 12 before give "o‘tgan davrga". Only the metrics this role may see are sent.
   const series = (key: "leads" | "calculations" | "seh" | "sales") => weekly.map(week => week[key]);
   const dynamics: DynamicsMetric[] = dynamicsMetrics(user.role).map(key => {
@@ -66,17 +85,29 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   return <div className="bk">
     <div className="bk-head">
-      <div><h1>BKLead Dashboard</h1><p className="bk-muted">Lidlar, sotuvlar va viloyatlar bo‘yicha holat · {period.label}</p></div>
+      <h1 className="bk-sr-only">BKLead Dashboard · {period.label}</h1>
+      <ChipGroup label="Davr">{PERIOD_CHIPS.map(chip => <Chip key={chip.key} href={`/admin?range=${chip.key}`} on={period.key === chip.key}>{chip.label}</Chip>)}</ChipGroup>
       <RangeSelect value={period.key} from={dayKey(period.from)} to={dayKey(new Date(period.to.getTime() - 86_400_000))}/>
     </div>
 
+    {plan && <GlassCard blur reveal className="bk-hero">
+      <div className="bk-hero-k">Oylik reja · {plan.month}<b>{formatPercent(percentOf(plan.done, plan.plan), 0)}</b></div>
+      <div className="bk-hero-big"><StatCounter value={plan.done} prefix="$"/> <small>/ {formatUsd(plan.plan)}</small></div>
+      <ProgressBar value={plan.done / plan.plan}/>
+      <div className="bk-hero-stats">
+        <div><StatCounter value={Math.max(0, plan.plan - plan.done)} prefix="$"/><span>Rejagacha</span></div>
+        <div><StatCounter value={plan.sellers}/><span>Sotuvchi</span></div>
+        <div><StatCounter value={plan.reached}/><span>Oylik rejada</span></div>
+      </div>
+    </GlassCard>}
+
     <div className="bk-grid-4">
-      <div className="bk-card bk-kpi"><div className="bk-kpi-top">Jami lidlar<span className="bk-kpi-icon"><MessageSquare size={16}/></span></div><strong>{formatInt(kpis.leads)}</strong>
+      <div className="bk-card bk-kpi rv"><div className="bk-kpi-top">Jami lidlar<span className="bk-kpi-icon"><MessageSquare size={16}/></span></div><strong><StatCounter value={kpis.leads}/></strong>
         <span className="bk-kpi-foot"><Delta current={kpis.leads} previous={kpis.prevLeads} suffix=""/>O‘zbekiston {formatInt(kpis.uz)} · xorij {formatInt(kpis.foreign)}{kpis.unknown ? ` · aniqlanmagan ${formatInt(kpis.unknown)}` : ""}</span></div>
-      <div className="bk-card bk-kpi"><div className="bk-kpi-top">Yangi (ishlanmagan) lidlar<span className="bk-kpi-icon is-orange"><Clock3 size={16}/></span></div><strong>{formatInt(kpis.fresh)}</strong>
+      <div className="bk-card bk-kpi rv"><div className="bk-kpi-top">Yangi (ishlanmagan) lidlar<span className="bk-kpi-icon is-orange"><Clock3 size={16}/></span></div><strong><StatCounter value={kpis.fresh}/></strong>
         <span className="bk-kpi-foot">{kpis.stale ? <><span className="bk-delta is-alert">{formatInt(kpis.stale)} ta</span>24 soatdan ortiq javobsiz</> : "Hammasiga 24 soat ichida javob berilgan"}</span></div>
-      <div className="bk-card bk-kpi"><div className="bk-kpi-top">Tasdiqlangan sotuvlar<span className="bk-kpi-icon"><CheckCircle2 size={16}/></span></div><strong>{formatInt(kpis.sales)}</strong><Delta current={kpis.sales} previous={kpis.prevSales}/></div>
-      <div className="bk-card bk-kpi"><div className="bk-kpi-top">Konversiya (lid → sotuv)<span className="bk-kpi-icon"><TrendingUp size={16}/></span></div><strong>{formatPercent(conversion)}</strong>
+      <div className="bk-card bk-kpi rv"><div className="bk-kpi-top">Tasdiqlangan sotuvlar<span className="bk-kpi-icon"><CheckCircle2 size={16}/></span></div><strong><StatCounter value={kpis.sales}/></strong><Delta current={kpis.sales} previous={kpis.prevSales}/></div>
+      <div className="bk-card bk-kpi rv"><div className="bk-kpi-top">Konversiya (lid → sotuv)<span className="bk-kpi-icon"><TrendingUp size={16}/></span></div><strong>{formatPercent(conversion)}</strong>
         <span className="bk-kpi-foot"><span className={`bk-delta${conversionChange < 0 ? " is-down" : ""}`}>{conversionChange < 0 ? <ArrowDownRight size={12}/> : <ArrowUpRight size={12}/>}{formatDecimal(Math.abs(conversionChange))} p.p.</span>oldingi davrga nisbatan</span></div>
     </div>
 
@@ -85,6 +116,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="bk-card-head"><div><h2 id="bk-weekly-title">Dinamika</h2><span className="bk-muted">So‘nggi 12 hafta, haftalik · kartani bosing</span></div></div>
         <DynamicsCards metrics={dynamics} weeks={weekly.slice(-12).map(week => formatDayMonth(new Date(`${week.week}T12:00:00+05:00`)))}/>
       </section>
+      <div style={{ display: "grid", alignContent: "start", gap: 16 }}>
       <section className="bk-card" aria-labelledby="bk-funnel-title" style={{ display: "grid", alignContent: "start", gap: 14 }}>
         <div className="bk-card-head" style={{ marginBottom: 0 }}><div><h2 id="bk-funnel-title">Sotuv voronkasi</h2><span className="bk-muted">{period.label}</span></div></div>
         {funnelView.rows[0].count ? <div className="bk-bars">{funnelView.rows.map((stage, index) => <div className="bk-bar-row" key={stage.key}>
@@ -93,6 +125,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </div>)}</div> : <div className="bk-empty">Bu davrda lid yo‘q.</div>}
         {funnelView.biggest && <p className="bk-note">Eng katta yo‘qotish: <strong>{funnelView.biggest.from} → {funnelView.biggest.to}</strong> ({formatInt(funnelView.biggest.lost)} lid)</p>}
       </section>
+      {topRegions.length > 0 && <section className="bk-card rv" aria-labelledby="bk-regbars-title">
+        <div className="bk-card-head"><div><h2 id="bk-regbars-title">Viloyatlar</h2><span className="bk-muted">O‘zbekiston lidlari · {period.label}</span></div></div>
+        <div className="bk-regbars">{topRegions.map(([code, count]) => <div key={code}><span>{regionName(code)}</span><ProgressBar value={count / topRegions[0][1]}/><b>{formatPercent(percentOf(count, kpis.leads), 0)}</b></div>)}</div>
+      </section>}
+      </div>
     </div>
 
     <LazyRegionMap rows={regions} tips={tips}/>
@@ -102,7 +139,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div><h2 id="bk-links-title">Linklar samaradorligi</h2><span className="bk-muted">Referal linklar orqali kelganlar va ularning oxirgi harakati · {period.label.toLocaleLowerCase("uz-UZ")} · zayavkalar bo‘yicha saralangan</span></div>
         <div className="bk-actions"><Link className="bk-btn" href={`/admin/links${query}`}>Barcha linklar</Link><Link className="bk-btn is-primary" href="/admin/links/new"><Plus size={15}/>Yangi link</Link></div>
       </div>
-      <div className="bk-legend" style={{ marginBottom: 10 }}><span><i style={{ background: "var(--k-bg-d9e3f3, #D9E3F3)" }}/>Ko‘rib chiqib ketdi</span><span><i style={{ background: "var(--k-bg-8db0e4, #8DB0E4)" }}/>Qiziqdi (mahsulot ko‘rdi, 30 s+)</span><span><i style={{ background: "var(--k-bg-4f7fcc, #4F7FCC)" }}/>Bog‘lanishga urindi (tel / Telegram / Madina)</span><span><i style={{ background: "#123E7C" }}/>Zayavka qoldirdi</span></div>
+      <div className="bk-legend" style={{ marginBottom: 10 }}><span><i style={{ background: "rgba(255,255,255,.14)" }}/>Ko‘rib chiqib ketdi</span><span><i style={{ background: "#a78bfa" }}/>Qiziqdi (mahsulot ko‘rdi, 30 s+)</span><span><i style={{ background: "#7c5cff" }}/>Bog‘lanishga urindi (tel / Telegram / Madina)</span><span><i style={{ background: "#22d3ee" }}/>Zayavka qoldirdi</span></div>
       {linkRows.length ? <div className="bk-table-wrap"><table className="bk-table">
         <thead><tr><th>Link</th><th className="is-left">Tashrifchilar harakati</th><th>Klik</th><th>Zayavka</th><th>Sotuv</th><th>Konv.</th></tr></thead>
         <tbody>{linkRows.map(row => {
@@ -110,7 +147,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           return <tr key={row.id}>
             <td><div className="bk-link-cell"><SourceIcon source={row.source}/><div><Link href={`/admin/links/${row.id}`}>{row.name}</Link><small>/r/{row.slug}</small></div></div></td>
             <td className="is-left" style={{ width: "40%" }}><div className="bk-stack" style={{ width: `${Math.max(4, (row.clicks / maxClicks) * 100)}%` }} role="img" aria-label={`Ketdi ${row.segments.left}, qiziqdi ${row.segments.interested}, bog‘lanish ${row.segments.contact}, zayavka ${row.segments.lead}`}>
-              {segment(row.segments.left, "#D9E3F3")}{segment(row.segments.interested, "#8DB0E4")}{segment(row.segments.contact, "#4F7FCC")}{segment(row.segments.lead, "#123E7C")}
+              {segment(row.segments.left, "rgba(255,255,255,.14)")}{segment(row.segments.interested, "#a78bfa")}{segment(row.segments.contact, "#7c5cff")}{segment(row.segments.lead, "#22d3ee")}
             </div></td>
             <td>{formatInt(row.clicks)}</td><td className="is-strong">{formatInt(row.leads)}</td><td>{formatInt(row.sales)}</td>
             <td className={row.clicks >= 50 && row.conversion < 2 ? "is-orange" : "is-strong"}>{formatPercent(row.conversion)}</td>
@@ -143,9 +180,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       </section>
       <section className="bk-card" aria-labelledby="bk-latest-title">
         <div className="bk-card-head"><h2 id="bk-latest-title">So‘nggi so‘rovlar</h2><Link href="/admin/leads">Barcha so‘rovlar →</Link></div>
-        {people.latest.length ? <div className="bk-list">{people.latest.map(lead => { const chip = lead.lost ? { label: "Yopildi", tone: "is-grey" } : LEVEL_CHIPS[lead.level]; return <Link key={lead.id} href={`/admin/leads?lead=${lead.id}`} style={{ color: "inherit", textDecoration: "none" }}>
-          <span className="bk-grow"><b>{lead.title}</b><span>{[lead.regionCode ? regionName(lead.regionCode) : lead.region, lead.customerName, formatRelative(new Date(lead.createdAt), now)].filter(Boolean).join(" · ")}</span></span>
-          <span className={`bk-badge ${chip.tone}`}>{chip.label}</span>
+        {people.latest.length ? <div className="bk-reqs">{people.latest.map((lead, index) => { const chip = lead.lost ? { label: "Yopildi", tone: "red" as const } : LEVEL_CHIPS[lead.level]; return <Link key={lead.id} className="bk-req rv" href={`/admin/leads?lead=${lead.id}`}>
+          <span className={`bk-req-th is-${(index % 5) + 1}`} aria-hidden="true"><span>{lead.title.split(" ")[0]}</span></span>
+          <span className="bk-req-it"><span className="bk-req-r1">{[formatRelative(new Date(lead.createdAt), now), lead.customerName].filter(Boolean).join(" · ")}<Pill tone={chip.tone}>{chip.label}</Pill></span>
+            <b>{lead.title}</b><small>{lead.regionCode ? regionName(lead.regionCode) : lead.region || "Hudud aniqlanmagan"}</small></span>
         </Link>; })}</div> : <div className="bk-empty">Hali so‘rov yo‘q.</div>}
       </section>
     </div>

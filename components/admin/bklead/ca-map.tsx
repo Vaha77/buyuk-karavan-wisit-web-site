@@ -94,19 +94,19 @@ export function useMapZoom() {
 
 /** Country fill under the regions (no holes, e.g. Baikonur), drawn first. */
 export function CountryBackground() {
-  return <g aria-hidden="true" style={{ pointerEvents: "none" }}>{CA_MAP.countries.map(country => <path key={country.code} d={country.d} fill="var(--k-bg-e6ebf2, #E6EBF2)"/>)}</g>;
+  return <g aria-hidden="true" style={{ pointerEvents: "none" }}>{CA_MAP.countries.map(country => <path key={country.code} d={country.d} fill="rgba(255,255,255,.03)"/>)}</g>;
 }
 
 /** Country borders (thicker than region borders) and faint country names; a name moves off any callout in `avoid`. */
 export function CountryLayer({ s, avoid }: { s: number; avoid: Array<{ x: number; y: number; w: number; h: number }> }) {
   const size = 14 * s;
   return <g aria-hidden="true" style={{ pointerEvents: "none" }}>
-    {CA_MAP.countries.map(country => <path key={country.code} d={country.d} fill="none" stroke="#5B6B82" strokeWidth="1.8" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>)}
+    {CA_MAP.countries.map(country => <path key={country.code} d={country.d} fill="none" stroke="rgba(255,255,255,.28)" strokeWidth="1.8" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>)}
     {CA_MAP.countries.map(country => {
       const name = COUNTRY_NAMES[country.code as CustomerCountry], w = name.length * size * 0.75;
       const hits = (y: number) => avoid.some(box => country.x - w / 2 < box.x + box.w && country.x + w / 2 > box.x && y - size < box.y + box.h && y > box.y);
       const y = [0, 1.6, -1.6, 3.2, -3.2].map(step => country.y - 18 * s + step * size).find(value => !hits(value)) ?? country.y;
-      return <text key={country.code} x={country.x} y={y} textAnchor="middle" style={{ fill: "var(--k-fg-5b6b82, #5B6B82)", opacity: 0.45, fontSize: size, fontWeight: 700, letterSpacing: 2 * s, textTransform: "uppercase" }}>{name}</text>;
+      return <text key={country.code} x={country.x} y={y} textAnchor="middle" style={{ fill: "#8b90a6", opacity: 0.45, fontSize: size, fontWeight: 700, letterSpacing: 2 * s, textTransform: "uppercase" }}>{name}</text>;
     })}
   </g>;
 }

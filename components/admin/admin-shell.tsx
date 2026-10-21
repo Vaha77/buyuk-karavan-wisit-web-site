@@ -3,15 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { labelTables } from "./table-cards";
 import { BrandEmblem } from "./brand-emblem";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { AdminSearch } from "./admin-search";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeCheck, Bell, FileText, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PackageCheck, PhoneCall, PlusCircle, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wrench, X } from "lucide-react";
+import { BadgeCheck, Bell, FileText, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PackageCheck, PhoneCall, Plus, PlusCircle, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wrench, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 import { homeFor } from "@/lib/auth/seller-access";
 import { NavigationProgress } from "./feedback";
+import { BottomNav } from "@/components/ui/aurora";
 
 type NavItem = { label: string; /** Phone bottom bar name */ short?: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; adminOnly?: boolean; badge?: "leads" | "new" | "purchases" | "due" | "sex"; soon?: boolean };
 // Grouped as in the BKLead design; items without a page yet are shown disabled with "Tez orada".
@@ -150,11 +150,15 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
   const visible = (item: NavItem) => (!item.superOnly || user.role === "SUPER_ADMIN") && (!item.adminOnly || isAdmin);
   // The most specific matching item is active, so /admin/customers/purchases does not also light up "Doimiy mijozlar".
   const activeHref = groups.flatMap(group => group.items).filter(item => !item.soon && (item.href === pathname || (item.href !== "/admin" && pathname.startsWith(`${item.href}/`)))).sort((a, b) => b.href.length - a.href.length)[0]?.href;
+  const pages = groups.flatMap(group => group.items).filter(item => visible(item) && !item.soon);
+  // Phone "+" button: the role's most common new record (WORKSHOP has none).
+  const fab = user.role === "SELLER" ? "/admin/my/purchase" : user.role === "STOREKEEPER" ? "/admin/seh/request" : user.role === "WORKSHOP" ? null : "/admin/seh/new";
+  const firstName = user.name.trim().split(/\s+/)[0] || user.name;
   return <div className="admin-shell">
     <NavigationProgress/>
     <button className={`admin-drawer-backdrop ${open ? "is-open" : ""}`} aria-label="Menyuni yopish" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}/>
-    <aside className={`admin-sidebar ${open ? "is-open" : ""}`}>
-      <div className="admin-sidebar-brand"><Link href={home} className="admin-brand-link" onClick={() => setOpen(false)}><BrandEmblem/><strong>BUYUK KARAVAN</strong></Link><button className="admin-sidebar-close" onClick={() => setOpen(false)} aria-label="Menyuni yopish"><X size={18}/></button><span className="admin-sidebar-collapse"><ChevronLeft size={15}/></span></div>
+    <aside className={`admin-sidebar glass-blur ${open ? "is-open" : ""}`}>
+      <div className="admin-sidebar-brand"><Link href={home} className="admin-brand-link" onClick={() => setOpen(false)}><BrandEmblem/><strong>Buyuk Karavan</strong></Link><button className="admin-sidebar-close" onClick={() => setOpen(false)} aria-label="Menyuni yopish"><X size={18}/></button><span className="admin-sidebar-collapse"><ChevronLeft size={15}/></span></div>
       <span className="admin-sidebar-label">{user.role === "SELLER" ? "SOTUVCHI" : user.role === "WORKSHOP" ? "SEH" : user.role === "STOREKEEPER" ? "OMBOR" : "ADMIN"}</span>
       <nav aria-label="Admin navigatsiya">{groups.map(section => <div className="admin-nav-group" key={section.group}><span className="admin-nav-group-label">{section.group}</span>{section.items.filter(visible).map(item => {
         const Icon = item.icon;
@@ -165,17 +169,16 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
       })}</div>)}</nav>
     </aside>
     <div className="admin-main">
-      <header className="admin-topbar">
-        <Link href={home} className="admin-mobile-brand"><BrandEmblem/><strong>BUYUK KARAVAN</strong></Link>
-        <div className="admin-topbar-title"><strong>{section.title}</strong><span>{section.subtitle}</span></div>
-        <div className="admin-topbar-actions"><AdminSearch pages={groups.flatMap(group => group.items).filter(item => visible(item) && !item.soon).map(item => ({ label: item.label, href: item.href }))}/><Bell className="admin-bell" size={18}/><ThemeToggle/><span className="admin-user"><span className="admin-avatar">{user.name.trim().charAt(0).toUpperCase()}</span><span className="admin-user-details"><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span></span><form action={logoutAction}><button className="admin-logout" type="submit" aria-label="Chiqish"><LogOut size={16}/><span>Chiqish</span></button></form><button className="admin-mobile-menu" aria-label="Menyuni ochish" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={21}/></button></div>
+      <header className="admin-topbar glass-blur">
+        <div className="admin-topbar-title"><span>Salom, {firstName} 👋</span><strong>{section.title}</strong><small>{section.subtitle}</small></div>
+        <div className="admin-topbar-actions"><AdminSearch pages={pages.map(item => ({ label: item.label, href: item.href }))}/><Bell className="admin-bell" size={18}/><span className="admin-user"><span className="admin-avatar">{user.name.trim().charAt(0).toUpperCase()}</span><span className="admin-user-details"><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span></span><form action={logoutAction}><button className="admin-logout" type="submit" aria-label="Chiqish"><LogOut size={16}/><span>Chiqish</span></button></form><button className="admin-mobile-menu" aria-label="Menyuni ochish" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={21}/></button></div>
       </header>
       <div className="admin-workspace" ref={workspace}>{children}</div>
     </div>
-    {/* Phone: the first sections as a bottom bar (above the home indicator), the rest under "Menyu". */}
-    <nav className="admin-tabbar" aria-label="Asosiy bo‘limlar">
-      {groups.flatMap(group => group.items).filter(item => visible(item) && !item.soon).slice(0, 4).map(item => { const Icon = item.icon; return <Link key={item.href} href={item.href} className={item.href === activeHref ? "is-active" : undefined} aria-current={item.href === activeHref ? "page" : undefined}><Icon size={20}/><span>{item.short ?? item.label}</span></Link>; })}
-      <button type="button" onClick={() => setOpen(true)}><Menu size={20}/><span>Menyu</span></button>
-    </nav>
+    {/* Phone: the first sections as a bottom bar around the "+" button (above the home indicator), the rest under "Menyu". */}
+    <BottomNav label="Asosiy bo‘limlar" fab={fab ? { href: fab, label: "Yangi", icon: <Plus size={26} strokeWidth={2.4}/> } : undefined} items={[
+      ...pages.filter(item => item.href !== fab).slice(0, 3).map(item => { const Icon = item.icon; return { href: item.href, label: item.short ?? item.label, icon: <Icon size={20}/>, on: item.href === activeHref }; }),
+      { label: "Menyu", icon: <Menu size={20}/>, onClick: () => setOpen(true) },
+    ]}/>
   </div>;
 }

@@ -86,7 +86,7 @@ export function CustomerRegions({ stats }: { stats: RegionStats }) {
               const stat = byCode.get(area.code);
               if (!stat || (area.point && !stat.customers)) return null;
               // "!" (no customers) only for Uzbekistan, the home market; elsewhere the area just stays uncoloured.
-              if (!stat.customers) return countryOf(area.code) !== "UZ" ? null : <g key={area.code} aria-hidden="true" className="bk-map-attention"><circle cx={area.x} cy={area.y} r={8 * s} fill="var(--k-bg-e07a2e, #E07A2E)" stroke="var(--k-bd-ffffff, #fff)" strokeWidth={1.5 * s}/><text x={area.x} y={area.y + 4 * s} textAnchor="middle">!</text></g>;
+              if (!stat.customers) return countryOf(area.code) !== "UZ" ? null : <g key={area.code} aria-hidden="true" className="bk-map-attention"><circle cx={area.x} cy={area.y} r={8 * s} fill="#ecc96b" stroke="#07070d" strokeWidth={1.5 * s}/><text x={area.x} y={area.y + 4 * s} textAnchor="middle">!</text></g>;
               if (area.small || area.point) return <Callout key={area.code} x={area.x} y={area.y} text={calloutText(stat)} s={s} view={zoom.box}/>;
               const tone = tones[area.code] ?? "none", light = tone === "b2" || tone === "b3" || tone === "none";
               return <g key={area.code}>
@@ -139,7 +139,7 @@ function RegionDetail({ ref, region, rank }: { ref: React.Ref<HTMLElement>; regi
       <h2 id="bk-region-detail-title">{region.name}</h2>
       <span className="bk-muted">{region.customers ? `${rank}-o‘rin · ${formatInt(region.customers)} mijoz · ulush ${formatPercent(region.share)}` : "Doimiy mijoz yo‘q"}</span>
     </div><GrowthBadge growth={region.growth}/></div>
-    {!region.customers ? <div className="bk-empty"><AlertTriangle size={18} color="var(--k-fg-8a4b12, #8A4B12)"/><strong>E’tibor kerak</strong><span>Bu viloyatda hali doimiy mijoz yo‘q.</span></div> : <>
+    {!region.customers ? <div className="bk-empty"><AlertTriangle size={18} color="#ecc96b"/><strong>E’tibor kerak</strong><span>Bu viloyatda hali doimiy mijoz yo‘q.</span></div> : <>
       <RegionPeriod region={region}/>
       <div>
         <h3 style={{ marginBottom: 4 }}>Mijozlar</h3>
@@ -255,8 +255,8 @@ function MorphChart({ values, highlight, highlightName, labels }: { values: numb
       {labels.map((label, i) => (phone ? (n - 1 - i) % 2 === 0 : true) && <text key={label} x={X(i)} y={B + font + 6} textAnchor={i === n - 1 ? "end" : i === 0 ? "start" : "middle"}>{label}</text>)}
       <path d={`${line} L${X(n - 1)},${B} L${L},${B}Z`} fill="url(#bk-rep-area)"/>
       <path d={line} fill="none" strokeWidth={3} strokeLinecap="round" style={{ stroke: "var(--bk-b1)" }}/>
-      {shown?.hs && highlight && <path d={smooth(shown.hs.map((y, i) => [X(i), y]), B)} fill="none" strokeWidth={3} strokeDasharray="7 5" strokeLinecap="round" style={{ stroke: "var(--bk-navy)" }}/>}
-      {ys.map((y, i) => <circle key={i} cx={X(i)} cy={y} r={tip === i ? 6 : 4} strokeWidth={2.5} style={{ fill: "var(--bk-card)", stroke: "var(--bk-b1)" }}/>)}
+      {shown?.hs && highlight && <path d={smooth(shown.hs.map((y, i) => [X(i), y]), B)} fill="none" strokeWidth={3} strokeDasharray="7 5" strokeLinecap="round" style={{ stroke: "#22d3ee" }}/>}
+      {ys.map((y, i) => <circle key={i} cx={X(i)} cy={y} r={tip === i ? 6 : 4} strokeWidth={2.5} style={{ fill: "#07070d", stroke: "var(--bk-b1)" }}/>)}
       {tip !== null && <line x1={X(tip)} x2={X(tip)} y1={T} y2={B} className="bk-dyn-grid" strokeDasharray="3 3"/>}
       {values.map((_, i) => <rect key={i} x={X(i) - slot / 2} y={T} width={slot} height={B - T + 24} fill="transparent" onPointerEnter={() => setTip(i)} onPointerDown={() => setTip(i)}/>)}
     </svg>

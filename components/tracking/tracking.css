@@ -1,5 +1,5 @@
 /* Cookie notice: bottom-left so it never covers the Madina button (bottom-right). */
-.bk-cookie-notice{position:fixed;left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:90;display:flex;align-items:center;gap:14px;max-width:min(430px,calc(100vw - 110px));padding:12px 14px;border:1px solid var(--k-bd-e3e9f2, #E3E9F2);border-radius:14px;background:var(--k-bg-ffffff, #fff);box-shadow:0 12px 32px rgba(15,30,51,.14);color:var(--k-fg-0f1e33, #0F1E33);font-size:12px;line-height:1.45}
-.bk-cookie-notice p{margin:0}.bk-cookie-notice span{display:block;color:var(--k-fg-5b6b82, #5B6B82)}
+.bk-cookie-notice{position:fixed;left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:90;display:flex;align-items:center;gap:14px;max-width:min(430px,calc(100vw - 110px));padding:12px 14px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:rgba(255,255,255,.045);box-shadow:0 12px 32px rgba(15,30,51,.14);color:#f4f5fb;font-size:12px;line-height:1.45}
+.bk-cookie-notice p{margin:0}.bk-cookie-notice span{display:block;color:#8b90a6}
 .bk-cookie-notice button{flex:none;min-height:36px;padding:0 14px;border:0;border-radius:10px;background:#1D4E9E;color:#fff;font:inherit;font-weight:700;cursor:pointer}
 @media(max-width:480px){.bk-cookie-notice{left:10px;right:86px;max-width:none;flex-direction:column;align-items:stretch;gap:8px}}

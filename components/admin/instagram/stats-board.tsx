@@ -1,5 +1,5 @@
 // Instagram → "Statistika" tab (server-rendered; the map paths are pre-projected in lib/instagram/world-map.json).
-// Layout and colours follow docs/design/instagram/instagram-statistika.dc.html (#1E4E8C primary, #E8792B accent).
+// Layout follows docs/design/instagram/instagram-statistika.dc.html; colours are the Aurora palette (#7c5cff violet, #22d3ee cyan accent).
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { Download } from "lucide-react";
@@ -9,12 +9,12 @@ import worldMap from "@/lib/instagram/world-map.json";
 import { withAccount } from "@/lib/instagram/constants";
 import { AudienceMode, AudienceToggle, RefreshButton, TopPosts } from "./stats-client";
 
-const NAVY = "#1E4E8C", ORANGE = "#E8792B", SKY = "#7FA4D6", GREY = "#9AA8BC", NONE = "#EEF2F8";
+const NAVY = "#7c5cff", ORANGE = "#22d3ee", SKY = "#b3a4ff", GREY = "#8b90a6", NONE = "rgba(255,255,255,.06)";
 const DEMO_NOTE = "Instagram oxirgi 30 kun bo‘yicha beradi · kichik guruhlar yashiriladi";
 const signed = (value: number) => `${value > 0 ? "+" : ""}${formatNumber(value)}`;
-/** Dark-blue scale: 12 % … 100 % of #1E4E8C by the square root of the share (small countries stay visible). */
+/** Violet scale: 12 % … 100 % of violet #7c5cff by the square root of the share (small countries stay visible). */
 const alpha = (percent: number, max: number) => !percent || !max ? 0 : 0.12 + 0.88 * Math.sqrt(percent / max);
-const fill = (a: number) => a ? `rgba(30,78,140,${a.toFixed(2)})` : NONE;
+const fill = (a: number) => a ? `rgba(124,92,255,${a.toFixed(2)})` : NONE;
 const tashkentTime = (iso: string) => new Intl.DateTimeFormat("uz-UZ", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Tashkent" }).format(new Date(iso));
 
 function Kpis({ board }: { board: Board }) {
@@ -66,8 +66,8 @@ function DailyChart({ daily }: { daily: Board["daily"] }) {
       <div className="igs-legend">{series.map(item => <span key={item.key}><i style={{ background: item.color }}/>{item.label}</span>)}</div>
     </div>
     <svg className="igs-chart" viewBox="0 0 1000 280" role="img" aria-label={`Kunlik like, komment va Direct xabarlar: ${daily.map(row => `${formatDayUz(row.day, true)} — ${row.likes} like, ${row.comments} komment, ${row.direct} Direct`).join("; ")}`}>
-      {[20, 135].map(line => <line key={line} x1="40" y1={line} x2="1000" y2={line} stroke="var(--k-bd-e6ecf5, #E6ECF5)"/>)}
-      <line x1="40" y1="250" x2="1000" y2="250" stroke="var(--k-bd-c9d5e6, #C9D5E6)"/>
+      {[20, 135].map(line => <line key={line} x1="40" y1={line} x2="1000" y2={line} stroke="rgba(255,255,255,.09)"/>)}
+      <line x1="40" y1="250" x2="1000" y2="250" stroke="rgba(255,255,255,.09)"/>
       <text x="0" y="24">{formatNumber(top)}</text><text x="0" y="139">{formatNumber(top / 2)}</text><text x="0" y="254">0</text>
       {series.map(item => daily.length > 1
         ? <polyline key={item.key} points={item.values.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ")} fill="none" stroke={item.color} strokeWidth="3" strokeDasharray={item.dash} strokeLinejoin="round" strokeLinecap="round"/>
@@ -132,11 +132,11 @@ function CountryMap({ board }: { board: Board }) {
     {!board.audience ? <div className="igs-empty">Demografiya hali yo‘q (100 dan kam obunachi yoki reaksiya bo‘lsa Instagram bermaydi)</div> : <div className="igs-geo-grid">
       <div className="igs-map-box">
         <svg className="igs-map" viewBox={`0 0 ${worldMap.width} ${worldMap.height}`} role="img" aria-label={`Xarita: ${MAP_COUNTRIES.map(code => `${nameOf(code)} — obunachilar ${formatNumber(shareOf(follower, code).percent, 1)}%, reaksiya ${formatNumber(shareOf(engaged, code).percent, 1)}%`).join("; ")}`}>
-          <rect width={worldMap.width} height={worldMap.height} fill="var(--k-bg-eaf1f8, #EAF1F8)"/>
-          {worldMap.neighbours.map(country => <path key={country.code} d={country.d} fill="var(--k-bg-f7f9fc, #F7F9FC)" stroke="var(--k-bd-c9d5e6, #C9D5E6)" strokeWidth="0.8"><title>{country.name}</title></path>)}
+          <rect width={worldMap.width} height={worldMap.height} fill="rgba(124,92,255,.12)"/>
+          {worldMap.neighbours.map(country => <path key={country.code} d={country.d} fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.09)" strokeWidth="0.8"><title>{country.name}</title></path>)}
           {worldMap.countries.map(country => {
             const f = shareOf(follower, country.code), e = shareOf(engaged, country.code);
-            return <path key={country.code} className="igs-country" d={country.d} stroke="var(--k-bd-ffffff, #fff)" strokeWidth="1.2" style={{ "--f": fill(alpha(f.percent, maxF)), "--e": fill(alpha(e.percent, maxE)) } as CSSProperties}>
+            return <path key={country.code} className="igs-country" d={country.d} stroke="rgba(255,255,255,.09)" strokeWidth="1.2" style={{ "--f": fill(alpha(f.percent, maxF)), "--e": fill(alpha(e.percent, maxE)) } as CSSProperties}>
               <title>{`${country.name} — obunachilar: ${formatNumber(f.percent, 1)}% · ≈ ${formatNumber(f.value)}; reaksiya: ${formatNumber(e.percent, 1)}% · ≈ ${formatNumber(e.value)}`}</title>
             </path>;
           })}
@@ -162,7 +162,7 @@ function Demographics({ board }: { board: Board }) {
     const ages = AGE_ORDER.map(key => age.rows.find(row => row.key === key)).filter((row): row is Shares["rows"][number] => !!row);
     const maxAge = Math.max(1, ...ages.map(row => row.percent));
     const ring = ["M", "F", "U"].map(key => gender.rows.find(row => row.key === key)).filter((row): row is Shares["rows"][number] => !!row && row.percent > 0);
-    const colors: Record<string, string> = { M: NAVY, F: ORANGE, U: "#DCE5F1" };
+    const colors: Record<string, string> = { M: NAVY, F: ORANGE, U: "rgba(255,255,255,.25)" };
     const circumference = 2 * Math.PI * 44;
     let offset = 0;
     const lead = ring[0];

@@ -25,7 +25,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
     <Link className={`bk-chip${archive ? " is-active" : ""}`} href="/admin/users?view=archive">Arxiv <small>{archivedCount}</small></Link>
   </nav>;
   if (archive) return <div className="admin-products-page"><div className="admin-page-heading"><div><h1>Arxivlangan foydalanuvchilar</h1><p>Bog‘langan ma’lumoti borligi uchun o‘chirilmagan · kira olmaydi</p></div></div>{filters}
-    <section className="admin-panel admin-management-panel admin-audit-panel"><div className="admin-user-list">{users.length ? users.map(user => <div key={user.id} className="admin-user-row" style={{ alignItems: "center" }}><div><strong>{user.name}</strong><small>{user.phone} · {roleLabel(user.role)}</small></div><RestoreUserButton userId={user.id}/></div>) : <p style={{ margin: 0, color: "var(--k-fg-5b6b82, #5B6B82)" }}>Arxiv bo‘sh.</p>}</div></section>
+    <section className="admin-panel admin-management-panel admin-audit-panel"><div className="admin-user-list">{users.length ? users.map(user => <div key={user.id} className="admin-user-row" style={{ alignItems: "center" }}><div><strong>{user.name}</strong><small>{user.phone} · {roleLabel(user.role)}</small></div><RestoreUserButton userId={user.id}/></div>) : <p style={{ margin: 0, color: "#8b90a6" }}>Arxiv bo‘sh.</p>}</div></section>
   </div>;
   const pending = users.filter(x => x.approvalStatus === "PENDING"), managed = users.filter(x => x.approvalStatus !== "PENDING");
   // Waiting seller records on Telegram accounts that belong to a non-seller profile (shown, deleted only by hand).

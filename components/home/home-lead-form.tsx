@@ -78,7 +78,7 @@ export function HomeLeadForm({ compact = false, initialProduct = "", initialTemp
   }
 
   return (
-    <form ref={formRef} className={`home-lead-form${compact ? " is-compact" : ""}`} onSubmit={submit} noValidate>
+    <form ref={formRef} className={`home-lead-form glass${compact ? " is-compact" : ""}`} onSubmit={submit} noValidate>
       <div className="home-lead-fields">
         <label><span>Ism *</span><input name="customerName" autoComplete="name" required maxLength={120} aria-invalid={Boolean(errors.customerName)} aria-describedby={errors.customerName ? `${errorId}-name` : undefined} />{errors.customerName&&<small className="field-error" id={`${errorId}-name`}>{errors.customerName}</small>}</label>
         <label><span>Telefon *</span><input name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+998 91 637 77 77" required maxLength={40} aria-invalid={Boolean(errors.phone)} aria-describedby={errors.phone ? `${errorId}-phone` : undefined} />{errors.phone&&<small className="field-error" id={`${errorId}-phone`}>{errors.phone}</small>}</label>
@@ -88,7 +88,7 @@ export function HomeLeadForm({ compact = false, initialProduct = "", initialTemp
         <label className="is-wide"><span>Izoh</span><textarea name="notes" rows={compact ? 2 : 4} maxLength={2000} /></label>
       </div>
       <label className="home-honeypot" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" /></label>
-      <button className="button button-blue" type="submit" disabled={status === "submitting"}>
+      <button className="btn-g btn-lg" type="submit" disabled={status === "submitting"}>
         {status === "submitting" ? "Yuborilmoqda…" : "So‘rov yuborish"}
       </button>
       {message && <p className={`home-form-message is-${status}`} role={status === "error" ? "alert" : "status"}>{message}</p>}
@@ -99,7 +99,7 @@ export function HomeLeadForm({ compact = false, initialProduct = "", initialTemp
 export function ContactSection({ options }: { options: HomeLeadOption[] }) {
   return (
     <section className="home-contact-section" id="aloqa">
-      <div className="container home-contact-layout">
+      <div className="container home-contact-layout rv">
         <div>
           <p className="eyebrow">Loyiha bo‘yicha maslahat</p>
           <h2>Bepul hisob-kitob oling</h2>

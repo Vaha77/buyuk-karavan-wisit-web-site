@@ -1,2 +1,0 @@
-/* Lenis does the smoothing; native smooth scrolling would fight it. */
-html.lenis{scroll-behavior:auto}

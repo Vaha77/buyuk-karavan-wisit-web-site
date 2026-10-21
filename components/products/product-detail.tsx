@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { CircleHelp, Droplet, House, PanelsTopLeft, Refrigerator } from "lucide-react";
 import type { Product } from "@/lib/products/types";
-import { ProductCard } from "./product-card";
+import { RelatedProducts } from "./related-products";
 import { ProductGallery } from "./product-gallery";
-import { ProductDetailMotion } from "./product-detail-motion";
 import { MadinaPlaceholder } from "./madina-placeholder";
 import { ProductPrice } from "./product-price";
 import { ProductConsultation } from "./product-consultation";
@@ -43,12 +42,11 @@ export function ProductDetail({ product, related, exchangeRate }: { product: Pro
           <p className="detail-help-note"><CircleHelp size={15} aria-hidden="true"/>Mutaxassislarimiz sizga mos konfiguratsiyani tanlashda yordam beradi.</p>
         </div>
       </div>
-      <section className="detail-spec-section"><h2>Texnik xususiyatlar</h2><div className="detail-spec-card"><div className="detail-spec-grid"><SpecRows rows={specs.left}/><SpecRows rows={specs.right}/></div>{specs.full&&<div className="detail-spec-full detail-spec-row"><span>{specs.full.name}</span><strong>{specs.full.value || "—"}</strong></div>}<div className="detail-spec-mobile"><SpecRows rows={specs.mobile}/></div></div><p className="detail-spec-note">— belgisi keyinchalik Admin panel orqali to‘ldiriladigan xususiyatlarni bildiradi.</p></section>
-      <section className="detail-description"><h2>Mahsulot haqida</h2><div className="detail-description-copy"><p>{product.description || "—"}</p>{Boolean(product.descriptionBullets?.length)&&<ul>{product.descriptionBullets?.map(item=><li key={item}>{item}</li>)}</ul>}</div></section>
-      {Boolean(product.applications?.length)&&<section className="detail-applications"><h2>Qayerda ishlatiladi?</h2><div className="detail-application-grid">{product.applications?.map(item=>{const Icon=applicationIcons[item.id as keyof typeof applicationIcons] || PanelsTopLeft;return <article className="detail-application-card" key={item.id}><span><Icon size={21} strokeWidth={1.5} aria-hidden="true"/></span><h3>{item.label}</h3></article>;})}</div></section>}
-      <section className="detail-consultation"><div className="detail-consultation-content"><h2>Qaysi uskuna sizga mosligini<br className="detail-consultation-break"/> bilmayapsizmi?</h2><p>Mutaxassislarimiz loyiha va harorat talablariga qarab to‘g‘ri uskunani tanlashda yordam beradi.</p><div className="detail-consultation-actions"><ProductConsultation productId={product.id} productSlug={product.slug} productName={`${product.name} ${product.model}`} className="detail-button detail-button-light" label="Bepul maslahat olish"/><MadinaPlaceholder className="detail-button detail-button-dark-outline">Madina AI bilan gaplashish</MadinaPlaceholder></div></div></section>
-      <section className="detail-related"><h2>O‘xshash mahsulotlar</h2><div className="detail-related-grid">{related.map(item=><ProductCard product={item} exchangeRate={exchangeRate} key={item.id}/>)}</div></section>
+      <section className="detail-spec-section rv"><h2>Texnik xususiyatlar</h2><div className="detail-spec-card"><div className="detail-spec-grid"><SpecRows rows={specs.left}/><SpecRows rows={specs.right}/></div>{specs.full&&<div className="detail-spec-full detail-spec-row"><span>{specs.full.name}</span><strong>{specs.full.value || "—"}</strong></div>}<div className="detail-spec-mobile"><SpecRows rows={specs.mobile}/></div></div><p className="detail-spec-note">— belgisi keyinchalik Admin panel orqali to‘ldiriladigan xususiyatlarni bildiradi.</p></section>
+      <section className="detail-description rv"><h2>Mahsulot haqida</h2><div className="detail-description-copy"><p>{product.description || "—"}</p>{Boolean(product.descriptionBullets?.length)&&<ul>{product.descriptionBullets?.map(item=><li key={item}>{item}</li>)}</ul>}</div></section>
+      {Boolean(product.applications?.length)&&<section className="detail-applications rv"><h2>Qayerda ishlatiladi?</h2><div className="detail-application-grid">{product.applications?.map(item=>{const Icon=applicationIcons[item.id as keyof typeof applicationIcons] || PanelsTopLeft;return <article className="detail-application-card" key={item.id}><span><Icon size={21} strokeWidth={1.5} aria-hidden="true"/></span><h3>{item.label}</h3></article>;})}</div></section>}
+      <section className="detail-consultation rv"><div className="detail-consultation-content"><h2>Qaysi uskuna sizga mosligini<br className="detail-consultation-break"/> bilmayapsizmi?</h2><p>Mutaxassislarimiz loyiha va harorat talablariga qarab to‘g‘ri uskunani tanlashda yordam beradi.</p><div className="detail-consultation-actions"><ProductConsultation productId={product.id} productSlug={product.slug} productName={`${product.name} ${product.model}`} className="detail-button detail-button-light" label="Bepul maslahat olish"/><MadinaPlaceholder className="detail-button detail-button-dark-outline">Madina AI bilan gaplashish</MadinaPlaceholder></div></div></section>
+      <section className="detail-related rv"><h2>O‘xshash mahsulotlar</h2><RelatedProducts products={related} category={product.category} exchangeRate={exchangeRate}/></section>
     </div>
-    <ProductDetailMotion/>
   </main>;
 }

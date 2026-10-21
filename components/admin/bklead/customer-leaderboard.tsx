@@ -12,7 +12,7 @@ export function CustomerLeaderboard({ rows, year }: { rows: LeaderRow[]; year: n
       <div><h2 id="sl-leaders-title">Mijozlar reytingi — {year}</h2><span className="bk-muted">Yil boshidan tasdiqlangan xaridlar bo‘yicha · summalar ko‘rsatilmaydi</span></div>
       <div className="bk-seg" role="group" aria-label="Ko‘rsatish">{LEADERBOARD_SIZES.map(value => <button key={value} type="button" aria-pressed={size === value} onClick={() => setSize(value)}>Top {value}</button>)}</div>
     </div>
-    {rows.length ? <ol className="bk-list" style={{ listStyle: "none", margin: 0, padding: 0 }}>{rows.slice(0, size).map(row => <li key={row.place} style={row.mine ? { background: "#EAF2FD", borderRadius: 8, padding: "10px 8px" } : undefined} aria-current={row.mine ? "true" : undefined}>
+    {rows.length ? <ol className="bk-list" style={{ listStyle: "none", margin: 0, padding: 0 }}>{rows.slice(0, size).map(row => <li key={row.place} style={row.mine ? { background: "rgba(124,92,255,.12)", borderRadius: 8, padding: "10px 8px" } : undefined} aria-current={row.mine ? "true" : undefined}>
       {row.place <= 3 ? <span className={`bk-trophy is-${row.place}`} aria-label={`${row.place}-o‘rin`}><Trophy size={24} aria-hidden="true"/><small>{row.place}</small></span> : <span className="bk-medal">{row.place}</span>}
       <div className="bk-grow"><b>{row.name}</b><span>{row.seller ?? "Sotuvchi biriktirilmagan"}</span></div>
       {row.mine && <span className="bk-badge">Sizning mijozingiz</span>}

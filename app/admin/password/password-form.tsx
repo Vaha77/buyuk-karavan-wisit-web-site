@@ -15,6 +15,6 @@ export function NewPasswordForm() {
     <PasswordInput id="new-password-confirm" name="confirm" autoComplete="new-password" disabled={pending}/>
     <p className="admin-login-forgot" style={{ marginTop: 0, textAlign: "left" }}>Kamida 12 ta belgi.</p>
     {state.error && <p className="admin-login-error" role="alert">{state.error}</p>}
-    <button type="submit" disabled={pending}>{pending ? "Saqlanmoqda..." : "Parolni saqlash"}</button>
+    <button className="btn-g" type="submit" disabled={pending}>{pending ? "Saqlanmoqda..." : "Parolni saqlash"}</button>
   </form>;
 }

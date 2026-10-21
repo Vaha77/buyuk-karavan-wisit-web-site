@@ -164,7 +164,7 @@ export function PraysBoard({ products, parts, markup, history, categories, stand
             <button type="button" role="tab" className="sx-tab" aria-selected={tab === "categories"} onClick={() => startFilter(() => { setTab("categories"); setEditing(null); setDeleting(null); })}>Kategoriyalar · {categories.length}</button>
             <button type="button" role="tab" className="sx-tab" aria-selected={tab === "sex"} onClick={() => startFilter(() => { setTab("sex"); setChip("all"); setEditing(null); setDeleting(null); })}>Eski ro‘yxat (arxiv) · {parts.length}</button>
           </div>
-          {tab !== "categories" && <label className="sx-search"><Search size={15} color="var(--k-fg-4f5a70, #4F5A70)"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Nomi yoki model bo‘yicha qidirish" aria-label="Qidirish"/></label>}
+          {tab !== "categories" && <label className="sx-search"><Search size={15} color="#8b90a6"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Nomi yoki model bo‘yicha qidirish" aria-label="Qidirish"/></label>}
         </div>
         {tab === "categories" ? <CategoryFlagsPanel categories={categories} standardCondenserCategoryId={standardCondenserCategoryId} busy={pending} run={run}/> : <>
         {tab === "ready" && <div className="sx-chips" role="group" aria-label="Seh filtri">{WORKSHOP_FILTERS.map(item => <button key={item.key} type="button" className="sx-chip" aria-pressed={sehFilter === item.key} onClick={() => startFilter(() => setSehFilter(item.key))}>{item.label}</button>)}</div>}
@@ -184,8 +184,8 @@ export function PraysBoard({ products, parts, markup, history, categories, stand
               <td className="is-num">{isEditing
                 ? <input className="sx-input is-price" value={editing.draft} onChange={event => setEditing({ id: row.id, draft: event.target.value })} onKeyDown={event => { if (event.key === "Enter") saveEdit(row); if (event.key === "Escape") setEditing(null); }} inputMode="decimal" aria-label="Yangi prays narxi" autoFocus/>
                 : <span className="sx-price-box">{row.base === null ? "—" : formatUsd(row.base)}</span>}</td>
-              <td className="is-num" style={{ fontWeight: 700, color: "var(--k-fg-1e4e8c, #1E4E8C)" }}>{formatUsd(row.sale)}</td>
-              <td><span className="sx-muted" style={changedToday ? { color: "#1B6B43", fontWeight: 800 } : undefined}>{changedToday ? "bugun" : row.date ? formatShortDate(new Date(row.date)) : "—"}</span></td>
+              <td className="is-num" style={{ fontWeight: 700, color: "#b3a4ff" }}>{formatUsd(row.sale)}</td>
+              <td><span className="sx-muted" style={changedToday ? { color: "#34d399", fontWeight: 800 } : undefined}>{changedToday ? "bugun" : row.date ? formatShortDate(new Date(row.date)) : "—"}</span></td>
               <td><div className="sx-row-actions">
                 {isEditing && <><button type="button" className="sx-btn is-sm is-green" disabled={pending} onClick={() => saveEdit(row)}><BusyLabel busy={pending}>Saqlash</BusyLabel></button><button type="button" className="sx-btn is-sm is-icon" onClick={() => setEditing(null)} aria-label="Bekor qilish">×</button></>}
                 {isDeleting && <><button type="button" className="sx-btn is-sm is-red" disabled={pending} onClick={() => run(() => removeEntryAction({ entityType: row.entityType, id: row.id }), () => setDeleting(null))}>Ha, o‘chirish</button><button type="button" className="sx-btn is-sm is-icon" onClick={() => setDeleting(null)} aria-label="Bekor qilish">×</button></>}
@@ -203,7 +203,7 @@ export function PraysBoard({ products, parts, markup, history, categories, stand
       <div className="sx-card" style={{ flex: "1 1 300px", gap: 10 }}>
         <h3>Narx tarixi</h3>
         <div className="sx-history">{history.length ? history.map(entry => <div key={entry.id}><b>{entry.title}</b><span>{entry.detail}</span><small>{entry.who}</small></div>) : <div><span>Hali o‘zgarish yo‘q.</span></div>}</div>
-        <span className="sx-muted" style={{ paddingTop: 6, borderTop: "1px solid var(--k-bd-eef1f6, #EEF1F6)" }}>Zakaz berilgan paytdagi narx zakaz ichida saqlanadi — keyingi o‘zgarishlar eski zakazlarga ta’sir qilmaydi.</span>
+        <span className="sx-muted" style={{ paddingTop: 6, borderTop: "1px solid rgba(255,255,255,.09)" }}>Zakaz berilgan paytdagi narx zakaz ichida saqlanadi — keyingi o‘zgarishlar eski zakazlarga ta’sir qilmaydi.</span>
       </div>
     </div>
   </div>;
@@ -214,7 +214,7 @@ function PreviewTable({ rows }: { rows: Preview["rows"] }) {
     <thead><tr><th>Mahsulot</th><th className="is-num">Eski</th><th className="is-num">Yangi</th><th className="is-num">Farq</th><th>Holat</th></tr></thead>
     <tbody>{rows.map(row => <tr key={row.key}>
       <td style={{ fontWeight: 600 }}>{row.name}</td>
-      <td className="is-num" style={{ color: "var(--k-fg-4f5a70, #4F5A70)" }}>{formatUsd(row.oldBase)}</td>
+      <td className="is-num" style={{ color: "#8b90a6" }}>{formatUsd(row.oldBase)}</td>
       <td className="is-num is-strong">{formatUsd(row.newBase)}</td>
       <td className="is-num" style={{ fontWeight: 700 }}>{row.status === "NEW" ? "yangi" : row.percent === null ? "—" : `${row.percent > 0 ? "+" : ""}${row.percent.toString().replace(".", ",")}%`}</td>
       <td><span className={`sx-pill is-sm ${STATUS_TONE[row.status]}`}>{CHANGE_LABEL[row.status]}</span></td>
@@ -225,7 +225,7 @@ function PreviewTable({ rows }: { rows: Preview["rows"] }) {
 function AddPartForm({ groups, busy, onSubmit }: { groups: string[]; busy: boolean; onSubmit: (draft: { name: string; size: string | null; group: string; unit: string; base: number | null }) => void }) {
   const [name, setName] = useState(""), [size, setSize] = useState(""), [group, setGroup] = useState(""), [unit, setUnit] = useState("dona"), [price, setPrice] = useState("");
   const base = price.trim() ? Number(price.replace(",", ".").replace(/\s/g, "")) : null;
-  return <form className="sx-fields" style={{ alignItems: "end", padding: 12, borderRadius: 12, background: "var(--k-bg-f6f8fb, #F6F8FB)" }} onSubmit={event => { event.preventDefault(); onSubmit({ name: name.trim(), size: size.trim() || null, group: group.trim(), unit: unit.trim() || "dona", base: base !== null && Number.isFinite(base) && base > 0 ? base : null }); }}>
+  return <form className="sx-fields" style={{ alignItems: "end", padding: 12, borderRadius: 12, background: "rgba(255,255,255,.03)" }} onSubmit={event => { event.preventDefault(); onSubmit({ name: name.trim(), size: size.trim() || null, group: group.trim(), unit: unit.trim() || "dona", base: base !== null && Number.isFinite(base) && base > 0 ? base : null }); }}>
     <label className="sx-field">Nomi<input value={name} onChange={event => setName(event.target.value)} required maxLength={120} placeholder="Vibro shlang"/></label>
     <label className="sx-field">O‘lcham<input value={size} onChange={event => setSize(event.target.value)} maxLength={40} placeholder="F22, 3/8, 20 L"/></label>
     <label className="sx-field">Guruh<input value={group} onChange={event => setGroup(event.target.value)} required maxLength={60} list="sx-part-groups" placeholder="Shlang"/><datalist id="sx-part-groups">{["Glazok", "Klapan", "Shlang", "Filtr", "Resiver", "Kompressor", "Kondensator", ...groups].filter((value, index, all) => all.indexOf(value) === index).map(value => <option key={value} value={value}/>)}</datalist></label>

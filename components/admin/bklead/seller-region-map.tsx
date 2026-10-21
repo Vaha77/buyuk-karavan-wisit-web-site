@@ -40,7 +40,7 @@ export function SellerRegionMap({ data, year }: { data: SellerMap; year: number 
         <svg {...zoom.svgProps} role="img" aria-label={`5 davlat: mening mijozlarim viloyatlar bo‘yicha, ${year}`}>
           <defs>
             <pattern id={HATCH} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <rect width="7" height="7" fill={REGION_STATUS.empty.color}/><line x1="0" y1="0" x2="0" y2="7" stroke="#9DB8E0" strokeWidth="1.6"/>
+              <rect width="7" height="7" fill={REGION_STATUS.empty.color}/><line x1="0" y1="0" x2="0" y2="7" stroke="rgba(255,255,255,.25)" strokeWidth="1.6"/>
             </pattern>
           </defs>
           <CountryBackground/>

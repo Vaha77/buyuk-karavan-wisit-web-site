@@ -96,7 +96,7 @@ test("Kamchilik bor / Soni boshqa: real count + reason required, the difference 
   assert.match(rules.storeDiffText("10-06", "Briliant 20 HP", 1, 1, "korpus chizilgan", "Jasur"), /Keldi: 1 ta\n/, "same count, defect only");
   const service = await source("lib/sex/service.ts");
   assert.match(service, /if \(diff\) await notifySuperAdmins\(storeDiffText\(/);
-  assert.match(await source("lib/admin/shell-data.ts"), /receivedNote: \{ not: null \}, receivedCheckedAt: null/, "counted in the Tasdiqlash kerak badge");
+  assert.match(await source("lib/admin/shell-data.ts"), /"receivedNote" IS NOT NULL AND "receivedCheckedAt" IS NULL/, "counted in the Tasdiqlash kerak badge");
   assert.match(await source("app/admin/(protected)/customers/purchases/page.tsx"), /<StoreDiffButton /);
   assert.match(service, /checkStoreDiff[\s\S]*?if \(actor\.role !== "SUPER_ADMIN"\)/);
 });

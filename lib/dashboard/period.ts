@@ -1,6 +1,8 @@
 // Dashboard date range. Every block uses [from, to) and compares with the equal-length period right before it.
 export const RANGE_OPTIONS = [
+  { key: "today", label: "Bugun" },
   { key: "7d", label: "So‘nggi 7 kun" },
+  { key: "month", label: "Bu oy" },
   { key: "30d", label: "So‘nggi 30 kun" },
   { key: "90d", label: "So‘nggi 90 kun" },
   { key: "year", label: "Bu yil" },
@@ -28,7 +30,9 @@ export function resolvePeriod(params: { range?: string; from?: string; to?: stri
   } else if (key === "year") {
     const year = new Date(now.getTime() + TZ_OFFSET).getUTCFullYear();
     from = new Date(`${year}-01-01T00:00:00+05:00`);
-  } else from = new Date(tomorrow.getTime() - Number(key.replace("d", "")) * DAY);
+  } else if (key === "month") from = new Date(`${dayKey(now).slice(0, 7)}-01T00:00:00+05:00`);
+  else if (key === "today") from = startOfDay(now);
+  else from = new Date(tomorrow.getTime() - Number(key.replace("d", "")) * DAY);
   const length = to.getTime() - from.getTime();
   const label = key === "custom" ? `${dayKey(from)} — ${dayKey(new Date(to.getTime() - DAY))}` : RANGE_OPTIONS.find(option => option.key === key)!.label;
   return { key, label, from, to, prevFrom: new Date(from.getTime() - length), prevTo: from, days: Math.round(length / DAY) };

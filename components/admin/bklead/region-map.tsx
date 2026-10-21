@@ -81,7 +81,7 @@ export function RegionMap({ rows, tips }: Props) {
           })}
           {map.regions.map(region => {
             const count = counts[region.code] ?? 0, tone = tones[region.code] ?? "none";
-            if (region.point) return <g key={region.code}><circle cx={region.x} cy={region.y} r="5" fill={TONE_FILL[count ? tone : "none"]} stroke="#0F1E33" strokeWidth="1"/>{count > 0 && <Callout x={region.x} y={region.y} text={`${shortName(region.code)} ${formatInt(count)}`}/>}</g>;
+            if (region.point) return <g key={region.code}><circle cx={region.x} cy={region.y} r="5" fill={TONE_FILL[count ? tone : "none"]} stroke="#07070d" strokeWidth="1"/>{count > 0 && <Callout x={region.x} y={region.y} text={`${shortName(region.code)} ${formatInt(count)}`}/>}</g>;
             if (!count) return null;
             if (region.small) return <Callout key={region.code} x={region.x} y={region.y} text={`${shortName(region.code)} ${formatInt(count)}`}/>;
             const light = tone === "b2" || tone === "b3" || tone === "none";
@@ -131,8 +131,8 @@ export function calloutBox(x: number, y: number, text: string, s = 1, view: View
 export function Callout({ x, y, text, s = 1, view }: { x: number; y: number; text: string; s?: number; view?: View }) {
   const box = calloutBox(x, y, text, s, view);
   return <g aria-hidden="true">
-    <line x1={x} y1={y} x2={box.x > x ? box.x : box.x + box.w} y2={box.y + 11 * s} stroke="#0F1E33" strokeWidth="1" vectorEffect="non-scaling-stroke"/>
-    <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={6 * s} fill="#0F1E33"/>
+    <line x1={x} y1={y} x2={box.x > x ? box.x : box.x + box.w} y2={box.y + 11 * s} stroke="rgba(255,255,255,.4)" strokeWidth="1" vectorEffect="non-scaling-stroke"/>
+    <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={6 * s} fill="#12121c" stroke="rgba(255,255,255,.14)" vectorEffect="non-scaling-stroke"/>
     <text x={box.x + 6 * s} y={box.y + 14 * s} style={{ fill: "#fff", fontSize: 11 * s, fontWeight: 700 }}>{text}</text>
   </g>;
 }

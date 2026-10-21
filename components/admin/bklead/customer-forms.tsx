@@ -37,7 +37,7 @@ export function CustomersManager({ customers, sellers, canEdit, startNew }: { cu
       <tbody>{shown.map(customer => editing === customer.id ? <tr key={customer.id}><td colSpan={canEdit ? 7 : 6} className="is-left"><CustomerForm customer={customer} sellers={sellers} onDone={() => setEditing(null)}/></td></tr> : <tr key={customer.id}>
         <td className="is-strong">{customer.name}</td><td className="is-left">{customer.ownerName ?? <span className="bk-badge is-soft">Biriktirilmagan</span>}</td><td className="is-left">{customer.regionCode ? customerRegionName(customer.regionCode) : COUNTRY_NAMES[customer.country as CountryCode] ?? customer.country}</td>
         <td className="is-left bk-muted">{customer.phone || "—"}</td><td>{customer.salesCount}</td>
-        <td className="is-left"><span className={`bk-badge${customer.isActive ? "" : " is-grey"}`}>{customer.isActive ? "Faol" : "Nofaol"}</span></td>
+        <td className="is-left"><span className={customer.isActive ? "pill pill-ok" : "bk-badge is-grey"}>{customer.isActive ? "Faol" : "Nofaol"}</span></td>
         {canEdit && <td><div className="bk-actions" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
           <button type="button" className="bk-btn bk-icon-btn" onClick={() => setEditing(customer.id)} aria-label={`${customer.name} — tahrirlash`}><Pencil size={15}/></button>
           <button type="button" className="bk-btn bk-icon-btn is-danger-ghost" onClick={() => { setDeleteError(""); setDeleting(customer); }} aria-label={`${customer.name} — o‘chirish`}><Trash2 size={15}/></button>

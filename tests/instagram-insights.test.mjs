@@ -183,15 +183,15 @@ test("Statistika design: block order, colours, map scale and audience switch as 
   const order = ["<Kpis", "<Funnel", "<DailyChart", "<Kinds", "<CountryMap", "<Demographics", "<Heatmap", "<ContentTypes", "<TopPosts", "<Growth"].map(tag => board.indexOf(`${tag} `) >= 0 ? board.indexOf(`${tag} `) : board.indexOf(`${tag}/`));
   assert.ok(order.every(index => index > 0), "every block rendered");
   assert.deepEqual([...order].sort((a, b) => a - b), order, "design order");
-  assert.match(board, /#1E4E8C/);
-  assert.match(board, /#E8792B/);
-  assert.match(board, /rgba\(30,78,140,/, "dark-blue map scale");
+  assert.match(board, /#7c5cff/, "Aurora violet");
+  assert.match(board, /#22d3ee/, "Aurora cyan accent");
+  assert.match(board, /rgba\(124,92,255,/, "violet map scale");
   assert.match(board, /Davlatlar bo‘yicha auditoriya/);
   assert.match(board, /igs-map-name/, "country name and % on the map");
   const client = await read("../components/admin/instagram/stats-client.tsx");
   assert.match(client, />Obunachilar</);
   assert.match(client, />Reaksiya beruvchilar</);
-  assert.match(css, /--igs-navy:(?:var\(--k-[\w-]+, )?#1E4E8C/); // dark theme: the design colour stays as the light fallback
+  assert.match(css, /--igs-navy:var\(--v\)/);
   assert.match(board, /\["today", "7", "30", "90"\]/, "Bugun first");
   assert.doesNotMatch(board, /Namuna ma/, "real data, no sample badge");
 });

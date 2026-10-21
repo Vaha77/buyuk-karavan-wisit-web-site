@@ -1,10 +1,10 @@
 import { MONTHS_LONG } from "./format";
 
 // ---- Map colours -----------------------------------------------------------------------------
-// Blue vs orange plus lightness; never red/green only.
+// Violet scale vs gold plus lightness on the dark map; never red/green only.
 export type Tone = "top" | "b1" | "b2" | "b3" | "low" | "none";
-export const TONE_FILL: Record<Tone, string> = { top: "#123E7C", b1: "#4F7FCC", b2: "#8DB0E4", b3: "#C7D8F1", low: "#E07A2E", none: "var(--map-none, #E6EBF2)" };
-export const TONE_TEXT: Record<Tone, string> = { top: "#FFFFFF", b1: "#FFFFFF", b2: "#0F1E33", b3: "#0F1E33", low: "#2B1200", none: "var(--map-none-text, #5B6B82)" };
+export const TONE_FILL: Record<Tone, string> = { top: "#7c5cff", b1: "#6247d6", b2: "rgba(124,92,255,.45)", b3: "rgba(124,92,255,.24)", low: "#ecc96b", none: "var(--map-none, rgba(255,255,255,.06))" };
+export const TONE_TEXT: Record<Tone, string> = { top: "#FFFFFF", b1: "#FFFFFF", b2: "#f4f5fb", b3: "#f4f5fb", low: "#1a1405", none: "var(--map-none-text, #8b90a6)" };
 
 type Counted = { code: string; count: number };
 const ranked = (items: Counted[]) => items.filter(item => item.count > 0).sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));

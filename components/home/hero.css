@@ -1,14 +1,34 @@
-/* ── Hero ── */
-/* Returning visitors skip the preloader: hold the hero back until its own intro runs (failsafe after 3 s). */
-.bk-preloader[data-mode="direct"]~main .hero :is(.hero-copy>*,.hero-temp,.hero-room,.hero-crates,.hero-fog){visibility:hidden;animation:bk-reveal-failsafe 0s 3s forwards}
-@keyframes bk-reveal-failsafe{to{visibility:visible}}
-/* Word masks clip the rising words; the padding keeps descenders (g, y, q) from being cut. */
-.hero-word-mask{padding-bottom:.12em;margin-bottom:-.12em}
-.hero-fog{position:absolute;pointer-events:none;will-change:transform}
-.hero-fog-back{left:-10%;right:-10%;top:28%;height:62%;background:radial-gradient(55% 50% at 72% 50%,#9fe3ff1c,#9fe3ff00 70%)}
-.hero-fog-front{left:-15%;right:-15%;bottom:-120px;height:340px;background:radial-gradient(45% 60% at 30% 72%,#e6f8ff26,#e6f8ff00 70%),radial-gradient(40% 55% at 76% 76%,#c4ecff22,#c4ecff00 70%)}
-.hero-crates{position:absolute;right:420px;bottom:150px;width:300px;height:188px;overflow:visible;pointer-events:none;fill:#0d274166;stroke:#b9dcf3;stroke-opacity:.42;stroke-width:1.3}
-.hero-crates circle{fill:#9fe3ff14}
-.hero-crate-handle{fill:var(--k-fg-0d2741, #0d2741)}
-@media(max-width:1000px){.hero-crates{display:none}}
-@media(max-width:700px){.hero-fog-front{bottom:-80px;height:240px}}
+/* Home hero (Claude outputs/bk_aurora_dizayn.html "Ommaviy sayt"): copy + search on the left, the aggregate visual on the right. */
+.hero{position:relative;isolation:isolate;padding:150px 0 40px;overflow:hidden}
+.hero-bg{object-fit:cover;opacity:.16;z-index:-1}
+.hero-layout{display:grid;grid-template-columns:1.1fr 1fr;gap:20px;align-items:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 6px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:12px;color:#cfd2e2;max-width:100%}
+.hero-badge b{background:var(--g);padding:3px 10px;border-radius:999px;font-size:11px;color:#fff;flex:none}
+.hero h1{font-size:clamp(38px,5vw,60px);line-height:1.04;font-weight:800;letter-spacing:-2px;margin:18px 0 16px}
+.hero-line{display:block}.hero h1 em{font-style:normal}
+.hero-subtitle{color:#a2a7bd;font-size:16px;line-height:1.55;max-width:520px;margin:0}
+.hero-search{display:flex;align-items:center;gap:10px;margin-top:26px;padding:8px 8px 8px 18px;border-radius:18px;max-width:520px;color:var(--muted)}
+.hero-search:focus-within{border-color:rgba(124,92,255,.6)}
+.hero-search input{flex:1;min-width:0;background:none;border:0;color:#fff;font:500 14px var(--font-sans);outline:none}
+.hero-search input::placeholder{color:var(--muted)}
+.hero-search .btn-g{padding:12px 20px}
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.hero-trust{display:flex;gap:30px;margin-top:30px}.hero-trust b{font-size:26px;font-weight:800;display:block}.hero-trust span{font-size:12px;color:var(--muted)}
+.hero-orb{position:relative;height:440px}
+.hero-ring{position:absolute;left:50%;top:50%;border-radius:50%;border:1px solid rgba(255,255,255,.1);transform:translate(-50%,-50%)}
+.hero-ring-1{width:400px;height:400px;border-style:dashed;animation:hero-spin 40s linear infinite}
+.hero-ring-2{width:290px;height:290px;border-color:rgba(124,92,255,.35)}
+.hero-ring-3{width:180px;height:180px;border:0;background:radial-gradient(circle,rgba(34,211,238,.35),rgba(124,92,255,.15) 60%,transparent 70%);animation:hero-breath 4s ease-in-out infinite}
+.hero-unit{position:absolute;left:50%;top:50%;width:210px;height:150px;transform:translate(-50%,-50%);border-radius:22px;background:linear-gradient(160deg,#2a2d3c,#14151d);border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 60px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.12);display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px;animation:hero-hover 5s ease-in-out infinite}
+.hero-fan{width:100%;height:100%;display:block}
+.hero-fan-rot{animation:hero-fan 2.6s linear infinite}.hero-fan+.hero-fan .hero-fan-rot{animation-duration:3s}
+.hero-float{position:absolute;padding:11px 14px;border-radius:16px;font-size:12px;animation:hero-bob 6s ease-in-out infinite}
+.hero-float span{color:var(--muted)}.hero-float b{display:block;font-size:16px}.hero-cold{color:#67e8f9}.hero-ok{color:var(--ok)}
+@keyframes hero-spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes hero-breath{50%{transform:translate(-50%,-50%) scale(1.12)}}
+@keyframes hero-hover{50%{transform:translate(-50%,-56%)}}
+@keyframes hero-fan{to{transform:rotate(360deg)}}
+@keyframes hero-bob{50%{transform:translateY(-10px)}}
+@media(max-width:900px){.hero-layout{grid-template-columns:1fr}.hero-orb{height:340px;max-width:440px;width:100%;margin:10px auto 0}.hero-ring-1{width:320px;height:320px}.hero-ring-2{width:240px;height:240px}}
+@media(max-width:700px){.hero{padding:104px 0 20px}.hero h1{letter-spacing:-1px}.hero-subtitle{font-size:14px}.hero-search{padding:6px 6px 6px 14px}.hero-search .btn-g{padding:10px 14px}.hero-actions>*{flex:1}.hero-trust{gap:22px}.hero-trust b{font-size:22px}.hero-orb{height:300px}.hero-ring-1{width:280px;height:280px}.hero-unit{width:180px;height:128px;padding:13px}.hero-float{padding:9px 11px}.hero-float b{font-size:13px}}
+@media(prefers-reduced-motion:reduce){.hero-ring,.hero-unit,.hero-fan-rot,.hero-float{animation:none}}

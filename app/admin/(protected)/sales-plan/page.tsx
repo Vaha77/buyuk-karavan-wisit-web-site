@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/auth/require-admin";
 import { tashkentYearMonth } from "@/lib/dashboard/period";
 import { monthKey } from "@/lib/sales-plan/rules";
 import { getPlanBoardData, getSalesPeriods, pickPeriod } from "@/lib/sales-plan/queries";
-import { ManagerSummary, SalesPlanBoard, ZoneLegend, ZoneSummary } from "@/components/admin/bklead/sales-plan-board";
+import { ManagerSummary, SalesPlanBoard, SellerPodium, ZoneLegend, ZoneSummary } from "@/components/admin/bklead/sales-plan-board";
 import { MonthlyEntryButton, PeriodSelect } from "@/components/admin/bklead/sales-plan-client";
 
 export const metadata: Metadata = { title: "Sotuv rejasi — Admin | BUYUK KARAVAN" };
@@ -39,6 +39,7 @@ export default async function SalesPlanPage({ searchParams }: { searchParams: Pr
     </div>
     <ZoneLegend zones={data.board.zones}/>
     {data.board.groups.length ? <>
+      <SellerPodium board={data.board}/>
       <ZoneSummary board={data.board}/>
       <SalesPlanBoard board={data.board}/>
       <ManagerSummary board={data.board} previousName={data.previousName}/>

@@ -37,6 +37,9 @@ test("period: default 30 days in Tashkent time, previous period of equal length"
   assert.equal(period.periodQuery(custom), "?range=custom&from=2026-09-01&to=2026-09-10");
   assert.equal(period.resolvePeriod({ range: "custom", from: "bad" }, now).key, "30d");
   assert.equal(period.resolvePeriod({ range: "year" }, now).from.toISOString(), "2025-12-31T19:00:00.000Z");
+  assert.equal(period.resolvePeriod({ range: "month" }, now).from.toISOString(), "2026-08-31T19:00:00.000Z", "Bu oy: from the 1st (Tashkent)");
+  const today = period.resolvePeriod({ range: "today" }, now);
+  assert.deepEqual([today.from.toISOString(), today.days, period.periodQuery(today)], ["2026-09-29T19:00:00.000Z", 1, "?range=today"]);
 });
 
 test("Uzbekistan map: top 3 navy, bottom 3 orange, middle on the blue scale, zero grey", () => {

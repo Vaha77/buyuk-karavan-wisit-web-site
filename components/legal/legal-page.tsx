@@ -14,7 +14,7 @@ export function LegalPage({ path, lang, eyebrow, title, updated, children }: { p
   return <div className="products-shell"><Header onProducts/>
     <main className="legal-page" lang={lang}>
       <div className="legal-wrap">
-        <div className="legal-head">
+        <div className="legal-head rv">
           <div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{updated}</p></div>
           <nav className="legal-lang" aria-label="Til / Язык">
             <Link href={path} aria-current={lang === "uz"} hrefLang="uz">O‘zbekcha</Link>

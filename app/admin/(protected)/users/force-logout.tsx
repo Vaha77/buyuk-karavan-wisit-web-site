@@ -15,7 +15,7 @@ export function ForceLogoutAllButton() {
   });
   return <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 16 }}>
     <button type="button" className="admin-user-button is-danger" onClick={() => { setResult(""); setError(""); setOpen(true); }}>Hammani qayta kirishga majburlash</button>
-    {result && <span role="status" style={{ color: "var(--k-fg-1b6b43, #1B6B43)", fontWeight: 700, fontSize: 13 }}>{result}</span>}
+    {result && <span role="status" style={{ color: "#34d399", fontWeight: 700, fontSize: 13 }}>{result}</span>}
     {open && <Dialog title="Hammani qayta kirishga majburlash" onClose={() => setOpen(false)} busy={pending}>
       <div style={{ display: "grid", gap: 12 }}>
         <p style={{ fontSize: 14 }}>Sizdan boshqa barcha foydalanuvchilar tizimdan chiqariladi va qaytadan kirishi kerak bo‘ladi. Davom etilsinmi?</p>

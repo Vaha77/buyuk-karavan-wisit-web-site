@@ -14,7 +14,7 @@ export function StrayAgents({ agents }: { agents: StrayAgent[] }) {
   const remove = (id: string) => { setBusy(id); setError(""); startTransition(async () => { const result = await deletePendingAgentAction(id); if (!result.ok) setError(result.error); else router.refresh(); }); };
   return <section className="admin-panel admin-management-panel admin-audit-panel">
     <div className="admin-panel-heading"><h2>Keraksiz sotuvchi yozuvlari</h2><span>{agents.length}</span></div>
-    <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--k-fg-5b6b82, #5B6B82)" }}>Bu Telegram akkauntlar admin panel profiliga bog‘langan, lekin oddiy /start bosilganda BKLead’da “tasdiq kutilayotgan sotuvchi” yozuvi ham yaratilgan. Endi bunday yozuv yaratilmaydi; mavjudlarini xohlasangiz o‘chiring.</p>
+    <p style={{ margin: "0 0 10px", fontSize: 13, color: "#8b90a6" }}>Bu Telegram akkauntlar admin panel profiliga bog‘langan, lekin oddiy /start bosilganda BKLead’da “tasdiq kutilayotgan sotuvchi” yozuvi ham yaratilgan. Endi bunday yozuv yaratilmaydi; mavjudlarini xohlasangiz o‘chiring.</p>
     <div className="admin-user-list">{agents.map(agent => <div key={agent.id} className="admin-user-row" style={{ alignItems: "center" }}>
       <div><strong>{agent.name}</strong><small>{agent.username ? `@${agent.username}` : "username yo‘q"} · profil: {agent.profileName} ({agent.profileRole})</small></div>
       <button type="button" className="admin-user-button is-danger" disabled={pending} onClick={() => remove(agent.id)}>{pending && busy === agent.id ? "O‘chirilmoqda…" : "O‘chirish"}</button>

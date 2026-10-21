@@ -19,7 +19,7 @@ function Stats({ count, height = 92 }: { count: number; height?: number }) {
   return <div className="sk-grid">{times(count).map(index => <div key={index} className="sk-card" style={{ height, justifyContent: "center" }}><Sk w="55%" h={12}/><Sk w="40%" h={26}/></div>)}</div>;
 }
 function TableRows({ rows, columns = 6 }: { rows: number; columns?: number }) {
-  return <div className="sk-table">{times(rows).map(row => <div key={row} className="sk-row" style={{ flexWrap: "nowrap", padding: "12px 0", borderBottom: "1px solid var(--k-bd-eef1f6, #EEF1F6)" }}>{times(columns).map(column => <Sk key={column} w={column === 1 ? "28%" : `${Math.max(8, 70 / columns)}%`} h={14}/>)}</div>)}</div>;
+  return <div className="sk-table">{times(rows).map(row => <div key={row} className="sk-row" style={{ flexWrap: "nowrap", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.09)" }}>{times(columns).map(column => <Sk key={column} w={column === 1 ? "28%" : `${Math.max(8, 70 / columns)}%`} h={14}/>)}</div>)}</div>;
 }
 function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return <div className="sk-card" style={style}>{children}</div>;
@@ -68,8 +68,8 @@ export function SexNewSkeleton() {
         <Card><Sk w={190} h={12}/><div className="sk-grid">{times(2).map(index => <Sk key={index} h={44}/>)}</div><div className="sk-grid" style={{ gridTemplateColumns: "repeat(2,minmax(0,1fr))" }}>{times(2).map(index => <Sk key={index} h={64} style={{ borderRadius: 12 }}/>)}</div><Sk h={44}/></Card>
       </div>
       <div className="sk-side">
-        <Card style={{ border: "2px solid var(--k-bd-c9d3e6, #C9D3E6)" }}><Sk w={90} h={12}/><Sk w="85%" h={22}/>{times(3).map(index => <Sk key={index} h={16}/>)}<Sk w="60%" h={30} style={{ marginLeft: "auto" }}/><Sk h={52} style={{ borderRadius: 12 }}/></Card>
-        <Card style={{ background: "var(--k-bg-e7eef5, #E7EEF5)", border: 0 }}><Sk w={170} h={12}/><Sk h={130} style={{ background: "var(--k-bg-ffffff, #fff)" }}/></Card>
+        <Card style={{ border: "2px solid rgba(255,255,255,.09)" }}><Sk w={90} h={12}/><Sk w="85%" h={22}/>{times(3).map(index => <Sk key={index} h={16}/>)}<Sk w="60%" h={30} style={{ marginLeft: "auto" }}/><Sk h={52} style={{ borderRadius: 12 }}/></Card>
+        <Card style={{ background: "rgba(124,92,255,.12)", border: 0 }}><Sk w={170} h={12}/><Sk h={130} style={{ background: "rgba(255,255,255,.045)" }}/></Card>
       </div>
     </div>
   </Page>;
@@ -80,7 +80,7 @@ export function PraysSkeleton() {
   return <Page label="Prays yuklanmoqda"><Heading actions={4}/><Stats count={4}/>
     <div className="sk-split">
       <div className="sk-main"><Card><div className="sk-row" style={{ justifyContent: "space-between" }}><Sk w={320} h={46} style={{ borderRadius: 12 }}/><Sk w={260} h={42}/></div><Chips count={4}/><TableRows rows={8} columns={6}/></Card></div>
-      <div className="sk-side"><Card><Sk w={110} h={16}/>{times(4).map(index => <div key={index} style={{ display: "grid", gap: 6, paddingTop: 10, borderTop: "1px solid var(--k-bd-eef1f6, #EEF1F6)" }}><Sk w="70%" h={13}/><Sk w="90%" h={11}/><Sk w="40%" h={11}/></div>)}</Card></div>
+      <div className="sk-side"><Card><Sk w={110} h={16}/>{times(4).map(index => <div key={index} style={{ display: "grid", gap: 6, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,.09)" }}><Sk w="70%" h={13}/><Sk w="90%" h={11}/><Sk w="40%" h={11}/></div>)}</Card></div>
     </div>
   </Page>;
 }
@@ -97,7 +97,7 @@ export function CustomersSkeleton() {
 /** /admin/sales-plan: period select, zone legend, summary and the plan board. */
 export function SalesPlanSkeleton() {
   return <Page label="Sotuv rejasi yuklanmoqda"><Heading actions={3}/><Chips count={6}/><Stats count={4} height={84}/>
-    <Card>{times(6).map(index => <div key={index} className="sk-row" style={{ flexWrap: "nowrap", padding: "10px 0", borderBottom: "1px solid var(--k-bd-eef1f6, #EEF1F6)" }}><Sk w={150} h={14}/><Sk w="45%" h={16} round/><Sk w={70} h={14}/><Sk w={70} h={14}/></div>)}</Card>
+    <Card>{times(6).map(index => <div key={index} className="sk-row" style={{ flexWrap: "nowrap", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,.09)" }}><Sk w={150} h={14}/><Sk w="45%" h={16} round/><Sk w={70} h={14}/><Sk w={70} h={14}/></div>)}</Card>
   </Page>;
 }
 

@@ -1,5 +1,6 @@
 import { formatInt, formatPercent, formatUsd, formatUsdK, MONTHS_LONG } from "@/lib/dashboard/format";
 import type { PersonResult, PlanBoard } from "@/lib/sales-plan/rules";
+import { GlassCard, ProgressBar } from "@/components/ui/aurora";
 import { zoneStyle, type ZoneInfo, type ZoneKey, type ZoneThresholds } from "@/lib/sales-plan/zones";
 
 const initials = (name: string) => name.replace(/\b(aka|filiali)\b/gi, "").trim().split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase() || name.slice(0, 2).toUpperCase();
@@ -19,6 +20,21 @@ function Progress({ percent, zone, thresholds, label }: { percent: number; zone:
     <i style={{ width: `${Math.min(100, Math.max(percent > 0 ? 1.5 : 0, (percent / scale) * 100))}%` }}/>
     {marks.map(mark => <b key={mark} style={{ left: `${(mark / scale) * 100}%` }} title={`${whole(mark)} chegarasi`}/>)}
   </div>;
+}
+
+/** "Sotuvchilar reytingi": top 3 on a podium (gold ring on #1), then every seller's plan completion as a bar. */
+export function SellerPodium({ board }: { board: PlanBoard }) {
+  const people = board.groups.flatMap(group => group.people).sort((a, b) => b.percent - a.percent);
+  if (!people.length) return null;
+  const podium = [people[1], people[0], people[2]].filter(Boolean);
+  return <GlassCard blur reveal role="region" className="bk-card" aria-labelledby="sp-podium-title" style={{ display: "grid", gap: 14 }}>
+    <div className="bk-card-head" style={{ marginBottom: 0 }}><div><h2 id="sp-podium-title">Sotuvchilar reytingi</h2><span className="bk-muted">Davr jami ÷ reja</span></div></div>
+    <div className="sp-podium">{podium.map(person => { const place = people.indexOf(person) + 1; return <div key={person.id} className={`is-${place}`}>
+      <span className="sp-podium-avatar" aria-hidden="true">{initials(person.name)}</span><b>{person.name}</b><small>{whole(person.percent)}</small>
+      <span className="sp-podium-base" aria-label={`${place}-o‘rin`}>{place}</span>
+    </div>; })}</div>
+    <div className="sp-rank-list">{people.map(person => <div key={person.id}><div><b>{person.name}</b><span>${formatUsdK(person.total)} · {whole(person.percent)}</span></div><ProgressBar value={person.percent / 100}/></div>)}</div>
+  </GlassCard>;
 }
 
 export function ZoneLegend({ zones }: { zones: ZoneInfo[] }) {
