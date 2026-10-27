@@ -28,7 +28,7 @@ export async function saveEntryAction(form: FormData): Promise<KassaResult> {
   // "Saqlash" in the sheet opened by ✏️ on a bot draft works like its ✓.
   const draftId = String(form.get("draftId") ?? "");
   if (draftId) { const result = await kassaBot().confirmDraft(draftId, user.id, values); if (result.ok) revalidatePath("/admin", "layout"); return result; }
-  if (!entry) await db.kassaEntry.create({ data: { ...values, createdById: user.id } });
+  if (!entry) await db.$transaction(async tx => { const created = await tx.kassaEntry.create({ data: { ...values, createdById: user.id } }); await tx.kassaEntryLog.create({ data: { entryId: created.id, userId: user.id, changes: diffEntry({}, values) } }); });
   else {
     const changes = diffEntry({ ...entry, amount: Number(entry.amount) }, values);
     if (Object.keys(changes).length) await db.$transaction([db.kassaEntry.update({ where: { id }, data: values }), db.kassaEntryLog.create({ data: { entryId: id, userId: user.id, changes } })]);

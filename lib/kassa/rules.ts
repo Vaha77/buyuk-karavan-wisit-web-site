@@ -95,3 +95,12 @@ export function suggestNotes(history: NoteHint[], text: string, type: EntryType,
     return true;
   }).slice(0, limit);
 }
+
+export const LOG_ACTIONS = { CREATED: "Qo‘shildi", EDITED: "Tuzatildi", DELETED: "O‘chirildi", RESTORED: "Tiklandi", BOT_CONFIRMED: "Botdan tasdiqlandi", BOT_CANCELLED: "Botdan bekor qilindi" } as const;
+export type LogAction = keyof typeof LOG_ACTIONS;
+/** What a KassaEntryLog row did, read from its changes (creation logs every field as [null, value]; a bot one adds draftId). */
+export function logAction(changes: Record<string, [string | null, string | null]>): LogAction {
+  if (changes.draftId) return "BOT_CONFIRMED";
+  if (changes.deletedAt) return changes.deletedAt[0] ? "RESTORED" : "DELETED";
+  return changes.type?.[0] === null && changes.amount?.[0] === null ? "CREATED" : "EDITED";
+}

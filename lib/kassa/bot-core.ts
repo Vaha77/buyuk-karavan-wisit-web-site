@@ -2,20 +2,24 @@
 // as `deps`, so tests/kassa-bot.test.mjs runs it with mocks; lib/kassa/bot.ts wires the real ones.
 import { timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "../../generated/prisma/client";
-import { money, type Currency, type EntryInput, type EntryType } from "./rules";
+import { diffEntry, money, type Currency, type EntryInput, type EntryType } from "./rules";
 
 export const FLAGS = { CURRENCY_UNCLEAR: "Valyuta aniq emas", AMOUNT_MISSING: "Summa yo‘q", CATEGORY_UNKNOWN: "Kategoriya topilmadi", TYPE_UNCLEAR: "Kirim yoki chiqim aniq emas" } as const;
 export type Flag = keyof typeof FLAGS;
-export type AiDraft = { type: EntryType | null; amount: number | null; currency: Currency | null; categoryName: string | null; note: string; flags: string[] };
+export type AiDraft = { type: EntryType | null; amount: number | null; currency: Currency | null; categoryName: string | null; note: string; flags: string[]; /** the voice transcript with recognition mistakes fixed */ corrected?: string };
 type Category = { id: string; name: string; type: EntryType };
 type Draft = { id: string; status: string; type: EntryType | null; amount: unknown; currency: Currency | null; categoryId: string | null; paymentType: EntryInput["paymentType"]; note: string; flags: string[]; occurredAt: Date; rawText: string; transcript: string | null; tgChatId: string; tgReplyMessageId: number | null };
-type TgMessage = { message_id: number; date: number; chat: { id: number }; from?: { id: number }; text?: string; voice?: { file_id: string }; reply_to_message?: { message_id: number } };
+type TgMessage = { message_id: number; date: number; chat: { id: number }; from?: { id: number }; text?: string; voice?: { file_id: string }; reply_to_message?: { message_id: number; text?: string } };
 export type TgUpdate = { update_id: number; message?: TgMessage; callback_query?: { id: string; from: { id: number }; data?: string; message?: { message_id: number; chat: { id: number } } } };
 export type BotDeps = {
   db: Pick<PrismaClient, "kassaDraft" | "kassaEntry" | "kassaCategory" | "kassaBotUpdate" | "$transaction">;
   tg: (method: string, payload: Record<string, unknown>) => Promise<{ message_id?: number } | unknown>;
-  transcribe: (fileId: string) => Promise<string>;
-  analyze: (text: string, categories: string[], today: string, previous?: AiDraft) => Promise<AiDraft>;
+  /** The voice file, in memory only (never stored). */
+  download: (fileId: string) => Promise<Uint8Array>;
+  /** Speech-to-text by provider; `sttOrder` = sttOrder(env): the preferred one first, only providers with a key. */
+  stt: Record<string, (audio: Uint8Array, vocabulary: string) => Promise<string>>;
+  sttOrder: string[];
+  analyze: (text: string, categories: string[], today: string, previous?: AiDraft, vocabulary?: string) => Promise<AiDraft>;
   owner: string | undefined;
   secret: string | undefined;
 };
@@ -55,7 +59,8 @@ const ENDINGS: Record<string, string> = { PENDING: "Saytga «tasdiqlash kutmoqda
 /** The bot's card (HTML): transcript in italics for a voice message, then Turi / Summa / Kategoriya / Izoh. */
 export function draftCard(draft: Draft, categoryName: string | null) {
   return [
-    draft.transcript ? `<i>«${esc(draft.transcript)}»</i>\n` : "",
+    // Voice: the corrected text, the raw recognition collapsed under it.
+    draft.transcript ? `<i>«${esc(draft.rawText.split("\n")[0])}»</i>${draft.rawText.split("\n")[0] === draft.transcript ? "" : `\n<blockquote expandable>🎙 ${esc(draft.transcript)}</blockquote>`}\n` : "",
     `Turi: ${draft.type === "IN" ? "↓ Kirim" : draft.type === "OUT" ? "↑ Chiqim" : "—"}`,
     `Summa: ${amountText(draft)}`,
     `Kategoriya: ${esc(categoryName ?? "—")}`,
@@ -66,7 +71,23 @@ export function draftCard(draft: Draft, categoryName: string | null) {
 }
 const keyboard = (draft: Pick<Draft, "id" | "status">) => ({ inline_keyboard: draft.status === "PENDING" ? [[{ text: "✏️ Tuzatish", callback_data: `kb:edit:${draft.id}` }, { text: "🗑 Bekor", callback_data: `kb:cancel:${draft.id}` }]] : [] });
 
-const HELP = "Salom! Kirim yoki chiqimni yozing yoki ovozli xabar yuboring — saytda tasdiqlaysiz.\n\nMisollar:\n• benzinga 300 ming\n• Atxam akadan 500 dollar oldim qarzidan\n• ovqatga 80 ming so‘m\n• 1,5 mln reklama\n\nTuzatish: kartaga reply qiling yoki ✏️ ni bosib yozing («yo‘q, 350 ming edi»).\n/kutmoqda — tasdiqlanmaganlar.";
+const HELP = "Salom! Kirim yoki chiqimni yozing yoki ovozli xabar yuboring — saytda tasdiqlaysiz.\n\nMisollar:\n• benzinga 300 ming\n• Atxam akadan 500 dollar oldim qarzidan\n• ovqatga 80 ming so‘m\n• 1,5 mln reklama\n\nTuzatish: kartaga reply qiling yoki ✏️ ni bosib yozing («yo‘q, 350 ming edi»).\n/kutmoqda — tasdiqlanmaganlar.\n/sinov — ovozni tanish provayderlarini solishtirish.";
+const SINOV = "🧪 Sinov";
+const STT_KEYS: Record<string, string> = { openai: "OPENAI_API_KEY", elevenlabs: "ELEVENLABS_API_KEY", aisha: "AISHA_API_KEY" };
+/** KASSA_STT_PROVIDER first (default openai), then the others; a provider without its key is skipped. */
+export function sttOrder(env: Record<string, string | undefined>) {
+  const preferred = env.KASSA_STT_PROVIDER?.trim().toLowerCase() || "openai";
+  return Object.keys(STT_KEYS).sort((a, b) => Number(b === preferred) - Number(a === preferred)).filter(name => env[STT_KEYS[name]]?.trim());
+}
+
+const BASE_WORDS = ["ming", "million", "mln", "so‘m", "dollar", "oldim", "berdim", "qarzidan", "yo‘lkira", "benzin", "UCS", "seh"];
+/** Recognition hints: category names, the most frequent words / names of the latest notes, money words. */
+export function kassaVocabulary(categories: string[], notes: string[]) {
+  const counts = new Map<string, number>();
+  for (const word of notes.join(" ").split(/[^\p{L}'‘’ʻ]+/u)) if (word.length >= 3) counts.set(word, (counts.get(word) ?? 0) + 1);
+  const frequent = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([word]) => word);
+  return [...new Set([...categories, ...frequent, ...BASE_WORDS])].join(", ");
+}
 
 export function createKassaBot(deps: BotDeps) {
   const { db } = deps;
@@ -86,26 +107,52 @@ export function createKassaBot(deps: BotDeps) {
       const pending = await db.kassaDraft.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" }, take: 30 }) as Draft[];
       return send(pending.length ? `⏳ ${pending.length} ta kutmoqda:\n${pending.map(draft => `• ${amountText(draft)} — ${esc(draft.note)}`).join("\n")}` : "Tasdiqlash kutayotgan yozuv yo‘q.");
     }
-    const voice = Boolean(message.voice);
-    const text = voice ? (await deps.transcribe(message.voice!.file_id)).trim() : message.text?.trim() ?? "";
-    if (!text) return send("Xabar tushunilmadi. Matn yoki ovozli xabar yuboring.");
+    if (message.text?.startsWith("/sinov")) return send(`${SINOV}: keyingi ovozli xabarni har bir provayderda tanib, yonma-yon ko‘rsataman (yozuv yaratilmaydi). Ovozli xabar yuboring.`, { reply_markup: { force_reply: true, input_field_placeholder: "Ovozli xabar" } });
+    const voice = message.voice, list = await categories();
+    const vocabulary = voice ? kassaVocabulary(list.map(item => item.name), (await db.kassaEntry.findMany({ where: { deletedAt: null }, orderBy: { occurredAt: "desc" }, take: 50, select: { note: true } })).map(row => row.note)) : "";
+    if (voice && message.reply_to_message?.text?.startsWith(SINOV)) return send(await compareStt(voice.file_id, vocabulary));
+    const raw = voice ? await transcribe(voice.file_id, vocabulary) : message.text?.trim() ?? "";
+    if (!raw) return send("Xabar tushunilmadi. Matn yoki ovozli xabar yuboring.");
     // A correction: a reply to a card, or the next message after "✏️ Tuzatish" (15 minutes).
     const target = (message.reply_to_message && await db.kassaDraft.findFirst({ where: { tgChatId: chat, tgReplyMessageId: message.reply_to_message.message_id } }))
       || await db.kassaDraft.findFirst({ where: { tgChatId: chat, editRequestedAt: { gte: new Date(Date.now() - 15 * 60_000) } }, orderBy: { editRequestedAt: "desc" } });
-    const list = await categories(), today = new Date(message.date * 1000).toISOString().slice(0, 10);
+    const today = new Date(message.date * 1000).toISOString().slice(0, 10);
     if (target) {
       const draft = target as Draft;
       if (draft.status !== "PENDING") return send("Bu yozuv allaqachon ko‘rib chiqilgan — tuzatib bo‘lmaydi.");
-      const combined = `${draft.rawText}\n${text}`;
-      const fields = normalizeDraft(await deps.analyze(text, list.map(item => item.name), today, await previous(draft)), list, combined);
+      const ai = await deps.analyze(raw, list.map(item => item.name), today, await previous(draft), vocabulary || undefined);
+      const combined = `${draft.rawText}\n${ai.corrected?.trim() || raw}`;
+      const fields = normalizeDraft(ai, list, `${combined} ${raw}`);
       const updated = await db.kassaDraft.update({ where: { id: draft.id }, data: { ...fields, rawText: combined, editRequestedAt: null } }) as Draft;
       await refreshCard(updated);
       return send(`✅ Tuzatildi: ${esc(await nameOf(updated.categoryId) ?? "—")} — ${amountText(updated)}`);
     }
-    const fields = normalizeDraft(await deps.analyze(text, list.map(item => item.name), today), list, text);
-    const draft = await db.kassaDraft.create({ data: { ...fields, source: voice ? "VOICE" : "TEXT", rawText: text, transcript: voice ? text : null, occurredAt: new Date(message.date * 1000), tgChatId: chat } }) as Draft;
+    const ai = await deps.analyze(raw, list.map(item => item.name), today, undefined, vocabulary || undefined), text = (voice && ai.corrected?.trim()) || raw;
+    const fields = normalizeDraft(ai, list, `${text} ${raw}`);
+    const draft = await db.kassaDraft.create({ data: { ...fields, source: voice ? "VOICE" : "TEXT", rawText: text, transcript: voice ? raw : null, occurredAt: new Date(message.date * 1000), tgChatId: chat } }) as Draft;
     const sent = await deps.tg("sendMessage", { chat_id: chat, text: draftCard(draft, await nameOf(draft.categoryId)), parse_mode: "HTML", reply_markup: keyboard(draft), reply_parameters: { message_id: message.message_id } }) as { message_id?: number };
     if (sent?.message_id) await db.kassaDraft.update({ where: { id: draft.id }, data: { tgReplyMessageId: sent.message_id } });
+  }
+
+  /** First provider that answers, the preferred one first. */
+  async function transcribe(fileId: string, vocabulary: string) {
+    const audio = await deps.download(fileId);
+    let failure: unknown = new Error("No speech-to-text provider has a key");
+    for (const name of deps.sttOrder) {
+      try { const text = (await deps.stt[name](audio, vocabulary)).trim(); if (text) return text; }
+      catch (error) { failure = error; }
+    }
+    throw failure;
+  }
+  /** /sinov: the same voice in every provider with a key, side by side; no draft. */
+  async function compareStt(fileId: string, vocabulary: string) {
+    const audio = await deps.download(fileId);
+    const results = await Promise.all(deps.sttOrder.map(async name => {
+      const started = Date.now();
+      try { const text = (await deps.stt[name](audio, vocabulary)).trim(); return `<b>${name}</b> · ${((Date.now() - started) / 1000).toFixed(1)} s\n<i>${esc(text || "—")}</i>`; }
+      catch { return `<b>${name}</b>\n⚠ xato`; }
+    }));
+    return results.length ? `🧪 Sinov natijalari:\n\n${results.join("\n\n")}` : "Hech bir STT provayderning kaliti yo‘q.";
   }
 
   async function onCallback(query: NonNullable<TgUpdate["callback_query"]>) {
@@ -128,6 +175,7 @@ export function createKassaBot(deps: BotDeps) {
         const data = values ?? entryFromDraft(found);
         if (!data) throw new Error("flags");
         const entry = await tx.kassaEntry.create({ data: { ...data, createdById: userId } });
+        await tx.kassaEntryLog.create({ data: { entryId: entry.id, userId, changes: { ...diffEntry({}, data), draftId: [null, id] } } });
         const { count } = await tx.kassaDraft.updateMany({ where: { id, status: "PENDING" }, data: { status: "CONFIRMED", entryId: entry.id, editRequestedAt: null } });
         if (count !== 1) throw new Error("handled"); // a parallel press won: roll this entry back
         return { ...found, ...data, status: "CONFIRMED", flags: [] };

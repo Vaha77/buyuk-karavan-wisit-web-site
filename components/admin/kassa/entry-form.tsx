@@ -16,7 +16,7 @@ const toLocal = (iso: string) => new Date(new Date(iso).getTime() + 5 * 3_600_00
 const groupDigits = (value: string) => { const [whole, part] = value.replace(/[^\d.,]/g, "").replace(",", ".").split("."); return whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (part !== undefined ? `.${part.slice(0, 2)}` : ""); };
 /** The bottom bar "+" on this page (components/admin/admin-shell.tsx). */
 const KASSA_NEW = "/admin/kassa#new";
-const FIELD_NAMES: Record<string, string> = { deletedAt: "O‘chirilgan", deleteReason: "Sabab", type: "Turi", amount: "Summa", currency: "Valyuta", categoryId: "Kategoriya", paymentType: "To‘lov", note: "Izoh", occurredAt: "Sana", receiptUrl: "Chek" };
+const FIELD_NAMES: Record<string, string> = { draftId: "Bot yozuvi", deletedAt: "O‘chirilgan", deleteReason: "Sabab", type: "Turi", amount: "Summa", currency: "Valyuta", categoryId: "Kategoriya", paymentType: "To‘lov", note: "Izoh", occurredAt: "Sana", receiptUrl: "Chek" };
 
 export function KassaEntryForm({ categories: initial, history, editing, closeHref }: { categories: Category[]; history: NoteHint[]; editing: EditingEntry | null; closeHref: string }) {
   const router = useRouter();

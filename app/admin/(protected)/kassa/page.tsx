@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, ChartColumn, ChevronLeft, ChevronRight, Download, Lock } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChartColumn, ChevronLeft, ChevronRight, Download, History, Lock } from "lucide-react";
 import { Chip, ChipGroup, GhostButton, GlassCard, Pill } from "@/components/ui/aurora";
 import { KassaEntryForm } from "@/components/admin/kassa/entry-form";
 import { DeleteEntryButton, KassaUndoToast } from "@/components/admin/kassa/delete-entry";
@@ -51,6 +51,7 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
         <Chip href={query({ range: "custom", from: search.from ?? fromDay, to: search.to ?? toDay })} on={period.key === "custom"} dashed={period.key !== "custom"}>+ Davr</Chip>
       </ChipGroup>
       <div className="kassa-actions">
+        <GhostButton href="/admin/kassa/history" aria-label="Tarix"><History size={16}/><span>Tarix</span></GhostButton>
         <GhostButton href={query({}, "/admin/kassa/report")} aria-label="Hisobot"><ChartColumn size={16}/><span>Hisobot</span></GhostButton>
         <GhostButton href={`/admin/kassa/export?from=${fromDay}&to=${toDay}`} prefetch={false} aria-label="Excel"><Download size={16}/><span>Excel</span></GhostButton>
       </div>
