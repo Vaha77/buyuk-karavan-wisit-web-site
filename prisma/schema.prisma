@@ -476,6 +476,8 @@ model AdminUser {
   workshopOrdersLoaded    WorkshopOrder[]           @relation("WorkshopOrderLoader")
   workshopCorrectionsAsked    WorkshopCorrectionRequest[] @relation("WorkshopCorrectionRequester")
   workshopCorrectionsResolved WorkshopCorrectionRequest[] @relation("WorkshopCorrectionResolver")
+  kassaEntries          KassaEntry[]
+  kassaEntryLogs        KassaEntryLog[]
 
   @@index([approvalStatus, isActive])
 }
@@ -1739,4 +1741,70 @@ model CommercialOffer {
   customer      RegularCustomer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([sellerId, createdAt])
+}
+
+// Kassa (Super Admin only): daily cash in/out. Balances are never stored — they are summed from the entries.
+enum KassaType {
+  IN
+  OUT
+}
+
+enum KassaPayment {
+  CASH
+  CARD
+  BANK
+}
+
+model KassaCategory {
+  id        String       @id @default(cuid())
+  name      String       @db.VarChar(60)
+  type      KassaType
+  icon      String?      @db.VarChar(8)
+  sortOrder Int          @default(0)
+  archived  Boolean      @default(false)
+  entries   KassaEntry[]
+}
+
+model KassaEntry {
+  id          String          @id @default(cuid())
+  type        KassaType
+  amount      Decimal         @db.Decimal(18, 2)
+  currency    MoneyCurrency
+  categoryId  String
+  paymentType KassaPayment
+  note        String          @db.VarChar(300)
+  receiptUrl  String?         @db.VarChar(500)
+  occurredAt  DateTime
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  // Never set by the UI (entries are only corrected); kept so a removal stays auditable.
+  deletedAt   DateTime?
+  category    KassaCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdBy   AdminUser       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  logs        KassaEntryLog[]
+
+  @@index([occurredAt])
+}
+
+// One row per correction: only the changed fields, { field: [old, new] }.
+model KassaEntryLog {
+  id        String     @id @default(cuid())
+  entryId   String
+  userId    String
+  changes   Json
+  createdAt DateTime   @default(now())
+  entry     KassaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user      AdminUser  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([entryId, createdAt])
+}
+
+// "Boshlang'ich qoldiq": one row, set once (editable), each currency on its own.
+model KassaSettings {
+  id          String   @id @default("global")
+  openingUsd  Decimal  @default(0) @db.Decimal(18, 2)
+  openingUzs  Decimal  @default(0) @db.Decimal(18, 2)
+  openingDate DateTime @db.Date
+  updatedAt   DateTime @updatedAt
 }

@@ -1,0 +1,109 @@
+/* Kassa (Claude outputs/kassa_maket.html): phone list + "+" sheet, desktop table + "Tez yozuv" panel. */
+.kassa{display:flex;flex-direction:column;gap:14px;padding-bottom:120px}
+.kassa-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.kassa-top h1{font-size:26px;font-weight:800;letter-spacing:-.4px}
+.kassa-hi{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}.kassa-hi a{display:inline-flex;align-items:center;color:var(--muted)}
+.kassa-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.kassa-actions .btn-ghost{padding:9px 14px}
+.kassa-day{display:flex;align-items:center;justify-content:center;gap:12px}
+.kassa-day>a{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--card2);border:1px solid var(--line)}
+.kassa-day b{font-size:14px;min-width:150px;text-align:center}
+.kassa-range{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.kassa-range input,.kassa-filters select,.kassa-filters input,.kassa-settings input:not([type=checkbox]){padding:9px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);color:var(--ink);font:inherit;font-size:13px;color-scheme:dark}
+.kassa-balances{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kassa-bal{padding:16px;border-radius:var(--r-card)}
+.kassa-bal>span{font-size:12px;color:var(--muted)}
+.kassa-bal>b{display:block;font-size:26px;font-weight:800;letter-spacing:-.5px;margin:4px 0 10px;white-space:nowrap}
+.kassa-bal dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kassa-bal dt{font-size:11px;color:var(--muted)}.kassa-bal dd{font-weight:800;font-size:14px;white-space:nowrap}
+.is-neg,.amt-out{color:var(--red)!important}.amt-in{color:var(--ok)}
+.amt-in,.amt-out{font-weight:800;white-space:nowrap}
+.kassa-grid{display:grid;grid-template-columns:1fr 340px;gap:14px;align-items:start}
+.kassa-list{padding:12px 10px;border-radius:var(--r-card);min-width:0}
+.kassa-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 6px 10px}
+.kassa-filters .seg{margin:0}.kassa-filters input[type=search]{margin-left:auto;min-width:160px}
+.kassa-empty{color:var(--muted);font-size:13px;padding:18px;text-align:center}
+.kassa-row{display:grid;grid-template-columns:110px minmax(0,1fr) 160px 110px 140px;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px;color:inherit;text-decoration:none}
+.kassa-row:hover,.kassa-row.on{background:rgba(255,255,255,.035)}
+.kassa-row>:last-child{text-align:right}
+.kassa-th{color:var(--muted);font-weight:600;border-bottom-color:var(--line)}.kassa-th:hover{background:none}
+.kassa-date{color:var(--muted);white-space:nowrap}.kassa-cat{color:#cfd2e2}
+.kassa-note-cell{display:flex;align-items:center;gap:10px;min-width:0}
+.kassa-note-cell b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kassa-note-cell i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none}
+.ic-in{background:rgba(52,211,153,.14);color:var(--ok)}.ic-out{background:rgba(251,113,133,.14);color:var(--red)}
+/* entry form */
+.kassa-form{padding:16px;border-radius:var(--r-card);display:flex;flex-direction:column}
+.kassa-form-head{display:flex;justify-content:space-between;align-items:center;font-size:15px}
+.kassa-form-head a,.kassa-close{color:var(--muted);background:none;border:0}
+.kassa-close,.kassa-fab{display:none}
+.kassa-io{display:flex;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:4px;margin:12px 0 10px}
+.kassa-io button{flex:1;padding:10px 0;border-radius:12px;border:0;background:none;font:inherit;font-size:13px;font-weight:800;color:var(--muted)}
+.kassa-io .is-in{background:rgba(52,211,153,.16);color:var(--ok);box-shadow:inset 0 0 0 1px rgba(52,211,153,.4)}
+.kassa-io .is-out{background:rgba(251,113,133,.16);color:var(--red);box-shadow:inset 0 0 0 1px rgba(251,113,133,.4)}
+.kassa-amount{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line)}
+.kassa-amount input{flex:1;min-width:0;background:none;border:0;outline:0;color:#fff;font:inherit;font-size:22px;font-weight:800}
+.kassa-amount .seg{margin:0;flex:none}.kassa-amount .seg button{border:0;background:none;color:inherit;font:inherit;font-weight:800;padding:6px 12px}
+.kassa-label{font-size:12px;color:var(--muted);font-weight:700;margin:12px 2px 8px}
+.kassa-chips{display:flex;flex-wrap:wrap;gap:8px}.kassa-chips .chip{cursor:pointer}
+.kassa-new{color:#22d3ee!important}
+.kassa-newcat{display:flex;gap:6px}.kassa-newcat input{width:150px;padding:8px 12px;border-radius:999px;background:var(--card);border:1px solid rgba(124,92,255,.6);color:#fff;font:inherit;font-size:12px}
+.kassa-note{position:relative}
+.kassa-note input{width:100%;padding:12px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line);color:#fff;font:inherit;font-size:13.5px}
+.kassa-note input:focus{outline:0;border-color:rgba(124,92,255,.6);box-shadow:0 0 0 3px rgba(124,92,255,.15)}
+.kassa-hints{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:5;border-radius:14px;background:rgba(18,18,30,.97);border:1px solid var(--line);overflow:hidden}
+.kassa-hints button{display:flex;justify-content:space-between;gap:10px;width:100%;padding:9px 12px;border:0;border-bottom:1px solid rgba(255,255,255,.05);background:none;color:#cfd2e2;font:inherit;font-size:12.5px;text-align:left}
+.kassa-hints button:hover,.kassa-hints button:first-child{background:rgba(124,92,255,.14)}
+.kassa-hints span{color:var(--muted);white-space:nowrap}
+.kassa-file{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:14px;border:1px dashed rgba(255,255,255,.2);color:var(--muted);font-size:12.5px;margin-top:10px;cursor:pointer}
+.kassa-file input{position:absolute;opacity:0;width:1px;height:1px}
+.kassa-file:focus-within{border-color:#7c5cff}
+.kassa-receipt{font-size:12px;color:#22d3ee;margin-top:6px}
+.kassa-when{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;font-size:12.5px;color:var(--muted)}
+.kassa-when input{padding:9px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);color:var(--ink);font:inherit;font-size:13px;color-scheme:dark}
+.kassa-error{color:var(--red);font-size:12.5px;margin-top:10px}
+.kassa-save{margin-top:14px;padding:13px;width:100%}
+.kassa-log{margin-top:6px;font-size:12px}.kassa-log>div{padding:8px 0;border-top:1px solid rgba(255,255,255,.05)}
+.kassa-log span{color:var(--muted);display:block}.kassa-log small{display:block;color:#cfd2e2}
+/* settings */
+.kassa-settings{padding:14px 16px;border-radius:var(--r-card)}
+.kassa-settings summary{cursor:pointer;font-weight:700;font-size:14px}
+.kassa-opening{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:14px 0}
+.kassa-opening label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+.kassa-opening .btn-g{padding:10px 18px}
+.kassa-cats form{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px solid rgba(255,255,255,.05);font-size:12px;color:var(--muted)}
+.kassa-cats input[name=name]{flex:1;min-width:140px}
+/* report */
+.kassa-cur{margin-top:2px}
+.kassa-report{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.kassa-report h2{font-size:15px;font-weight:700;margin-bottom:12px}
+.kassa-donut,.kassa-bars,.kassa-daily{padding:16px;border-radius:var(--r-card)}
+.kassa-donut>div{display:flex;align-items:center;gap:16px}
+.kassa-donut svg{width:130px;height:130px;flex:none;transform:rotate(-90deg)}
+.kassa-donut circle{fill:none;stroke-width:16}
+.kassa-donut ul{list-style:none;flex:1;min-width:0}
+.kassa-donut li{display:flex;align-items:center;gap:8px;font-size:12px;margin:6px 0;color:#cfd2e2;flex-wrap:wrap}
+.kassa-donut li i{width:10px;height:10px;border-radius:3px;flex:none}.kassa-donut li b{margin-left:auto}
+.kassa-donut li small{width:100%;padding-left:18px;color:var(--muted)}
+.kassa-bars>div{padding:8px 0}.kassa-bars p{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:7px}
+.kassa-bars .bar{opacity:1;transform:none}.kassa-bars .bar i{width:calc(var(--w)*100%)}
+.kassa-daily{grid-column:1/-1}
+.kassa-cols{display:flex;align-items:flex-end;gap:3px;height:150px}
+.kassa-cols>div{flex:1;display:flex;align-items:flex-end;gap:1px;height:100%;min-width:2px}
+.kassa-cols i,.kassa-legend i{display:block;flex:1;border-radius:3px 3px 1px 1px;min-height:0}
+.col-in{background:#34d399}.col-out{background:#fb7185;opacity:.85}
+.kassa-legend{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:8px}
+.kassa-legend span{display:flex;align-items:center;gap:5px}.kassa-legend i{flex:none;width:9px;height:9px}
+@media (max-width:1000px){
+  .kassa-grid,.kassa-report{grid-template-columns:1fr}
+  .kassa-grid>aside{display:contents}
+  /* phone: list cards; the form is a bottom sheet opened by "+" (or by tapping an entry to correct it) */
+  .kassa-th,.kassa-row .kassa-cat,.kassa-row>[role=cell]:nth-child(4){display:none}
+  .kassa-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"note amt" "date amt"}
+  .kassa-note-cell{grid-area:note}.kassa-date{grid-area:date;padding-left:40px;font-size:11.5px}.kassa-row>:last-child{grid-area:amt}
+  .kassa-fab{display:grid;place-items:center;position:fixed;right:18px;bottom:96px;z-index:30;width:58px;height:58px;border-radius:19px;border:0;color:#fff}
+  .kassa-form{display:none;position:fixed;inset:auto 0 0 0;z-index:60;max-height:92dvh;overflow:auto;border-radius:24px 24px 0 0;background:rgba(12,12,20,.97);padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+  .kassa-form.is-open{display:flex}
+  .kassa-close{display:block}
+}
+@media (max-width:560px){.kassa-balances{grid-template-columns:1fr}.kassa-bal>b{font-size:22px}}

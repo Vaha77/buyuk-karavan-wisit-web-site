@@ -7,7 +7,7 @@ import { AdminSearch } from "./admin-search";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeCheck, Bell, FileText, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PackageCheck, PhoneCall, Plus, PlusCircle, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wrench, X } from "lucide-react";
+import { BadgeCheck, Bell, FileText, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PackageCheck, PhoneCall, Plus, PlusCircle, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wallet, Wrench, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 import { homeFor } from "@/lib/auth/seller-access";
 import { NavigationProgress } from "./feedback";
@@ -23,6 +23,7 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Nazorat", href: "/admin/customers/control", icon: ClipboardList, adminOnly: true },
     { label: "Mahsulotlar", href: "/admin/products", icon: Package },
     { label: "Prays", href: "/admin/prays", icon: Tags, superOnly: true },
+    { label: "Kassa", href: "/admin/kassa", icon: Wallet, superOnly: true },
     { label: "Loyihalar", href: "/admin/projects", icon: FolderKanban },
     { label: "Foto Studio", href: "/admin/photo-studio", icon: Camera },
     { label: "AI Ofis", href: "/admin/ai-office", icon: Bot },
