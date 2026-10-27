@@ -59,7 +59,7 @@ test("entry validation and note suggestions", () => {
 test("only SUPER_ADMIN: every page, action and the Excel route check the role; the menu hides it", async () => {
   const actions = await source("app/admin/(protected)/kassa/actions.ts");
   const bodies = actions.split("export async function ").slice(1);
-  assert.equal(bodies.length, 6, "save, category ×2, opening, delete, restore");
+  assert.equal(bodies.length, 9, "save, category ×2, opening, delete, restore, bot draft ✓ / ✕ / all");
   for (const body of bodies) assert.match(body.split("\n")[1], /^\s+(const user = )?await requireRole\("SUPER_ADMIN"\);$/, `${body.slice(0, 30)} starts with requireRole(SUPER_ADMIN)`);
   for (const file of ["app/admin/(protected)/kassa/page.tsx", "app/admin/(protected)/kassa/report/page.tsx", "app/admin/(protected)/kassa/export/route.ts"]) assert.match(await source(file), /await requireRole\("SUPER_ADMIN"\);/, file);
   assert.match(await source("lib/auth/require-admin.ts"), /if \(!hasRole\(user\.role, roles\)\) redirect\("\/admin"\);/, "other roles are sent away");

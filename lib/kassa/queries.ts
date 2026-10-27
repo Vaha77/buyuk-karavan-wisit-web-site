@@ -54,3 +54,9 @@ export async function getDeletedEntries() {
   const rows = await getDb().kassaEntry.findMany({ where: { deletedAt: { not: null } }, orderBy: { deletedAt: "desc" }, take: 100, include: { deletedBy: { select: { name: true } } } });
   return rows.map(row => ({ ...row, amount: Number(row.amount), currency: row.currency as Currency }));
 }
+
+/** "Botdan kelganlar": PENDING bot drafts, oldest first. */
+export async function getPendingDrafts() {
+  const rows = await getDb().kassaDraft.findMany({ where: { status: "PENDING" }, orderBy: { occurredAt: "asc" }, include: { category: { select: { name: true, icon: true } } } });
+  return rows.map(row => ({ ...row, amount: row.amount === null ? null : Number(row.amount) }));
+}

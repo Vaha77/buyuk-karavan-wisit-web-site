@@ -2,6 +2,8 @@
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
+import { kassaBot } from "@/lib/kassa/bot";
+import { entryFromDraft } from "@/lib/kassa/bot-core";
 import { diffEntry, parseEntry } from "@/lib/kassa/rules";
 import { ProjectImageError, uploadProjectImage } from "@/lib/projects/storage";
 
@@ -23,6 +25,9 @@ export async function saveEntryAction(form: FormData): Promise<KassaResult> {
     catch (error) { return { ok: false, error: error instanceof ProjectImageError ? error.message : "Rasm yuklanmadi." }; }
   }
   const values = { ...data, ...(receiptUrl && { receiptUrl }) };
+  // "Saqlash" in the sheet opened by ✏️ on a bot draft works like its ✓.
+  const draftId = String(form.get("draftId") ?? "");
+  if (draftId) { const result = await kassaBot().confirmDraft(draftId, user.id, values); if (result.ok) revalidatePath("/admin", "layout"); return result; }
   if (!entry) await db.kassaEntry.create({ data: { ...values, createdById: user.id } });
   else {
     const changes = diffEntry({ ...entry, amount: Number(entry.amount) }, values);
@@ -84,5 +89,28 @@ export async function restoreEntryAction(id: string): Promise<KassaResult> {
     db.kassaEntryLog.create({ data: { entryId: entry.id, userId: user.id, changes: { deletedAt: [entry.deletedAt.toISOString(), null], deleteReason: [entry.deleteReason, null] } } }),
   ]);
   revalidatePath("/admin/kassa", "layout");
+  return { ok: true };
+}
+
+/** Bot drafts: ✓ (one entry, once), ✕, and "Hammasini tasdiqlash" (only drafts without flags). */
+export async function confirmDraftAction(id: string): Promise<KassaResult> {
+  const user = await requireRole("SUPER_ADMIN");
+  const result = await kassaBot().confirmDraft(String(id), user.id);
+  revalidatePath("/admin", "layout");
+  return result;
+}
+
+export async function cancelDraftAction(id: string): Promise<KassaResult> {
+  await requireRole("SUPER_ADMIN");
+  const done = await kassaBot().cancelDraft(String(id));
+  revalidatePath("/admin", "layout");
+  return done ? { ok: true } : { ok: false, error: "Bu yozuv allaqachon ko‘rib chiqilgan." };
+}
+
+export async function confirmAllDraftsAction(): Promise<KassaResult> {
+  const user = await requireRole("SUPER_ADMIN");
+  const bot = kassaBot(), drafts = await getDb().kassaDraft.findMany({ where: { status: "PENDING" }, orderBy: { occurredAt: "asc" } });
+  for (const draft of drafts.filter(item => entryFromDraft(item))) await bot.confirmDraft(draft.id, user.id);
+  revalidatePath("/admin", "layout");
   return { ok: true };
 }

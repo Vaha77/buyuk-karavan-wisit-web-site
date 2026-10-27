@@ -179,7 +179,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
     </div>
     {/* Phone: the first sections as a bottom bar around the "+" button (above the home indicator), the rest under "Menyu". */}
     <BottomNav label="Asosiy bo‘limlar" fab={fab ? { href: fab, label: "Yangi", icon: <Plus size={26} strokeWidth={2.4}/> } : undefined} items={[
-      ...pages.filter(item => item.href !== fab).slice(0, 3).map(item => { const Icon = item.icon; return { href: item.href, label: item.short ?? item.label, icon: <Icon size={20}/>, on: item.href === activeHref }; }),
+      ...pages.filter(item => item.href !== fab).slice(0, 3).map(item => { const Icon = item.icon; return { href: item.href, label: item.short ?? item.label, icon: <Icon size={20}/>, on: item.href === activeHref, badge: item.badge === "purchases" ? pendingPurchases : undefined }; }),
       { label: "Menyu", icon: <Menu size={20}/>, onClick: () => setOpen(true) },
     ]}/>
   </div>;

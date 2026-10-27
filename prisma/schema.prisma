@@ -1764,6 +1764,7 @@ model KassaCategory {
   sortOrder Int          @default(0)
   archived  Boolean      @default(false)
   entries   KassaEntry[]
+  drafts    KassaDraft[]
 }
 
 model KassaEntry {
@@ -1787,6 +1788,7 @@ model KassaEntry {
   createdBy   AdminUser       @relation("KassaEntryCreator", fields: [createdById], references: [id], onDelete: Restrict)
   deletedBy   AdminUser?      @relation("KassaEntryDeleter", fields: [deletedById], references: [id], onDelete: SetNull)
   logs        KassaEntryLog[]
+  draft       KassaDraft?
 
   @@index([occurredAt])
 }
@@ -1811,4 +1813,50 @@ model KassaSettings {
   openingUzs  Decimal  @default(0) @db.Decimal(18, 2)
   openingDate DateTime @db.Date
   updatedAt   DateTime @updatedAt
+}
+
+// "BK Kassa" Telegram bot (separate from Madina): a voice/text message becomes a draft; the Super Admin confirms it into KassaEntry.
+enum KassaDraftSource {
+  VOICE
+  TEXT
+}
+
+enum KassaDraftStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+model KassaDraft {
+  id               String           @id @default(cuid())
+  source           KassaDraftSource
+  rawText          String           @db.Text
+  transcript       String?          @db.Text
+  type             KassaType?
+  amount           Decimal?         @db.Decimal(18, 2)
+  currency         MoneyCurrency?
+  categoryId       String?
+  paymentType      KassaPayment     @default(CASH)
+  note             String           @db.VarChar(300)
+  // CURRENCY_UNCLEAR, AMOUNT_MISSING, CATEGORY_UNKNOWN, TYPE_UNCLEAR: "✓" stays off until fixed.
+  flags            String[]
+  status           KassaDraftStatus @default(PENDING)
+  occurredAt       DateTime
+  tgChatId         String           @db.VarChar(32)
+  tgReplyMessageId Int?
+  // "✏️ Tuzatish" pressed: the owner's next message corrects this draft.
+  editRequestedAt  DateTime?
+  entryId          String?          @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  category         KassaCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  entry            KassaEntry?      @relation(fields: [entryId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+// Telegram update_id of the kassa bot: a redelivered update is skipped.
+model KassaBotUpdate {
+  updateId  BigInt   @id
+  createdAt DateTime @default(now())
 }

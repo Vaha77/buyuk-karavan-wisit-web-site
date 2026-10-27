@@ -47,6 +47,18 @@
 .kassa-deleted{margin-top:14px}
 .kassa-deleted form{display:grid;grid-template-columns:120px 120px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.05);font-size:12.5px}
 .kassa-deleted small{color:var(--muted)}
+/* "Botdan kelganlar" (Telegram bot drafts) */
+.kassa-drafts{padding:14px 16px;border-radius:var(--r-card);border-color:rgba(124,92,255,.35)}
+.kassa-drafts h2{font-size:15px;font-weight:700;margin-bottom:8px}.kassa-drafts h2 span{margin-left:6px;font-size:12px;color:#c4b5fd}
+.kassa-draft{display:grid;grid-template-columns:30px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid rgba(255,255,255,.05)}
+.kassa-draft>i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center}
+.kassa-draft b{font-size:13.5px}.kassa-draft small{font-size:11px;color:var(--muted)}.kassa-draft span{display:block;font-size:11.5px;color:var(--muted)}
+.kassa-draft.is-warn{background:rgba(236,201,107,.07);margin:0 -16px;padding-inline:16px}.kassa-draft.is-warn span{color:var(--gold)}
+.kassa-draft-actions{display:flex;gap:6px}
+.kassa-draft-actions>*{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;border:1px solid var(--line);background:var(--card2);color:#cfd2e2}
+.kassa-draft-actions button:first-child{color:var(--ok)}.kassa-draft-actions button:first-child:disabled{opacity:.3}.kassa-draft-actions button:last-child{color:var(--red)}
+.kassa-confirm-all{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;padding:11px}
+.kassa-botsetup{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;font-size:13px;color:var(--muted)}.kassa-botsetup b{color:#fff}
 /* entry form */
 .kassa-form{padding:16px;border-radius:var(--r-card);display:flex;flex-direction:column}
 .kassa-form-head{display:flex;justify-content:space-between;align-items:center;font-size:15px}
@@ -125,7 +137,8 @@
   .kassa-bal>b{font-size:21px;margin:0 0 4px}.kassa-bal dd{font-size:12.5px}
   .kassa-filters select,.kassa-filters input[type=search],.kassa-filters>button{display:none}
   .kassa-th,.kassa-row .kassa-cat,.kassa-row>[role=cell]:nth-child(4){display:none}
-  .kassa-trash{display:none}.kassa-deleted form{grid-template-columns:minmax(0,1fr) auto;font-size:12px}
+  .kassa-trash{display:none}
+  .kassa-draft{grid-template-columns:30px minmax(0,1fr) auto;grid-template-areas:"ic txt amt" "act act act"}.kassa-draft>i{grid-area:ic}.kassa-draft>div:nth-child(2){grid-area:txt}.kassa-draft>strong{grid-area:amt}.kassa-draft-actions{grid-area:act;justify-content:flex-end}.kassa-deleted form{grid-template-columns:minmax(0,1fr) auto;font-size:12px}
   .kassa-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"note amt" "date amt"}
   .kassa-note-cell{grid-area:note}.kassa-date{grid-area:date;padding-left:40px;font-size:11.5px}.kassa-row>:last-child{grid-area:amt}
   /* "Tez yozuv": full-screen sheet opened by the bottom bar "+" (or tapping an entry); height follows the keyboard (entry-form.tsx) */

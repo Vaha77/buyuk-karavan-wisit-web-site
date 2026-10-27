@@ -62,10 +62,10 @@ export function Sparkline({ values, className, height = 34 }: { values: number[]
 }
 
 /** Phone bottom bar with a gradient FAB in the middle (hidden ≥ 768px). */
-export function BottomNav({ items, fab, label }: { items: Array<{ href?: string; onClick?: () => void; label: string; icon: ReactNode; on?: boolean }>; fab?: { href: string; label: string; icon: ReactNode }; label: string }) {
+export function BottomNav({ items, fab, label }: { items: Array<{ href?: string; onClick?: () => void; label: string; icon: ReactNode; on?: boolean; badge?: number }>; fab?: { href: string; label: string; icon: ReactNode }; label: string }) {
   const half = Math.ceil(items.length / 2);
   const link = (item: (typeof items)[number]) => item.href
-    ? <Link key={item.href} href={item.href} className={item.on ? "on" : undefined} aria-current={item.on ? "page" : undefined}>{item.icon}<span>{item.label}</span></Link>
+    ? <Link key={item.href} href={item.href} className={item.on ? "on" : undefined} aria-current={item.on ? "page" : undefined}>{item.icon}<span>{item.label}</span>{item.badge ? <em className="bottom-nav-badge">{item.badge}</em> : null}</Link>
     : <button key={item.label} type="button" onClick={item.onClick}>{item.icon}<span>{item.label}</span></button>;
   return <nav className="bottom-nav glass-blur" aria-label={label}>
     {items.slice(0, half).map(link)}

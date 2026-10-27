@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireRole } from "@/lib/auth/require-admin";
 import { orderNumber } from "@/lib/sex/rules";
 import { getDb } from "@/lib/db";
@@ -13,15 +14,17 @@ const money = (amount: { toString(): string }, currency: string) => `${formatDec
 export default async function PurchasesReviewPage() {
   const user = await requireRole("SUPER_ADMIN", "ADMIN");
   const select = { id: true, date: true, amount: true, currency: true, amountUsd: true, note: true, status: true, rejectReason: true, createdAt: true, reviewedAt: true, customer: { select: { name: true } }, seller: { select: { name: true } }, reviewedBy: { select: { name: true } } } as const;
-  const [pending, recent, corrections, storeDiffs] = await Promise.all([
+  const [pending, recent, corrections, storeDiffs, kassaDrafts] = await Promise.all([
     getDb().customerPurchase.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" }, select }),
     getDb().customerPurchase.findMany({ where: { status: { not: "PENDING" } }, orderBy: { reviewedAt: "desc" }, take: 20, select }),
     user.role === "SUPER_ADMIN" ? getDb().workshopCorrectionRequest.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" }, select: { id: true, reason: true, createdAt: true, requester: { select: { name: true } }, order: { select: { id: true, monthKey: true, monthNo: true } } } }) : [],
     // Omborchi "Kamchilik bor / Soni boshqa" reports.
     user.role === "SUPER_ADMIN" ? getDb().workshopOrder.findMany({ where: { receivedNote: { not: null }, receivedCheckedAt: null }, orderBy: { receivedAt: "asc" }, select: { id: true, monthKey: true, monthNo: true, receivedAt: true, receivedQty: true, receivedNote: true, receivedBy: { select: { name: true } } } }) : [],
+    user.role === "SUPER_ADMIN" ? getDb().kassaDraft.count({ where: { status: "PENDING" } }) : 0,
   ]);
   return <div className="bk">
     <div className="bk-head"><div><h1>Tasdiqlash kerak</h1><p className="bk-muted">Tasdiqlangan xarid mijozning o‘sha oydagi savdosiga qo‘shiladi; rad etilsa sotuvchi sababni ko‘radi</p></div></div>
+    {kassaDrafts > 0 && <Link href="/admin/kassa" className="bk-card" style={{ display: "block" }}>Kassa boti: <b>{kassaDrafts} ta yozuv</b> tasdiqlash kutmoqda →</Link>}
     <section className="bk-card" aria-labelledby="pr-pending-title">
       <div className="bk-card-head"><div><h2 id="pr-pending-title">Kutilayotgan xaridlar</h2><span className="bk-muted">{pending.length} ta · jami {formatUsd(pending.reduce((sum, row) => sum + Number(row.amountUsd), 0))}</span></div></div>
       {pending.length ? <div className="bk-table-wrap"><table className="bk-table">

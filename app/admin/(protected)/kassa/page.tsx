@@ -4,15 +4,17 @@ import { ArrowDownLeft, ArrowUpRight, ChartColumn, ChevronLeft, ChevronRight, Do
 import { Chip, ChipGroup, GhostButton, GlassCard, Pill } from "@/components/ui/aurora";
 import { KassaEntryForm } from "@/components/admin/kassa/entry-form";
 import { DeleteEntryButton, KassaUndoToast } from "@/components/admin/kassa/delete-entry";
+import { KassaBotDrafts } from "@/components/admin/kassa/bot-drafts";
+import { amountText, FLAGS, type Flag } from "@/lib/kassa/bot-core";
 import { requireRole } from "@/lib/auth/require-admin";
 import { dayKey, resolvePeriod } from "@/lib/dashboard/period";
-import { getDeletedEntries, getKassaCategories, getKassaEntries, getKassaLedger, getKassaSettings, getNoteHistory } from "@/lib/kassa/queries";
+import { getDeletedEntries, getKassaCategories, getPendingDrafts, getKassaEntries, getKassaLedger, getKassaSettings, getNoteHistory } from "@/lib/kassa/queries";
 import { addDays, CURRENCIES, money, PAYMENTS, totals, type Currency } from "@/lib/kassa/rules";
 import { restoreEntryAction, saveOpeningAction, updateCategoryAction } from "./actions";
 import "@/components/admin/kassa/kassa.css";
 
 export const metadata: Metadata = { title: "Kassa — Admin | BUYUK KARAVAN" };
-type Search = { range?: string; from?: string; to?: string; type?: string; cat?: string; pay?: string; q?: string; edit?: string };
+type Search = { range?: string; from?: string; to?: string; type?: string; cat?: string; pay?: string; q?: string; edit?: string; draft?: string; bot?: string };
 
 const PERIODS = [{ key: "today", label: "Bugun" }, { key: "7d", label: "Hafta" }, { key: "month", label: "Oy" }] as const;
 const CURRENCY_NAMES: Record<Currency, string> = { USD: "Dollar", UZS: "So‘m" };
@@ -24,19 +26,22 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
   const period = resolvePeriod({ ...search, range: search.range ?? "today" });
   const fromDay = dayKey(period.from), toDay = dayKey(new Date(period.to.getTime() - 1)), today = dayKey(new Date());
   const type = search.type === "IN" || search.type === "OUT" ? search.type : undefined;
-  const [{ days }, entries, categories, history, settings, deleted] = await Promise.all([
+  const [{ days }, entries, categories, history, settings, deleted, drafts] = await Promise.all([
     getKassaLedger(period.from, period.to),
     getKassaEntries(period.from, period.to, { type, categoryId: search.cat, paymentType: search.pay, q: search.q?.trim().slice(0, 100) }),
-    getKassaCategories(), getNoteHistory(), getKassaSettings(), getDeletedEntries(),
+    getKassaCategories(), getNoteHistory(), getKassaSettings(), getDeletedEntries(), getPendingDrafts(),
   ]);
   const query = (patch: Partial<Search>, path = "/admin/kassa") => {
-    const params = new URLSearchParams(Object.entries({ ...search, edit: undefined, ...patch }).filter((pair): pair is [string, string] => !!pair[1]));
+    const params = new URLSearchParams(Object.entries({ ...search, edit: undefined, draft: undefined, bot: undefined, ...patch }).filter((pair): pair is [string, string] => !!pair[1]));
     return `${path}${params.size ? `?${params}` : ""}`;
   };
   const dayHref = (day: string) => query({ range: "custom", from: day, to: day });
   const single = fromDay === toDay;
   const editingRow = search.edit ? entries.find(entry => entry.id === search.edit) : undefined;
   const editing = editingRow ? { ...editingRow, occurredAt: editingRow.occurredAt.toISOString(), logs: editingRow.logs.map(log => ({ at: log.createdAt.toISOString(), user: log.user.name, changes: log.changes as Record<string, [string | null, string | null]> })) } : null;
+  const draft = search.draft ? drafts.find(item => item.id === search.draft) : undefined;
+  // ✏️ on a bot draft opens the same sheet with its values; "Saqlash" confirms it.
+  const draftEditing = draft ? { id: "", draftId: draft.id, type: draft.type ?? "OUT" as const, amount: draft.amount ?? 0, currency: draft.currency ?? "UZS" as const, categoryId: draft.categoryId ?? "", paymentType: draft.paymentType, note: draft.note, occurredAt: draft.occurredAt.toISOString(), receiptUrl: null, logs: [] } : null;
 
   return <div className="kassa">
     <header className="kassa-top">
@@ -50,6 +55,10 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
         <GhostButton href={`/admin/kassa/export?from=${fromDay}&to=${toDay}`} prefetch={false} aria-label="Excel"><Download size={16}/><span>Excel</span></GhostButton>
       </div>
     </header>
+
+    {drafts.length > 0 && <KassaBotDrafts drafts={drafts.map(item => ({ id: item.id, note: item.note, voice: item.source === "VOICE", isIn: item.type === "IN", amount: amountText(item), editHref: query({ draft: item.id }),
+      meta: `${item.category ? `${item.category.icon ?? ""} ${item.category.name}`.trim() : "—"} · ${PAYMENTS[item.paymentType].slice(3).toLowerCase()} · ${dayKey(item.occurredAt) === today ? "bugun" : dayKey(item.occurredAt).split("-").reverse().join(".")} ${local(item.occurredAt).slice(11, 16)}`,
+      warning: item.flags.length ? item.flags.map(flag => FLAGS[flag as Flag] ?? flag).join(", ") : null }))}/>}
 
     {!settings.openingDate && <GlassCard blur className="kassa-opening-card">
       <b>Boshlang‘ich qoldiqni kiriting</b>
@@ -112,12 +121,16 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
         </div>}
       </GlassCard>
       <aside>
-        <KassaEntryForm key={editing?.id ?? "new"} categories={categories} history={history} editing={editing} closeHref={query({})}/>
+        <KassaEntryForm key={editing?.id ?? draftEditing?.draftId ?? "new"} categories={categories} history={history} editing={editing ?? draftEditing} closeHref={query({})}/>
       </aside>
     </div>
 
-    <details className="glass kassa-settings">
+    <details className="glass kassa-settings" open={!!search.bot || undefined}>
       <summary>Sozlamalar · boshlang‘ich qoldiq va kategoriyalar</summary>
+      <form method="post" action="/api/kassa-bot/setup" className="kassa-botsetup">
+        <span>BK Kassa Telegram boti{search.bot && <b> · {{ ok: "ulandi ✓", env: "Vercel env to‘liq emas", error: "ulanmadi — tokenni tekshiring" }[search.bot] ?? ""}</b>}</span>
+        <button className="chip">Botni ulash</button>
+      </form>
       {settings.openingDate && <form action={saveOpeningAction} className="kassa-opening">
         <label>Boshlang‘ich qoldiq · $<input name="openingUsd" inputMode="decimal" defaultValue={settings.opening.USD} required/></label>
         <label>Boshlang‘ich qoldiq · so‘m<input name="openingUzs" inputMode="decimal" defaultValue={settings.opening.UZS} required/></label>

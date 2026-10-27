@@ -8,7 +8,7 @@ import { DeleteEntryButton } from "./delete-entry";
 import { money, PAYMENTS, suggestNotes, type Currency, type EntryType, type NoteHint, type Payment } from "@/lib/kassa/rules";
 
 type Category = { id: string; name: string; type: EntryType; icon: string | null; archived?: boolean };
-export type EditingEntry = { id: string; type: EntryType; amount: number; currency: Currency; categoryId: string; paymentType: Payment; note: string; occurredAt: string; receiptUrl: string | null; logs: Array<{ at: string; user: string; changes: Record<string, [string | null, string | null]> }> };
+export type EditingEntry = { id: string; draftId?: string; type: EntryType; amount: number; currency: Currency; categoryId: string; paymentType: Payment; note: string; occurredAt: string; receiptUrl: string | null; logs: Array<{ at: string; user: string; changes: Record<string, [string | null, string | null]> }> };
 
 const nowLocal = () => new Date(Date.now() + 5 * 3_600_000).toISOString().slice(0, 16);
 const toLocal = (iso: string) => new Date(new Date(iso).getTime() + 5 * 3_600_000).toISOString().slice(0, 16);
@@ -23,7 +23,7 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState(initial);
   const [type, setType] = useState<EntryType>(editing?.type ?? "IN");
-  const [amount, setAmount] = useState(editing ? groupDigits(String(editing.amount)) : "");
+  const [amount, setAmount] = useState(editing?.amount ? groupDigits(String(editing.amount)) : "");
   const [currency, setCurrency] = useState<Currency>(editing?.currency ?? "USD");
   const [categoryId, setCategoryId] = useState(editing?.categoryId ?? "");
   const [payment, setPayment] = useState<Payment>(editing?.paymentType ?? "CASH");
@@ -47,7 +47,7 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
   useEffect(() => {
     document.body.classList.toggle("kassa-sheet-open", sheet);
     const view = window.visualViewport, form = formRef.current;
-    if (!sheet || !view || !form) return () => document.body.classList.remove("kassa-sheet-open");
+    if (!sheet || !view || !form || !matchMedia("(max-width: 1000px)").matches) return () => document.body.classList.remove("kassa-sheet-open");
     const fit = () => { form.style.height = `${view.height}px`; form.style.top = `${view.offsetTop}px`; };
     fit(); view.addEventListener("resize", fit); view.addEventListener("scroll", fit);
     return () => { view.removeEventListener("resize", fit); view.removeEventListener("scroll", fit); form.style.height = form.style.top = ""; document.body.classList.remove("kassa-sheet-open"); };
@@ -81,10 +81,10 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
 
   return <form ref={formRef} action={submit} className={`glass kassa-form${sheet ? " is-open" : ""}`} aria-label={editing ? "Yozuvni tuzatish" : "Tez yozuv"}>
       <div className="kassa-form-head">
-        <b>{editing ? "Yozuvni tuzatish" : "Tez yozuv"}</b>
+        <b>{editing?.draftId ? "Botdan kelgan yozuv" : editing ? "Yozuvni tuzatish" : "Tez yozuv"}</b>
         {editing ? <Link href={closeHref} scroll={false} aria-label="Yopish"><X size={18}/></Link> : <button type="button" className="kassa-close" aria-label="Yopish" onClick={() => setOpen(false)}><X size={18}/></button>}
       </div>
-      {editing && <input type="hidden" name="id" value={editing.id}/>}
+      {editing?.id && <input type="hidden" name="id" value={editing.id}/>}{editing?.draftId && <input type="hidden" name="draftId" value={editing.draftId}/>}
       <input type="hidden" name="type" value={type}/><input type="hidden" name="currency" value={currency}/><input type="hidden" name="categoryId" value={categoryId}/><input type="hidden" name="paymentType" value={payment}/>
       <div className="kassa-io" role="group" aria-label="Turi">
         <button type="button" className={type === "IN" ? "is-in" : undefined} aria-pressed={type === "IN"} onClick={() => pickType("IN")}>↓ Kirim</button>
@@ -113,6 +113,6 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
       <label className="kassa-when">Sana<input type="datetime-local" name="occurredAt" value={when} onChange={event => setWhen(event.target.value)} required/></label>
       {error && <p className="kassa-error" role="alert">{error}</p>}
       {editing && editing.logs.length > 0 && <div className="kassa-log"><p className="kassa-label">Tuzatishlar tarixi</p>{editing.logs.map(log => <div key={log.at}><span>{toLocal(log.at).replace("T", " ")} · {log.user}</span>{Object.entries(log.changes).map(([field, [from, to]]) => <small key={field}>{FIELD_NAMES[field] ?? field}: {field === "categoryId" ? nameOf(from) : field === "occurredAt" && from ? toLocal(from).replace("T", " ") : from ?? "—"} → {field === "categoryId" ? nameOf(to) : field === "occurredAt" && to ? toLocal(to).replace("T", " ") : to ?? "—"}</small>)}</div>)}</div>}
-      <div className="kassa-save"><button type="submit" className="btn-g" disabled={pending}>{pending ? "Saqlanmoqda…" : editing ? "Tuzatishni saqlash · Enter" : "Saqlash · Enter"}</button>{editing && <DeleteEntryButton ghost id={editing.id} label={`${money(editing.type === "IN" ? editing.amount : -editing.amount, editing.currency, true)} · ${editing.note}`}/>}</div>
+      <div className="kassa-save"><button type="submit" className="btn-g" disabled={pending}>{pending ? "Saqlanmoqda…" : editing?.draftId ? "Tasdiqlash · Enter" : editing ? "Tuzatishni saqlash · Enter" : "Saqlash · Enter"}</button>{editing?.id && <DeleteEntryButton ghost id={editing.id} label={`${money(editing.type === "IN" ? editing.amount : -editing.amount, editing.currency, true)} · ${editing.note}`}/>}</div>
     </form>;
 }
