@@ -59,9 +59,24 @@ test("entry validation and note suggestions", () => {
 test("only SUPER_ADMIN: every page, action and the Excel route check the role; the menu hides it", async () => {
   const actions = await source("app/admin/(protected)/kassa/actions.ts");
   const bodies = actions.split("export async function ").slice(1);
-  assert.equal(bodies.length, 4);
+  assert.equal(bodies.length, 6, "save, category ×2, opening, delete, restore");
   for (const body of bodies) assert.match(body.split("\n")[1], /^\s+(const user = )?await requireRole\("SUPER_ADMIN"\);$/, `${body.slice(0, 30)} starts with requireRole(SUPER_ADMIN)`);
   for (const file of ["app/admin/(protected)/kassa/page.tsx", "app/admin/(protected)/kassa/report/page.tsx", "app/admin/(protected)/kassa/export/route.ts"]) assert.match(await source(file), /await requireRole\("SUPER_ADMIN"\);/, file);
   assert.match(await source("lib/auth/require-admin.ts"), /if \(!hasRole\(user\.role, roles\)\) redirect\("\/admin"\);/, "other roles are sent away");
   assert.match(await source("components/admin/admin-shell.tsx"), /\{ label: "Kassa", href: "\/admin\/kassa", icon: Wallet, superOnly: true \}/);
+});
+
+test("delete is soft: a deleted entry leaves every balance (later days too) and comes back when restored; both are logged", async () => {
+  const rows = [at("2026-10-01T10:00", "IN", "USD", 1250), at("2026-10-02T10:00", "OUT", "USD", 200), at("2026-10-03T10:00", "IN", "USD", 50)];
+  const ends = list => kassa.ledger(zero, list, "2026-10-01", "2026-10-03").map(day => day.USD.end);
+  assert.deepEqual(ends(rows), [1250, 1050, 1100]);
+  const live = rows.filter((_, index) => index !== 0); // the past day's entry is deleted
+  assert.deepEqual(ends(live), [0, -200, -150], "every later day moves, a minus carries");
+  assert.deepEqual(ends(rows), [1250, 1050, 1100], "restored");
+  const queries = await source("lib/kassa/queries.ts");
+  assert.equal(queries.match(/kassaEntry\.(findMany|groupBy)\(\{ (by: \[[^\]]+\], )?where: (\{ \.\.\.)?live\b/g)?.length, 3, "ledger carry, ledger rows and note history skip deleted entries");
+  assert.match(queries, /const where: Prisma\.KassaEntryWhereInput = \{ \.\.\.live,/, "list and Excel skip deleted entries");
+  const actions = await source("app/admin/(protected)/kassa/actions.ts");
+  assert.match(actions, /deleteEntryAction[\s\S]*?updateMany\(\{ where: \{ id: String\(id\), deletedAt: null \}, data: \{ deletedAt: at, deletedById: user\.id, deleteReason \} \}\);\n\s+if \(count\) await tx\.kassaEntryLog\.create/);
+  assert.match(actions, /restoreEntryAction[\s\S]*?deletedAt: null, deletedById: null[\s\S]*?kassaEntryLog\.create/);
 });

@@ -3,11 +3,12 @@ import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, ChartColumn, ChevronLeft, ChevronRight, Download, Lock } from "lucide-react";
 import { Chip, ChipGroup, GhostButton, GlassCard, Pill } from "@/components/ui/aurora";
 import { KassaEntryForm } from "@/components/admin/kassa/entry-form";
+import { DeleteEntryButton, KassaUndoToast } from "@/components/admin/kassa/delete-entry";
 import { requireRole } from "@/lib/auth/require-admin";
 import { dayKey, resolvePeriod } from "@/lib/dashboard/period";
-import { getKassaCategories, getKassaEntries, getKassaLedger, getKassaSettings, getNoteHistory } from "@/lib/kassa/queries";
+import { getDeletedEntries, getKassaCategories, getKassaEntries, getKassaLedger, getKassaSettings, getNoteHistory } from "@/lib/kassa/queries";
 import { addDays, CURRENCIES, money, PAYMENTS, totals, type Currency } from "@/lib/kassa/rules";
-import { saveOpeningAction, updateCategoryAction } from "./actions";
+import { restoreEntryAction, saveOpeningAction, updateCategoryAction } from "./actions";
 import "@/components/admin/kassa/kassa.css";
 
 export const metadata: Metadata = { title: "Kassa — Admin | BUYUK KARAVAN" };
@@ -23,10 +24,10 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
   const period = resolvePeriod({ ...search, range: search.range ?? "today" });
   const fromDay = dayKey(period.from), toDay = dayKey(new Date(period.to.getTime() - 1)), today = dayKey(new Date());
   const type = search.type === "IN" || search.type === "OUT" ? search.type : undefined;
-  const [{ days }, entries, categories, history, settings] = await Promise.all([
+  const [{ days }, entries, categories, history, settings, deleted] = await Promise.all([
     getKassaLedger(period.from, period.to),
     getKassaEntries(period.from, period.to, { type, categoryId: search.cat, paymentType: search.pay, q: search.q?.trim().slice(0, 100) }),
-    getKassaCategories(), getNoteHistory(), getKassaSettings(),
+    getKassaCategories(), getNoteHistory(), getKassaSettings(), getDeletedEntries(),
   ]);
   const query = (patch: Partial<Search>, path = "/admin/kassa") => {
     const params = new URLSearchParams(Object.entries({ ...search, edit: undefined, ...patch }).filter((pair): pair is [string, string] => !!pair[1]));
@@ -100,13 +101,13 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
           <div className="kassa-row kassa-th" role="row"><span role="columnheader">Sana</span><span role="columnheader">Yozuv</span><span role="columnheader">Kategoriya</span><span role="columnheader">To‘lov</span><span role="columnheader">Summa</span></div>
           {entries.map(entry => {
             const iso = local(entry.occurredAt), isIn = entry.type === "IN";
-            return <Link key={entry.id} href={query({ edit: entry.id })} scroll={false} className={`kassa-row${entry.id === search.edit ? " on" : ""}`} role="row">
+            return <div key={entry.id} className="kassa-rowwrap"><Link href={query({ edit: entry.id })} scroll={false} className={`kassa-row${entry.id === search.edit ? " on" : ""}`} role="row">
               <span className="kassa-date" role="cell">{`${iso.slice(8, 10)}.${iso.slice(5, 7)} · ${iso.slice(11, 16)}`}</span>
               <span className="kassa-note-cell" role="cell"><i className={isIn ? "ic-in" : "ic-out"}>{isIn ? <ArrowDownLeft size={16}/> : <ArrowUpRight size={16}/>}</i><b>{entry.note}</b>{entry.logs.length > 0 && <Pill tone="wait">tuzatilgan</Pill>}</span>
               <span className="kassa-cat" role="cell">{entry.category.icon} {entry.category.name}</span>
               <span role="cell"><Pill tone={entry.paymentType === "CASH" ? "gold" : "info"}>{PAYMENTS[entry.paymentType].slice(3)}</Pill></span>
               <span role="cell" className={isIn ? "amt-in" : "amt-out"}>{money(isIn ? entry.amount : -entry.amount, entry.currency, true)}</span>
-            </Link>;
+            </Link><DeleteEntryButton id={entry.id} label={`${money(isIn ? entry.amount : -entry.amount, entry.currency, true)} · ${entry.note}`}/></div>;
           })}
         </div>}
       </GlassCard>
@@ -133,6 +134,17 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
           <button className="chip">Saqlash</button>
         </form>)}
       </div>
+      {deleted.length > 0 && <div className="kassa-deleted">
+        <p className="kassa-label">O‘chirilganlar</p>
+        {deleted.map(entry => <form key={entry.id} action={async () => { "use server"; await restoreEntryAction(entry.id); }}>
+          <span className="kassa-date">{local(entry.occurredAt).slice(0, 16).replace("T", " ")}</span>
+          <b className={entry.type === "IN" ? "amt-in" : "amt-out"}>{money(entry.type === "IN" ? entry.amount : -entry.amount, entry.currency, true)}</b>
+          <span>{entry.note}{entry.deleteReason && <small> · {entry.deleteReason}</small>}</span>
+          <small>{entry.deletedBy?.name ?? "—"} · {local(entry.deletedAt!).slice(0, 16).replace("T", " ")}</small>
+          <button className="chip">Tiklash</button>
+        </form>)}
+      </div>}
     </details>
+    <KassaUndoToast/>
   </div>;
 }

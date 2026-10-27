@@ -48,3 +48,9 @@ export async function getNoteHistory(): Promise<NoteHint[]> {
   const rows = await getDb().kassaEntry.findMany({ where: live, orderBy: { occurredAt: "desc" }, take: 300, select: { note: true, amount: true, currency: true, categoryId: true, type: true } });
   return rows.map(row => ({ ...row, amount: Number(row.amount) }));
 }
+
+/** "O‘chirilganlar" in Sozlamalar, newest deletion first. */
+export async function getDeletedEntries() {
+  const rows = await getDb().kassaEntry.findMany({ where: { deletedAt: { not: null } }, orderBy: { deletedAt: "desc" }, take: 100, include: { deletedBy: { select: { name: true } } } });
+  return rows.map(row => ({ ...row, amount: Number(row.amount), currency: row.currency as Currency }));
+}

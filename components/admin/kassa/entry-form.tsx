@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Camera, X } from "lucide-react";
 import { createCategoryAction, saveEntryAction } from "@/app/admin/(protected)/kassa/actions";
+import { DeleteEntryButton } from "./delete-entry";
 import { money, PAYMENTS, suggestNotes, type Currency, type EntryType, type NoteHint, type Payment } from "@/lib/kassa/rules";
 
 type Category = { id: string; name: string; type: EntryType; icon: string | null; archived?: boolean };
@@ -15,7 +16,7 @@ const toLocal = (iso: string) => new Date(new Date(iso).getTime() + 5 * 3_600_00
 const groupDigits = (value: string) => { const [whole, part] = value.replace(/[^\d.,]/g, "").replace(",", ".").split("."); return whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (part !== undefined ? `.${part.slice(0, 2)}` : ""); };
 /** The bottom bar "+" on this page (components/admin/admin-shell.tsx). */
 const KASSA_NEW = "/admin/kassa#new";
-const FIELD_NAMES: Record<string, string> = { type: "Turi", amount: "Summa", currency: "Valyuta", categoryId: "Kategoriya", paymentType: "To‘lov", note: "Izoh", occurredAt: "Sana", receiptUrl: "Chek" };
+const FIELD_NAMES: Record<string, string> = { deletedAt: "O‘chirilgan", deleteReason: "Sabab", type: "Turi", amount: "Summa", currency: "Valyuta", categoryId: "Kategoriya", paymentType: "To‘lov", note: "Izoh", occurredAt: "Sana", receiptUrl: "Chek" };
 
 export function KassaEntryForm({ categories: initial, history, editing, closeHref }: { categories: Category[]; history: NoteHint[]; editing: EditingEntry | null; closeHref: string }) {
   const router = useRouter();
@@ -112,6 +113,6 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
       <label className="kassa-when">Sana<input type="datetime-local" name="occurredAt" value={when} onChange={event => setWhen(event.target.value)} required/></label>
       {error && <p className="kassa-error" role="alert">{error}</p>}
       {editing && editing.logs.length > 0 && <div className="kassa-log"><p className="kassa-label">Tuzatishlar tarixi</p>{editing.logs.map(log => <div key={log.at}><span>{toLocal(log.at).replace("T", " ")} · {log.user}</span>{Object.entries(log.changes).map(([field, [from, to]]) => <small key={field}>{FIELD_NAMES[field] ?? field}: {field === "categoryId" ? nameOf(from) : field === "occurredAt" && from ? toLocal(from).replace("T", " ") : from ?? "—"} → {field === "categoryId" ? nameOf(to) : field === "occurredAt" && to ? toLocal(to).replace("T", " ") : to ?? "—"}</small>)}</div>)}</div>}
-      <div className="kassa-save"><button type="submit" className="btn-g" disabled={pending}>{pending ? "Saqlanmoqda…" : editing ? "Tuzatishni saqlash · Enter" : "Saqlash · Enter"}</button></div>
+      <div className="kassa-save"><button type="submit" className="btn-g" disabled={pending}>{pending ? "Saqlanmoqda…" : editing ? "Tuzatishni saqlash · Enter" : "Saqlash · Enter"}</button>{editing && <DeleteEntryButton ghost id={editing.id} label={`${money(editing.type === "IN" ? editing.amount : -editing.amount, editing.currency, true)} · ${editing.note}`}/>}</div>
     </form>;
 }

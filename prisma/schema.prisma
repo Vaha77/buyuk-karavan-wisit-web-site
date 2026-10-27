@@ -476,7 +476,8 @@ model AdminUser {
   workshopOrdersLoaded    WorkshopOrder[]           @relation("WorkshopOrderLoader")
   workshopCorrectionsAsked    WorkshopCorrectionRequest[] @relation("WorkshopCorrectionRequester")
   workshopCorrectionsResolved WorkshopCorrectionRequest[] @relation("WorkshopCorrectionResolver")
-  kassaEntries          KassaEntry[]
+  kassaEntries          KassaEntry[]                @relation("KassaEntryCreator")
+  kassaEntriesDeleted   KassaEntry[]                @relation("KassaEntryDeleter")
   kassaEntryLogs        KassaEntryLog[]
 
   @@index([approvalStatus, isActive])
@@ -1778,10 +1779,13 @@ model KassaEntry {
   createdById String
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
-  // Never set by the UI (entries are only corrected); kept so a removal stays auditable.
-  deletedAt   DateTime?
+  // Soft delete ("O‘chirish"): left out of every list, balance, report and Excel; "Tiklash" clears it.
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?        @db.VarChar(200)
   category    KassaCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  createdBy   AdminUser       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy   AdminUser       @relation("KassaEntryCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  deletedBy   AdminUser?      @relation("KassaEntryDeleter", fields: [deletedById], references: [id], onDelete: SetNull)
   logs        KassaEntryLog[]
 
   @@index([occurredAt])

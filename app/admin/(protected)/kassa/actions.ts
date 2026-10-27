@@ -60,3 +60,29 @@ export async function saveOpeningAction(form: FormData) {
   await getDb().kassaSettings.upsert({ where: { id: "global" }, create: { id: "global", ...data }, update: data });
   revalidatePath("/admin/kassa", "layout");
 }
+
+/** Soft delete: the entry leaves lists, balances, the report and Excel at once; logged, and "Tiklash" brings it back. */
+export async function deleteEntryAction(id: string, reason: string): Promise<KassaResult> {
+  const user = await requireRole("SUPER_ADMIN");
+  const db = getDb(), at = new Date(), deleteReason = String(reason ?? "").trim().slice(0, 200) || null;
+  const done = await db.$transaction(async tx => {
+    const { count } = await tx.kassaEntry.updateMany({ where: { id: String(id), deletedAt: null }, data: { deletedAt: at, deletedById: user.id, deleteReason } });
+    if (count) await tx.kassaEntryLog.create({ data: { entryId: String(id), userId: user.id, changes: { deletedAt: [null, at.toISOString()], deleteReason: [null, deleteReason] } } });
+    return count === 1;
+  });
+  if (!done) return { ok: false, error: "Yozuv topilmadi." };
+  revalidatePath("/admin/kassa", "layout");
+  return { ok: true };
+}
+
+export async function restoreEntryAction(id: string): Promise<KassaResult> {
+  const user = await requireRole("SUPER_ADMIN");
+  const db = getDb(), entry = await db.kassaEntry.findFirst({ where: { id: String(id), deletedAt: { not: null } } });
+  if (!entry?.deletedAt) return { ok: false, error: "Yozuv topilmadi." };
+  await db.$transaction([
+    db.kassaEntry.update({ where: { id: entry.id }, data: { deletedAt: null, deletedById: null, deleteReason: null } }),
+    db.kassaEntryLog.create({ data: { entryId: entry.id, userId: user.id, changes: { deletedAt: [entry.deletedAt.toISOString(), null], deleteReason: [entry.deleteReason, null] } } }),
+  ]);
+  revalidatePath("/admin/kassa", "layout");
+  return { ok: true };
+}
