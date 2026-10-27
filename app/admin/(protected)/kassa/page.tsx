@@ -40,15 +40,25 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
   return <div className="kassa">
     <header className="kassa-top">
       <div><p className="kassa-hi"><Lock size={12}/> Super Admin · {user.name}</p><h1>Kassa</h1></div>
+      <ChipGroup label="Davr">
+        {PERIODS.map(item => <Chip key={item.key} href={query({ range: item.key, from: undefined, to: undefined })} on={period.key === item.key}>{item.label}</Chip>)}
+        <Chip href={query({ range: "custom", from: search.from ?? fromDay, to: search.to ?? toDay })} on={period.key === "custom"} dashed={period.key !== "custom"}>+ Davr</Chip>
+      </ChipGroup>
       <div className="kassa-actions">
-        <ChipGroup label="Davr">
-          {PERIODS.map(item => <Chip key={item.key} href={query({ range: item.key, from: undefined, to: undefined })} on={period.key === item.key}>{item.label}</Chip>)}
-          <Chip href={query({ range: "custom", from: search.from ?? fromDay, to: search.to ?? toDay })} on={period.key === "custom"} dashed={period.key !== "custom"}>+ Davr</Chip>
-        </ChipGroup>
-        <GhostButton href={query({}, "/admin/kassa/report")}><ChartColumn size={16}/>Hisobot</GhostButton>
-        <GhostButton href={`/admin/kassa/export?from=${fromDay}&to=${toDay}`} prefetch={false}><Download size={16}/>Excel</GhostButton>
+        <GhostButton href={query({}, "/admin/kassa/report")} aria-label="Hisobot"><ChartColumn size={16}/><span>Hisobot</span></GhostButton>
+        <GhostButton href={`/admin/kassa/export?from=${fromDay}&to=${toDay}`} prefetch={false} aria-label="Excel"><Download size={16}/><span>Excel</span></GhostButton>
       </div>
     </header>
+
+    {!settings.openingDate && <GlassCard blur className="kassa-opening-card">
+      <b>Boshlang‘ich qoldiqni kiriting</b>
+      <form action={saveOpeningAction} className="kassa-opening">
+        <label>Dollar · $<input name="openingUsd" inputMode="decimal" placeholder="10 000" required/></label>
+        <label>So‘m<input name="openingUzs" inputMode="decimal" placeholder="100 000 000" required/></label>
+        <input type="hidden" name="openingDate" value={today}/>
+        <button className="btn-g">Saqlash</button>
+      </form>
+    </GlassCard>}
 
     <nav className="kassa-day" aria-label="Kun">
       <Link href={dayHref(addDays(fromDay, -1))} aria-label="Oldingi kun" scroll={false}><ChevronLeft size={18}/></Link>
@@ -58,10 +68,10 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
       <Link href={dayHref(addDays(toDay, 1))} aria-label="Keyingi kun" scroll={false}><ChevronRight size={18}/></Link>
     </nav>
 
-    <div className="kassa-balances">
+    <GlassCard blur className="kassa-balances">
       {CURRENCIES.map(currency => {
         const sum = totals(days, currency);
-        return <GlassCard key={currency} blur className="kassa-bal">
+        return <div key={currency} className="kassa-bal">
           <span>{CURRENCY_NAMES[currency]} · {single ? "kun" : "davr"} oxiri</span>
           <b className={sum.end < 0 ? "is-neg" : undefined}>{money(sum.end, currency)}</b>
           <dl>
@@ -69,9 +79,9 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
             <div><dt>Kirim</dt><dd className="amt-in">{money(sum.in, currency, true)}</dd></div>
             <div><dt>Chiqim</dt><dd className="amt-out">{money(-sum.out, currency)}</dd></div>
           </dl>
-        </GlassCard>;
+        </div>;
       })}
-    </div>
+    </GlassCard>
 
     <div className="kassa-grid">
       <GlassCard className="kassa-list">
@@ -107,12 +117,12 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
 
     <details className="glass kassa-settings">
       <summary>Sozlamalar · boshlang‘ich qoldiq va kategoriyalar</summary>
-      <form action={saveOpeningAction} className="kassa-opening">
+      {settings.openingDate && <form action={saveOpeningAction} className="kassa-opening">
         <label>Boshlang‘ich qoldiq · $<input name="openingUsd" inputMode="decimal" defaultValue={settings.opening.USD} required/></label>
         <label>Boshlang‘ich qoldiq · so‘m<input name="openingUzs" inputMode="decimal" defaultValue={settings.opening.UZS} required/></label>
-        <label>Sanasi<input type="date" name="openingDate" defaultValue={settings.openingDate ?? today} required/></label>
+        <label>Sanasi<input type="date" name="openingDate" defaultValue={settings.openingDate} required/></label>
         <button className="btn-g">Saqlash</button>
-      </form>
+      </form>}
       <div className="kassa-cats">
         {categories.map(category => <form key={category.id} action={updateCategoryAction}>
           <input type="hidden" name="id" value={category.id}/>

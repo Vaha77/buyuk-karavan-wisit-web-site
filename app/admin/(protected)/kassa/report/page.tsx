@@ -46,16 +46,16 @@ export default async function KassaReportPage({ searchParams }: { searchParams: 
       </div>
     </header>
 
-    <div className="kassa-balances">
+    <GlassCard blur className="kassa-balances">
       {CURRENCIES.map(item => {
         const sum = totals(days, item), diff = sum.in - sum.out;
-        return <GlassCard key={item} blur className="kassa-bal">
+        return <div key={item} className="kassa-bal">
           <span>{item === "USD" ? "Dollar" : "So‘m"} · farq (kirim − chiqim)</span>
           <b className={diff < 0 ? "is-neg" : undefined}>{money(diff, item, true)}</b>
           <dl><div><dt>Kirim</dt><dd className="amt-in">{money(sum.in, item, true)}</dd></div><div><dt>Chiqim</dt><dd className="amt-out">{money(-sum.out, item)}</dd></div><div><dt>Davr oxiri</dt><dd className={sum.end < 0 ? "is-neg" : undefined}>{money(sum.end, item)}</dd></div></dl>
-        </GlassCard>;
+        </div>;
       })}
-    </div>
+    </GlassCard>
 
     <ChipGroup label="Valyuta" className="kassa-cur">{CURRENCIES.map(item => <Chip key={item} href={query({ cur: item })} on={currency === item}>{item === "USD" ? "$ dollar" : "so‘m"}</Chip>)}</ChipGroup>
 

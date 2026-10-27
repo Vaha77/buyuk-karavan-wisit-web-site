@@ -1,8 +1,8 @@
 "use client";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, Plus, X } from "lucide-react";
+import { Camera, X } from "lucide-react";
 import { createCategoryAction, saveEntryAction } from "@/app/admin/(protected)/kassa/actions";
 import { money, PAYMENTS, suggestNotes, type Currency, type EntryType, type NoteHint, type Payment } from "@/lib/kassa/rules";
 
@@ -13,6 +13,8 @@ const nowLocal = () => new Date(Date.now() + 5 * 3_600_000).toISOString().slice(
 const toLocal = (iso: string) => new Date(new Date(iso).getTime() + 5 * 3_600_000).toISOString().slice(0, 16);
 /** "1200000" → "1 200 000" while typing; one decimal point, 2 decimals. */
 const groupDigits = (value: string) => { const [whole, part] = value.replace(/[^\d.,]/g, "").replace(",", ".").split("."); return whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (part !== undefined ? `.${part.slice(0, 2)}` : ""); };
+/** The bottom bar "+" on this page (components/admin/admin-shell.tsx). */
+const KASSA_NEW = "/admin/kassa#new";
 const FIELD_NAMES: Record<string, string> = { type: "Turi", amount: "Summa", currency: "Valyuta", categoryId: "Kategoriya", paymentType: "To‘lov", note: "Izoh", occurredAt: "Sana", receiptUrl: "Chek" };
 
 export function KassaEntryForm({ categories: initial, history, editing, closeHref }: { categories: Category[]; history: NoteHint[]; editing: EditingEntry | null; closeHref: string }) {
@@ -31,6 +33,24 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const sheet = open || !!editing;
+
+  // The bottom bar's "+" (href KASSA_NEW on this page) opens the sheet instead of navigating; capture runs before next/link.
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => { if ((event.target as Element).closest?.(`a[href="${KASSA_NEW}"]`)) { event.preventDefault(); setOpen(true); } };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, []);
+  // Phone sheet: hide the bottom bar and fit the visible viewport, so "Saqlash" stays above the keyboard.
+  useEffect(() => {
+    document.body.classList.toggle("kassa-sheet-open", sheet);
+    const view = window.visualViewport, form = formRef.current;
+    if (!sheet || !view || !form) return () => document.body.classList.remove("kassa-sheet-open");
+    const fit = () => { form.style.height = `${view.height}px`; form.style.top = `${view.offsetTop}px`; };
+    fit(); view.addEventListener("resize", fit); view.addEventListener("scroll", fit);
+    return () => { view.removeEventListener("resize", fit); view.removeEventListener("scroll", fit); form.style.height = form.style.top = ""; document.body.classList.remove("kassa-sheet-open"); };
+  }, [sheet]);
 
   const chips = categories.filter(category => category.type === type && (!category.archived || category.id === categoryId));
   const hints = focus ? suggestNotes(history, note, type) : [];
@@ -47,6 +67,7 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
     });
   }
   function submit(form: FormData) {
+    if (!categoryId) return setError("Kategoriyani tanlang.");
     setError("");
     start(async () => {
       const result = await saveEntryAction(form);
@@ -57,9 +78,7 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
     });
   }
 
-  return <>
-    <button type="button" className="fab kassa-fab" aria-label="Yangi yozuv" onClick={() => setOpen(true)}><Plus size={26}/></button>
-    <form action={submit} className={`glass kassa-form${open || editing ? " is-open" : ""}`} aria-label={editing ? "Yozuvni tuzatish" : "Tez yozuv"}>
+  return <form ref={formRef} action={submit} className={`glass kassa-form${sheet ? " is-open" : ""}`} aria-label={editing ? "Yozuvni tuzatish" : "Tez yozuv"}>
       <div className="kassa-form-head">
         <b>{editing ? "Yozuvni tuzatish" : "Tez yozuv"}</b>
         {editing ? <Link href={closeHref} scroll={false} aria-label="Yopish"><X size={18}/></Link> : <button type="button" className="kassa-close" aria-label="Yopish" onClick={() => setOpen(false)}><X size={18}/></button>}
@@ -92,8 +111,7 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
       {editing?.receiptUrl && <a className="kassa-receipt" href={editing.receiptUrl} target="_blank" rel="noreferrer">Chekni ko‘rish</a>}
       <label className="kassa-when">Sana<input type="datetime-local" name="occurredAt" value={when} onChange={event => setWhen(event.target.value)} required/></label>
       {error && <p className="kassa-error" role="alert">{error}</p>}
-      <button type="submit" className="btn-g kassa-save" disabled={pending}>{pending ? "Saqlanmoqda…" : editing ? "Tuzatishni saqlash · Enter" : "Saqlash · Enter"}</button>
       {editing && editing.logs.length > 0 && <div className="kassa-log"><p className="kassa-label">Tuzatishlar tarixi</p>{editing.logs.map(log => <div key={log.at}><span>{toLocal(log.at).replace("T", " ")} · {log.user}</span>{Object.entries(log.changes).map(([field, [from, to]]) => <small key={field}>{FIELD_NAMES[field] ?? field}: {field === "categoryId" ? nameOf(from) : field === "occurredAt" && from ? toLocal(from).replace("T", " ") : from ?? "—"} → {field === "categoryId" ? nameOf(to) : field === "occurredAt" && to ? toLocal(to).replace("T", " ") : to ?? "—"}</small>)}</div>)}</div>}
-    </form>
-  </>;
+      <div className="kassa-save"><button type="submit" className="btn-g" disabled={pending}>{pending ? "Saqlanmoqda…" : editing ? "Tuzatishni saqlash · Enter" : "Saqlash · Enter"}</button></div>
+    </form>;
 }

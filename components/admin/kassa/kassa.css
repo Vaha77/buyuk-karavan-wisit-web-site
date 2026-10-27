@@ -1,17 +1,17 @@
 /* Kassa (Claude outputs/kassa_maket.html): phone list + "+" sheet, desktop table + "Tez yozuv" panel. */
 .kassa{display:flex;flex-direction:column;gap:14px;padding-bottom:120px}
-.kassa-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.kassa-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.kassa-top>div:first-child{flex:1}.kassa-top .chips{min-width:0}
 .kassa-top h1{font-size:26px;font-weight:800;letter-spacing:-.4px}
 .kassa-hi{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}.kassa-hi a{display:inline-flex;align-items:center;color:var(--muted)}
 .kassa-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .kassa-actions .btn-ghost{padding:9px 14px}
+.kassa-opening-card{padding:16px;border-radius:var(--r-card)}.kassa-opening-card .kassa-opening{margin:10px 0 0}
 .kassa-day{display:flex;align-items:center;justify-content:center;gap:12px}
 .kassa-day>a{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--card2);border:1px solid var(--line)}
 .kassa-day b{font-size:14px;min-width:150px;text-align:center}
 .kassa-range{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .kassa-range input,.kassa-filters select,.kassa-filters input,.kassa-settings input:not([type=checkbox]){padding:9px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);color:var(--ink);font:inherit;font-size:13px;color-scheme:dark}
-.kassa-balances{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.kassa-bal{padding:16px;border-radius:var(--r-card)}
+.kassa-balances{display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;padding:16px;border-radius:var(--r-card)}
 .kassa-bal>span{font-size:12px;color:var(--muted)}
 .kassa-bal>b{display:block;font-size:26px;font-weight:800;letter-spacing:-.5px;margin:4px 0 10px;white-space:nowrap}
 .kassa-bal dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -36,7 +36,7 @@
 .kassa-form{padding:16px;border-radius:var(--r-card);display:flex;flex-direction:column}
 .kassa-form-head{display:flex;justify-content:space-between;align-items:center;font-size:15px}
 .kassa-form-head a,.kassa-close{color:var(--muted);background:none;border:0}
-.kassa-close,.kassa-fab{display:none}
+.kassa-close{display:none}
 .kassa-io{display:flex;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:4px;margin:12px 0 10px}
 .kassa-io button{flex:1;padding:10px 0;border-radius:12px;border:0;background:none;font:inherit;font-size:13px;font-weight:800;color:var(--muted)}
 .kassa-io .is-in{background:rgba(52,211,153,.16);color:var(--ok);box-shadow:inset 0 0 0 1px rgba(52,211,153,.4)}
@@ -62,14 +62,17 @@
 .kassa-when{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;font-size:12.5px;color:var(--muted)}
 .kassa-when input{padding:9px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);color:var(--ink);font:inherit;font-size:13px;color-scheme:dark}
 .kassa-error{color:var(--red);font-size:12.5px;margin-top:10px}
-.kassa-save{margin-top:14px;padding:13px;width:100%}
+/* desktop: the panel stays under the topbar (90px) and "Saqlash" stays at its bottom */
+.kassa-grid>aside{position:sticky;top:0}
+.kassa-form{max-height:max(420px,calc(100dvh - 420px));overflow:auto}
+.kassa-save{position:sticky;bottom:-16px;margin:14px -16px -16px;padding:12px 16px 16px;background:rgba(14,14,22,.96)}.kassa-save .btn-g{padding:13px;width:100%}
 .kassa-log{margin-top:6px;font-size:12px}.kassa-log>div{padding:8px 0;border-top:1px solid rgba(255,255,255,.05)}
 .kassa-log span{color:var(--muted);display:block}.kassa-log small{display:block;color:#cfd2e2}
 /* settings */
 .kassa-settings{padding:14px 16px;border-radius:var(--r-card)}
 .kassa-settings summary{cursor:pointer;font-weight:700;font-size:14px}
 .kassa-opening{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:14px 0}
-.kassa-opening label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+.kassa-opening label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);flex:1;min-width:120px}
 .kassa-opening .btn-g{padding:10px 18px}
 .kassa-cats form{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px solid rgba(255,255,255,.05);font-size:12px;color:var(--muted)}
 .kassa-cats input[name=name]{flex:1;min-width:140px}
@@ -95,15 +98,25 @@
 .kassa-legend{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:8px}
 .kassa-legend span{display:flex;align-items:center;gap:5px}.kassa-legend i{flex:none;width:9px;height:9px}
 @media (max-width:1000px){
+  .kassa{gap:10px}
   .kassa-grid,.kassa-report{grid-template-columns:1fr}
   .kassa-grid>aside{display:contents}
-  /* phone: list cards; the form is a bottom sheet opened by "+" (or by tapping an entry to correct it) */
+  /* the topbar already names the page; the page header carries the title and icon buttons */
+  .admin-main:has(.kassa) .admin-topbar-title,.kassa-hi{display:none}
+  .kassa-top h1{font-size:22px}.kassa-top .chips{order:3;flex-basis:100%}
+  .kassa-actions span{display:none}.kassa-actions .btn-ghost{padding:9px 11px}
+  .kassa-day>a{width:34px;height:34px}
+  .kassa-balances{grid-template-columns:1fr;padding:12px 14px;gap:10px}
+  .kassa-bal>b{font-size:21px;margin:0 0 4px}.kassa-bal dd{font-size:12.5px}
+  .kassa-filters select,.kassa-filters input[type=search],.kassa-filters>button{display:none}
   .kassa-th,.kassa-row .kassa-cat,.kassa-row>[role=cell]:nth-child(4){display:none}
   .kassa-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"note amt" "date amt"}
   .kassa-note-cell{grid-area:note}.kassa-date{grid-area:date;padding-left:40px;font-size:11.5px}.kassa-row>:last-child{grid-area:amt}
-  .kassa-fab{display:grid;place-items:center;position:fixed;right:18px;bottom:96px;z-index:30;width:58px;height:58px;border-radius:19px;border:0;color:#fff}
-  .kassa-form{display:none;position:fixed;inset:auto 0 0 0;z-index:60;max-height:92dvh;overflow:auto;border-radius:24px 24px 0 0;background:rgba(12,12,20,.97);padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+  /* "Tez yozuv": full-screen sheet opened by the bottom bar "+" (or tapping an entry); height follows the keyboard (entry-form.tsx) */
+  .kassa-form{display:none;position:fixed;left:0;right:0;top:0;height:100dvh;max-height:none;z-index:70;overflow:auto;overscroll-behavior:contain;border-radius:0;border:0;background:#0b0b12;padding-bottom:0}
   .kassa-form.is-open{display:flex}
+  .kassa-sheet-open .bottom-nav{display:none}
   .kassa-close{display:block}
+  .kassa-save{position:sticky;bottom:0;margin:auto -16px 0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:#0b0b12;border-top:1px solid var(--line)}
 }
-@media (max-width:560px){.kassa-balances{grid-template-columns:1fr}.kassa-bal>b{font-size:22px}}
+@media (max-width:560px){.kassa-bal dl{gap:4px;grid-template-columns:repeat(3,minmax(0,1fr))}.kassa-bal dd{white-space:normal}}

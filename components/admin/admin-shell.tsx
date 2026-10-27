@@ -153,7 +153,8 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
   const activeHref = groups.flatMap(group => group.items).filter(item => !item.soon && (item.href === pathname || (item.href !== "/admin" && pathname.startsWith(`${item.href}/`)))).sort((a, b) => b.href.length - a.href.length)[0]?.href;
   const pages = groups.flatMap(group => group.items).filter(item => visible(item) && !item.soon);
   // Phone "+" button: the role's most common new record (WORKSHOP has none).
-  const fab = user.role === "SELLER" ? "/admin/my/purchase" : user.role === "STOREKEEPER" ? "/admin/seh/request" : user.role === "WORKSHOP" ? null : "/admin/seh/new";
+  // On Kassa the "+" opens its entry sheet (components/admin/kassa/entry-form.tsx catches this href).
+  const fab = pathname === "/admin/kassa" ? "/admin/kassa#new" : user.role === "SELLER" ? "/admin/my/purchase" : user.role === "STOREKEEPER" ? "/admin/seh/request" : user.role === "WORKSHOP" ? null : "/admin/seh/new";
   const firstName = user.name.trim().split(/\s+/)[0] || user.name;
   return <div className="admin-shell">
     <NavigationProgress/>
