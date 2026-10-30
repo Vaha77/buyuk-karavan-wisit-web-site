@@ -479,6 +479,9 @@ model AdminUser {
   kassaEntries          KassaEntry[]                @relation("KassaEntryCreator")
   kassaEntriesDeleted   KassaEntry[]                @relation("KassaEntryDeleter")
   kassaEntryLogs        KassaEntryLog[]
+  employeeDebtEntries   EmployeeDebtEntry[]         @relation("EmployeeDebtCreator")
+  employeeDebtsDeleted  EmployeeDebtEntry[]         @relation("EmployeeDebtDeleter")
+  employeeDebtLogs      EmployeeDebtLog[]
 
   @@index([approvalStatus, isActive])
 }
@@ -1784,6 +1787,10 @@ model KassaEntry {
   deletedAt    DateTime?
   deletedById  String?
   deleteReason String?        @db.VarChar(200)
+  // Optional hodim mark; with a debt, its EmployeeDebtEntry follows this entry (lib/employees/rules.ts).
+  employeeId  String?
+  employee    Employee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  debtEntry   EmployeeDebtEntry?
   category    KassaCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   createdBy   AdminUser       @relation("KassaEntryCreator", fields: [createdById], references: [id], onDelete: Restrict)
   deletedBy   AdminUser?      @relation("KassaEntryDeleter", fields: [deletedById], references: [id], onDelete: SetNull)
@@ -1791,6 +1798,7 @@ model KassaEntry {
   draft       KassaDraft?
 
   @@index([occurredAt])
+  @@index([employeeId])
 }
 
 // One row per correction: only the changed fields, { field: [old, new] }.
@@ -1847,6 +1855,9 @@ model KassaDraft {
   // "✏️ Tuzatish" pressed: the owner's next message corrects this draft.
   editRequestedAt  DateTime?
   entryId          String?          @unique
+  // The bot's suggestion: a name of the list found in the message; never guessed.
+  employeeId       String?
+  employee         Employee?        @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   category         KassaCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -1859,4 +1870,60 @@ model KassaDraft {
 model KassaBotUpdate {
   updateId  BigInt   @id
   createdAt DateTime @default(now())
+}
+
+// Hodimlar (Super Admin only): debts in USD. A plain list, not tied to AdminUser. The debt is never stored — it is summed from the entries.
+enum EmployeeDebtType {
+  DEBT
+  PAYMENT
+  OPENING
+}
+
+model Employee {
+  id           String              @id @default(cuid())
+  name         String              @db.VarChar(100)
+  position     String?             @db.VarChar(100)
+  phone        String?             @db.VarChar(32)
+  archived     Boolean             @default(false)
+  createdAt    DateTime            @default(now())
+  entries      EmployeeDebtEntry[]
+  kassaEntries KassaEntry[]
+  kassaDrafts  KassaDraft[]
+}
+
+model EmployeeDebtEntry {
+  id           String            @id @default(cuid())
+  employeeId   String
+  type         EmployeeDebtType
+  amountUsd    Decimal           @db.Decimal(18, 2)
+  note         String            @db.VarChar(300)
+  occurredAt   DateTime          @default(now())
+  createdById  String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?           @db.VarChar(200)
+  // Set when the row comes from a kassa entry: it is corrected only there.
+  kassaEntryId String?           @unique
+  employee     Employee          @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdBy    AdminUser         @relation("EmployeeDebtCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  deletedBy    AdminUser?        @relation("EmployeeDebtDeleter", fields: [deletedById], references: [id], onDelete: SetNull)
+  kassaEntry   KassaEntry?       @relation(fields: [kassaEntryId], references: [id], onDelete: SetNull)
+  logs         EmployeeDebtLog[]
+
+  @@index([employeeId, occurredAt])
+}
+
+// One row per action: { field: [old, new] }.
+model EmployeeDebtLog {
+  id        String            @id @default(cuid())
+  entryId   String
+  userId    String
+  changes   Json
+  createdAt DateTime          @default(now())
+  entry     EmployeeDebtEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user      AdminUser         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([entryId, createdAt])
 }

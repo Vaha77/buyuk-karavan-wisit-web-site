@@ -5,20 +5,22 @@ import { useRouter } from "next/navigation";
 import { Camera, X } from "lucide-react";
 import { createCategoryAction, saveEntryAction } from "@/app/admin/(protected)/kassa/actions";
 import { DeleteEntryButton } from "./delete-entry";
-import { money, PAYMENTS, suggestNotes, type Currency, type EntryType, type NoteHint, type Payment } from "@/lib/kassa/rules";
+import { debtAfter, debtTone, EMPLOYEE_CATEGORY_ID } from "@/lib/employees/rules";
+import { money, parseAmount, PAYMENTS, suggestNotes, type Currency, type EntryType, type NoteHint, type Payment } from "@/lib/kassa/rules";
 
 type Category = { id: string; name: string; type: EntryType; icon: string | null; archived?: boolean };
-export type EditingEntry = { id: string; draftId?: string; type: EntryType; amount: number; currency: Currency; categoryId: string; paymentType: Payment; note: string; occurredAt: string; receiptUrl: string | null; logs: Array<{ at: string; user: string; changes: Record<string, [string | null, string | null]> }> };
+export type EditingEntry = { id: string; draftId?: string; type: EntryType; amount: number; currency: Currency; categoryId: string; paymentType: Payment; note: string; occurredAt: string; receiptUrl: string | null; logs: Array<{ at: string; user: string; changes: Record<string, [string | null, string | null]> }>; employeeId: string | null; addToDebt: boolean; debtEffect: number | null };
+type Employee = { id: string; name: string; debt: number; archived: boolean };
 
-const nowLocal = () => new Date(Date.now() + 5 * 3_600_000).toISOString().slice(0, 16);
-const toLocal = (iso: string) => new Date(new Date(iso).getTime() + 5 * 3_600_000).toISOString().slice(0, 16);
+export const nowLocal = () => new Date(Date.now() + 5 * 3_600_000).toISOString().slice(0, 16);
+export const toLocal = (iso: string) => new Date(new Date(iso).getTime() + 5 * 3_600_000).toISOString().slice(0, 16);
 /** "1200000" → "1 200 000" while typing; one decimal point, 2 decimals. */
-const groupDigits = (value: string) => { const [whole, part] = value.replace(/[^\d.,]/g, "").replace(",", ".").split("."); return whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (part !== undefined ? `.${part.slice(0, 2)}` : ""); };
+export const groupDigits = (value: string) => { const [whole, part] = value.replace(/[^\d.,]/g, "").replace(",", ".").split("."); return whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (part !== undefined ? `.${part.slice(0, 2)}` : ""); };
 /** The bottom bar "+" on this page (components/admin/admin-shell.tsx). */
 const KASSA_NEW = "/admin/kassa#new";
-const FIELD_NAMES: Record<string, string> = { draftId: "Bot yozuvi", deletedAt: "O‘chirilgan", deleteReason: "Sabab", type: "Turi", amount: "Summa", currency: "Valyuta", categoryId: "Kategoriya", paymentType: "To‘lov", note: "Izoh", occurredAt: "Sana", receiptUrl: "Chek" };
+const FIELD_NAMES: Record<string, string> = { draftId: "Bot yozuvi", deletedAt: "O‘chirilgan", deleteReason: "Sabab", employeeId: "Hodim", debt: "Qarziga qo‘shilgan", type: "Turi", amount: "Summa", currency: "Valyuta", categoryId: "Kategoriya", paymentType: "To‘lov", note: "Izoh", occurredAt: "Sana", receiptUrl: "Chek" };
 
-export function KassaEntryForm({ categories: initial, history, editing, closeHref }: { categories: Category[]; history: NoteHint[]; editing: EditingEntry | null; closeHref: string }) {
+export function KassaEntryForm({ categories: initial, history, employees, editing, closeHref }: { categories: Category[]; history: NoteHint[]; employees: Employee[]; editing: EditingEntry | null; closeHref: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState(initial);
@@ -29,6 +31,10 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
   const [payment, setPayment] = useState<Payment>(editing?.paymentType ?? "CASH");
   const [note, setNote] = useState(editing?.note ?? "");
   const [when, setWhen] = useState(editing ? toLocal(editing.occurredAt) : nowLocal);
+  const [employeeId, setEmployeeId] = useState(editing?.employeeId ?? "");
+  const [addToDebt, setAddToDebt] = useState(editing?.addToDebt ?? true);
+  const [picker, setPicker] = useState(false);
+  const [search, setSearch] = useState("");
   const [focus, setFocus] = useState(false);
   const [newName, setNewName] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -55,7 +61,13 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
 
   const chips = categories.filter(category => category.type === type && (!category.archived || category.id === categoryId));
   const hints = focus ? suggestNotes(history, note, type) : [];
-  const nameOf = (id: string | null) => categories.find(category => category.id === id)?.name ?? id;
+  const nameOf = (id: string | null) => categories.find(category => category.id === id)?.name ?? employees.find(item => item.id === id)?.name ?? id;
+  // The hodim counts only in dollars: so‘m leaves the choice off until $ comes back.
+  const usd = currency === "USD", employee = usd ? employees.find(item => item.id === employeeId) : undefined;
+  const pickable = employees.filter(item => (!item.archived || item.id === employeeId) && item.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  // The debt row this entry already made counts only for its own hodim.
+  const after = employee && debtAfter(employee.debt, editing?.employeeId === employee.id ? editing.debtEffect ?? 0 : 0, { type, amount: parseAmount(amount) || 0, addToDebt });
+  const pickEmployee = (id: string) => { setEmployeeId(id); setPicker(false); setSearch(""); };
 
   function pickType(next: EntryType) { setType(next); if (categories.find(category => category.id === categoryId)?.type !== next) setCategoryId(""); }
   function applyHint(hint: NoteHint) { setNote(hint.note); setCategoryId(hint.categoryId); setAmount(groupDigits(String(hint.amount))); setCurrency(hint.currency); setFocus(false); }
@@ -74,7 +86,7 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
       const result = await saveEntryAction(form);
       if (!result.ok) return setError(result.error);
       if (editing) return router.replace(closeHref, { scroll: false });
-      setAmount(""); setNote(""); setWhen(nowLocal()); setOpen(false);
+      setAmount(""); setNote(""); setWhen(nowLocal()); setOpen(false); setEmployeeId(""); setAddToDebt(true);
       if (fileRef.current) fileRef.current.value = "";
     });
   }
@@ -85,7 +97,7 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
         {editing ? <Link href={closeHref} scroll={false} aria-label="Yopish"><X size={18}/></Link> : <button type="button" className="kassa-close" aria-label="Yopish" onClick={() => setOpen(false)}><X size={18}/></button>}
       </div>
       {editing?.id && <input type="hidden" name="id" value={editing.id}/>}{editing?.draftId && <input type="hidden" name="draftId" value={editing.draftId}/>}
-      <input type="hidden" name="type" value={type}/><input type="hidden" name="currency" value={currency}/><input type="hidden" name="categoryId" value={categoryId}/><input type="hidden" name="paymentType" value={payment}/>
+      <input type="hidden" name="type" value={type}/><input type="hidden" name="currency" value={currency}/><input type="hidden" name="categoryId" value={categoryId}/><input type="hidden" name="paymentType" value={payment}/><input type="hidden" name="employeeId" value={employee?.id ?? ""}/>{addToDebt && <input type="hidden" name="addToDebt" value="on"/>}
       <div className="kassa-io" role="group" aria-label="Turi">
         <button type="button" className={type === "IN" ? "is-in" : undefined} aria-pressed={type === "IN"} onClick={() => pickType("IN")}>↓ Kirim</button>
         <button type="button" className={type === "OUT" ? "is-out" : undefined} aria-pressed={type === "OUT"} onClick={() => pickType("OUT")}>↑ Chiqim</button>
@@ -96,11 +108,23 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
       </div>
       <p className="kassa-label">{type === "IN" ? "Qayerdan keldi?" : "Nimaga ketdi?"}</p>
       <div className="kassa-chips">
-        {chips.map(category => <button key={category.id} type="button" className={`chip${categoryId === category.id ? " on" : ""}`} aria-pressed={categoryId === category.id} onClick={() => setCategoryId(category.id)}>{category.icon} {category.name}</button>)}
+        {chips.map(category => <button key={category.id} type="button" className={`chip${categoryId === category.id ? " on" : ""}`} aria-pressed={categoryId === category.id} onClick={() => { setCategoryId(category.id); if (category.id === EMPLOYEE_CATEGORY_ID && usd) setPicker(true); }}>{category.icon} {category.name}</button>)}
         {newName === null
           ? <button type="button" className="chip dash kassa-new" onClick={() => setNewName("")}>+ Yangi</button>
           : <span className="kassa-newcat"><input autoFocus maxLength={60} placeholder="Kategoriya nomi" value={newName} onChange={event => setNewName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addCategory(); } if (event.key === "Escape") setNewName(null); }}/><button type="button" className="chip" onClick={addCategory} disabled={pending}>Qo‘shish</button></span>}
       </div>
+      <p className="kassa-label">Hodim (ixtiyoriy)</p>
+      <div className={`kassa-hsel${usd ? "" : " is-off"}`}>
+        <button type="button" disabled={!usd} aria-expanded={picker} onClick={() => setPicker(value => !value)}>{employee?.name ?? "Hodimni tanlang"}<span>{picker ? "▴" : "▾"}</span></button>
+        {picker && usd && <div>
+          <input type="search" placeholder="🔍 Qidirish…" aria-label="Hodimni qidirish" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }}/>
+          {pickable.map(item => <button key={item.id} type="button" className={item.id === employeeId ? "on" : undefined} onClick={() => pickEmployee(item.id)}>{item.name}<b className={debtTone(item.debt)}>{item.debt ? money(item.debt, "USD") : "0"}</b></button>)}
+          <button type="button" className="kassa-hsel-none" onClick={() => pickEmployee("")}>— Hodimsiz</button>
+        </div>}
+      </div>
+      {!usd && <p className="kassa-hnote">Hodim hisoblari faqat dollarda</p>}
+      {employee && type === "OUT" && <label className="kassa-htoggle"><input type="checkbox" checked={addToDebt} onChange={event => setAddToDebt(event.target.checked)}/>Qarziga qo‘shilsin</label>}
+      {employee && <p className="kassa-hcalc">{employee.name} qarzi: <b>{money(employee.debt, "USD")}</b> → saqlangach <b className={debtTone(after!)}>{money(after!, "USD")}</b></p>}
       <p className="kassa-label">To‘lov turi</p>
       <div className="kassa-chips">{(Object.keys(PAYMENTS) as Payment[]).map(item => <button key={item} type="button" className={`chip${payment === item ? " on" : ""}`} aria-pressed={payment === item} onClick={() => setPayment(item)}>{PAYMENTS[item]}</button>)}</div>
       <p className="kassa-label">Izoh — o‘zingiz yozasiz</p>
@@ -112,7 +136,7 @@ export function KassaEntryForm({ categories: initial, history, editing, closeHre
       {editing?.receiptUrl && <a className="kassa-receipt" href={editing.receiptUrl} target="_blank" rel="noreferrer">Chekni ko‘rish</a>}
       <label className="kassa-when">Sana<input type="datetime-local" name="occurredAt" value={when} onChange={event => setWhen(event.target.value)} required/></label>
       {error && <p className="kassa-error" role="alert">{error}</p>}
-      {editing && editing.logs.length > 0 && <div className="kassa-log"><p className="kassa-label">Tuzatishlar tarixi</p>{editing.logs.map(log => <div key={log.at}><span>{toLocal(log.at).replace("T", " ")} · {log.user}</span>{Object.entries(log.changes).map(([field, [from, to]]) => <small key={field}>{FIELD_NAMES[field] ?? field}: {field === "categoryId" ? nameOf(from) : field === "occurredAt" && from ? toLocal(from).replace("T", " ") : from ?? "—"} → {field === "categoryId" ? nameOf(to) : field === "occurredAt" && to ? toLocal(to).replace("T", " ") : to ?? "—"}</small>)}</div>)}</div>}
+      {editing && editing.logs.length > 0 && <div className="kassa-log"><p className="kassa-label">Tuzatishlar tarixi</p>{editing.logs.map(log => <div key={log.at}><span>{toLocal(log.at).replace("T", " ")} · {log.user}</span>{Object.entries(log.changes).map(([field, [from, to]]) => <small key={field}>{FIELD_NAMES[field] ?? field}: {field === "categoryId" || field === "employeeId" ? nameOf(from) : field === "occurredAt" && from ? toLocal(from).replace("T", " ") : from ?? "—"} → {field === "categoryId" || field === "employeeId" ? nameOf(to) : field === "occurredAt" && to ? toLocal(to).replace("T", " ") : to ?? "—"}</small>)}</div>)}</div>}
       <div className="kassa-save"><button type="submit" className="btn-g" disabled={pending}>{pending ? "Saqlanmoqda…" : editing?.draftId ? "Tasdiqlash · Enter" : editing ? "Tuzatishni saqlash · Enter" : "Saqlash · Enter"}</button>{editing?.id && <DeleteEntryButton ghost id={editing.id} label={`${money(editing.type === "IN" ? editing.amount : -editing.amount, editing.currency, true)} · ${editing.note}`}/>}</div>
     </form>;
 }

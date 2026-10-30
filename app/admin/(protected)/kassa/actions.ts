@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { kassaBot } from "@/lib/kassa/bot";
 import { entryFromDraft } from "@/lib/kassa/bot-core";
+import { deleteKassaDebt, debtTypeOf, restoreKassaDebt, syncKassaDebt } from "@/lib/employees/rules";
 import { diffEntry, parseEntry } from "@/lib/kassa/rules";
 import { ProjectImageError, uploadProjectImage } from "@/lib/projects/storage";
 
@@ -15,9 +16,11 @@ export async function saveEntryAction(form: FormData): Promise<KassaResult> {
   const parsed = parseEntry(Object.fromEntries(form));
   if (!parsed.ok) return parsed;
   const id = String(form.get("id") ?? ""), data = parsed.data, db = getDb();
-  const [category, entry] = await Promise.all([db.kassaCategory.findUnique({ where: { id: data.categoryId } }), id ? db.kassaEntry.findFirst({ where: { id, deletedAt: null } }) : null]);
+  const [category, entry, employee, linked] = await Promise.all([db.kassaCategory.findUnique({ where: { id: data.categoryId } }), id ? db.kassaEntry.findFirst({ where: { id, deletedAt: null } }) : null, data.employeeId ? db.employee.findUnique({ where: { id: data.employeeId } }) : null, id ? db.employeeDebtEntry.findUnique({ where: { kassaEntryId: id }, select: { deletedAt: true } }) : null]);
   if (id && !entry) return { ok: false, error: "Yozuv topilmadi." };
   if (!category || category.type !== data.type || (category.archived && entry?.categoryId !== category.id)) return { ok: false, error: "Kategoriyani tanlang." };
+  if (data.employeeId && (!employee || (employee.archived && entry?.employeeId !== employee.id))) return { ok: false, error: "Hodimni tanlang." };
+  const addToDebt = form.get("addToDebt") === "on";
   const photo = form.get("receipt");
   let receiptUrl: string | undefined;
   if (photo instanceof File && photo.size > 0) {
@@ -27,13 +30,14 @@ export async function saveEntryAction(form: FormData): Promise<KassaResult> {
   const values = { ...data, ...(receiptUrl && { receiptUrl }) };
   // "Saqlash" in the sheet opened by ✏️ on a bot draft works like its ✓.
   const draftId = String(form.get("draftId") ?? "");
-  if (draftId) { const result = await kassaBot().confirmDraft(draftId, user.id, values); if (result.ok) revalidatePath("/admin", "layout"); return result; }
-  if (!entry) await db.$transaction(async tx => { const created = await tx.kassaEntry.create({ data: { ...values, createdById: user.id } }); await tx.kassaEntryLog.create({ data: { entryId: created.id, userId: user.id, changes: diffEntry({}, values) } }); });
+  if (draftId) { const result = await kassaBot().confirmDraft(draftId, user.id, values, addToDebt); if (result.ok) revalidatePath("/admin", "layout"); return result; }
+  if (!entry) await db.$transaction(async tx => { const created = await tx.kassaEntry.create({ data: { ...values, createdById: user.id } }); await tx.kassaEntryLog.create({ data: { entryId: created.id, userId: user.id, changes: diffEntry({}, values) } }); await syncKassaDebt(tx, { ...values, id: created.id }, addToDebt, user.id); });
   else {
-    const changes = diffEntry({ ...entry, amount: Number(entry.amount) }, values);
-    if (Object.keys(changes).length) await db.$transaction([db.kassaEntry.update({ where: { id }, data: values }), db.kassaEntryLog.create({ data: { entryId: id, userId: user.id, changes } })]);
+    // "debt" logs the toggle; every field the debt row depends on is in this diff, so an unchanged save writes nothing.
+    const changes = diffEntry({ ...entry, amount: Number(entry.amount), debt: !!linked && !linked.deletedAt }, { ...values, debt: !!debtTypeOf(values, addToDebt) });
+    if (Object.keys(changes).length) await db.$transaction(async tx => { await tx.kassaEntry.update({ where: { id }, data: values }); await tx.kassaEntryLog.create({ data: { entryId: id, userId: user.id, changes } }); await syncKassaDebt(tx, { ...values, id }, addToDebt, user.id); });
   }
-  revalidatePath("/admin/kassa", "layout");
+  revalidatePath("/admin", "layout");
   return { ok: true };
 }
 
@@ -73,10 +77,11 @@ export async function deleteEntryAction(id: string, reason: string): Promise<Kas
   const done = await db.$transaction(async tx => {
     const { count } = await tx.kassaEntry.updateMany({ where: { id: String(id), deletedAt: null }, data: { deletedAt: at, deletedById: user.id, deleteReason } });
     if (count) await tx.kassaEntryLog.create({ data: { entryId: String(id), userId: user.id, changes: { deletedAt: [null, at.toISOString()], deleteReason: [null, deleteReason] } } });
+    if (count) await deleteKassaDebt(tx, String(id), at, user.id, deleteReason);
     return count === 1;
   });
   if (!done) return { ok: false, error: "Yozuv topilmadi." };
-  revalidatePath("/admin/kassa", "layout");
+  revalidatePath("/admin", "layout");
   return { ok: true };
 }
 
@@ -84,11 +89,13 @@ export async function restoreEntryAction(id: string): Promise<KassaResult> {
   const user = await requireRole("SUPER_ADMIN");
   const db = getDb(), entry = await db.kassaEntry.findFirst({ where: { id: String(id), deletedAt: { not: null } } });
   if (!entry?.deletedAt) return { ok: false, error: "Yozuv topilmadi." };
-  await db.$transaction([
-    db.kassaEntry.update({ where: { id: entry.id }, data: { deletedAt: null, deletedById: null, deleteReason: null } }),
-    db.kassaEntryLog.create({ data: { entryId: entry.id, userId: user.id, changes: { deletedAt: [entry.deletedAt.toISOString(), null], deleteReason: [entry.deleteReason, null] } } }),
-  ]);
-  revalidatePath("/admin/kassa", "layout");
+  const deletedAt = entry.deletedAt;
+  await db.$transaction(async tx => {
+    await tx.kassaEntry.update({ where: { id: entry.id }, data: { deletedAt: null, deletedById: null, deleteReason: null } });
+    await tx.kassaEntryLog.create({ data: { entryId: entry.id, userId: user.id, changes: { deletedAt: [deletedAt.toISOString(), null], deleteReason: [entry.deleteReason, null] } } });
+    await restoreKassaDebt(tx, entry.id, deletedAt, user.id);
+  });
+  revalidatePath("/admin", "layout");
   return { ok: true };
 }
 

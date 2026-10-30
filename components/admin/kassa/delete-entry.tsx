@@ -4,13 +4,13 @@ import { Trash2 } from "lucide-react";
 import { deleteEntryAction, restoreEntryAction } from "@/app/admin/(protected)/kassa/actions";
 
 /** 🗑 on a desktop row, or the red ghost "O‘chirish" in the correction panel: confirm with an optional reason, then the undo toast. */
-export function DeleteEntryButton({ id, label, ghost }: { id: string; label: string; ghost?: boolean }) {
+export function DeleteEntryButton({ id, label, ghost, action = deleteEntryAction }: { id: string; label: string; ghost?: boolean; action?: (id: string, reason: string) => Promise<{ ok: true } | { ok: false; error: string }> }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
   const confirm = () => start(async () => {
-    const result = await deleteEntryAction(id, reason);
+    const result = await action(id, reason);
     if (!result.ok) return setError(result.error);
     dialog.current?.close();
     window.dispatchEvent(new CustomEvent("kassa:deleted", { detail: id }));
@@ -27,7 +27,7 @@ export function DeleteEntryButton({ id, label, ghost }: { id: string; label: str
 }
 
 /** "O‘chirildi · Qaytarish" for 6 seconds after a delete (mounted once on the page, so it outlives the removed row). */
-export function KassaUndoToast() {
+export function KassaUndoToast({ restore = restoreEntryAction }: { restore?: (id: string) => Promise<unknown> }) {
   const [id, setId] = useState<string | null>(null);
   const [pending, start] = useTransition();
   useEffect(() => {
@@ -37,5 +37,5 @@ export function KassaUndoToast() {
     return () => { window.removeEventListener("kassa:deleted", onDeleted); clearTimeout(timer); };
   }, []);
   if (!id) return null;
-  return <div className="glass-blur kassa-toast" role="status">O‘chirildi<button type="button" disabled={pending} onClick={() => start(async () => { await restoreEntryAction(id); setId(null); })}>Qaytarish</button></div>;
+  return <div className="glass-blur kassa-toast" role="status">O‘chirildi<button type="button" disabled={pending} onClick={() => start(async () => { await restore(id); setId(null); })}>Qaytarish</button></div>;
 }

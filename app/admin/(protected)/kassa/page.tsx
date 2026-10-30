@@ -5,6 +5,9 @@ import { Chip, ChipGroup, GhostButton, GlassCard, Pill } from "@/components/ui/a
 import { KassaEntryForm } from "@/components/admin/kassa/entry-form";
 import { DeleteEntryButton, KassaUndoToast } from "@/components/admin/kassa/delete-entry";
 import { KassaBotDrafts } from "@/components/admin/kassa/bot-drafts";
+import { EmployeeTag } from "@/components/admin/kassa/employee-tag";
+import { DokonTabs, EmployeeSelect } from "@/components/admin/kassa/dokon-tabs";
+import { getEmployees } from "@/lib/employees/queries";
 import { amountText, FLAGS, type Flag } from "@/lib/kassa/bot-core";
 import { requireRole } from "@/lib/auth/require-admin";
 import { dayKey, resolvePeriod } from "@/lib/dashboard/period";
@@ -14,7 +17,7 @@ import { restoreEntryAction, saveOpeningAction, updateCategoryAction } from "./a
 import "@/components/admin/kassa/kassa.css";
 
 export const metadata: Metadata = { title: "Kassa — Admin | BUYUK KARAVAN" };
-type Search = { range?: string; from?: string; to?: string; type?: string; cat?: string; pay?: string; q?: string; edit?: string; draft?: string; bot?: string };
+type Search = { range?: string; from?: string; to?: string; type?: string; cat?: string; pay?: string; emp?: string; q?: string; edit?: string; draft?: string; bot?: string };
 
 const PERIODS = [{ key: "today", label: "Bugun" }, { key: "7d", label: "Hafta" }, { key: "month", label: "Oy" }] as const;
 const CURRENCY_NAMES: Record<Currency, string> = { USD: "Dollar", UZS: "So‘m" };
@@ -26,10 +29,10 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
   const period = resolvePeriod({ ...search, range: search.range ?? "today" });
   const fromDay = dayKey(period.from), toDay = dayKey(new Date(period.to.getTime() - 1)), today = dayKey(new Date());
   const type = search.type === "IN" || search.type === "OUT" ? search.type : undefined;
-  const [{ days }, entries, categories, history, settings, deleted, drafts] = await Promise.all([
+  const [{ days }, entries, categories, history, settings, deleted, drafts, employees] = await Promise.all([
     getKassaLedger(period.from, period.to),
-    getKassaEntries(period.from, period.to, { type, categoryId: search.cat, paymentType: search.pay, q: search.q?.trim().slice(0, 100) }),
-    getKassaCategories(), getNoteHistory(), getKassaSettings(), getDeletedEntries(), getPendingDrafts(),
+    getKassaEntries(period.from, period.to, { type, categoryId: search.cat, employeeId: search.emp, paymentType: search.pay, q: search.q?.trim().slice(0, 100) }),
+    getKassaCategories(), getNoteHistory(), getKassaSettings(), getDeletedEntries(), getPendingDrafts(), getEmployees(),
   ]);
   const query = (patch: Partial<Search>, path = "/admin/kassa") => {
     const params = new URLSearchParams(Object.entries({ ...search, edit: undefined, draft: undefined, bot: undefined, ...patch }).filter((pair): pair is [string, string] => !!pair[1]));
@@ -38,12 +41,14 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
   const dayHref = (day: string) => query({ range: "custom", from: day, to: day });
   const single = fromDay === toDay;
   const editingRow = search.edit ? entries.find(entry => entry.id === search.edit) : undefined;
-  const editing = editingRow ? { ...editingRow, occurredAt: editingRow.occurredAt.toISOString(), logs: editingRow.logs.map(log => ({ at: log.createdAt.toISOString(), user: log.user.name, changes: log.changes as Record<string, [string | null, string | null]> })) } : null;
+  const editing = editingRow ? { ...editingRow, addToDebt: editingRow.debtEffect !== null, occurredAt: editingRow.occurredAt.toISOString(), logs: editingRow.logs.map(log => ({ at: log.createdAt.toISOString(), user: log.user.name, changes: log.changes as Record<string, [string | null, string | null]> })) } : null;
   const draft = search.draft ? drafts.find(item => item.id === search.draft) : undefined;
   // ✏️ on a bot draft opens the same sheet with its values; "Saqlash" confirms it.
-  const draftEditing = draft ? { id: "", draftId: draft.id, type: draft.type ?? "OUT" as const, amount: draft.amount ?? 0, currency: draft.currency ?? "UZS" as const, categoryId: draft.categoryId ?? "", paymentType: draft.paymentType, note: draft.note, occurredAt: draft.occurredAt.toISOString(), receiptUrl: null, logs: [] } : null;
+  const draftEditing = draft ? { id: "", draftId: draft.id, type: draft.type ?? "OUT" as const, amount: draft.amount ?? 0, currency: draft.currency ?? "UZS" as const, categoryId: draft.categoryId ?? "", paymentType: draft.paymentType, note: draft.note, occurredAt: draft.occurredAt.toISOString(), receiptUrl: null, logs: [], employeeId: draft.employeeId, addToDebt: true, debtEffect: null } : null;
 
   return <div className="kassa">
+    <DokonTabs on="kassa"/>
+    <EmployeeSelect className="hodim-select-phone" employees={employees.filter(item => !item.archived)}/>
     <header className="kassa-top">
       <div><p className="kassa-hi"><Lock size={12}/> Super Admin · {user.name}</p><h1>Kassa</h1></div>
       <ChipGroup label="Davr">
@@ -57,7 +62,7 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
       </div>
     </header>
 
-    {drafts.length > 0 && <KassaBotDrafts drafts={drafts.map(item => ({ id: item.id, note: item.note, voice: item.source === "VOICE", isIn: item.type === "IN", amount: amountText(item), editHref: query({ draft: item.id }),
+    {drafts.length > 0 && <KassaBotDrafts drafts={drafts.map(item => ({ id: item.id, employee: item.employee?.name ?? null, note: item.note, voice: item.source === "VOICE", isIn: item.type === "IN", amount: amountText(item), editHref: query({ draft: item.id }),
       meta: `${item.category ? `${item.category.icon ?? ""} ${item.category.name}`.trim() : "—"} · ${PAYMENTS[item.paymentType].slice(3).toLowerCase()} · ${dayKey(item.occurredAt) === today ? "bugun" : dayKey(item.occurredAt).split("-").reverse().join(".")} ${local(item.occurredAt).slice(11, 16)}`,
       warning: item.flags.length ? item.flags.map(flag => FLAGS[flag as Flag] ?? flag).join(", ") : null }))}/>}
 
@@ -104,6 +109,7 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
           {type && <input type="hidden" name="type" value={type}/>}
           <select name="cat" defaultValue={search.cat ?? ""} aria-label="Kategoriya"><option value="">Kategoriya</option>{categories.filter(category => !type || category.type === type).map(category => <option key={category.id} value={category.id}>{category.icon} {category.name}</option>)}</select>
           <select name="pay" defaultValue={search.pay ?? ""} aria-label="To‘lov turi"><option value="">To‘lov turi</option>{Object.entries(PAYMENTS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+          <select name="emp" defaultValue={search.emp ?? ""} aria-label="Hodim"><option value="">Hodim</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select>
           <input type="search" name="q" defaultValue={search.q} placeholder="🔍 Qidirish…" aria-label="Qidirish"/>
           <button className="chip">Filtr</button>
         </form>
@@ -113,7 +119,7 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
             const iso = local(entry.occurredAt), isIn = entry.type === "IN";
             return <div key={entry.id} className="kassa-rowwrap"><Link href={query({ edit: entry.id })} scroll={false} className={`kassa-row${entry.id === search.edit ? " on" : ""}`} role="row">
               <span className="kassa-date" role="cell">{`${iso.slice(8, 10)}.${iso.slice(5, 7)} · ${iso.slice(11, 16)}`}</span>
-              <span className="kassa-note-cell" role="cell"><i className={isIn ? "ic-in" : "ic-out"}>{isIn ? <ArrowDownLeft size={16}/> : <ArrowUpRight size={16}/>}</i><b>{entry.note}</b>{entry.logs.length > 0 && <Pill tone="wait">tuzatilgan</Pill>}</span>
+              <span className="kassa-note-cell" role="cell"><i className={isIn ? "ic-in" : "ic-out"}>{isIn ? <ArrowDownLeft size={16}/> : <ArrowUpRight size={16}/>}</i><b>{entry.note}</b>{entry.employee && entry.employeeId && <EmployeeTag id={entry.employeeId} name={entry.employee.name}/>}{entry.logs.length > 0 && <Pill tone="wait">tuzatilgan</Pill>}</span>
               <span className="kassa-cat" role="cell">{entry.category.icon} {entry.category.name}</span>
               <span role="cell"><Pill tone={entry.paymentType === "CASH" ? "gold" : "info"}>{PAYMENTS[entry.paymentType].slice(3)}</Pill></span>
               <span role="cell" className={isIn ? "amt-in" : "amt-out"}>{money(isIn ? entry.amount : -entry.amount, entry.currency, true)}</span>
@@ -122,7 +128,7 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
         </div>}
       </GlassCard>
       <aside>
-        <KassaEntryForm key={editing?.id ?? draftEditing?.draftId ?? "new"} categories={categories} history={history} editing={editing ?? draftEditing} closeHref={query({})}/>
+        <KassaEntryForm key={editing?.id ?? draftEditing?.draftId ?? "new"} categories={categories} history={history} employees={employees} editing={editing ?? draftEditing} closeHref={query({})}/>
       </aside>
     </div>
 

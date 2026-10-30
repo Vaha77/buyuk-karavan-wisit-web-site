@@ -7,11 +7,13 @@ import { AdminSearch } from "./admin-search";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeCheck, Bell, FileText, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PackageCheck, PhoneCall, Plus, PlusCircle, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wallet, Wrench, X } from "lucide-react";
+import { BadgeCheck, Bell, ChevronDown, Store, UserRound, FileText, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PackageCheck, PhoneCall, Plus, PlusCircle, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wallet, Wrench, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 import { homeFor } from "@/lib/auth/seller-access";
 import { NavigationProgress } from "./feedback";
 import { BottomNav } from "@/components/ui/aurora";
+import { debtTone } from "@/lib/employees/rules";
+import { money } from "@/lib/kassa/rules";
 
 type NavItem = { label: string; /** Phone bottom bar name */ short?: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; adminOnly?: boolean; badge?: "leads" | "new" | "purchases" | "due" | "sex"; soon?: boolean };
 // Grouped as in the BKLead design; items without a page yet are shown disabled with "Tez orada".
@@ -23,7 +25,6 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Nazorat", href: "/admin/customers/control", icon: ClipboardList, adminOnly: true },
     { label: "Mahsulotlar", href: "/admin/products", icon: Package },
     { label: "Prays", href: "/admin/prays", icon: Tags, superOnly: true },
-    { label: "Kassa", href: "/admin/kassa", icon: Wallet, superOnly: true },
     { label: "Loyihalar", href: "/admin/projects", icon: FolderKanban },
     { label: "Foto Studio", href: "/admin/photo-studio", icon: Camera },
     { label: "AI Ofis", href: "/admin/ai-office", icon: Bot },
@@ -49,9 +50,18 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
   ] },
 ];
 
+// "Do‘kon" (Super Admin): its own group at the top of the menu; in search they come after every other page, so the bottom bar keeps its items.
+const shopPages: NavItem[] = [
+  { label: "Do‘kon Dashboard", href: "/admin/dokon", icon: LayoutDashboard, superOnly: true },
+  { label: "Kassa", href: "/admin/kassa", icon: Wallet, superOnly: true },
+  { label: "Hodimlar", href: "/admin/kassa/hodimlar", icon: UserRound, superOnly: true },
+];
+
 // Top bar title and subtitle per section; the first matching prefix wins ("/admin" itself is exact).
 const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path: string) => string); subtitle: string }> = [
   { match: path => path === "/admin", title: "BKLead Dashboard", subtitle: "Lidlar, sotuvlar va hududlar bo‘yicha umumiy holat" },
+  { match: path => path.startsWith("/admin/dokon"), title: "Do‘kon", subtitle: "Kassa va hodimlar xulosasi" },
+  { match: path => path.startsWith("/admin/kassa/hodimlar"), title: "Hodimlar", subtitle: "Hodimlarning qarzi (dollarda)" },
   { match: path => path.startsWith("/admin/customers/purchases"), title: "Tasdiqlash kerak", subtitle: "Sotuvchilar kiritgan xaridlarni tasdiqlash yoki rad etish" },
   { match: path => path.startsWith("/admin/customers/control"), title: "Nazorat", subtitle: "Sotuvchilar bo‘yicha muddati o‘tgan qo‘ng‘iroqlar" },
   { match: path => path.startsWith("/admin/my/dashboard"), title: "Mening dashboardim", subtitle: "Faqat sizning ma’lumotlaringiz" },
@@ -123,12 +133,19 @@ const storeNavigation: Array<{ group: string; items: NavItem[] }> = [
 
 const roleLabels = { SUPER_ADMIN: "Super Admin", ADMIN: "Administrator", MANAGER: "Menejer", SELLER: "Sotuvchi", WORKSHOP: "Seh mas‘uli", STOREKEEPER: "Omborchi" };
 
+/** <details> whose open / closed state is remembered; `force` keeps it open on its own pages. */
+function NavFold({ id, force, className, summary, children }: { id: string; force: boolean; className: string; summary: React.ReactNode; children: React.ReactNode }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => { if (ref.current) ref.current.open = force || localStorage.getItem(id) !== "0"; }, [id, force]);
+  return <details ref={ref} className={className} onToggle={event => localStorage.setItem(id, event.currentTarget.open ? "1" : "0")}><summary>{summary}<ChevronDown className="admin-fold-caret" size={15}/></summary>{children}</details>;
+}
+
 function NavigationPending() {
   const { pending } = useLinkStatus();
   return <span className={`admin-nav-pending ${pending ? "is-pending" : ""}`} aria-hidden />;
 }
 
-export function AdminShell({ children, user, newLeads = 0, linksBadge = false, pendingPurchases = 0, dueToday = 0, sexBadge = 0 }: { children: React.ReactNode; user: { name: string; role: keyof typeof roleLabels }; newLeads?: number; linksBadge?: boolean; pendingPurchases?: number; dueToday?: number; sexBadge?: number }) {
+export function AdminShell({ children, user, newLeads = 0, linksBadge = false, pendingPurchases = 0, dueToday = 0, sexBadge = 0, employees = [] }: { employees?: Array<{ id: string; name: string; debt: number }>; children: React.ReactNode; user: { name: string; role: keyof typeof roleLabels }; newLeads?: number; linksBadge?: boolean; pendingPurchases?: number; dueToday?: number; sexBadge?: number }) {
   const [open, setOpen] = useState(false);
   const workspace = useRef<HTMLDivElement>(null);
   // Label table cells for the phone card layout, again whenever rows change (navigation, filters, refresh).
@@ -151,7 +168,9 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
   const visible = (item: NavItem) => (!item.superOnly || user.role === "SUPER_ADMIN") && (!item.adminOnly || isAdmin);
   // The most specific matching item is active, so /admin/customers/purchases does not also light up "Doimiy mijozlar".
   const activeHref = groups.flatMap(group => group.items).filter(item => !item.soon && (item.href === pathname || (item.href !== "/admin" && pathname.startsWith(`${item.href}/`)))).sort((a, b) => b.href.length - a.href.length)[0]?.href;
-  const pages = groups.flatMap(group => group.items).filter(item => visible(item) && !item.soon);
+  const pages = [...groups.flatMap(group => group.items), ...shopPages].filter(item => visible(item) && !item.soon);
+  const inShop = pathname.startsWith("/admin/dokon") || pathname.startsWith("/admin/kassa"), inStaff = pathname.startsWith("/admin/kassa/hodimlar");
+  const close = () => setOpen(false);
   // Phone "+" button: the role's most common new record (WORKSHOP has none).
   // On Kassa the "+" opens its entry sheet (components/admin/kassa/entry-form.tsx catches this href).
   const fab = pathname === "/admin/kassa" ? "/admin/kassa#new" : user.role === "SELLER" ? "/admin/my/purchase" : user.role === "STOREKEEPER" ? "/admin/seh/request" : user.role === "WORKSHOP" ? null : "/admin/seh/new";
@@ -162,7 +181,15 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
     <aside className={`admin-sidebar glass-blur ${open ? "is-open" : ""}`}>
       <div className="admin-sidebar-brand"><Link href={home} className="admin-brand-link" onClick={() => setOpen(false)}><BrandEmblem/><strong>Buyuk Karavan</strong></Link><button className="admin-sidebar-close" onClick={() => setOpen(false)} aria-label="Menyuni yopish"><X size={18}/></button><span className="admin-sidebar-collapse"><ChevronLeft size={15}/></span></div>
       <span className="admin-sidebar-label">{user.role === "SELLER" ? "SOTUVCHI" : user.role === "WORKSHOP" ? "SEH" : user.role === "STOREKEEPER" ? "OMBOR" : "ADMIN"}</span>
-      <nav aria-label="Admin navigatsiya">{groups.map(section => <div className="admin-nav-group" key={section.group}><span className="admin-nav-group-label">{section.group}</span>{section.items.filter(visible).map(item => {
+      <nav aria-label="Admin navigatsiya">{user.role === "SUPER_ADMIN" && <NavFold id="nav-dokon" force={inShop} className="admin-fold" summary={<><Store size={17}/>Do‘kon</>}>
+        <Link className={`admin-nav-item ${pathname === "/admin/dokon" ? "is-active" : ""}`} href="/admin/dokon" onClick={close}><LayoutDashboard size={17}/>Dashboard<NavigationPending/></Link>
+        <Link className={`admin-nav-item ${inShop && !inStaff && pathname !== "/admin/dokon" ? "is-active" : ""}`} href="/admin/kassa" onClick={close}><Wallet size={17}/>Kassa<NavigationPending/></Link>
+        <NavFold id="nav-hodimlar" force={inStaff} className={`admin-fold admin-fold-sub${inStaff ? " is-active" : ""}`} summary={<><UserRound size={17}/>Hodimlar</>}>
+          <Link className={`admin-nav-child ${pathname === "/admin/kassa/hodimlar" ? "is-active" : ""}`} href="/admin/kassa/hodimlar" onClick={close}>Barchasi<NavigationPending/></Link>
+          {employees.map(item => <Link key={item.id} className={`admin-nav-child ${pathname === `/admin/kassa/hodimlar/${item.id}` ? "is-active" : ""}`} href={`/admin/kassa/hodimlar/${item.id}`} onClick={close}><span>{item.name}</span><b className={debtTone(item.debt)}>{item.debt ? money(item.debt, "USD") : "0"}</b></Link>)}
+          <Link className="admin-nav-child admin-nav-add" href="/admin/kassa/hodimlar?new=1" onClick={close}>+ Yangi hodim</Link>
+        </NavFold>
+      </NavFold>}{groups.map(section => <div className="admin-nav-group" key={section.group}><span className="admin-nav-group-label">{section.group}</span>{section.items.filter(visible).map(item => {
         const Icon = item.icon;
         const active = item.href === activeHref;
         const count = item.badge === "leads" ? newLeads : item.badge === "purchases" ? pendingPurchases : item.badge === "due" ? dueToday : item.badge === "sex" ? sexBadge : 0;

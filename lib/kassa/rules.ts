@@ -12,7 +12,7 @@ export type LedgerDay = { day: string } & Record<Currency, DayTotals>;
 export const CURRENCIES: Currency[] = ["USD", "UZS"];
 export const PAYMENTS: Record<Payment, string> = { CASH: "💵 Naqd", CARD: "💳 Karta / Click", BANK: "🏦 Bank" };
 const DAY = 86_400_000;
-const round = (value: number) => Math.round(value * 100) / 100;
+export const round = (value: number) => Math.round(value * 100) / 100;
 
 /** "$ 1 200", "−450 000 so‘m"; `sign` adds + for positive amounts. */
 export function money(value: number, currency: Currency, sign = false) {
@@ -56,22 +56,26 @@ export function carryFrom(opening: Sums, groups: Array<{ type: EntryType; curren
   return carry;
 }
 
-export type EntryInput = { type: EntryType; amount: number; currency: Currency; categoryId: string; paymentType: Payment; note: string; occurredAt: Date };
+export type EntryInput = { type: EntryType; amount: number; currency: Currency; categoryId: string; paymentType: Payment; note: string; occurredAt: Date; employeeId: string | null };
+export const parseAmount = (value: unknown) => Number(String(value ?? "").replace(/[\s ]/g, "").replace(",", "."));
+/** A datetime-local value in Tashkent time ("2026-10-27T14:20"); invalid = Invalid Date. */
+export function parseLocalTime(value: unknown) { const when = String(value ?? ""); return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(when) ? new Date(`${when}:00+05:00`) : new Date(NaN); }
 const pick = <T extends string>(value: unknown, allowed: readonly T[]) => (allowed as readonly unknown[]).includes(value) ? value as T : null;
 
 /** Form fields → entry; `occurredAt` is a datetime-local value in Tashkent time ("2026-10-27T14:20"). */
 export function parseEntry(form: Record<string, unknown>): { ok: true; data: EntryInput } | { ok: false; error: string } {
   const type = pick(form.type, ["IN", "OUT"] as const), currency = pick(form.currency, CURRENCIES), paymentType = pick(form.paymentType, ["CASH", "CARD", "BANK"] as const);
-  const amount = Number(String(form.amount ?? "").replace(/[\s ]/g, "").replace(",", "."));
+  const amount = parseAmount(form.amount);
   const note = String(form.note ?? "").trim(), categoryId = String(form.categoryId ?? "");
-  const when = String(form.occurredAt ?? ""), occurredAt = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(when) ? new Date(`${when}:00+05:00`) : new Date(NaN);
+  const occurredAt = parseLocalTime(form.occurredAt), employeeId = String(form.employeeId ?? "") || null;
   if (!type || !currency || !paymentType) return { ok: false, error: "So‘rov noto‘g‘ri." };
   if (!Number.isFinite(amount) || amount <= 0 || amount >= 1e15 || round(amount) !== amount) return { ok: false, error: "Summani to‘g‘ri kiriting." };
   if (!categoryId || categoryId.length > 40) return { ok: false, error: "Kategoriyani tanlang." };
   if (!note) return { ok: false, error: "Izoh yozing." };
   if (note.length > 300) return { ok: false, error: "Izoh 300 belgidan oshmasin." };
   if (Number.isNaN(occurredAt.getTime())) return { ok: false, error: "Sanani to‘g‘ri kiriting." };
-  return { ok: true, data: { type, amount, currency, categoryId, paymentType, note, occurredAt } };
+  if (employeeId && currency !== "USD") return { ok: false, error: "Hodim hisoblari faqat dollarda." };
+  return { ok: true, data: { type, amount, currency, categoryId, paymentType, note, occurredAt, employeeId } };
 }
 
 /** Correction log: only the fields that changed, { field: [old, new] } (dates as ISO strings). */

@@ -61,6 +61,7 @@ const schema = z.object({
   amount: z.number().nullable(),
   currency: z.enum(["USD", "UZS"]).nullable(),
   categoryName: z.string().nullable(),
+  employeeName: z.string().nullable(),
   note: z.string(),
   corrected: z.string(),
   flags: z.array(z.enum(["CURRENCY_UNCLEAR", "AMOUNT_MISSING", "CATEGORY_UNKNOWN", "TYPE_UNCLEAR"])),
@@ -70,13 +71,14 @@ const PROMPT = `Sen kassa yordamchisisan: o‘zbekcha (lotin/kirill, ruscha aral
 - amount: son. "300 ming" = 300000, "1,5 mln" = 1500000, "besh yuz dollar" = 500, "80 ming so‘m" = 80000. Summa yo‘q bo‘lsa null va AMOUNT_MISSING.
 - currency: "$", "dollar", "доллар" → USD; "ming", "so‘m", "сум", "mln", "million" → UZS. Valyuta aytilmagan bo‘lsa null va CURRENCY_UNCLEAR — hech qachon taxmin qilma.
 - categoryName: faqat berilgan ro‘yxatdagi nomlardan biri, aynan shu yozuvda. Mos kelmasa null va CATEGORY_UNKNOWN.
+- employeeName: xabarda hodim ismi aytilgan bo‘lsa, berilgan hodimlar ro‘yxatidagi aynan o‘sha nom ("Atham akadan" → "Atham aka"). Ism aniq mos kelmasa yoki aytilmagan bo‘lsa null — taxmin qilma.
 - note: qisqa izoh (kim, nima uchun), summasiz, masalan "Atxam aka · qarzidan".
 Oldingi qiymatlar berilsa, bu tuzatish: faqat tuzatishda aytilganini o‘zgartir, qolganini saqla.
 Xabar ovozdan tanilgan bo‘lsa, unda xato bo‘lishi mumkin: o‘zbek tilidagi eng mantiqiy ma’noga keltir, ismlar va so‘zlarni lug‘atdagiga moslab yoz. corrected — shu tuzatilgan to‘liq matn (matnli xabarda o‘zi).
 Faqat JSON qaytar.`;
 
-async function analyze(text: string, categories: string[], today: string, previous?: AiDraft, vocabulary?: string): Promise<AiDraft> {
-  const input = `Bugun: ${today}\nKategoriyalar: ${JSON.stringify(categories)}\n${vocabulary ? `Ovozdan tanilgan matn. Lug‘at: ${vocabulary}\n` : ""}${previous ? `Oldingi qiymatlar: ${JSON.stringify(previous)}\nTuzatish: ` : "Xabar: "}${JSON.stringify(text.slice(0, 1000))}`;
+async function analyze(text: string, categories: string[], today: string, previous?: AiDraft, vocabulary?: string, employees: string[] = []): Promise<AiDraft> {
+  const input = `Bugun: ${today}\nKategoriyalar: ${JSON.stringify(categories)}\nHodimlar: ${JSON.stringify(employees)}\n${vocabulary ? `Ovozdan tanilgan matn. Lug‘at: ${vocabulary}\n` : ""}${previous ? `Oldingi qiymatlar: ${JSON.stringify(previous)}\nTuzatish: ` : "Xabar: "}${JSON.stringify(text.slice(0, 1000))}`;
   const response = await openai().responses.parse({ model: "gpt-4.1-mini", store: false, max_output_tokens: 500, input: [{ role: "system", content: PROMPT }, { role: "user", content: input }], text: { format: zodTextFormat(schema, "kassa_draft") } });
   if (!response.output_parsed) throw new Error("Kassa bot analysis returned nothing");
   return response.output_parsed;

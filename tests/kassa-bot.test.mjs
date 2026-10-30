@@ -6,7 +6,7 @@ import { register } from "node:module";
 register("./ts-resolve.mjs", import.meta.url);
 const core = await import("../lib/kassa/bot-core.ts");
 const kassa = await import("../lib/kassa/rules.ts");
-const source = file => readFile(new URL(`../${file}`, import.meta.url), "utf8");
+const source = async file => (await readFile(new URL(`../${file}`, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 
 const CATEGORIES = [{ id: "fuel", name: "Benzin", type: "OUT" }, { id: "food", name: "Ovqat", type: "OUT" }, { id: "ads", name: "Reklama", type: "OUT" }, { id: "debt", name: "Mijoz qarzi", type: "IN" }];
 // What the OpenAI mock "understands" from each phrase (the real model gets the same rules in its prompt).
@@ -19,11 +19,12 @@ const AI = {
   "yo‘q, 350 ming edi": { type: "OUT", amount: 350000, currency: "UZS", categoryName: "Benzin", note: "Benzin", flags: [] },
 };
 
-function fakeDb() {
+function fakeDb(employees = []) {
   const drafts = [], entries = [], logs = [], updates = new Set();
   const match = (row, where = {}) => Object.entries(where).every(([key, value]) => value && typeof value === "object" && "gte" in value ? row[key] && row[key] >= value.gte : row[key] === value);
   const db = {
     kassaCategory: { findMany: async () => CATEGORIES, findUnique: async ({ where }) => CATEGORIES.find(item => item.id === where.id) ?? null },
+    employee: { findMany: async () => employees, findUnique: async ({ where }) => employees.find(item => item.id === where.id) ?? null },
     kassaEntryLog: { create: async ({ data }) => { logs.push(data); return data; } },
     kassaBotUpdate: { create: async ({ data }) => { if (updates.has(data.updateId)) throw Object.assign(new Error("unique"), { code: "P2002" }); updates.add(data.updateId); } },
     kassaDraft: {
@@ -44,8 +45,8 @@ function fakeDb() {
   return { db, drafts, entries, logs };
 }
 
-function setup({ sttOrder = ["openai", "elevenlabs"], stt = {}, corrected } = {}) {
-  const store = fakeDb(), sent = [], calls = { stt: [], analyze: [] };
+function setup({ sttOrder = ["openai", "elevenlabs"], stt = {}, corrected, employees } = {}) {
+  const store = fakeDb(employees), sent = [], calls = { stt: [], analyze: [] };
   const tg = async (method, payload) => { sent.push({ method, payload }); return method === "sendMessage" ? { message_id: 900 + sent.length } : true; };
   const voice = name => async (audio, vocabulary) => { calls.stt.push({ name, vocabulary }); return name === "openai" ? "Atxam akadan 500 dollar oldim qarzidan" : `${name}: Atxamakadan besh yuz dollar`; };
   const bot = core.createKassaBot({
@@ -60,9 +61,9 @@ function setup({ sttOrder = ["openai", "elevenlabs"], stt = {}, corrected } = {}
 
 test("analysis: amounts, currencies and categories are checked on the server; a currency the text never names is not guessed", () => {
   const parse = text => core.normalizeDraft(AI[text], CATEGORIES, text);
-  assert.deepEqual(parse("benzinga 300 ming"), { type: "OUT", amount: 300000, currency: "UZS", categoryId: "fuel", note: "Benzin", flags: [] });
-  assert.deepEqual(parse("Atxam akadan 500 dollar oldim qarzidan"), { type: "IN", amount: 500, currency: "USD", categoryId: "debt", note: "Atxam aka · qarzidan", flags: [] });
-  assert.deepEqual(parse("ovqatga 80 ming so‘m"), { type: "OUT", amount: 80000, currency: "UZS", categoryId: "food", note: "Ovqat", flags: [] });
+  assert.deepEqual(parse("benzinga 300 ming"), { type: "OUT", amount: 300000, currency: "UZS", categoryId: "fuel", employeeId: null, note: "Benzin", flags: [] });
+  assert.deepEqual(parse("Atxam akadan 500 dollar oldim qarzidan"), { type: "IN", amount: 500, currency: "USD", categoryId: "debt", employeeId: null, note: "Atxam aka · qarzidan", flags: [] });
+  assert.deepEqual(parse("ovqatga 80 ming so‘m"), { type: "OUT", amount: 80000, currency: "UZS", categoryId: "food", employeeId: null, note: "Ovqat", flags: [] });
   assert.equal(parse("1,5 mln reklama").amount, 1500000);
   assert.equal(parse("1,5 mln reklama").currency, "UZS");
   const ucs = parse("UCS yo‘lkira 120");
@@ -132,7 +133,7 @@ test("✓ makes exactly one KassaEntry (pressed twice or in parallel); cancelled
   assert.deepEqual(results.map(result => result.ok).sort(), [false, true]);
   assert.deepEqual(await bot.confirmDraft(fuel.id, "admin"), { ok: false, error: "Bu yozuv allaqachon ko‘rib chiqilgan." });
   assert.equal(entries.length, 1);
-  assert.deepEqual({ ...entries[0], occurredAt: entries[0].occurredAt.getTime() }, { id: entries[0].id, type: "OUT", amount: 300000, currency: "UZS", categoryId: "fuel", paymentType: "CASH", note: "Benzin", occurredAt: fuel.occurredAt.getTime(), createdById: "admin" });
+  assert.deepEqual({ ...entries[0], occurredAt: entries[0].occurredAt.getTime() }, { id: entries[0].id, type: "OUT", amount: 300000, currency: "UZS", categoryId: "fuel", paymentType: "CASH", note: "Benzin", occurredAt: fuel.occurredAt.getTime(), employeeId: null, createdById: "admin" });
   assert.equal(fuel.status, "CONFIRMED");
   assert.equal(fuel.entryId, entries[0].id);
   assert.match(sent.findLast(item => item.method === "editMessageText").payload.text, /✅ Kassaga o‘tdi$/);

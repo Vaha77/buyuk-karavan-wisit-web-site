@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { dayKey } from "@/lib/dashboard/period";
+import { signed, type DebtType } from "@/lib/employees/rules";
 import { carryFrom, ledger, type Currency, type EntryType, type NoteHint } from "./rules";
 
 const live = { deletedAt: null };
@@ -29,18 +30,20 @@ export async function getKassaLedger(from: Date, to: Date) {
   return { days: ledger(carry, flat, dayKey(from), dayKey(new Date(to.getTime() - 1))), rows: flat };
 }
 
-export type EntryFilter = { type?: EntryType; categoryId?: string; paymentType?: string; q?: string; limit?: number };
+export type EntryFilter = { type?: EntryType; employeeId?: string; categoryId?: string; paymentType?: string; q?: string; limit?: number };
 export async function getKassaEntries(from: Date, to: Date, filter: EntryFilter = {}) {
   const where: Prisma.KassaEntryWhereInput = { ...live, occurredAt: { gte: from, lt: to } };
   if (filter.type) where.type = filter.type;
+  if (filter.employeeId) where.employeeId = filter.employeeId;
   if (filter.categoryId) where.categoryId = filter.categoryId;
   if (filter.paymentType === "CASH" || filter.paymentType === "CARD" || filter.paymentType === "BANK") where.paymentType = filter.paymentType;
   if (filter.q) where.note = { contains: filter.q, mode: "insensitive" };
   const rows = await getDb().kassaEntry.findMany({
     where, orderBy: { occurredAt: "desc" }, take: filter.limit ?? 500,
-    include: { category: { select: { name: true, icon: true } }, createdBy: { select: { name: true } }, logs: { orderBy: { createdAt: "desc" }, include: { user: { select: { name: true } } } } },
+    include: { employee: { select: { name: true } }, debtEntry: { select: { type: true, amountUsd: true, deletedAt: true } }, category: { select: { name: true, icon: true } }, createdBy: { select: { name: true } }, logs: { orderBy: { createdAt: "desc" }, include: { user: { select: { name: true } } } } },
   });
-  return rows.map(row => ({ ...row, amount: Number(row.amount), currency: row.currency as Currency }));
+  // debtEffect: what this entry adds to the hodim debt now (null = no live debt row).
+  return rows.map(({ debtEntry, ...row }) => ({ ...row, amount: Number(row.amount), currency: row.currency as Currency, debtEffect: debtEntry && !debtEntry.deletedAt ? signed(debtEntry.type as DebtType, Number(debtEntry.amountUsd)) : null }));
 }
 
 /** Note suggestions: the latest 300 entries (the form filters them while typing). */
@@ -57,6 +60,6 @@ export async function getDeletedEntries() {
 
 /** "Botdan kelganlar": PENDING bot drafts, oldest first. */
 export async function getPendingDrafts() {
-  const rows = await getDb().kassaDraft.findMany({ where: { status: "PENDING" }, orderBy: { occurredAt: "asc" }, include: { category: { select: { name: true, icon: true } } } });
+  const rows = await getDb().kassaDraft.findMany({ where: { status: "PENDING" }, orderBy: { occurredAt: "asc" }, include: { employee: { select: { name: true } }, category: { select: { name: true, icon: true } } } });
   return rows.map(row => ({ ...row, amount: row.amount === null ? null : Number(row.amount) }));
 }

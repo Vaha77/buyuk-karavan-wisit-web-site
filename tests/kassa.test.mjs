@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./ts-resolve.mjs", import.meta.url);
 const kassa = await import("../lib/kassa/rules.ts");
-const source = file => readFile(new URL(`../${file}`, import.meta.url), "utf8");
+const source = async file => (await readFile(new URL(`../${file}`, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const zero = { USD: 0, UZS: 0 };
 const at = (local, type, currency, amount) => ({ type, currency, amount, occurredAt: new Date(`${local}+05:00`) });
 
@@ -37,7 +37,7 @@ test("correcting a past entry changes every later day and logs only the changed 
   const before = { amount: 100, note: "Sotuv", occurredAt: new Date("2026-10-01T05:00:00Z"), createdAt: new Date() };
   assert.deepEqual(kassa.diffEntry(before, { amount: 150, note: "Sotuv", occurredAt: new Date("2026-10-01T05:00:00Z") }), { amount: ["100", "150"] });
   const actions = await source("app/admin/(protected)/kassa/actions.ts");
-  assert.match(actions, /\$transaction\(\[db\.kassaEntry\.update[\s\S]*?db\.kassaEntryLog\.create/);
+  assert.match(actions, /\$transaction\(async tx => \{ await tx\.kassaEntry\.update[\s\S]*?tx\.kassaEntryLog\.create/);
   assert.doesNotMatch(actions, /kassaEntry\.delete/, "entries are never deleted");
 });
 

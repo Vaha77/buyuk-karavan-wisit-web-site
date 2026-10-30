@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma, type AdminUser } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
+import { getEmployees } from "@/lib/employees/queries";
 import { myDueCustomers } from "@/lib/customers/seller-queries";
 import { referralLinksAreNew } from "@/lib/referrals/rules";
 import { sexBadgeCount } from "@/lib/sex/queries";
@@ -19,6 +20,7 @@ export async function getShellData(user: AdminUser) {
     ${canReview ? Prisma.sql`(SELECT count(*) FROM "CustomerPurchase" WHERE status = 'PENDING')::int` : Prisma.sql`0`} AS purchases,
     ${user.role === "SUPER_ADMIN" ? Prisma.sql`((SELECT count(*) FROM "WorkshopCorrectionRequest" WHERE status = 'PENDING') + (SELECT count(*) FROM "WorkshopOrder" WHERE "receivedNote" IS NOT NULL AND "receivedCheckedAt" IS NULL) + (SELECT count(*) FROM "KassaDraft" WHERE status = 'PENDING'))::int` : Prisma.sql`0`} AS corrections`)
     .then(rows => rows[0]).catch(error => { console.error("[shell-data] admin badge counts failed", error); return { leads: 0, purchases: 0, corrections: 0 }; });
-  const [{ leads, purchases, corrections }, sexBadge] = await Promise.all([counts, sexBadgeCount(user)]);
-  return { newLeads: leads, pendingPurchases: purchases + corrections, linksBadge: referralLinksAreNew(), sexBadge };
+  const staff = user.role === "SUPER_ADMIN" ? getEmployees().catch(error => { console.error("[shell-data] employees failed", error); return []; }) : [];
+  const [{ leads, purchases, corrections }, sexBadge, employees] = await Promise.all([counts, sexBadgeCount(user), staff]);
+  return { employees: employees.filter(item => !item.archived).map(({ id, name, debt }) => ({ id, name, debt })), newLeads: leads, pendingPurchases: purchases + corrections, linksBadge: referralLinksAreNew(), sexBadge };
 }
