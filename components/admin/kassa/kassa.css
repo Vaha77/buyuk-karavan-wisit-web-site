@@ -23,13 +23,16 @@
 .kassa-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 6px 10px}
 .kassa-filters .seg{margin:0}.kassa-filters input[type=search]{margin-left:auto;min-width:160px}
 .kassa-empty{color:var(--muted);font-size:13px;padding:18px;text-align:center}
-.kassa-row{display:grid;grid-template-columns:110px minmax(0,1fr) 160px 110px 140px 24px;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px;color:inherit;text-decoration:none}
+.kassa-row{display:grid;grid-template-columns:92px minmax(180px,1fr) 130px 84px 120px 24px;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px;color:inherit;text-decoration:none}
 .kassa-row:hover,.kassa-row.on{background:rgba(255,255,255,.035)}
 .kassa-row>:last-child{text-align:right}
 .kassa-th{color:var(--muted);font-weight:600;border-bottom-color:var(--line)}.kassa-th:hover{background:none}
 .kassa-date{color:var(--muted);white-space:nowrap}.kassa-cat{color:#cfd2e2}
 .kassa-note-cell{display:flex;align-items:center;gap:10px;min-width:0}
-.kassa-note-cell b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kassa-note-cell>span{flex:1;min-width:0}
+.kassa-note-cell b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kassa-note-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}.kassa-note-tags>*{flex:none;max-width:100%;overflow:hidden;text-overflow:ellipsis}.kassa-note-tags:empty,.kassa-paysub{display:none}
+.kassa-paysub{font-size:11px;color:var(--muted)}
 .kassa-note-cell i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none}
 .ic-in{background:rgba(52,211,153,.14);color:var(--ok)}.ic-out{background:rgba(251,113,133,.14);color:var(--red)}
 /* delete: 🗑 on row hover (desktop), confirm dialog, undo toast, "O‘chirilganlar" */
@@ -61,6 +64,8 @@
 .kassa-botsetup{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;font-size:13px;color:var(--muted)}.kassa-botsetup b{color:#fff}
 /* entry form */
 .kassa-form{padding:16px;border-radius:var(--r-card);display:flex;flex-direction:column}
+/* the panel scrolls; its blocks never shrink (.hodim-select has overflow:hidden, so it would collapse) */
+.kassa-form>*{flex-shrink:0}
 .kassa-form-head{display:flex;justify-content:space-between;align-items:center;font-size:15px}
 .kassa-form-head a,.kassa-close{color:var(--muted);background:none;border:0}
 .kassa-close{display:none}
@@ -91,7 +96,7 @@
 .kassa-error{color:var(--red);font-size:12.5px;margin-top:10px}
 /* desktop: the panel stays under the topbar (90px) and "Saqlash" stays at its bottom */
 .kassa-grid>aside{position:sticky;top:0}
-.kassa-form{max-height:max(320px,calc(100dvh - 560px));overflow:auto}
+.kassa-form{max-height:max(420px,calc(100dvh - 260px));overflow:auto}
 .kassa-save{position:sticky;bottom:-16px;margin:14px -16px -16px;padding:12px 16px 16px;background:rgba(14,14,22,.96)}.kassa-save .btn-g{padding:13px;width:100%}
 .kassa-log{margin-top:6px;font-size:12px}.kassa-log>div{padding:8px 0;border-top:1px solid rgba(255,255,255,.05)}
 .kassa-log span{color:var(--muted);display:block}.kassa-log small{display:block;color:#cfd2e2}
@@ -246,3 +251,17 @@
 .hodim-select-open [role=option]{display:flex;align-items:center;gap:10px;width:100%;padding:9px 14px;border:0;border-top:1px solid rgba(255,255,255,.05);background:none;color:#fff;font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer}.hodim-select-open [role=option] b{margin-left:auto;white-space:nowrap}
 .hodim-select-open [role=option].on,.hodim-select-open [role=option]:hover{background:rgba(124,92,255,.22)}.hodim-select-open .hodim-none{color:var(--muted)}
 .dokon-dot{position:absolute;left:50%;width:12px;height:12px;margin:0 0 -6px -6px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,.25);pointer-events:none;opacity:0;transition:opacity .6s ease .5s}.in .dokon-dot{opacity:1}
+/* the 1fr note column needs 180px: below 1360 To‘lov moves under the note, below 1270 the form goes above the table */
+@media (min-width:1001px) and (max-width:1360px){
+  .kassa-grid{grid-template-columns:minmax(0,1fr) 300px}
+  .kassa-row{grid-template-columns:92px minmax(180px,1fr) 110px 120px 24px}
+  .kassa-row>:nth-child(4){display:none}
+  .kassa-paysub{display:block}
+}
+@media (min-width:1001px) and (max-width:1270px){
+  .kassa-grid{grid-template-columns:minmax(0,1fr)}
+  .kassa-grid>aside{position:static;order:-1}
+  .kassa-form{max-height:none}.kassa-save{position:static}
+}
+.kassa-main{display:flex;flex-direction:column;gap:14px;min-width:0}.kassa-main .kassa-bal dl{grid-template-columns:repeat(3,minmax(0,1fr))}.kassa-main .kassa-bal dd{white-space:normal;font-size:13px}
+@media (max-width:1000px){.kassa-main{gap:10px}}

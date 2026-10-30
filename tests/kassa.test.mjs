@@ -80,3 +80,12 @@ test("delete is soft: a deleted entry leaves every balance (later days too) and 
   assert.match(actions, /deleteEntryAction[\s\S]*?updateMany\(\{ where: \{ id: String\(id\), deletedAt: null \}, data: \{ deletedAt: at, deletedById: user\.id, deleteReason \} \}\);\n\s+if \(count\) await tx\.kassaEntryLog\.create/);
   assert.match(actions, /restoreEntryAction[\s\S]*?deletedAt: null, deletedById: null[\s\S]*?kassaEntryLog\.create/);
 });
+
+test("layout: form blocks never shrink; the table's note column keeps 180px and the header shares its grid", async () => {
+  const css = await source("components/admin/kassa/kassa.css"), page = await source("app/admin/(protected)/kassa/page.tsx");
+  assert.match(css, /\.kassa-form>\*\{flex-shrink:0\}/);
+  assert.match(css, /\.kassa-row\{display:grid;grid-template-columns:92px minmax\(180px,1fr\) 130px 84px 120px 24px/);
+  assert.match(page, /className="kassa-row kassa-th"/, "the header row uses the same grid");
+  assert.match(page, /className="kassa-paysub"/);
+  assert.match(css, /max-width:1360px\)\{[^@]*\.kassa-row>:nth-child\(4\)\{display:none\}/);
+});

@@ -84,6 +84,8 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
       <Link href={dayHref(addDays(toDay, 1))} aria-label="Keyingi kun" scroll={false}><ChevronRight size={18}/></Link>
     </nav>
 
+    <div className="kassa-grid">
+      <div className="kassa-main">
     <GlassCard blur className="kassa-balances">
       {CURRENCIES.map(currency => {
         const sum = totals(days, currency);
@@ -98,8 +100,6 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
         </div>;
       })}
     </GlassCard>
-
-    <div className="kassa-grid">
       <GlassCard className="kassa-list">
         <form className="kassa-filters">
           {Object.entries({ range: search.range, from: search.from, to: search.to }).map(([key, value]) => value && <input key={key} type="hidden" name={key} value={value}/>)}
@@ -118,7 +118,7 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
             const iso = local(entry.occurredAt), isIn = entry.type === "IN";
             return <div key={entry.id} className="kassa-rowwrap"><Link href={query({ edit: entry.id })} scroll={false} className={`kassa-row${entry.id === search.edit ? " on" : ""}`} role="row">
               <span className="kassa-date" role="cell">{`${iso.slice(8, 10)}.${iso.slice(5, 7)} · ${iso.slice(11, 16)}`}</span>
-              <span className="kassa-note-cell" role="cell"><i className={isIn ? "ic-in" : "ic-out"}>{isIn ? <ArrowDownLeft size={16}/> : <ArrowUpRight size={16}/>}</i><b>{entry.note}</b>{entry.employee && entry.employeeId && <EmployeeTag id={entry.employeeId} name={entry.employee.name}/>}{entry.logs.length > 0 && <Pill tone="wait">tuzatilgan</Pill>}</span>
+              <span className="kassa-note-cell" role="cell"><i className={isIn ? "ic-in" : "ic-out"}>{isIn ? <ArrowDownLeft size={16}/> : <ArrowUpRight size={16}/>}</i><span><b title={entry.note}>{entry.note}</b><small className="kassa-paysub">{PAYMENTS[entry.paymentType]}</small><span className="kassa-note-tags">{entry.employee && entry.employeeId && <EmployeeTag id={entry.employeeId} name={entry.employee.name}/>}{entry.logs.length > 0 && <Pill tone="wait">tuzatilgan</Pill>}</span></span></span>
               <span className="kassa-cat" role="cell">{entry.category.icon} {entry.category.name}</span>
               <span role="cell"><Pill tone={entry.paymentType === "CASH" ? "gold" : "info"}>{PAYMENTS[entry.paymentType].slice(3)}</Pill></span>
               <span role="cell" className={isIn ? "amt-in" : "amt-out"}>{money(isIn ? entry.amount : -entry.amount, entry.currency, true)}</span>
@@ -126,6 +126,7 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
           })}
         </div>}
       </GlassCard>
+      </div>
       <aside>
         <KassaEntryForm key={editing?.id ?? draftEditing?.draftId ?? "new"} categories={categories} history={history} employees={employees} editing={editing ?? draftEditing} closeHref={query({})}/>
       </aside>
