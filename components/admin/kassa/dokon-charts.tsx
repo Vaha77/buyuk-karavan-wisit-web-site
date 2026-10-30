@@ -56,11 +56,11 @@ export function BarsChart({ rows, labels, tones, currency, area }: { rows: Chart
         </span>
       </button>)}
       {low < 0 && <div className="dokon-zero" style={{ bottom: `${-low / span * 100}%` }}/>}
-      <svg viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden>
+      {rows.length === 1 ? <i className="dokon-dot" style={{ bottom: `${(rows[0].line - low) / span * 100}%` }}/> : <svg viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden>
         <defs><linearGradient id="dokon-line" x1="0" x2="1"><stop stopColor="#7c5cff"/><stop offset="1" stopColor="#22d3ee"/></linearGradient><linearGradient id="dokon-area" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#f59e0b" stopOpacity=".28"/><stop offset="1" stopColor="#f59e0b" stopOpacity="0"/></linearGradient></defs>
         {area && <path className="dokon-area" d={`${path}L${((rows.length - .5) / rows.length * 1000).toFixed(1)} ${floor.toFixed(1)}L${(500 / rows.length).toFixed(1)} ${floor.toFixed(1)}Z`} fill="url(#dokon-area)"/>}
         <path className="dokon-stroke" d={path} pathLength={1} fill="none" stroke={area ? "#f59e0b" : "url(#dokon-line)"} strokeWidth="3" vectorEffect="non-scaling-stroke"/>
-      </svg>
+      </svg>}
       {shown && <div className="dokon-tip" style={{ left: `clamp(75px, ${(active! + .5) / rows.length * 100}%, calc(100% - 75px))` }}><b>{shown.full}</b><span>{labels[0]}: {money(shown.a, currency)}</span><span>{labels[1]}: {money(shown.b, currency)}</span><span>{labels[2]}: {money(shown.line, currency)}</span></div>}
     </div>
     <div className="dokon-axis">{rows.map((row, index) => <span key={row.full}>{index % step === 0 ? row.label : ""}</span>)}</div>

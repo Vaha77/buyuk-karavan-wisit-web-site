@@ -91,7 +91,7 @@
 .kassa-error{color:var(--red);font-size:12.5px;margin-top:10px}
 /* desktop: the panel stays under the topbar (90px) and "Saqlash" stays at its bottom */
 .kassa-grid>aside{position:sticky;top:0}
-.kassa-form{max-height:max(420px,calc(100dvh - 420px));overflow:auto}
+.kassa-form{max-height:max(320px,calc(100dvh - 560px));overflow:auto}
 .kassa-save{position:sticky;bottom:-16px;margin:14px -16px -16px;padding:12px 16px 16px;background:rgba(14,14,22,.96)}.kassa-save .btn-g{padding:13px;width:100%}
 .kassa-log{margin-top:6px;font-size:12px}.kassa-log>div{padding:8px 0;border-top:1px solid rgba(255,255,255,.05)}
 .kassa-log span{color:var(--muted);display:block}.kassa-log small{display:block;color:#cfd2e2}
@@ -152,12 +152,6 @@
 /* Hodimlar (Claude outputs/hodimlar_maket.html, kassa_hodim_maket.html) and the Do‘kon Dashboard */
 .is-debt{color:var(--red)!important}.is-over{color:var(--ok)!important}.is-zero{color:var(--muted)!important}
 .dokon-tabs,.hodim-select-phone{display:none}
-.kassa-hsel{border-radius:14px;border:1px solid rgba(124,92,255,.55);background:rgba(124,92,255,.12);overflow:hidden}
-.kassa-hsel.is-off{opacity:.5;border-color:var(--line);background:var(--card)}
-.kassa-hsel button{display:flex;justify-content:space-between;gap:10px;width:100%;padding:11px 14px;border:0;background:none;color:#fff;font:inherit;font-size:13px;font-weight:700;text-align:left}
-.kassa-hsel>div>button{border-top:1px solid rgba(255,255,255,.06);font-weight:600}.kassa-hsel>div>button.on{background:rgba(124,92,255,.22)}
-.kassa-hsel input{width:calc(100% - 16px);margin:0 8px 8px;padding:9px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line);color:#fff;font:inherit;font-size:13px}
-.kassa-hsel-none{color:var(--muted)!important}
 .kassa-hnote{font-size:12px;color:var(--muted);margin-top:6px}
 .kassa-hcalc{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.35);font-size:12.5px;color:#cfd2e2}.kassa-hcalc b{color:#fff;white-space:nowrap}
 .kassa-htoggle,.hodim-fields .hodim-check{display:flex;flex-direction:row;align-items:center;gap:10px;margin-top:10px;font-size:13px;font-weight:700;color:#fff}.kassa-htoggle input,.hodim-check input{width:18px;height:18px;accent-color:#7c5cff;flex:none}
@@ -216,7 +210,7 @@
 .dokon-area{opacity:0;transition:opacity 1s ease 1.4s}.in .dokon-area{opacity:1}
 .dokon-tip{position:absolute;top:0;transform:translateX(-50%);width:150px;z-index:3;display:grid;gap:2px;padding:8px 10px;border-radius:10px;background:rgba(18,18,30,.97);border:1px solid var(--line);font-size:11.5px;color:#cfd2e2;pointer-events:none}
 .dokon-axis{display:flex;gap:4px;margin-top:6px;font-size:10px;color:var(--muted)}.dokon-axis span{flex:1;min-width:0;white-space:nowrap;text-align:center;overflow:visible}
-.dokon-debts a{display:grid;grid-template-columns:30px minmax(0,96px) minmax(0,1fr) auto 10px;align-items:center;gap:10px;padding:7px 4px;border-radius:12px;font-size:13px;font-weight:700;color:inherit}.dokon-debts a:hover{background:rgba(255,255,255,.05)}
+.dokon-debts a{display:grid;grid-template-columns:30px minmax(0,170px) minmax(40px,1fr) auto 10px;align-items:center;gap:10px;padding:7px 4px;border-radius:12px;font-size:13px;font-weight:700;color:inherit}.dokon-debts a:hover{background:rgba(255,255,255,.05)}
 .dokon-debts span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dokon-debts b{white-space:nowrap}
 .dokon-debts em{height:12px;border-radius:8px;background:rgba(255,255,255,.06);overflow:hidden}
 .dokon-debts u{display:block;height:100%;width:0;border-radius:8px;background:linear-gradient(90deg,#fb7185,#f43f5e);transition:width 1.4s cubic-bezier(.2,.8,.2,1)}.dokon-debts u.is-minus{background:#34d399}.in u{width:var(--w)}
@@ -233,7 +227,7 @@
   .hodim-back{display:inline-flex}.dokon-desk{display:none}
   .staff-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .dokon-plot{height:150px;gap:2px}.dokon-axis{gap:2px}
-  .dokon-debts a{grid-template-columns:minmax(0,70px) minmax(0,1fr) auto 10px}.dokon-debts .dokon-av{display:none}
+  .dokon-debts a{grid-template-columns:minmax(0,120px) minmax(30px,1fr) auto 10px}.dokon-debts .dokon-av{display:none}
   .dokon-donut svg,.dokon-ring svg{width:100px;height:100px}.dokon-ring>div>b{font-size:19px}
 }
 .staff-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
@@ -243,5 +237,12 @@
 .staff-card .spark{display:block;margin:8px 0 4px;opacity:1;transform:none}.staff-card .spark path{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 1.8s ease .3s}.staff-card.in .spark path{stroke-dashoffset:0}
 .staff-prog{display:block;height:6px;margin-bottom:6px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}.staff-prog u{display:block;height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,#34d399,#22d3ee);transition:width 1.5s cubic-bezier(.2,.8,.2,1) .4s}
 @media (max-width:650px){.staff-grid{grid-template-columns:minmax(0,1fr)}.staff-two{display:none}}
-@media (prefers-reduced-motion:reduce){.staff-card .spark path,.staff-prog u,.dokon-plot i,.dokon-stroke,.dokon-area,.dokon-debts u,.dokon-seg,.dokon-plot>button>span{transition:none}}
+@media (prefers-reduced-motion:reduce){.dokon-dot,.staff-card .spark path,.staff-prog u,.dokon-plot i,.dokon-stroke,.dokon-area,.dokon-debts u,.dokon-seg,.dokon-plot>button>span{transition:none}}
 .kassa>*{min-width:0;max-width:100%}
+.hodim-select-hd{display:flex;align-items:center;gap:10px;width:100%;padding:13px 14px;border:0;background:rgba(124,92,255,.14);color:#fff;font:inherit;font-size:14px;font-weight:800;text-align:left;cursor:pointer}.hodim-select-hd svg:last-child{margin-left:auto;flex:none}
+.hodim-select.is-off{opacity:.5}.hodim-select.is-off .hodim-select-hd{cursor:not-allowed;background:var(--card)}
+.hodim-select-open input{display:block;width:calc(100% - 16px);margin:8px;padding:9px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line);color:#fff;font:inherit;font-size:13px}
+.hodim-select-open [role=listbox]{max-height:240px;overflow:auto}
+.hodim-select-open [role=option]{display:flex;align-items:center;gap:10px;width:100%;padding:9px 14px;border:0;border-top:1px solid rgba(255,255,255,.05);background:none;color:#fff;font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer}.hodim-select-open [role=option] b{margin-left:auto;white-space:nowrap}
+.hodim-select-open [role=option].on,.hodim-select-open [role=option]:hover{background:rgba(124,92,255,.22)}.hodim-select-open .hodim-none{color:var(--muted)}
+.dokon-dot{position:absolute;left:50%;width:12px;height:12px;margin:0 0 -6px -6px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,.25);pointer-events:none;opacity:0;transition:opacity .6s ease .5s}.in .dokon-dot{opacity:1}

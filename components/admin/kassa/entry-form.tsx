@@ -2,10 +2,10 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, X } from "lucide-react";
+import { Camera, ChevronDown, UserRound, X } from "lucide-react";
 import { createCategoryAction, saveEntryAction } from "@/app/admin/(protected)/kassa/actions";
 import { DeleteEntryButton } from "./delete-entry";
-import { debtAfter, debtTone, EMPLOYEE_CATEGORY_ID } from "@/lib/employees/rules";
+import { debtAfter, debtTone, EMPLOYEE_CATEGORY_ID, pickableEmployees } from "@/lib/employees/rules";
 import { money, parseAmount, PAYMENTS, suggestNotes, type Currency, type EntryType, type NoteHint, type Payment } from "@/lib/kassa/rules";
 
 type Category = { id: string; name: string; type: EntryType; icon: string | null; archived?: boolean };
@@ -35,6 +35,7 @@ export function KassaEntryForm({ categories: initial, history, employees, editin
   const [addToDebt, setAddToDebt] = useState(editing?.addToDebt ?? true);
   const [picker, setPicker] = useState(false);
   const [search, setSearch] = useState("");
+  const [cursor, setCursor] = useState(0);
   const [focus, setFocus] = useState(false);
   const [newName, setNewName] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -64,10 +65,25 @@ export function KassaEntryForm({ categories: initial, history, employees, editin
   const nameOf = (id: string | null) => categories.find(category => category.id === id)?.name ?? employees.find(item => item.id === id)?.name ?? id;
   // The hodim counts only in dollars: so‘m leaves the choice off until $ comes back.
   const usd = currency === "USD", employee = usd ? employees.find(item => item.id === employeeId) : undefined;
-  const pickable = employees.filter(item => (!item.archived || item.id === employeeId) && item.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const pickable = pickableEmployees(employees, search, employeeId);
   // The debt row this entry already made counts only for its own hodim.
   const after = employee && debtAfter(employee.debt, editing?.employeeId === employee.id ? editing.debtEffect ?? 0 : 0, { type, amount: parseAmount(amount) || 0, addToDebt });
-  const pickEmployee = (id: string) => { setEmployeeId(id); setPicker(false); setSearch(""); };
+  const pickEmployee = (id: string) => { setEmployeeId(id); setPicker(false); setSearch(""); setCursor(0); };
+  // ↑↓ walk the list ("— Hodimsiz" is its last row), Enter picks, Esc closes.
+  function pickerKey(event: React.KeyboardEvent) {
+    const count = pickable.length + 1;
+    if (event.key === "ArrowDown") setCursor(value => (value + 1) % count);
+    else if (event.key === "ArrowUp") setCursor(value => (value - 1 + count) % count);
+    else if (event.key === "Enter") pickEmployee(pickable[cursor]?.id ?? "");
+    else if (event.key === "Escape") setPicker(false);
+    else return;
+    event.preventDefault();
+  }
+  // Typing on the closed select opens it and starts the search.
+  function closedKey(event: React.KeyboardEvent) {
+    if (event.key === "ArrowDown") { event.preventDefault(); setPicker(true); }
+    else if (event.key.length === 1 && event.key !== " " && !event.ctrlKey && !event.metaKey && !picker) { event.preventDefault(); setSearch(event.key); setPicker(true); }
+  }
 
   function pickType(next: EntryType) { setType(next); if (categories.find(category => category.id === categoryId)?.type !== next) setCategoryId(""); }
   function applyHint(hint: NoteHint) { setNote(hint.note); setCategoryId(hint.categoryId); setAmount(groupDigits(String(hint.amount))); setCurrency(hint.currency); setFocus(false); }
@@ -114,12 +130,14 @@ export function KassaEntryForm({ categories: initial, history, employees, editin
           : <span className="kassa-newcat"><input autoFocus maxLength={60} placeholder="Kategoriya nomi" value={newName} onChange={event => setNewName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addCategory(); } if (event.key === "Escape") setNewName(null); }}/><button type="button" className="chip" onClick={addCategory} disabled={pending}>Qo‘shish</button></span>}
       </div>
       <p className="kassa-label">Hodim (ixtiyoriy)</p>
-      <div className={`kassa-hsel${usd ? "" : " is-off"}`}>
-        <button type="button" disabled={!usd} aria-expanded={picker} onClick={() => setPicker(value => !value)}>{employee?.name ?? "Hodimni tanlang"}<span>{picker ? "▴" : "▾"}</span></button>
-        {picker && usd && <div>
-          <input type="search" placeholder="🔍 Qidirish…" aria-label="Hodimni qidirish" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }}/>
-          {pickable.map(item => <button key={item.id} type="button" className={item.id === employeeId ? "on" : undefined} onClick={() => pickEmployee(item.id)}>{item.name}<b className={debtTone(item.debt)}>{item.debt ? money(item.debt, "USD") : "0"}</b></button>)}
-          <button type="button" className="kassa-hsel-none" onClick={() => pickEmployee("")}>— Hodimsiz</button>
+      <div className={`hodim-select${usd ? "" : " is-off"}`} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setPicker(false); }}>
+        <button type="button" className="hodim-select-hd" disabled={!usd} aria-haspopup="listbox" aria-expanded={picker} onClick={() => setPicker(value => !value)} onKeyDown={closedKey}><UserRound size={18}/>{employee?.name ?? "Hodimni tanlang"}<ChevronDown size={16}/></button>
+        {picker && usd && <div className="hodim-select-open">
+          <input autoFocus type="search" role="combobox" aria-expanded aria-controls="kassa-hodimlar" aria-label="Hodimni qidirish" placeholder="🔍 Qidirish…" autoComplete="off" value={search} onChange={event => { setSearch(event.target.value); setCursor(0); }} onKeyDown={pickerKey}/>
+          <div id="kassa-hodimlar" role="listbox" aria-label="Hodimlar">
+            {pickable.map((item, index) => <button key={item.id} type="button" role="option" tabIndex={-1} aria-selected={item.id === employeeId} className={index === cursor ? "on" : undefined} onMouseDown={event => event.preventDefault()} onClick={() => pickEmployee(item.id)}><i>{item.name.charAt(0).toUpperCase()}</i>{item.name}<b className={debtTone(item.debt)}>{item.debt ? money(item.debt, "USD") : "0"}</b></button>)}
+            <button type="button" role="option" tabIndex={-1} aria-selected={!employeeId} className={`hodim-none${cursor === pickable.length ? " on" : ""}`} onMouseDown={event => event.preventDefault()} onClick={() => pickEmployee("")}>— Hodimsiz</button>
+          </div>
         </div>}
       </div>
       {!usd && <p className="kassa-hnote">Hodim hisoblari faqat dollarda</p>}

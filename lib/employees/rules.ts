@@ -38,6 +38,12 @@ export function debtTypeOf(entry: { type: EntryType; currency: Currency; employe
   return entry.type === "IN" ? "PAYMENT" : addToDebt ? "DEBT" : null;
 }
 
+/** The form's hodim list: active ones (plus the one already chosen) whose name holds the typed text. */
+export function pickableEmployees<T extends { id: string; name: string; archived: boolean }>(employees: T[], search: string, current: string) {
+  const query = search.trim().toLocaleLowerCase();
+  return employees.filter(item => (!item.archived || item.id === current) && item.name.toLocaleLowerCase().includes(query));
+}
+
 /** The form's live line: current debt without what this entry already did (`prior`), plus what it will do. */
 export function debtAfter(current: number, prior: number, entry: { type: EntryType; amount: number; addToDebt: boolean }) {
   return round(current - prior + (entry.type === "IN" ? -entry.amount : entry.addToDebt ? entry.amount : 0));

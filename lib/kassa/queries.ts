@@ -30,11 +30,10 @@ export async function getKassaLedger(from: Date, to: Date) {
   return { days: ledger(carry, flat, dayKey(from), dayKey(new Date(to.getTime() - 1))), rows: flat };
 }
 
-export type EntryFilter = { type?: EntryType; employeeId?: string; categoryId?: string; paymentType?: string; q?: string; limit?: number };
+export type EntryFilter = { type?: EntryType; categoryId?: string; paymentType?: string; q?: string; limit?: number };
 export async function getKassaEntries(from: Date, to: Date, filter: EntryFilter = {}) {
   const where: Prisma.KassaEntryWhereInput = { ...live, occurredAt: { gte: from, lt: to } };
   if (filter.type) where.type = filter.type;
-  if (filter.employeeId) where.employeeId = filter.employeeId;
   if (filter.categoryId) where.categoryId = filter.categoryId;
   if (filter.paymentType === "CASH" || filter.paymentType === "CARD" || filter.paymentType === "BANK") where.paymentType = filter.paymentType;
   if (filter.q) where.note = { contains: filter.q, mode: "insensitive" };

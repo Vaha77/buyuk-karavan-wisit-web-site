@@ -29,7 +29,7 @@ export function PeriodChips({ path, keys, on, search }: { path: string; keys: Ar
 export function DebtBars({ list }: { list: Array<{ id: string; name: string; debt: number }> }) {
   const widest = Math.max(1, ...list.map(item => Math.abs(item.debt)));
   if (!list.length) return <p className="kassa-empty">Hodim yo‘q.</p>;
-  return <Reveal className="dokon-debts">{list.map(item => <Link key={item.id} href={`/admin/kassa/hodimlar/${item.id}`}><i className="dokon-av">{item.name.charAt(0).toUpperCase()}</i><span>{item.name}</span><em><u className={item.debt < 0 ? "is-minus" : undefined} style={{ "--w": `${Math.abs(item.debt) / widest * 100}%` } as React.CSSProperties}/></em><b className={debtTone(item.debt)}>{money(item.debt, "USD")}</b>›</Link>)}</Reveal>;
+  return <Reveal className="dokon-debts">{list.map(item => <Link key={item.id} href={`/admin/kassa/hodimlar/${item.id}`}><i className="dokon-av">{item.name.charAt(0).toUpperCase()}</i><span title={item.name}>{item.name}</span><em><u className={item.debt < 0 ? "is-minus" : undefined} style={{ "--w": `${Math.abs(item.debt) / widest * 100}%` } as React.CSSProperties}/></em><b className={debtTone(item.debt)}>{money(item.debt, "USD")}</b>›</Link>)}</Reveal>;
 }
 
 /** "Hodimni tanlang ▾": name + debt, then "+ Yangi hodim qo‘shish". */

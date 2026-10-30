@@ -154,3 +154,20 @@ test("the debt total and list come from one function, biggest first; archived ho
   assert.equal(holders, 6);
   assert.deepEqual(list.map(item => item.id), ["a", "n5", "n4", "n3", "n2", "n1", "c"]);
 });
+
+test("kassa hodim select: search, Hodimdan opens it, off in so‘m, keyboard; the page has no Hodim filter, the 👤 tag stays", async () => {
+  const staff = [{ id: "a", name: "Atxamjon aka", archived: false }, { id: "j", name: "Jasur", archived: false }, { id: "o", name: "Atxam eski", archived: true }];
+  assert.deepEqual(rules.pickableEmployees(staff, "atx", "").map(item => item.id), ["a"], "search; archived are out");
+  assert.deepEqual(rules.pickableEmployees(staff, "", "o").map(item => item.id), ["a", "j", "o"], "the entry's archived hodim stays");
+  const form = await source("components/admin/kassa/entry-form.tsx"), page = await source("app/admin/(protected)/kassa/page.tsx");
+  assert.match(form, /category\.id === EMPLOYEE_CATEGORY_ID && usd\) setPicker\(true\)/);
+  assert.match(form, /<input autoFocus type="search" role="combobox"/, "focus goes to the search");
+  assert.match(form, /disabled=\{!usd\}/);
+  assert.match(form, /Hodim hisoblari faqat dollarda/);
+  assert.match(form, /— Hodimsiz/);
+  for (const key of ["ArrowDown", "ArrowUp", "Enter"]) assert.ok(form.includes(`event.key === "${key}"`), key);
+  assert.doesNotMatch(page, /name="emp"|search\.emp/);
+  assert.match(page, /name="cat"/);
+  assert.match(page, /name="pay"/);
+  assert.match(page, /<EmployeeTag /);
+});

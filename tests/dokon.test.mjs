@@ -148,3 +148,8 @@ test("the net line shares the bars' scale: bars start at the zero line, drawn in
 test("Hodimlar page: only SUPER_ADMIN", async () => {
   assert.match(await source("app/admin/(protected)/kassa/hodimlar/page.tsx"), /await requireRole\("SUPER_ADMIN"\);/);
 });
+
+test("debt list keeps long names with a title; a single month shows a dot, not a line", async () => {
+  assert.match(await source("components/admin/kassa/dokon-tabs.tsx"), /<span title=\{item\.name\}>/);
+  assert.match(await source("components/admin/kassa/dokon-charts.tsx"), /rows\.length === 1 \? <i className="dokon-dot"/);
+});

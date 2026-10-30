@@ -17,7 +17,7 @@ import { restoreEntryAction, saveOpeningAction, updateCategoryAction } from "./a
 import "@/components/admin/kassa/kassa.css";
 
 export const metadata: Metadata = { title: "Kassa — Admin | BUYUK KARAVAN" };
-type Search = { range?: string; from?: string; to?: string; type?: string; cat?: string; pay?: string; emp?: string; q?: string; edit?: string; draft?: string; bot?: string };
+type Search = { range?: string; from?: string; to?: string; type?: string; cat?: string; pay?: string; q?: string; edit?: string; draft?: string; bot?: string };
 
 const PERIODS = [{ key: "today", label: "Bugun" }, { key: "7d", label: "Hafta" }, { key: "month", label: "Oy" }] as const;
 const CURRENCY_NAMES: Record<Currency, string> = { USD: "Dollar", UZS: "So‘m" };
@@ -31,7 +31,7 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
   const type = search.type === "IN" || search.type === "OUT" ? search.type : undefined;
   const [{ days }, entries, categories, history, settings, deleted, drafts, employees] = await Promise.all([
     getKassaLedger(period.from, period.to),
-    getKassaEntries(period.from, period.to, { type, categoryId: search.cat, employeeId: search.emp, paymentType: search.pay, q: search.q?.trim().slice(0, 100) }),
+    getKassaEntries(period.from, period.to, { type, categoryId: search.cat, paymentType: search.pay, q: search.q?.trim().slice(0, 100) }),
     getKassaCategories(), getNoteHistory(), getKassaSettings(), getDeletedEntries(), getPendingDrafts(), getEmployees(),
   ]);
   const query = (patch: Partial<Search>, path = "/admin/kassa") => {
@@ -109,7 +109,6 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
           {type && <input type="hidden" name="type" value={type}/>}
           <select name="cat" defaultValue={search.cat ?? ""} aria-label="Kategoriya"><option value="">Kategoriya</option>{categories.filter(category => !type || category.type === type).map(category => <option key={category.id} value={category.id}>{category.icon} {category.name}</option>)}</select>
           <select name="pay" defaultValue={search.pay ?? ""} aria-label="To‘lov turi"><option value="">To‘lov turi</option>{Object.entries(PAYMENTS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
-          <select name="emp" defaultValue={search.emp ?? ""} aria-label="Hodim"><option value="">Hodim</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select>
           <input type="search" name="q" defaultValue={search.q} placeholder="🔍 Qidirish…" aria-label="Qidirish"/>
           <button className="chip">Filtr</button>
         </form>
