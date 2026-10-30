@@ -55,6 +55,7 @@ export function BarsChart({ rows, labels, tones, currency, area }: { rows: Chart
           <i className={tones[1]} style={{ height: `${row.b / high * 100}%`, transitionDelay: `${index * 25 + 40}ms` }}/>
         </span>
       </button>)}
+      {low < 0 && <div className="dokon-zero" style={{ bottom: `${-low / span * 100}%` }}/>}
       <svg viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden>
         <defs><linearGradient id="dokon-line" x1="0" x2="1"><stop stopColor="#7c5cff"/><stop offset="1" stopColor="#22d3ee"/></linearGradient><linearGradient id="dokon-area" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#f59e0b" stopOpacity=".28"/><stop offset="1" stopColor="#f59e0b" stopOpacity="0"/></linearGradient></defs>
         {area && <path className="dokon-area" d={`${path}L${((rows.length - .5) / rows.length * 1000).toFixed(1)} ${floor.toFixed(1)}L${(500 / rows.length).toFixed(1)} ${floor.toFixed(1)}Z`} fill="url(#dokon-area)"/>}
@@ -69,7 +70,7 @@ export function BarsChart({ rows, labels, tones, currency, area }: { rows: Chart
 const COLORS = ["#7c5cff", "#22d3ee", "#f59e0b", "#fb7185", "#34d399"];
 type Part = { name: string; value: number; pct: number };
 
-function Donut({ parts }: { parts: Part[] }) {
+export function Donut({ parts }: { parts: Part[] }) {
   return <Reveal className="dokon-donut">
     <svg viewBox="0 0 150 150" aria-hidden><circle cx="75" cy="75" r="58" stroke="rgba(255,255,255,.07)" pathLength={100}/>{parts.map((part, index) => {
       const style = { "--d": part.pct, strokeDashoffset: -parts.slice(0, index).reduce((sum, item) => sum + item.pct, 0) } as React.CSSProperties;

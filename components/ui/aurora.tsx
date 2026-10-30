@@ -51,13 +51,13 @@ export function StatCounter({ value, prefix = "", suffix = "", className }: { va
 export const formatCount = (value: number) => Math.round(value).toLocaleString("en-US").replace(/,/g, " ");
 
 /** Line drawn with stroke-dashoffset on reveal. Needs ≥ 2 values. */
-export function Sparkline({ values, className, height = 34 }: { values: number[]; className?: string; height?: number }) {
+export function Sparkline({ values, className, height = 34, stroke = "url(#spark-g)" }: { values: number[]; className?: string; height?: number; stroke?: string }) {
   if (values.length < 2) return null;
   const max = Math.max(...values), min = Math.min(...values), span = max - min || 1, step = 120 / (values.length - 1);
   const d = values.map((v, i) => `${i ? "L" : "M"}${(i * step).toFixed(1)} ${(height - 3 - ((v - min) / span) * (height - 6)).toFixed(1)}`).join(" ");
   return <svg className={cx("spark rv", className)} viewBox={`0 0 120 ${height}`} preserveAspectRatio="none" style={{ width: "100%", height, "--len": 1 } as CSSProperties} aria-hidden="true">
     <defs><linearGradient id="spark-g" x1="0" x2="1"><stop stopColor="#7c5cff"/><stop offset="1" stopColor="#22d3ee"/></linearGradient></defs>
-    <path d={d} pathLength={1} stroke="url(#spark-g)" strokeWidth="2.5" fill="none" vectorEffect="non-scaling-stroke"/>
+    <path d={d} pathLength={1} stroke={stroke} strokeWidth="2.5" fill="none" vectorEffect="non-scaling-stroke"/>
   </svg>;
 }
 

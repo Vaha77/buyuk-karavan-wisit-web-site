@@ -1,7 +1,7 @@
 // Do‘kon Dashboard and hodim statistics, pure (tests/dokon.test.mjs). Input is what the kassa and hodim queries already return; USD and UZS never mix.
 import { dayKey } from "../dashboard/period";
-import { debtOf, type DebtRow } from "../employees/rules";
-import { addDays, round, type Currency, type EntryType, type LedgerDay } from "../kassa/rules";
+import { debtOf, paidToday, type DebtRow } from "../employees/rules";
+import { addDays, ledger, round, type Currency, type EntryType, type LedgerDay, type LedgerRow } from "../kassa/rules";
 
 export type ChartRow = { label: string; full: string; a: number; b: number; line: number };
 const MONTHS = ["yan", "fev", "mar", "apr", "may", "iyn", "iyl", "avg", "sen", "okt", "noy", "dek"];
@@ -24,13 +24,20 @@ export function kassaChart(days: LedgerDay[], currency: Currency): ChartRow[] {
   return [...months.values()];
 }
 
-/** Chiqim by category: top 4 + "Boshqa", biggest first, with shares. */
+/** Kirim / chiqim days without the "Statistikaga kirmasin" categories. Only for flows: a balance always comes from the full ledger. */
+export const statsDays = (rows: Array<LedgerRow & { categoryId: string }>, excluded: Set<string>, fromDay: string, toDay: string) => ledger({ USD: 0, UZS: 0 }, rows.filter(row => !excluded.has(row.categoryId)), fromDay, toDay);
+
+/** Top 4 + the rest, biggest first, with shares; a part that rounds to 0% is not shown. */
+function topParts(sorted: Array<{ name: string; value: number }>, restName: string) {
+  const total = sorted.reduce((sum, part) => sum + part.value, 0), rest = sorted.slice(4).reduce((sum, part) => sum + part.value, 0);
+  return [...sorted.slice(0, 4), ...(rest ? [{ name: restName, value: rest }] : [])].map(part => ({ name: part.name, value: round(part.value), pct: total ? Math.round(part.value / total * 100) : 0 })).filter(part => part.pct > 0);
+}
+
+/** Chiqim by category: top 4 + "Boshqa", one currency. */
 export function spendByCategory(rows: Array<{ type: EntryType; currency: Currency; amount: number; categoryId: string }>, currency: Currency, names: Record<string, string>) {
   const sums = new Map<string, number>();
   for (const row of rows) if (row.type === "OUT" && row.currency === currency) sums.set(row.categoryId, (sums.get(row.categoryId) ?? 0) + row.amount);
-  const sorted = [...sums].sort((a, b) => b[1] - a[1]), total = sorted.reduce((sum, [, value]) => sum + value, 0), rest = sorted.slice(4).reduce((sum, [, value]) => sum + value, 0);
-  const parts = [...sorted.slice(0, 4).map(([id, value]) => ({ name: names[id] ?? "—", value })), ...(rest ? [{ name: "Boshqa", value: rest }] : [])];
-  return parts.map(part => ({ name: part.name, value: round(part.value), pct: total ? Math.round(part.value / total * 100) : 0 }));
+  return topParts([...sums].sort((a, b) => b[1] - a[1]).map(([id, value]) => ({ name: names[id] ?? "—", value })), "Boshqa");
 }
 
 /** ± against the previous period; null when there is nothing to compare with. */
@@ -70,4 +77,18 @@ export function employeeStats<T extends DebtRow & { kassaEntryId?: string | null
     average: given.length ? round(givenSum / given.length) : 0,
     months, recent: inRange.slice(-5).reverse(),
   };
+}
+
+/** The Hodimlar page: active hodimlar only; the debt line, cards and shares all run through employeeStats / debtOf. */
+export function staffStats<E extends { id: string; name: string; position: string | null; archived: boolean; debt: number }, T extends DebtRow & { employeeId: string; kassaEntryId?: string | null; note: string }>(employees: E[], rows: T[], range: { from?: Date; to?: Date } = {}, now = new Date()) {
+  const active = employees.filter(item => !item.archived), ids = new Set(active.map(item => item.id)), live = rows.filter(row => ids.has(row.employeeId));
+  const payers = new Set(live.filter(row => row.type === "PAYMENT" && dayKey(row.occurredAt) === dayKey(now)).map(row => row.employeeId));
+  const months: string[] = [];
+  for (let key = monthKey(new Date(now.getTime() - 335 * 86_400_000)); months.length < 12; key = nextMonth(key)) months.push(key);
+  const cards = active.map(item => {
+    const own = live.filter(row => row.employeeId === item.id), trend = months.map(key => debtOf(own.filter(row => monthKey(row.occurredAt) <= key)));
+    return { id: item.id, name: item.name, position: item.position, debt: item.debt, trend, rising: trend[11] > trend[0], pct: employeeStats(own, {}, now).pct };
+  });
+  const owing = active.filter(item => item.debt > 0).sort((a, b) => b.debt - a.debt).map(item => ({ name: item.name, value: item.debt }));
+  return { sums: employeeStats(live, range, now), today: { ...paidToday(live, now), people: payers.size }, parts: topParts(owing, "Boshqalar"), cards };
 }

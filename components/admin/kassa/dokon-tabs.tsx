@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronDown, UserRound } from "lucide-react";
 import { Chip, ChipGroup } from "@/components/ui/aurora";
+import { Reveal } from "./dokon-charts";
 import { debtTone } from "@/lib/employees/rules";
 import { money } from "@/lib/kassa/rules";
 
@@ -22,6 +23,13 @@ export function PeriodChips({ path, keys, on, search }: { path: string; keys: Ar
     </ChipGroup>
     {on === "davr" && <form className="kassa-range"><input type="hidden" name="p" value="davr"/><input type="date" name="from" defaultValue={search.from} aria-label="Dan"/><span>—</span><input type="date" name="to" defaultValue={search.to} aria-label="Gacha"/><button className="chip">Ko‘rsatish</button></form>}
   </div>;
+}
+
+/** "Kimda qancha qarz": biggest first, the biggest = 100%; a minus is green. */
+export function DebtBars({ list }: { list: Array<{ id: string; name: string; debt: number }> }) {
+  const widest = Math.max(1, ...list.map(item => Math.abs(item.debt)));
+  if (!list.length) return <p className="kassa-empty">Hodim yo‘q.</p>;
+  return <Reveal className="dokon-debts">{list.map(item => <Link key={item.id} href={`/admin/kassa/hodimlar/${item.id}`}><i className="dokon-av">{item.name.charAt(0).toUpperCase()}</i><span>{item.name}</span><em><u className={item.debt < 0 ? "is-minus" : undefined} style={{ "--w": `${Math.abs(item.debt) / widest * 100}%` } as React.CSSProperties}/></em><b className={debtTone(item.debt)}>{money(item.debt, "USD")}</b>›</Link>)}</Reveal>;
 }
 
 /** "Hodimni tanlang ▾": name + debt, then "+ Yangi hodim qo‘shish". */

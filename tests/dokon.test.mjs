@@ -7,7 +7,7 @@ register("./ts-resolve.mjs", import.meta.url);
 const stats = await import("../lib/dokon/stats.ts");
 const kassa = await import("../lib/kassa/rules.ts");
 const access = await import("../lib/auth/seller-access.ts");
-const source = file => readFile(new URL(`../${file}`, import.meta.url), "utf8");
+const source = async file => (await readFile(new URL(`../${file}`, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const zero = { USD: 0, UZS: 0 };
 const at = (local, type, currency, amount, categoryId = "c") => ({ type, currency, amount, categoryId, occurredAt: new Date(`${local}+05:00`) });
 const debt = (local, type, amount, kassaEntryId = null) => ({ type, amount, kassaEntryId, note: type, occurredAt: new Date(`${local}+05:00`) });
@@ -96,5 +96,55 @@ test("only SUPER_ADMIN; no new table; charts stay plain SVG/CSS and respect redu
   assert.doesNotMatch(charts, /from "(recharts|chart\.js|d3)/);
   assert.match(charts, /IntersectionObserver/);
   assert.match(charts, /prefers-reduced-motion/);
-  assert.match(css, /prefers-reduced-motion:reduce\)\{\.dokon-plot i/);
+  assert.match(css, /prefers-reduced-motion:reduce\)\{[^}]*\.dokon-plot i/);
+});
+
+const staff = [{ id: "a", name: "Atham", position: null, archived: false, debt: 1500 }, { id: "j", name: "Jasur", position: "Omborchi", archived: false, debt: 300 }, { id: "o", name: "Old", position: null, archived: true, debt: 900 }];
+const row = (employeeId, local, type, amount) => ({ employeeId, ...debt(local, type, amount) });
+const staffRows = [row("a", "2026-08-01T10:00", "OPENING", 2000), row("a", "2026-10-30T09:00", "PAYMENT", 500), row("j", "2026-10-01T10:00", "DEBT", 300), row("o", "2026-09-01T10:00", "DEBT", 900)];
+
+test("Hodimlar stats: debt = olgan − bergan, equal to the sum of the hodim pages; archived are out; the line ends at the debt", () => {
+  const { sums, today, cards, parts } = stats.staffStats(staff, staffRows, {}, NOW);
+  assert.deepEqual([sums.taken, sums.takenCount, sums.given, sums.givenCount], [2300, 2, 500, 1]);
+  assert.equal(sums.taken - sums.given, 1800);
+  assert.equal(sums.debt, 1800);
+  assert.equal(sums.months.at(-1).line, 1800);
+  assert.equal(sums.debt, ["a", "j"].reduce((sum, id) => sum + stats.employeeStats(staffRows.filter(item => item.employeeId === id), {}, NOW).debt, 0), "the hodim pages add up to it");
+  assert.deepEqual(today, { sum: 500, count: 1, people: 1 });
+  assert.deepEqual(cards.map(card => [card.id, card.pct, card.trend.length, card.trend.at(-1), card.rising]), [["a", 25, 12, 1500, true], ["j", 0, 12, 300, true]]);
+  assert.deepEqual(parts.map(part => [part.name, part.pct]), [["Atham", 83], ["Jasur", 17]]);
+  const empty = stats.staffStats([], [], {}, NOW);
+  assert.deepEqual([empty.sums.pct, empty.sums.months, empty.parts, empty.cards], [0, [], [], []]);
+  const falling = stats.staffStats(staff, [row("a", "2025-01-01T10:00", "DEBT", 100), row("a", "2026-10-01T10:00", "PAYMENT", 100)], {}, NOW);
+  assert.equal(falling.cards[0].rising, false);
+});
+
+test("donut: no 0% parts; shares stay inside one currency", () => {
+  const rows = [at("2026-10-27T10:00", "OUT", "USD", 100000, "a"), at("2026-10-27T10:00", "OUT", "USD", 1, "b"), at("2026-10-27T10:00", "OUT", "UZS", 500, "b")];
+  assert.deepEqual(stats.spendByCategory(rows, "USD", { a: "A", b: "B" }).map(part => part.name), ["A"]);
+  assert.deepEqual(stats.spendByCategory(rows, "UZS", { a: "A", b: "B" }).map(part => [part.name, part.pct]), [["B", 100]]);
+});
+
+test("excludeFromStats: out of kirim / chiqim, chart and donut; the balance still counts it; so‘m sums stay apart", async () => {
+  const rows = [at("2026-10-27T10:00", "IN", "USD", 100, "sale"), at("2026-10-27T11:00", "OUT", "USD", 40, "boss"), at("2026-10-27T12:00", "IN", "UZS", 700, "sale"), at("2026-10-27T13:00", "OUT", "UZS", 90, "boss")];
+  const flow = stats.statsDays(rows, new Set(["boss"]), "2026-10-27", "2026-10-27");
+  assert.deepEqual([flow[0].USD.in, flow[0].USD.out, flow[0].UZS.in, flow[0].UZS.out], [100, 0, 700, 0]);
+  const full = kassa.ledger(zero, rows, "2026-10-27", "2026-10-27");
+  assert.deepEqual([full[0].USD.end, full[0].UZS.end], [60, 610], "balance unchanged");
+  const page = await source("app/admin/(protected)/dokon/page.tsx");
+  assert.match(page, /usd = totals\(days, "USD"\), uzs = totals\(days, "UZS"\)/, "balance from the full ledger");
+  assert.match(page, /kassaChart\(flow, currency\), parts: spendByCategory\(counted, currency, names\)/);
+  assert.match(page, /inOutUzs\.in/);
+  assert.match(await readFile(new URL("../prisma/migrations/20261105090000_kassa_category_exclude_stats/migration.sql", import.meta.url), "utf8"), /DEFAULT false;\s*$/, "no category is marked by the migration");
+});
+
+test("the net line shares the bars' scale: bars start at the zero line, drawn inside the plot", async () => {
+  const css = await source("components/admin/kassa/kassa.css"), charts = await source("components/admin/kassa/dokon-charts.tsx");
+  assert.match(css, /\.dokon-plot>button\{[^}]*align-items:flex-start/, "not centred: the bars' zero is the line's zero");
+  assert.match(css, /\.dokon-plot svg\{[^}]*overflow:hidden/);
+  assert.match(charts, /low < 0 && <div className="dokon-zero"/);
+});
+
+test("Hodimlar page: only SUPER_ADMIN", async () => {
+  assert.match(await source("app/admin/(protected)/kassa/hodimlar/page.tsx"), /await requireRole\("SUPER_ADMIN"\);/);
 });

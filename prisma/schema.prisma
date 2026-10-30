@@ -1766,6 +1766,8 @@ model KassaCategory {
   icon      String?      @db.VarChar(8)
   sortOrder Int          @default(0)
   archived  Boolean      @default(false)
+  // Left out of the dashboard's kirim / chiqim and donut; balances always count every entry.
+  excludeFromStats Boolean @default(false)
   entries   KassaEntry[]
   drafts    KassaDraft[]
 }

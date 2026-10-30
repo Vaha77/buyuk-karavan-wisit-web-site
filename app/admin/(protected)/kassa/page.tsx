@@ -150,6 +150,7 @@ export default async function KassaPage({ searchParams }: { searchParams: Promis
           <Pill tone={category.type === "IN" ? "ok" : "red"}>{category.type === "IN" ? "Kirim" : "Chiqim"}</Pill>
           <input name="name" defaultValue={category.name} maxLength={60} aria-label="Nomi" required/>
           <label><input type="checkbox" name="archived" defaultChecked={category.archived}/> arxiv</label>
+          <label><input type="checkbox" name="excludeFromStats" defaultChecked={category.excludeFromStats}/> Statistikaga kirmasin</label>
           <span>{category.uses} ta</span>
           <button className="chip">Saqlash</button>
         </form>)}

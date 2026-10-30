@@ -56,7 +56,7 @@ export async function updateCategoryAction(form: FormData) {
   await requireRole("SUPER_ADMIN");
   const id = String(form.get("id") ?? ""), name = String(form.get("name") ?? "").trim();
   if (!id || !name || name.length > 60) return;
-  await getDb().kassaCategory.update({ where: { id }, data: { name, archived: form.get("archived") === "on" } });
+  await getDb().kassaCategory.update({ where: { id }, data: { name, archived: form.get("archived") === "on", excludeFromStats: form.get("excludeFromStats") === "on" } });
   revalidatePath("/admin/kassa", "layout");
 }
 
