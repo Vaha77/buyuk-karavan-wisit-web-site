@@ -52,30 +52,70 @@ export function employeeRange(params: { p?: string; from?: string; to?: string }
   return {};
 }
 
+export type DebtPoint = { label: string; full: string; a: number; b: number; line: number; today: boolean };
+export type DebtUnit = "day" | "week" | "month";
+const dayMs = 86_400_000, dayText = (day: string) => day.split("-").reverse().join(".");
+const daysBetween = (from: string, to: string) => Math.round((new Date(to).getTime() - new Date(from).getTime()) / dayMs) + 1;
+
+/** Olgan (a = DEBT), bergan (b = PAYMENT) and the debt line per bucket. OPENING is never a bar: it is the line's base, so the last point is the current debt. */
+function debtPoints(rows: Array<{ day: string; type: DebtRow["type"]; amount: number }>, buckets: Array<{ from: string; to: string; label: string; full: string }>, opening: number, today: string): DebtPoint[] {
+  const flows = rows.filter(row => row.type !== "OPENING");
+  const sum = (type: DebtRow["type"], from: string, to: string) => round(flows.filter(row => row.type === type && row.day >= from && row.day <= to).reduce((total, row) => total + row.amount, 0));
+  return buckets.map(({ from, to, label, full }) => ({ label, full, a: sum("DEBT", from, to), b: sum("PAYMENT", from, to), line: round(opening + debtOf(flows.filter(row => row.day <= to))), today: today >= from && today <= to }));
+}
+
+/** The chart's three views. Empty buckets stay on the axis; a short range is padded so no bar stands alone. Hammasi in days = the last 30. */
+export function debtChart<T extends DebtRow>(rows: T[], range: { from?: Date; to?: Date } = {}, now = new Date()) {
+  const dated = rows.map(row => ({ day: dayKey(row.occurredAt), type: row.type, amount: row.amount })).sort((a, b) => a.day < b.day ? -1 : 1);
+  const opening = round(dated.filter(row => row.type === "OPENING").reduce((sum, row) => sum + row.amount, 0)), today = dayKey(now);
+  const last = range.to ? dayKey(new Date(range.to.getTime() - 1)) : [today, dated.at(-1)?.day ?? today].sort()[1];
+  const first = range.from ? dayKey(range.from) : dated[0]?.day ?? today, span = Math.max(1, daysBetween(first, last));
+  const dayCount = Math.min(92, Math.max(7, range.from ? span : 30));
+  const day = Array.from({ length: dayCount }, (_, index) => { const key = addDays(last, index - dayCount + 1); return { from: key, to: key, label: String(Number(key.slice(8))), full: dayText(key) }; });
+  const weekCount = Math.min(60, Math.max(8, Math.ceil(span / 7)));
+  const week = Array.from({ length: weekCount }, (_, index) => { const to = addDays(last, (index - weekCount + 1) * 7), from = addDays(to, -6); return { from, to, label: `${index + 1}-hafta`, full: `${dayText(from)} — ${dayText(to)}` }; });
+  const lastMonth = last.slice(0, 7), keys = [first.slice(0, 7)];
+  while (keys.at(-1)! < lastMonth) keys.push(nextMonth(keys.at(-1)!));
+  while (keys.length < 6) { const [year, month] = keys[0].split("-").map(Number); keys.unshift(month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, "0")}`); }
+  const month = keys.map(key => ({ from: `${key}-01`, to: `${key}-31`, ...monthRow(key) }));
+  const inRange = dated.filter(row => row.day >= first && row.day <= last);
+  const auto: DebtUnit = span <= 62 || new Set(inRange.map(row => row.day.slice(0, 7))).size <= 1 ? "day" : span <= 186 ? "week" : "month";
+  return { opening, auto, series: { day: debtPoints(dated, day, opening, today), week: debtPoints(dated, week, opening, today), month: debtPoints(dated, month, opening, today) } };
+}
+
+const nice = (value: number) => { const power = 10 ** Math.floor(Math.log10(value)), part = value / power; return (part <= 1 ? 1 : part <= 2 ? 2 : part <= 5 ? 5 : 10) * power; };
+/** Left axis: round values from 0 covering the bars. */
+export function barAxis(max: number) {
+  const step = nice((max || 100) / 4), count = Math.ceil((max || 100) / step);
+  return Array.from({ length: count + 1 }, (_, index) => index * step);
+}
+/** Right axis: fits the debt's own range, so the line never lies flat against an axis that starts at 0. */
+export function debtAxis(values: number[]) {
+  const low = Math.min(...values), high = Math.max(...values), step = nice((high - low || Math.max(Math.abs(high) * .1, 100)) / 4);
+  const from = high === low ? Math.floor(low / step) * step - 2 * step : Math.floor(low / step) * step, to = high === low ? from + 4 * step : Math.ceil(high / step) * step;
+  return Array.from({ length: Math.round((to - from) / step) + 1 }, (_, index) => from + index * step);
+}
+/** "$64k" for the right axis. */
+export const shortUsd = (value: number) => `${value < 0 ? "−" : ""}$${Math.abs(value) >= 1000 ? `${round(Math.abs(value) / 1000)}k` : Math.abs(value)}`;
+
 /** Everything the statistics block shows. Rows are all live rows of one hodim; the debt line always counts from the first row, so its last point is the debt. */
 export function employeeStats<T extends DebtRow & { kassaEntryId?: string | null; note: string }>(rows: T[], range: { from?: Date; to?: Date } = {}, now = new Date()) {
   const sorted = [...rows].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
   const inRange = sorted.filter(row => (!range.from || row.occurredAt >= range.from) && (!range.to || row.occurredAt < range.to));
-  const taken = inRange.filter(row => row.type !== "PAYMENT"), given = inRange.filter(row => row.type === "PAYMENT");
+  // "Olgan" is DEBT only: OPENING is the starting debt, shown on its own.
+  const taken = inRange.filter(row => row.type === "DEBT"), given = inRange.filter(row => row.type === "PAYMENT"), opened = inRange.filter(row => row.type === "OPENING");
   const sum = (list: T[]) => round(list.reduce((total, row) => total + row.amount, 0));
-  const takenSum = sum(taken), givenSum = sum(given), month = monthKey(now);
-  const months: ChartRow[] = [];
-  if (sorted.length) {
-    const lastRow = inRange.at(-1), end = range.to ? monthKey(new Date(range.to.getTime() - 1)) : [month, lastRow ? monthKey(lastRow.occurredAt) : month].sort()[1];
-    for (let key = monthKey(range.from ?? sorted[0].occurredAt); key <= end; key = nextMonth(key)) {
-      const of = (list: T[]) => sum(list.filter(row => monthKey(row.occurredAt) === key));
-      months.push({ ...monthRow(key), a: of(taken), b: of(given), line: debtOf(sorted.filter(row => monthKey(row.occurredAt) <= key)) });
-    }
-  }
+  const takenSum = sum(taken), givenSum = sum(given), openedSum = sum(opened), owed = round(openedSum + takenSum), month = monthKey(now);
   return {
     since: sorted[0]?.occurredAt ?? null,
-    taken: takenSum, takenCount: taken.length, given: givenSum, givenCount: given.length,
+    opening: openedSum, taken: takenSum, takenCount: taken.length, given: givenSum, givenCount: given.length,
     debt: debtOf(sorted), monthChange: debtOf(sorted.filter(row => monthKey(row.occurredAt) === month)),
     lastPayment: sorted.findLast(row => row.type === "PAYMENT") ?? null,
-    pct: takenSum ? Math.min(100, Math.round(givenSum / takenSum * 100)) : 0,
-    left: Math.max(0, round(takenSum - givenSum)),
+    // Repaid share of everything owed, the starting debt included.
+    pct: owed ? Math.min(100, Math.round(givenSum / owed * 100)) : 0,
+    left: Math.max(0, round(owed - givenSum)),
     average: given.length ? round(givenSum / given.length) : 0,
-    months, recent: inRange.slice(-5).reverse(),
+    recent: inRange.slice(-5).reverse(),
   };
 }
 
@@ -90,5 +130,5 @@ export function staffStats<E extends { id: string; name: string; position: strin
     return { id: item.id, name: item.name, position: item.position, debt: item.debt, trend, rising: trend[11] > trend[0], pct: employeeStats(own, {}, now).pct };
   });
   const owing = active.filter(item => item.debt > 0).sort((a, b) => b.debt - a.debt).map(item => ({ name: item.name, value: item.debt }));
-  return { sums: employeeStats(live, range, now), today: { ...paidToday(live, now), people: payers.size }, parts: topParts(owing, "Boshqalar"), cards };
+  return { sums: employeeStats(live, range, now), chart: debtChart(live, range, now), today: { ...paidToday(live, now), people: payers.size }, parts: topParts(owing, "Boshqalar"), cards };
 }

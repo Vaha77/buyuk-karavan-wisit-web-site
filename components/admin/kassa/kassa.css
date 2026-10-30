@@ -212,7 +212,6 @@
 .dokon-plot svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden}
 .dokon-zero{position:absolute;left:0;right:0;border-top:1px dashed rgba(255,255,255,.3);pointer-events:none}
 .dokon-stroke{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 2.2s ease .5s}.in .dokon-stroke{stroke-dashoffset:0}
-.dokon-area{opacity:0;transition:opacity 1s ease 1.4s}.in .dokon-area{opacity:1}
 .dokon-tip{position:absolute;top:0;transform:translateX(-50%);width:150px;z-index:3;display:grid;gap:2px;padding:8px 10px;border-radius:10px;background:rgba(18,18,30,.97);border:1px solid var(--line);font-size:11.5px;color:#cfd2e2;pointer-events:none}
 .dokon-axis{display:flex;gap:4px;margin-top:6px;font-size:10px;color:var(--muted)}.dokon-axis span{flex:1;min-width:0;white-space:nowrap;text-align:center;overflow:visible}
 .dokon-debts a{display:grid;grid-template-columns:30px minmax(0,170px) minmax(40px,1fr) auto 10px;align-items:center;gap:10px;padding:7px 4px;border-radius:12px;font-size:13px;font-weight:700;color:inherit}.dokon-debts a:hover{background:rgba(255,255,255,.05)}
@@ -265,3 +264,32 @@
 }
 .kassa-main{display:flex;flex-direction:column;gap:14px;min-width:0}.kassa-main .kassa-bal dl{grid-template-columns:repeat(3,minmax(0,1fr))}.kassa-main .kassa-bal dd{white-space:normal;font-size:13px}
 @media (max-width:1000px){.kassa-main{gap:10px}}
+/* DebtChart (Claude outputs/hodimlar_grafik_maket.html): keyframes, so a Kun / Hafta / Oy switch (a remount) redraws */
+.debt-units{display:flex;background:rgba(255,255,255,.05);border-radius:10px;padding:3px;flex:none}.debt-units button{padding:5px 12px;border:0;border-radius:8px;background:none;color:var(--muted);font:inherit;font-size:12px;font-weight:700;cursor:pointer}.debt-units .on{background:var(--g);color:#fff}
+.debt-phone{display:none}
+.debt-sums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}.debt-sums>div{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.04);font-size:11.5px;color:var(--muted);min-width:0}.debt-sums b{display:block;margin-top:2px;font-size:16px;font-weight:800;color:#fff;overflow-wrap:anywhere}.debt-sums .debt-gold{color:#f59e0b}
+.debt-gold-key{background:#f59e0b;height:3px!important;vertical-align:middle}
+.dokon-legend .debt-a,.debt-a{background:linear-gradient(180deg,#fb7185,#e11d48)}.dokon-legend .debt-b,.debt-b{background:linear-gradient(180deg,#34d399,#059669)}
+.debt-plot{position:relative;display:flex;gap:3px;height:280px;margin:18px 54px 26px}
+.debt-yl,.debt-yr{position:absolute;top:0;bottom:0;width:50px;font-size:10.5px;color:var(--muted)}.debt-yl{left:-56px}.debt-yr{right:-56px;color:#f59e0b}
+.debt-yl span,.debt-yr span{position:absolute;transform:translateY(50%);white-space:nowrap}.debt-yl span{right:0}.debt-yr span{left:0}
+.debt-grid{position:absolute;left:0;right:0;border-top:1px dashed rgba(255,255,255,.07);pointer-events:none}
+.debt-plot>button{position:relative;flex:1;min-width:0;height:100%;padding:0;border:0;border-radius:6px;background:none;cursor:pointer;display:flex;align-items:flex-end;justify-content:center;gap:2px}
+.debt-plot>button.is-today{background:rgba(255,255,255,.05)}.debt-plot>button:hover,.debt-plot>button:focus-visible{background:rgba(255,255,255,.07);outline:0}
+.debt-plot>button>i{width:42%;max-width:12px;border-radius:4px 4px 1px 1px;transform:scaleY(0);transform-origin:bottom}
+.debt-plot>button>em{position:absolute;left:50%;bottom:-20px;transform:translateX(-50%);font-style:normal;font-size:10px;color:var(--muted);white-space:nowrap}
+.debt-plot svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden}
+.debt-stroke{stroke-dasharray:1;stroke-dashoffset:1}.debt-fill,.debt-dot{opacity:0}
+.debt-dot{position:absolute;width:9px;height:9px;margin:0 0 -4.5px -4.5px;border-radius:50%;background:#f59e0b;box-shadow:0 0 10px 2px rgba(245,158,11,.7);pointer-events:none}
+.debt-opening{position:absolute;left:0;right:0;border-top:2px dashed rgba(245,158,11,.55);pointer-events:none}.debt-opening b{position:absolute;left:8px;top:-24px;padding:2px 8px;border-radius:6px;background:rgba(20,16,8,.8);font-size:11px;color:#f59e0b;white-space:nowrap}
+.debt-tip{position:absolute;top:0;width:170px;transform:translateX(-50%);z-index:3;display:grid;gap:2px;padding:10px 12px;border-radius:12px;background:rgba(15,15,25,.95);border:1px solid rgba(255,255,255,.1);font-size:12px;color:#cfd2e2;pointer-events:none}.debt-tip span{display:flex;justify-content:space-between;gap:12px}.debt-tip u{text-decoration:none;font-weight:700;color:#fff;white-space:nowrap}
+.in .debt-plot>button>i{transform:none;animation:debt-grow 1s cubic-bezier(.2,.9,.25,1.15) backwards}
+.in .debt-stroke{stroke-dashoffset:0;animation:debt-draw 1.8s ease .6s backwards}
+.in .debt-fill{opacity:1;animation:debt-fade .8s ease 1.4s backwards}.in .debt-dot{opacity:1;animation:debt-fade .4s ease 2.2s backwards}
+@keyframes debt-grow{from{transform:scaleY(0)}}@keyframes debt-draw{from{stroke-dashoffset:1}}@keyframes debt-fade{from{opacity:0}}
+@media (max-width:650px){
+  .debt-week,.debt-sums,.debt-yl,.debt-yr,.debt-opening b{display:none}
+  .debt-phone{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;margin-top:6px;font-size:12.5px;color:var(--muted)}.debt-phone b{color:#fff;font-weight:800}.debt-phone span{margin-left:auto}
+  .debt-plot{height:170px;margin:14px 0 24px;gap:1px}
+}
+@media (prefers-reduced-motion:reduce){.debt-plot *{animation:none!important}}

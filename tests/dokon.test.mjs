@@ -56,18 +56,17 @@ test("± change: none without a previous value", () => {
   assert.equal(stats.pctChange(90, 0), null);
 });
 
-test("hodim stats: olgan − bergan = debt; the line's last point = debt; % right", () => {
+test("hodim stats: opening + olgan − bergan = debt; % right", () => {
   const rows = [debt("2026-08-10T10:00", "OPENING", 300), debt("2026-09-10T10:00", "DEBT", 700), debt("2026-09-20T10:00", "PAYMENT", 250), debt("2026-10-30T09:00", "PAYMENT", 250, "k1")];
   const all = stats.employeeStats(rows, {}, NOW);
-  assert.equal(all.taken - all.given, all.debt);
+  assert.equal(all.opening + all.taken - all.given, all.debt);
+  assert.deepEqual([all.opening, all.taken], [300, 700], "olgan is DEBT only");
   assert.equal(all.debt, 500);
-  assert.deepEqual([all.takenCount, all.givenCount, all.pct, all.left, all.average, all.monthChange], [2, 2, 50, 500, 250, -250]);
-  assert.deepEqual(all.months.map(({ full, a, b, line }) => [full, a, b, line]), [["avg 2026", 300, 0, 300], ["sen 2026", 700, 250, 750], ["okt 2026", 0, 250, 500]]);
-  assert.equal(all.months.at(-1).line, all.debt);
+  assert.deepEqual([all.takenCount, all.givenCount, all.pct, all.left, all.average, all.monthChange], [1, 2, 50, 500, 250, -250]);
   assert.equal(all.lastPayment.kassaEntryId, "k1");
   assert.equal(all.recent[0].kassaEntryId, "k1", "newest first");
   const month = stats.employeeStats(rows, stats.employeeRange({ p: "oy" }, NOW), NOW);
-  assert.deepEqual([month.taken, month.given, month.debt, month.months.length, month.months[0].line], [0, 250, 500, 1, 500], "a period narrows the sums, never the debt");
+  assert.deepEqual([month.taken, month.given, month.debt], [0, 250, 500], "a period narrows the sums, never the debt");
 });
 
 test("no division by zero: nothing taken or nothing paid", () => {
@@ -76,7 +75,7 @@ test("no division by zero: nothing taken or nothing paid", () => {
   const takenOnly = stats.employeeStats([debt("2026-10-01T10:00", "DEBT", 50)], {}, NOW);
   assert.deepEqual([takenOnly.pct, takenOnly.average, takenOnly.lastPayment], [0, 0, null]);
   const empty = stats.employeeStats([], {}, NOW);
-  assert.deepEqual([empty.pct, empty.debt, empty.months, empty.since], [0, 0, [], null]);
+  assert.deepEqual([empty.pct, empty.debt, empty.since], [0, 0, null]);
 });
 
 test("the Oy / Yil / Davr chips follow the Tashkent calendar", () => {
@@ -99,22 +98,69 @@ test("only SUPER_ADMIN; no new table; charts stay plain SVG/CSS and respect redu
   assert.match(css, /prefers-reduced-motion:reduce\)\{[^}]*\.dokon-plot i/);
 });
 
+test("debt chart: OPENING is no bar; the line starts from it; the last point is the debt; empty days are 0; Tashkent days", () => {
+  const rows = [debt("2026-10-30T09:00", "OPENING", 5000), debt("2026-10-27T23:59", "DEBT", 100), debt("2026-10-28T00:00", "PAYMENT", 40)];
+  const chart = stats.debtChart(rows, {}, NOW);
+  assert.equal(chart.opening, 5000);
+  for (const series of Object.values(chart.series)) {
+    assert.equal(series.reduce((sum, row) => sum + row.a, 0), 100, "OPENING is not in the bars");
+    assert.equal(series.at(-1).line, 5060);
+  }
+  const days = chart.series.day, find = full => days.find(row => row.full === full);
+  assert.equal(days.length, 30, "Hammasi: the last 30 days");
+  assert.equal(days[0].line, 5000, "the line starts from OPENING even before its date");
+  assert.deepEqual([find("27.10.2026").a, find("27.10.2026").b, find("28.10.2026").a, find("28.10.2026").b], [100, 0, 0, 40]);
+  assert.deepEqual([find("29.10.2026").a, find("29.10.2026").b, find("29.10.2026").line], [0, 0, 5060], "an empty day stays on the axis");
+  assert.equal(days.filter(row => row.today).length, 1);
+  assert.ok(chart.series.week.length >= 8 && chart.series.month.length >= 6, "no lone bar");
+});
+
+test("Kun / Hafta / Oy default", () => {
+  const span = (from, extra = []) => stats.debtChart([debt(from, "DEBT", 1), ...extra], {}, NOW).auto;
+  assert.equal(span("2026-10-01T10:00"), "day");
+  assert.equal(span("2026-09-01T10:00", [debt("2026-10-29T10:00", "DEBT", 1)]), "day", "≤ 62 days");
+  assert.equal(span("2026-06-01T10:00", [debt("2026-10-29T10:00", "DEBT", 1)]), "week", "≤ 6 months");
+  assert.equal(span("2025-01-01T10:00", [debt("2026-10-29T10:00", "DEBT", 1)]), "month");
+  assert.equal(span("2025-01-01T10:00"), "day", "all data in one month");
+  assert.equal(stats.debtChart([], stats.employeeRange({ p: "yil" }, NOW), NOW).auto, "day", "no data");
+});
+
+test("axes: round left values from 0; the right axis fits the debt, also when it stays flat", () => {
+  assert.deepEqual(stats.barAxis(1800), [0, 500, 1000, 1500, 2000]);
+  assert.deepEqual(stats.barAxis(0), [0, 50, 100]);
+  const right = stats.debtAxis([64000, 66500]);
+  assert.ok(right[0] > 0 && right[0] <= 64000 && right.at(-1) >= 66500);
+  const flat = stats.debtAxis([64000, 64000]);
+  assert.ok(flat[0] < 64000 && flat.at(-1) > 64000);
+  assert.equal(stats.shortUsd(64000), "$64k");
+  assert.equal(stats.shortUsd(-500), "−$500");
+});
+
+test("both pages use the one DebtChart; the card's Jami olgan is DEBT with the opening under it", async () => {
+  for (const file of ["app/admin/(protected)/kassa/hodimlar/page.tsx", "app/admin/(protected)/kassa/hodimlar/[id]/page.tsx"]) {
+    const page = await source(file);
+    assert.match(page, /<DebtChart key=\{p\}/, file);
+    assert.match(page, /boshlang‘ich<\/small>/, file);
+    assert.doesNotMatch(page, /BarsChart/, file);
+  }
+});
+
 const staff = [{ id: "a", name: "Atham", position: null, archived: false, debt: 1500 }, { id: "j", name: "Jasur", position: "Omborchi", archived: false, debt: 300 }, { id: "o", name: "Old", position: null, archived: true, debt: 900 }];
 const row = (employeeId, local, type, amount) => ({ employeeId, ...debt(local, type, amount) });
 const staffRows = [row("a", "2026-08-01T10:00", "OPENING", 2000), row("a", "2026-10-30T09:00", "PAYMENT", 500), row("j", "2026-10-01T10:00", "DEBT", 300), row("o", "2026-09-01T10:00", "DEBT", 900)];
 
 test("Hodimlar stats: debt = olgan − bergan, equal to the sum of the hodim pages; archived are out; the line ends at the debt", () => {
-  const { sums, today, cards, parts } = stats.staffStats(staff, staffRows, {}, NOW);
-  assert.deepEqual([sums.taken, sums.takenCount, sums.given, sums.givenCount], [2300, 2, 500, 1]);
-  assert.equal(sums.taken - sums.given, 1800);
+  const { sums, chart, today, cards, parts } = stats.staffStats(staff, staffRows, {}, NOW);
+  assert.deepEqual([sums.opening, sums.taken, sums.takenCount, sums.given, sums.givenCount], [2000, 300, 1, 500, 1]);
+  assert.equal(sums.opening + sums.taken - sums.given, 1800);
   assert.equal(sums.debt, 1800);
-  assert.equal(sums.months.at(-1).line, 1800);
+  for (const unit of ["day", "week", "month"]) assert.equal(chart.series[unit].at(-1).line, 1800, unit);
   assert.equal(sums.debt, ["a", "j"].reduce((sum, id) => sum + stats.employeeStats(staffRows.filter(item => item.employeeId === id), {}, NOW).debt, 0), "the hodim pages add up to it");
   assert.deepEqual(today, { sum: 500, count: 1, people: 1 });
   assert.deepEqual(cards.map(card => [card.id, card.pct, card.trend.length, card.trend.at(-1), card.rising]), [["a", 25, 12, 1500, true], ["j", 0, 12, 300, true]]);
   assert.deepEqual(parts.map(part => [part.name, part.pct]), [["Atham", 83], ["Jasur", 17]]);
   const empty = stats.staffStats([], [], {}, NOW);
-  assert.deepEqual([empty.sums.pct, empty.sums.months, empty.parts, empty.cards], [0, [], [], []]);
+  assert.deepEqual([empty.sums.pct, empty.parts, empty.cards], [0, [], []]);
   const falling = stats.staffStats(staff, [row("a", "2025-01-01T10:00", "DEBT", 100), row("a", "2026-10-01T10:00", "PAYMENT", 100)], {}, NOW);
   assert.equal(falling.cards[0].rising, false);
 });

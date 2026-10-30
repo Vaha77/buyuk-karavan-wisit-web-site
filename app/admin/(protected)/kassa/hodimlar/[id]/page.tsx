@@ -4,14 +4,14 @@ import { notFound } from "next/navigation";
 import { ChevronLeft, Download, Pencil } from "lucide-react";
 import { GhostButton, GlassCard, Pill } from "@/components/ui/aurora";
 import { DeleteEntryButton, KassaUndoToast } from "@/components/admin/kassa/delete-entry";
-import { BarsChart, Count, Reveal } from "@/components/admin/kassa/dokon-charts";
+import { Count, DebtChart, Reveal } from "@/components/admin/kassa/dokon-charts";
 import { DokonTabs, PeriodChips } from "@/components/admin/kassa/dokon-tabs";
 import { DebtSheet, EmployeeSheet } from "@/components/admin/kassa/hodim-forms";
 import { requireRole } from "@/lib/auth/require-admin";
 import { getDebtEntries, getEmployees } from "@/lib/employees/queries";
 import { debtTone, paidToday, withBalance } from "@/lib/employees/rules";
 import { dayKey } from "@/lib/dashboard/period";
-import { employeeRange, employeeStats } from "@/lib/dokon/stats";
+import { debtChart, employeeRange, employeeStats } from "@/lib/dokon/stats";
 import { money } from "@/lib/kassa/rules";
 import { deleteDebtEntryAction, restoreDebtEntryAction } from "../actions";
 import "@/components/admin/kassa/kassa.css";
@@ -28,7 +28,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
   const here = `/admin/kassa/hodimlar/${id}`, paid = paidToday(entries), rows = withBalance(entries);
   const editing = search.entry ? entries.find(row => row.id === search.entry && !row.kassaEntryId) : undefined;
   const notes = [...new Set(entries.map(row => row.note))].slice(-30);
-  const p = ["oy", "yil", "davr"].includes(search.p ?? "") ? search.p! : "hammasi", stats = employeeStats(entries, employeeRange(search));
+  const p = ["oy", "yil", "davr"].includes(search.p ?? "") ? search.p! : "hammasi", range = employeeRange(search), stats = employeeStats(entries, range);
   return <div className="kassa">
     <DokonTabs on="hodimlar"/>
     <Link className="hodim-back" href="/admin/kassa/hodimlar"><ChevronLeft size={14}/> Hodimlar</Link>
@@ -44,12 +44,12 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     {entries.length === 0 ? <p className="kassa-empty">Hali qarz yozilmagan</p> : <>
       <PeriodChips path={here} keys={[["oy", "Oy"], ["yil", "Yil"], ["hammasi", "Hammasi"]]} on={p} search={search}/>
       <div className="dokon-cards">
-        <div className="glass kassa-bal"><span>Jami olgan</span><Count value={stats.taken} currency="USD" className="is-debt"/><small>{stats.takenCount} marta</small></div>
+        <div className="glass kassa-bal"><span>Jami olgan</span><Count value={stats.taken} currency="USD" className="is-debt"/><small>{stats.takenCount} marta · + {money(stats.opening, "USD")} boshlang‘ich</small></div>
         <div className="glass kassa-bal"><span>Jami bergan</span><Count value={stats.given} currency="USD" className="is-over"/><small>{stats.givenCount} marta</small></div>
         <div className="glass kassa-bal dokon-desk"><span>Hozirgi qarz</span><Count value={stats.debt} currency="USD" className={debtTone(stats.debt)}/><small>{money(stats.monthChange, "USD", true)} shu oy</small></div>
         <div className="glass kassa-bal dokon-desk"><span>Oxirgi to‘lov</span>{stats.lastPayment ? <><b>{money(stats.lastPayment.amount, "USD")}</b><small>{dayKey(stats.lastPayment.occurredAt).split("-").reverse().join(".")}{stats.lastPayment.kassaEntryId && " · kassadan"}</small></> : <b>—</b>}</div>
       </div>
-      <section className="glass dokon-box"><h2>Oylar bo‘yicha: olgan va bergan</h2><Reveal className="dokon-reveal"><BarsChart rows={stats.months} labels={["Olgan", "Bergan", "Qarz qoldig‘i"]} tones={["col-out", "col-in"]} currency="USD" area/></Reveal></section>
+      <DebtChart key={p} title="Oylar bo‘yicha: olgan va bergan" chart={debtChart(entries, range)} debt={stats.debt} label={{ oy: "Oy", yil: "Yil", hammasi: "Hammasi", davr: "Davr" }[p] ?? "Hammasi"} taken={stats.taken} given={stats.given}/>
       <div className="dokon-two">
         <section className="glass dokon-box"><h2>Qarzni qaytarishi</h2><Reveal className="dokon-ring"><div><svg viewBox="0 0 150 150" aria-hidden><circle cx="75" cy="75" r="62" pathLength={100} stroke="rgba(255,255,255,.07)"/><circle className="dokon-seg" cx="75" cy="75" r="62" pathLength={100} stroke="#34d399" style={{ "--d": stats.pct } as React.CSSProperties}/></svg><Count value={stats.pct}/></div><ul><li>Bergan<b>{money(stats.given, "USD")}</b></li><li>Qolgan<b>{money(stats.left, "USD")}</b></li><li>O‘rtacha to‘lov<b>{money(stats.average, "USD")}</b></li></ul></Reveal></section>
         <section className="glass dokon-box dokon-desk"><h2>Oxirgi harakatlar</h2>{stats.recent.length ? stats.recent.map(row => <div key={row.id} className="dokon-line"><span>{row.note}{row.kassaEntryId && " · 🧾 kassadan"}</span><b className={row.type === "PAYMENT" ? "amt-in" : "amt-out"}>{money(row.type === "PAYMENT" ? -row.amount : row.amount, "USD", true)}</b></div>) : <p className="kassa-empty">Bu davrda yozuv yo‘q.</p>}</section>
