@@ -34,14 +34,23 @@ Turlar:
 Ham narx, ham boshqa savol bo'lsa — PRICE. Shubhada salbiyroq turni tanla (NEGATIVE > QUESTION > POSITIVE).
 Faqat JSON qaytar.`;
 
-/** AI comment kind, or null (no key / error / timeout). */
-export async function classifyWithAi(comment: string, brand: string): Promise<{ kind: Exclude<CommentKind, "UNKNOWN" | "PHONE" | "ADDRESS" | "HOURS">; usage: AiUsage } | null> {
+const classificationAsks = classification.extend({ asks: z.array(z.enum(["address", "phone", "price", "other"])) });
+const ASKS_PROMPT = `\nasks: komment nimani so'rayapti — address (manzil), phone (telefon raqami), price (narx), boshqa bo'lsa other. "Qaydan topding" kabi gap manzil so'rash emas.`;
+
+/** AI comment kind (with `withAsks` also what it asks for), or null (no key / error / timeout). */
+export async function classifyWithAi(comment: string, brand: string, withAsks = false): Promise<{ kind: Exclude<CommentKind, "UNKNOWN" | "PHONE" | "ADDRESS" | "HOURS">; asks: string[]; usage: AiUsage } | null> {
   const openai = client();
   if (!openai) return null;
   try {
-    const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 40, input: [{ role: "system", content: classifyPrompt(brand) }, { role: "user", content: `Komment: ${JSON.stringify(comment.slice(0, 600))}` }], text: { format: zodTextFormat(classification, "comment_kind") } });
+    const input = (prompt: string) => [{ role: "system" as const, content: prompt }, { role: "user" as const, content: `Komment: ${JSON.stringify(comment.slice(0, 600))}` }];
+    if (withAsks) {
+      const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 80, input: input(classifyPrompt(brand) + ASKS_PROMPT), text: { format: zodTextFormat(classificationAsks, "comment_kind_asks") } });
+      const parsed = response.output_parsed;
+      return parsed ? { kind: parsed.kind, asks: parsed.asks, usage: usageOf(response) } : null;
+    }
+    const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 40, input: input(classifyPrompt(brand)), text: { format: zodTextFormat(classification, "comment_kind") } });
     const kind = response.output_parsed?.kind;
-    return kind ? { kind, usage: usageOf(response) } : null;
+    return kind ? { kind, asks: [], usage: usageOf(response) } : null;
   } catch (error) {
     console.warn("Instagram AI classify failed", safe(error));
     return null;

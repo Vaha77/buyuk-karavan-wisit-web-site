@@ -14,7 +14,7 @@ import { GraphError, getMediaPermalink, listComments, listMedia, refreshLongLive
 import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComments } from "./ingest";
 import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { notifyNegative } from "./telegram";
-import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
+import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
 /** The account connected before multi-account (Buyuk Karavan): its rows were migrated with this id. */
 export const FIRST_ACCOUNT_ID = "global";
@@ -116,10 +116,11 @@ type Outcome = "sent" | "failed" | "skipped" | "notified" | "retry" | "rate-limi
 
 /** Keywords first; when they are unclear the AI decides; without the AI the keyword fallback, else UNKNOWN (no reply). */
 async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage }> {
-  const keywords = classifyByKeywords(comment.text, rule?.keywords ?? [], { contact: account.contactRepliesEnabled });
-  if (keywords.definite) return { kind: keywords.definite, by: "KEYWORD", usage: { tokens: 0, costUsd: 0 } };
-  const ai = await classifyWithAi(comment.text, accountBrand(account));
-  if (ai) return { kind: ai.kind, by: "AI", usage: ai.usage };
+  const keywords = classifyByKeywords(comment.text, rule?.keywords ?? [], { contact: account.contactRepliesEnabled, asks: account.aiReplyAll });
+  // aiReplyAll: a keyword QUESTION still goes to the AI, which may find an address / phone / price ask.
+  if (keywords.definite && !(account.aiReplyAll && keywords.definite === "QUESTION")) return { kind: keywords.definite, by: "KEYWORD", usage: { tokens: 0, costUsd: 0 } };
+  const ai = await classifyWithAi(comment.text, accountBrand(account), account.aiReplyAll);
+  if (ai) return { kind: (ai.kind === "QUESTION" && kindFromAsks(ai.asks)) || ai.kind, by: "AI", usage: ai.usage };
   return { kind: keywords.fallback ?? "UNKNOWN", by: "KEYWORD_FALLBACK", usage: { tokens: 0, costUsd: 0 } };
 }
 

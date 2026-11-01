@@ -129,7 +129,7 @@ test("eshikmaster: AI answers every other comment (1–2 sentences, own prompt);
   assert.doesNotMatch(em.phoneDmTemplate + em.hoursDmTemplate, /narx/i, "no price talk unless price was asked");
   assert.doesNotMatch(Object.values(em).join(" "), /\{ishVaqti\}/);
   assert.match(em.aiPrompt, /Narx va ish vaqtini HECH QACHON yozma/);
-  assert.equal(em.questionReplyText, "Ma'lumotni Direct'ga yubordik");
+  assert.equal(em.questionReplyText, "Ma'lumotni Direct'ga yubordik 📩");
   assert.deepEqual([em.leadsEnabled, em.directEnabled, em.negativeNotify], [false, false, false]);
   assert.equal(rules.aiReplyProblem("Rahmat, juda xursandmiz! Sizni kutib qolamiz."), null, "two sentences allowed");
   assert.equal(rules.validPositiveReply("Rahmat, juda xursandmiz! Sizni kutib qolamiz.", "Zo'r eshiklar"), false, "Buyuk Karavan: still one");
@@ -176,6 +176,33 @@ test("eshikmaster: emoji-only and short comments get a reply; a banned reply is 
   // One reply per person per post and the spam / negative / reply-comment rules stay before the AI.
   const em = { priceEnabled: true, positiveEnabled: true, questionEnabled: true, negativeNotify: false, dailyReplyLimit: 150, aiReplyAll: true };
   assert.equal(rules.chooseAction("POSITIVE", em, { rule: null, alreadyAnswered: true, repliesToday: 0, generalReplyEnabled: false }).type, "skip");
+});
+
+test("eshikmaster: dialect and misspelt address / phone / price asks are one Direct + the Direct public reply", async () => {
+  const { ESHIKMASTER_PRESET: em } = await import("../lib/instagram/constants.ts");
+  const settings = { ...em, dailyReplyLimit: 150 };
+  const context = { rule: null, alreadyAnswered: false, repliesToday: 0, generalReplyEnabled: false };
+  const kindOf = text => rules.classifyByKeywords(text, [], { contact: true, asks: true }).definite;
+  for (const [text, kind, type] of [["qayda shixona nechpul", "PRICE", "price"], ["Nechpul manzil qayerda", "PRICE", "price"], ["Aka manzil qayda telfon nomir tashvrsi", "ADDRESS", "contact"], ["adres qatta oka", "ADDRESS", "contact"], ["Манзил кайда ака", "ADDRESS", "contact"], ["сколько стоит, где находитесь", "PRICE", "price"], ["Hizmati nech pul", "PRICE", "price"], ["Mazil qayda nomer nichchi", "ADDRESS", "contact"], ["No‘merizni tashlang", "PHONE", "contact"], ["Telefonn bormi", "PHONE", "contact"], ["Катта ака", "ADDRESS", "contact"]]) {
+    assert.equal(kindOf(text), kind, text);
+    const action = rules.chooseAction(kind, settings, context);
+    assert.equal(action.type, type, text);
+    assert.equal(action.publicReply, true, `${text}: public reply goes with the Direct`);
+  }
+  assert.match(em.noPriceDmTemplate, /Narxni telefon orqali aniqlab oling[\s\S]*\+998[\s\S]*maps\.app/, "price: the extra line, phone and map");
+  assert.doesNotMatch(em.addressDmTemplate, /Narx/, "no price line unless asked");
+  assert.match(em.addressDmTemplate, /\+998[\s\S]*maps\.app/);
+
+  for (const text of ["Miyyani qaydan topkansz", "qayta keldim", "Катта рахмат", "Katta rahmat", "telegramga yozing"]) assert.deepEqual(rules.askedAbout(text), [], text);
+  assert.equal(kindOf("🔥🔥"), "POSITIVE");
+  assert.equal(kindOf("Manzil qayda? aldov ekan"), null, "a negative word: no Direct by keywords, the AI decides");
+  assert.equal(rules.kindFromAsks(["other"]), null, "AI asks: nothing to send");
+  for (const [asks, kind] of [[["address"], "ADDRESS"], [["phone"], "PHONE"], [["price", "address"], "PRICE"]]) assert.equal(rules.kindFromAsks(asks), kind);
+
+  const service = await read("../lib/instagram/service.ts");
+  assert.match(service, /asks: account\.aiReplyAll/, "only aiReplyAll accounts");
+  assert.match(service, /ai\.kind === "QUESTION" && kindFromAsks\(ai\.asks\)/, "AI question → the same Direct flow");
+  assert.equal(rules.classifyByKeywords("Manzil qayerda?").definite, "QUESTION", "Buyuk Karavan: without `asks` as before");
 });
 
 test("Buyuk Karavan: the strict check, 3 tries and its prompt are unchanged", async () => {

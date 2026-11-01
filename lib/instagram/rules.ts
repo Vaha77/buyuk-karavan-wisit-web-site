@@ -225,6 +225,42 @@ const CONTACT: Record<ContactKind, RegExp> = {
   ADDRESS: /(?:^|[^\p{L}])(?:adres|manzil|qayerda|qaerda|lokatsiya|lokatsa|адрес|манзил|где|локац|қаерда|каерда)/u,
   HOURS: /ish vaqt|ish grafik|soat nechada|nechada ochil|nechagacha|qachon kel|kelsak|kelsam|режим работы|график работы|часы работы|во сколько|когда (?:можно )?(?:прийти|приехать|подойти)/u,
 };
+// aiReplyAll accounts (@eshikmaster): dialect and misspelt asks. No "qayda" among the fuzzy words: "qaydan", "qayta" are one letter away.
+const ASK_STEMS = {
+  address: ["manzil", "mazil", "manzl", "adres", "aderes", "joy qayer", "joyingiz", "sexona", "sehxona", "shixona", "sixona", "ustaxona", "masterskoy", "локац", "адрес", "манзил"],
+  phone: ["telefon", "telfon", "nomer", "nomir", "no'mer", "raqam", "номер", "телефон", "рақам"],
+  price: ["narx", "narh", "qancha", "нарх", "канча", "қанча", "сколько", "цена"],
+};
+const ASK_WORDS = {
+  address: ["qayda", "qayerda", "qaerda", "qayrda", "qatta", "qatda", "qerda", "kayda", "kaerda", "қаерда", "каерда", "кайда", "қайда", "қатта", "где"],
+  phone: ["tel", "тел"],
+  price: ["puli"],
+};
+const PRICE_PHRASES = ["nechpul", "nichpul", "nichchipul", "нечпул", "хизматинеч"];
+const ASK_FUZZY = { address: ["manzil", "adres", "sehxona", "ustaxona", "манзил", "адрес"], phone: ["telefon", "nomer", "raqam", "телефон", "номер", "рақам"], price: ["qancha", "канча", "қанча", "цена"] };
+const ASK_KEYS = ["address", "phone", "price"] as const;
+export type Ask = (typeof ASK_KEYS)[number];
+
+function withinOneEdit(a: string, b: string) {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  while (i < a.length && a[i] === b[i]) i++;
+  return a.slice(i + 1) === b.slice(i + 1) || a.slice(i) === b.slice(i + 1) || a.slice(i + 1) === b.slice(i);
+}
+
+/** What a comment asks for, by the word lists; the first letter must match for a typo to count. */
+export function askedAbout(comment: string): Ask[] {
+  const text = normalizeText(comment), words = text.split(/[^\p{L}\p{N}']+/u).filter(Boolean);
+  const asks = ASK_KEYS.filter(key => ASK_STEMS[key].some(stem => text.includes(stem)) || words.some(word => (ASK_WORDS[key] as string[]).includes(word) || (word.length >= 4 && ASK_FUZZY[key].some(item => item[0] === word[0] && withinOneEdit(word, item)))));
+  // "катта" is also "big" ("катта рахмат"): "where" only at the end or before an address form.
+  if (!asks.includes("address") && words.some((word, index) => word === "катта" && (index === words.length - 1 || ["ака", "ока", "ука", "уста"].includes(words[index + 1])))) asks.push("address");
+  if (!asks.includes("price") && PRICE_PHRASES.some(phrase => text.replace(/\s+/g, "").includes(phrase))) asks.push("price");
+  return asks;
+}
+
+/** Any mix of asks is one Direct: with price the template that has the price line, else the contact one. */
+export const kindFromAsks = (asks: readonly string[]): CommentKind | null => asks.includes("price") ? "PRICE" : asks.includes("address") ? "ADDRESS" : asks.includes("phone") ? "PHONE" : null;
+
 const hasLetters = (value: string) => /\p{L}/u.test(value);
 const hasEmoji = (value: string) => /\p{Extended_Pictographic}/u.test(value);
 const containsWord = (text: string, words: readonly string[]) => words.some(word => text.includes(word));
@@ -236,10 +272,14 @@ const containsWord = (text: string, words: readonly string[]) => words.some(word
  * With `contact` (the account answers contact questions), a phone / address / working-hours question that is not also
  * price, spam or negative is that contact kind.
  */
-export function classifyByKeywords(comment: string, priceKeywords: readonly string[] = [], options: { contact?: boolean } = {}) {
+export function classifyByKeywords(comment: string, priceKeywords: readonly string[] = [], options: { contact?: boolean; asks?: boolean } = {}) {
   const text = normalizeText(comment);
   const matched = new Set<ClassKind>();
   if (!text) return { definite: null, fallback: null, matched: [] as ClassKind[] };
+  if (options.asks && !SPAM.some(pattern => pattern.test(text)) && !containsWord(text, NEGATIVE) && !NEGATIVE_EMOJI.test(text)) {
+    const kind = kindFromAsks(askedAbout(text));
+    if (kind) return { definite: kind, fallback: kind, matched: [] as ClassKind[] };
+  }
   if (options.contact) {
     const contact = (Object.keys(CONTACT) as ContactKind[]).filter(kind => CONTACT[kind].test(text));
     // "?" alone is a price signal for symbol-only comments, never for "telefon?".

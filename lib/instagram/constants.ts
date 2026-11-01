@@ -21,7 +21,7 @@ const withLine = (line: string) => ESHIKMASTER_DM.replace("\n", `\n${line}\n`);
 export const ESHIKMASTER_PRESET = {
   label: "Eshik Master", brandName: "Eshik Master", phone: "+998 91 185 30 23", mapLink: "https://maps.app.goo.gl/1hSXYLYgBBeAgEZh6",
   contactRepliesEnabled: true, phoneDmTemplate: ESHIKMASTER_DM, addressDmTemplate: ESHIKMASTER_DM, hoursDmTemplate: withLine("Ish vaqtini telefon orqali aniqlab oling."), noPriceDmTemplate: withLine("Narxni telefon orqali aniqlab oling."),
-  questionReplyText: "Ma'lumotni Direct'ga yubordik", priceEnabled: true, positiveEnabled: true, questionEnabled: true, negativeNotify: false,
+  questionReplyText: "Ma'lumotni Direct'ga yubordik 📩", priceEnabled: true, positiveEnabled: true, questionEnabled: true, negativeNotify: false,
   aiReplyAll: true, leadsEnabled: false, directEnabled: false,
   aiPrompt: `Sen Eshik Master Instagram sahifasi nomidan kommentga javob yozasan.
 Qoidalar:
