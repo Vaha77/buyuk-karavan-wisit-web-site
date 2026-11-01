@@ -1,1 +1,11 @@
 @AGENTS.md
+
+## Git ish tartibi (har vazifa)
+- master'ga to'g'ridan-to'g'ri push qilinmaydi.
+- Har vazifa alohida branch: `feat/<qisqa-nom>` yoki `fix/<qisqa-nom>`.
+- Ish tugagach: testlar, tsc, lint, build yashil → `git push -u origin <branch>` → `gh pr create` (sarlavha + qisqa tavsif: nima o'zgardi, testlar soni).
+- Vercel preview deploy "Ready" bo'lishini kut (`gh pr checks --watch`), xato bo'lsa tuzat.
+- Keyin `gh pr merge --squash --delete-branch` (yoki merge commit), master'ni `git pull` qil.
+- Hisobotda: PR raqami/havolasi va master'dagi commit hash.
+- Bir vazifada bir nechta mustaqil qism bo'lsa — har biri alohida PR (sun'iy bo'lak qilma).
+- Commit'larda `Co-authored-by:` qatori faqat haqiqatan birga ishlagan, GitHub akkaunti bor odam uchun yoziladi (men aytsam).
