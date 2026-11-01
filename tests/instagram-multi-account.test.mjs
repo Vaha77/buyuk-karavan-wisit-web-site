@@ -158,6 +158,10 @@ test("eshikmaster: emoji-only and short comments get a reply; a banned reply is 
   for (const [reply, reason] of [["Narxi juda arzon", "narx"], ["Biz bilan bog'laning +998911853023", "raqam"], ["Saytimizga kiring eshikmaster.uz", "havola"], ["Ko'ring https://x.co", "havola"], ["Yozing @eshikmaster", "@belgi"], ["Ish vaqtimizni bilib oling", "ish vaqti"], ["Telefon orqali bog'laning", "telefon raqami"], ["🔥🔥", "matnsiz javob"]]) assert.equal(rules.aiReplyProblem(reply), reason, reply);
   for (const fine of ["Сумка emas, eshik! Оценка uchun rahmat", "Somon yo'li kabi ajoyib 🔥🔥"]) assert.equal(rules.aiReplyProblem(fine), null, fine);
 
+  for (const reply of ["Sizga chegirma bor", "Скидка есть", "Sizga skidka qilamiz", "Maslahat bepul", "Kafolat beramiz", "Va'da beramiz", "Sizga va‘da beraman"]) assert.equal(rules.aiReplyProblem(reply), "chegirma, bepul, kafolat yoki va'da", reply);
+  assert.equal(rules.aiReplyProblem("Rahmat, kelgan vaqtingizda sizni kutamiz"), null, "ordinary words pass");
+  for (const draft of ["Rahmat, e'tiboringiz biz uchun qadrli! 🔥", "Qo'llab-quvvatlaganingiz uchun katta rahmat! 🙏", "Olqishingiz uchun rahmat, ishimizga kuch berdi! 👏", "Rahmat, baho berganingizdan xursandmiz! 🔥"]) assert.equal(rules.aiReplyProblem(draft), null, draft);
+
   const run = async answers => {
     const seen = [];
     const result = await rules.firstGoodReply(2, async rejected => { seen.push(rejected); return answers.shift(); }, rules.aiReplyProblem);
@@ -166,6 +170,7 @@ test("eshikmaster: emoji-only and short comments get a reply; a banned reply is 
   assert.deepEqual(await run(["Rahmat! 🔥🔥"]), { reply: "Rahmat! 🔥🔥", reason: "", seen: [""] }, "emoji-only comment: first reply goes out");
   assert.deepEqual(await run(["Narxi arzon", "Rahmat, omad! 🔥"]), { reply: "Rahmat, omad! 🔥", reason: "", seen: ["", "narx"] }, "retried, told why");
   assert.deepEqual(await run(["Narxi arzon", "Yozing @eshikmaster", "Rahmat"]), { reply: null, reason: "@belgi", seen: ["", "narx"] }, "only one retry, no fixed text, last reason");
+  assert.deepEqual(await run(["Sizga chegirma bor", "Rahmat, omad! 🔥"]), { reply: "Rahmat, omad! 🔥", reason: "", seen: ["", "chegirma, bepul, kafolat yoki va'da"] }, "banned word: asked again");
   assert.deepEqual(await run(["", ""]), { reply: null, reason: "bo‘sh javob", seen: ["", "bo‘sh javob"] });
 
   // One reply per person per post and the spam / negative / reply-comment rules stay before the AI.

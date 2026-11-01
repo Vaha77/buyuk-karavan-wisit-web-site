@@ -347,6 +347,7 @@ const AI_REPLY_BANS: Array<[RegExp, string]> = [
   [/narx|нарх|(?<!\p{L})цен|стоимост|price|(?<!\p{L})so['‘’ʻ]m|(?<!\p{L})сўм|(?<!\p{L})(?:som|сум)(?!\p{L})|dollar|доллар|\$/iu, "narx"],
   [/ish vaqt|ish grafik|иш вақт|(?<!\p{L})soat|соат|режим работы|график работы|часы работы|время работы/iu, "ish vaqti"],
   [/telefon|телефон|raqam|номер|nomer/iu, "telefon raqami"],
+  [/chegirma|чегирма|skidka|скидк|bepul|бепул|бесплат|kafolat|кафолат|гарант|(?<!\p{L})va['‘’ʻ]?da|ваъда|обеща/iu, "chegirma, bepul, kafolat yoki va'da"],
 ];
 
 /** Why an aiReplyAll account's AI reply cannot go out, or null. Emoji and "!" are free; 300 = the cut in the public reply. */
