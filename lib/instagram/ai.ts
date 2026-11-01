@@ -5,7 +5,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { CommentKind } from "./constants";
-import { aiCostUsd, tooSimilar, validPositiveReply } from "./rules";
+import { aiCostUsd, aiReplyProblem, firstGoodReply, isShortComment, tooSimilar, validPositiveReply } from "./rules";
 
 const DEFAULT_MODEL = "gpt-4.1-mini";
 export const instagramModel = () => process.env.OPENAI_INSTAGRAM_MODEL?.trim() || DEFAULT_MODEL;
@@ -62,25 +62,30 @@ Qoidalar:
 Faqat JSON qaytar: {"reply": "..."}`;
 
 /**
- * A fresh public reply for a POSITIVE comment; rewritten (up to 3 tries) when invalid or similar to one of the last 20
- * replies. null when the AI is unavailable or never produced a usable reply — then no reply goes out.
+ * A fresh public reply for a POSITIVE comment; rewritten when invalid or similar to one of the last 20 replies (3 tries;
+ * `relaxed`, the aiReplyAll accounts: 2 tries, only aiReplyProblem's bans). null when the AI is unavailable; `reply: null`
+ * with the `reason` when it never produced a usable reply — then no reply goes out.
  */
-export async function writePositiveReply(comment: string, recent: string[], brand: string, options: { prompt?: string | null; sentences?: number } = {}): Promise<{ reply: string | null; usage: AiUsage } | null> {
+export async function writePositiveReply(comment: string, recent: string[], brand: string, options: { prompt?: string | null; relaxed?: boolean } = {}): Promise<{ reply: string | null; usage: AiUsage; reason: string } | null> {
   const openai = client();
   if (!openai) return null;
   let usage = ZERO;
   const avoid = [...recent];
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 120, temperature: 1, input: [{ role: "system", content: options.prompt?.trim() || replyPrompt(brand) }, { role: "user", content: `Oldingi javoblar: ${JSON.stringify(avoid.slice(-20))}\nKomment: ${JSON.stringify(comment.slice(0, 600))}` }], text: { format: zodTextFormat(positiveReply, "positive_reply") } });
+  const relaxed = options.relaxed === true;
+  // shortcut: the door-master context is hard-coded, as @eshikmaster is the only aiReplyAll account; move it to the account when another joins.
+  const hint = relaxed && isShortComment(comment) ? `\nKomment faqat emoji yoki 1–2 so'zdan iborat: ${brand} (avto eshik regulirovkasi ustasi) nomidan o'zbek tilida qisqa, samimiy javob yoz.` : "";
+  try {
+    const result = await firstGoodReply(relaxed ? 2 : 3, async rejected => {
+      const retry = relaxed && rejected ? `\nOldingi javobing rad etildi (${rejected}). Boshqacha javob yoz.` : "";
+      const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 120, temperature: 1, input: [{ role: "system", content: options.prompt?.trim() || replyPrompt(brand) }, { role: "user", content: `Oldingi javoblar: ${JSON.stringify(avoid.slice(-20))}\nKomment: ${JSON.stringify(comment.slice(0, 600))}${hint}${retry}` }], text: { format: zodTextFormat(positiveReply, "positive_reply") } });
       usage = addUsage(usage, usageOf(response));
       const reply = response.output_parsed?.reply?.trim() ?? "";
-      if (validPositiveReply(reply, comment, options.sentences) && !tooSimilar(reply, recent)) return { reply, usage };
       if (reply) avoid.push(reply);
-    } catch (error) {
-      console.warn("Instagram AI reply failed", safe(error));
-      return usage.tokens ? { reply: null, usage } : null;
-    }
+      return reply;
+    }, reply => (relaxed ? aiReplyProblem(reply) : validPositiveReply(reply, comment) ? null : "qoidaga mos emas") ?? (tooSimilar(reply, recent) ? "oldingi javobga o‘xshash" : null));
+    return { ...result, usage };
+  } catch (error) {
+    console.warn("Instagram AI reply failed", safe(error));
+    return usage.tokens ? { reply: null, usage, reason: `AI xatosi (${safe(error).type})` } : null;
   }
-  return { reply: null, usage };
 }

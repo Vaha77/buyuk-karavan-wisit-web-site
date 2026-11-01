@@ -322,16 +322,49 @@ export const parseVariants = (input: string | string[]) => [...new Set((Array.is
 const emojiCount = (value: string) => [...value.matchAll(/\p{Extended_Pictographic}/gu)].length;
 const FORBIDDEN = /\d|narx|нарх|цен|price|so['‘’ʻ]?m|сўм|сум|\$|chegirma|чегирма|skidka|скидк|aksiya|акци|bepul|бесплат|tekin|va'?da|обеща|kafolat|гарант|%/i;
 
-/** A POSITIVE reply from the AI: `sentences` (1–2) sentence(s), 3–12 words each at most, no price / promise / discount, at most one emoji (exactly one if the comment had emoji). */
-export function validPositiveReply(reply: string, comment: string, sentences = 1) {
+const letterWords = (value: string) => value.replace(/\p{Extended_Pictographic}|️|‍/gu, " ").split(/\s+/).filter(word => /[\p{L}]/u.test(word));
+
+/** A POSITIVE reply from the AI: one sentence, 3–12 words, no price / promise / discount, at most one emoji (exactly one if the comment had emoji). */
+export function validPositiveReply(reply: string, comment: string) {
   const text = reply.trim();
-  if (!text || text.length > 160 * sentences || /\n/.test(text)) return false;
-  const words = text.replace(/\p{Extended_Pictographic}|️|‍/gu, " ").split(/\s+/).filter(word => /[\p{L}]/u.test(word));
-  if (words.length < 3 || words.length > 12 * sentences) return false;
-  if ((text.replace(/[.!?…]+$/u, "").match(/[.!?…]\s+\S/gu) ?? []).length > sentences - 1) return false;
+  if (!text || text.length > 160 || /\n/.test(text)) return false;
+  const words = letterWords(text);
+  if (words.length < 3 || words.length > 12) return false;
+  if (/[.!?…]\s+\S/u.test(text.replace(/[.!?…]+$/u, ""))) return false;
   if (FORBIDDEN.test(text) || /https?:|www\.|@\w/.test(text)) return false;
   const emoji = emojiCount(text);
   return hasEmoji(comment) ? emoji === 1 : emoji <= 1;
+}
+
+/** Only emoji, or 1–2 words ("🔥🔥", "🔥🔥🔥Zor"). */
+export const isShortComment = (comment: string) => letterWords(comment).length <= 2;
+
+// aiReplyAll accounts (@eshikmaster). Any digit counts: a number here can only be an invented price, time or phone.
+const AI_REPLY_BANS: Array<[RegExp, string]> = [
+  [/https?:|www\.|t\.me|\b[a-z0-9-]+\.(?:com|ru|uz|net|org|io|me|link|shop|xyz)\b/iu, "havola"],
+  [/@/u, "@belgi"],
+  [/\d/u, "raqam"],
+  [/narx|нарх|(?<!\p{L})цен|стоимост|price|(?<!\p{L})so['‘’ʻ]m|(?<!\p{L})сўм|(?<!\p{L})(?:som|сум)(?!\p{L})|dollar|доллар|\$/iu, "narx"],
+  [/ish vaqt|ish grafik|иш вақт|(?<!\p{L})soat|соат|режим работы|график работы|часы работы|время работы/iu, "ish vaqti"],
+  [/telefon|телефон|raqam|номер|nomer/iu, "telefon raqami"],
+];
+
+/** Why an aiReplyAll account's AI reply cannot go out, or null. Emoji and "!" are free; 300 = the cut in the public reply. */
+export function aiReplyProblem(reply: string) {
+  if (!/\p{L}/u.test(reply)) return "matnsiz javob";
+  if (reply.length > 300) return "juda uzun";
+  return AI_REPLY_BANS.find(([pattern]) => pattern.test(reply))?.[1] ?? null;
+}
+
+/** Asks up to `tries` times, each time told why the last reply was rejected; the last reason comes back when none passed. */
+export async function firstGoodReply(tries: number, ask: (rejected: string) => Promise<string>, problem: (reply: string) => string | null) {
+  let reason = "";
+  for (let attempt = 0; attempt < tries; attempt++) {
+    const reply = await ask(reason);
+    reason = reply ? problem(reply) ?? "" : "bo‘sh javob";
+    if (!reason) return { reply, reason };
+  }
+  return { reply: null, reason };
 }
 
 const wordsOf = (value: string) => new Set(normalizeText(value).replace(/\p{Extended_Pictographic}|️|‍/gu, " ").replace(/[^\p{L}\p{N}\s']/gu, " ").split(" ").filter(word => word.length > 1));

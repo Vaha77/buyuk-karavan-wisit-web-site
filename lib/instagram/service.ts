@@ -200,9 +200,9 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   let positive: string | null = null;
   if (action.type === "positive") {
     const recent = (await db.instagramComment.findMany({ where: { accountId: account.id, kind: "POSITIVE", publicReplyText: { not: null } }, orderBy: { publicReplyAt: "desc" }, take: 20, select: { publicReplyText: true } })).map(row => row.publicReplyText!);
-    const written = await writePositiveReply(comment.text, recent, accountBrand(account), { prompt: account.aiPrompt, sentences: account.aiReplyAll ? 2 : 1 });
+    const written = await writePositiveReply(comment.text, recent, accountBrand(account), { prompt: account.aiPrompt, relaxed: account.aiReplyAll });
     if (written) await update({ aiTokens: comment.aiTokens + written.usage.tokens, aiCostUsd: addUsage({ tokens: 0, costUsd: comment.aiCostUsd === null ? null : Number(comment.aiCostUsd) }, written.usage).costUsd });
-    if (!written?.reply) { await finish("SKIPPED", written ? "AI mos javob yozmadi" : "AI ishlamadi — javobsiz"); return "skipped"; }
+    if (!written?.reply) { await finish("SKIPPED", written ? `AI mos javob yozmadi: ${written.reason}` : "AI ishlamadi — javobsiz"); return "skipped"; }
     positive = written.reply;
   }
 

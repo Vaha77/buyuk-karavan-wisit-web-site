@@ -131,10 +131,12 @@ test("eshikmaster: AI answers every other comment (1–2 sentences, own prompt);
   assert.match(em.aiPrompt, /Narx va ish vaqtini HECH QACHON yozma/);
   assert.equal(em.questionReplyText, "Ma'lumotni Direct'ga yubordik");
   assert.deepEqual([em.leadsEnabled, em.directEnabled, em.negativeNotify], [false, false, false]);
-  assert.equal(rules.validPositiveReply("Rahmat, juda xursandmiz! Sizni kutib qolamiz.", "Zo'r eshiklar", 2), true, "two sentences allowed");
+  assert.equal(rules.aiReplyProblem("Rahmat, juda xursandmiz! Sizni kutib qolamiz."), null, "two sentences allowed");
   assert.equal(rules.validPositiveReply("Rahmat, juda xursandmiz! Sizni kutib qolamiz.", "Zo'r eshiklar"), false, "Buyuk Karavan: still one");
-  assert.equal(rules.validPositiveReply("Rahmat! Ertaga 10 da keling.", "Zo'r", 2), false, "no invented time");
+  assert.equal(rules.aiReplyProblem("Rahmat! Ertaga 10 da keling."), "raqam", "no invented time");
   const service = await read("../lib/instagram/service.ts");
+  assert.match(service, /relaxed: account\.aiReplyAll/, "the relaxed check is for aiReplyAll accounts only");
+  assert.match(service, /`AI mos javob yozmadi: \$\{written\.reason\}`/, "the reason reaches the journal");
   assert.match(service, /if \(account\.leadsEnabled && /);
   assert.match(service, /account\.directEnabled \? await recordDirectEvents/);
   assert.match(service, /prompt: account\.aiPrompt/);
@@ -142,6 +144,52 @@ test("eshikmaster: AI answers every other comment (1–2 sentences, own prompt);
   assert.match(await read("../app/api/instagram/oauth/callback/route.ts"), /=== "eshikmaster" \? ESHIKMASTER_PRESET/);
   const migration = (await read("../prisma/migrations/20261026090000_instagram_account_ai_switches/migration.sql")).replace(/^--.*$/gm, "");
   assert.doesNotMatch(migration, /DROP|DELETE FROM|TRUNCATE|ALTER COLUMN/i);
+});
+
+test("eshikmaster: emoji-only and short comments get a reply; a banned reply is retried once, then skipped with its reason", async () => {
+  // Each of these was rejected by the strict check although it is harmless.
+  for (const [reply, comment] of [["Rahmat! Sizga omad! 🔥", "🔥🔥"], ["Rahmat 🙏🔥", "👏👏👏"], ["Rahmat", "🔥🔥🔥Zor"]]) {
+    assert.equal(rules.validPositiveReply(reply, comment), false, reply);
+    assert.equal(rules.aiReplyProblem(reply), null, reply);
+  }
+  for (const comment of ["🔥🔥", "👏👏👏", "🔥🔥🔥Zor", "Zo'r ekan"]) assert.equal(rules.isShortComment(comment), true, comment);
+  assert.equal(rules.isShortComment("Juda zo'r ish qilibsiz"), false);
+
+  for (const [reply, reason] of [["Narxi juda arzon", "narx"], ["Biz bilan bog'laning +998911853023", "raqam"], ["Saytimizga kiring eshikmaster.uz", "havola"], ["Ko'ring https://x.co", "havola"], ["Yozing @eshikmaster", "@belgi"], ["Ish vaqtimizni bilib oling", "ish vaqti"], ["Telefon orqali bog'laning", "telefon raqami"], ["🔥🔥", "matnsiz javob"]]) assert.equal(rules.aiReplyProblem(reply), reason, reply);
+  for (const fine of ["Сумка emas, eshik! Оценка uchun rahmat", "Somon yo'li kabi ajoyib 🔥🔥"]) assert.equal(rules.aiReplyProblem(fine), null, fine);
+
+  const run = async answers => {
+    const seen = [];
+    const result = await rules.firstGoodReply(2, async rejected => { seen.push(rejected); return answers.shift(); }, rules.aiReplyProblem);
+    return { ...result, seen };
+  };
+  assert.deepEqual(await run(["Rahmat! 🔥🔥"]), { reply: "Rahmat! 🔥🔥", reason: "", seen: [""] }, "emoji-only comment: first reply goes out");
+  assert.deepEqual(await run(["Narxi arzon", "Rahmat, omad! 🔥"]), { reply: "Rahmat, omad! 🔥", reason: "", seen: ["", "narx"] }, "retried, told why");
+  assert.deepEqual(await run(["Narxi arzon", "Yozing @eshikmaster", "Rahmat"]), { reply: null, reason: "@belgi", seen: ["", "narx"] }, "only one retry, no fixed text, last reason");
+  assert.deepEqual(await run(["", ""]), { reply: null, reason: "bo‘sh javob", seen: ["", "bo‘sh javob"] });
+
+  // One reply per person per post and the spam / negative / reply-comment rules stay before the AI.
+  const em = { priceEnabled: true, positiveEnabled: true, questionEnabled: true, negativeNotify: false, dailyReplyLimit: 150, aiReplyAll: true };
+  assert.equal(rules.chooseAction("POSITIVE", em, { rule: null, alreadyAnswered: true, repliesToday: 0, generalReplyEnabled: false }).type, "skip");
+});
+
+test("Buyuk Karavan: the strict check, 3 tries and its prompt are unchanged", async () => {
+  const ai = await read("../lib/instagram/ai.ts");
+  assert.match(ai, /firstGoodReply\(relaxed \? 2 : 3,/);
+  assert.match(ai, /relaxed \? aiReplyProblem\(reply\) : validPositiveReply\(reply, comment\)/);
+  assert.match(ai, /const hint = relaxed && /, "no short-comment hint without relaxed");
+  assert.match(ai, /const retry = relaxed && /, "no retry note without relaxed");
+  assert.equal(rules.validPositiveReply("Rahmat, e'tiboringiz uchun minnatdormiz 🙏", "Zo'r 🔥"), true);
+  assert.equal(rules.validPositiveReply("Rahmat, e'tiboringiz uchun minnatdormiz", "Zo'r 🔥"), false, "comment had emoji → one emoji");
+  assert.equal(rules.validPositiveReply("Rahmat sizga. Savol bo'lsa yozing bizga", "zo'r"), false, "one sentence");
+  const answers = ["Rahmat", "Rahmat", "Rahmat, e'tiboringiz uchun minnatdormiz"];
+  const result = await rules.firstGoodReply(3, async () => answers.shift(), reply => rules.validPositiveReply(reply, "zo'r") ? null : "qoidaga mos emas");
+  assert.equal(result.reply, "Rahmat, e'tiboringiz uchun minnatdormiz", "third try still counts");
+});
+
+test("switching account remounts the board, so the settings form never keeps the other account's values", async () => {
+  assert.match(await read("../app/admin/(protected)/instagram/page.tsx"), /<InstagramBoard key=\{accountId\} board=\{await getInstagramBoard\(accountId\)\}/);
+  assert.match(await read("../components/admin/instagram/instagram-board.tsx"), /function GeneralSettings[^\n]*\n\s*const \[form, setForm\] = useState\(\{ \.\.\.account/, "the form state is seeded once per mount");
 });
 
 test("connect (new account too): the long-lived token subscribes the account to comments + messages webhooks", async () => {

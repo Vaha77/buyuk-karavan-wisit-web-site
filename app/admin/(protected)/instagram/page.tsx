@@ -34,6 +34,6 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
     <InstagramNav accounts={accounts} accountId={accountId || null} active={tab} isSuper={user.role === "SUPER_ADMIN"}/>
     {tab === "direct" ? <DirectBoard board={await getDirectBoard(status, accountId)} status={status}/>
       : tab === "stats" ? <Suspense key={`${accountId}:${period}`} fallback={<StatsSkeleton/>}><Stats period={period} accountId={accountId}/></Suspense>
-      : <InstagramBoard board={await getInstagramBoard(accountId)} canConnect={user.role === "SUPER_ADMIN"}/>}
+      : <InstagramBoard key={accountId} board={await getInstagramBoard(accountId)} canConnect={user.role === "SUPER_ADMIN"}/>}
   </div>;
 }
