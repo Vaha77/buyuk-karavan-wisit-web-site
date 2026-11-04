@@ -276,7 +276,8 @@ export function dailyCapView(started: number, limit: number) {
  * Cancelling (soft — the order stays, status CANCELLED): the seller only their own order while it is still "Yangi";
  * SUPER_ADMIN any order before it left the workshop, with a reason.
  */
-export function checkCancel(role: string, status: OrderStatus, isOwnOrder: boolean, reason: string | null | undefined): { ok: true } | { ok: false; error: string } {
+/** awaitingAnswer: a "Sotuvchi nomidan" order the seller has not answered — they reply "✕ Meniki emas" instead of cancelling. */
+export function checkCancel(role: string, status: OrderStatus, isOwnOrder: boolean, reason: string | null | undefined, awaitingAnswer = false): { ok: true } | { ok: false; error: string } {
   if (status === "CANCELLED") return { ok: false, error: "Bu zakaz allaqachon bekor qilingan." };
   if (role === "SUPER_ADMIN") {
     if (!CANCELLABLE.includes(status)) return { ok: false, error: `“${STATUS_LABEL[status]}” holatidagi zakazni bekor qilib bo‘lmaydi.` };
@@ -285,13 +286,14 @@ export function checkCancel(role: string, status: OrderStatus, isOwnOrder: boole
   }
   if (role === "SELLER") {
     if (!isOwnOrder) return { ok: false, error: "Faqat o‘z zakazingizni bekor qila olasiz." };
+    if (awaitingAnswer) return { ok: false, error: "Seh kiritgan zakaz: “✕ Meniki emas” ni bosing." };
     if (status !== "NEW") return { ok: false, error: "Seh qabul qilgan zakazni bekor qilib bo‘lmaydi — Super Admin’ga murojaat qiling." };
     return { ok: true };
   }
   return { ok: false, error: "Zakazni bekor qilish huquqi yo‘q." };
 }
-export const canCancel = (role: string, status: OrderStatus, isOwnOrder: boolean) =>
-  (role === "SUPER_ADMIN" && CANCELLABLE.includes(status)) || (role === "SELLER" && isOwnOrder && status === "NEW");
+export const canCancel = (role: string, status: OrderStatus, isOwnOrder: boolean, awaitingAnswer = false) =>
+  (role === "SUPER_ADMIN" && CANCELLABLE.includes(status)) || (role === "SELLER" && isOwnOrder && status === "NEW" && !awaitingAnswer);
 
 /** Same seller sending the same thing again within this window is asked "Baribir yana yuborasizmi?". */
 export const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;

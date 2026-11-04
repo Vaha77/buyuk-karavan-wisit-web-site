@@ -207,10 +207,10 @@ export async function transitionOrder(actor: Actor, id: string, action: OrderAct
 export async function cancelOrder(actor: Actor, id: string, reason: string | null): Promise<Result> {
   const db = getDb();
   await closeMonths();
-  const order = await db.workshopOrder.findUnique({ where: { id }, select: { id: true, monthKey: true, monthNo: true, status: true, sellerId: true } });
+  const order = await db.workshopOrder.findUnique({ where: { id }, select: { id: true, monthKey: true, monthNo: true, status: true, sellerId: true, sellerConfirm: true } });
   if (!order) return { ok: false, error: "Zakaz topilmadi." };
   if (!canEditOrder(actor.role, order.monthKey)) return { ok: false, error: CLOSED_TEXT };
-  const check = checkCancel(actor.role, order.status, order.sellerId === actor.id, reason);
+  const check = checkCancel(actor.role, order.status, order.sellerId === actor.id, reason, order.sellerConfirm === "PENDING");
   if (!check.ok) return check;
   const cleanReason = reason?.trim().slice(0, 300) || null;
   const result = await db.workshopOrder.updateMany({ where: { id, status: order.status }, data: { status: "CANCELLED", cancelledById: actor.id, cancelledAt: new Date(), cancelReason: cleanReason } });
