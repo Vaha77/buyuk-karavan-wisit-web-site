@@ -5,8 +5,8 @@ import { writeAudit } from "@/lib/audit/service";
 import { getDb } from "@/lib/db";
 import { getPraysCategories, getPraysProducts, getSexParts, getStandardCondenserCategoryId } from "@/lib/prays/queries";
 import { isIssueCategory } from "./categories";
-import { CLOSED_TEXT, DUPLICATE_WINDOW_MS, RECEIVE_OVERDUE_MS, STATUS_LABEL, receiveReminderText, storeDiffText, storeExtra, type StoreInput, alreadyText, canEditOrder, canMarkTest, checkCorrection, checkCancel, checkTransition, duplicateWarning, findDuplicate, orderNumber, type FingerprintInput, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
-import { notifyCancelled, notifyChanged, notifyCreated, notifyStore } from "./bot";
+import { ACTIVE_SELLER, CANCELLABLE, SELLER_CONFIRM_REMIND_MS, rejectCancelReason, resumedStatus, sellerConfirmStep, CLOSED_TEXT, DUPLICATE_WINDOW_MS, RECEIVE_OVERDUE_MS, STATUS_LABEL, receiveReminderText, storeDiffText, storeExtra, type StoreInput, alreadyText, canEditOrder, canMarkTest, checkCorrection, checkCancel, checkTransition, duplicateWarning, findDuplicate, orderNumber, type FingerprintInput, type OrderAction, type OrderStatus, type PriceSnapshot } from "./rules";
+import { closeSellerMessage, notifyCancelled, notifyChanged, notifyCreated, notifySellerConfirm, notifyStopped, notifyStore } from "./bot";
 import { createOnce } from "./idempotency";
 import { closeMonths, createNumbered } from "./month";
 import type { DeliveryStatus } from "./bot-text";
@@ -38,6 +38,12 @@ async function resolveCustomer(actor: Actor, input: OrderCommon): Promise<Result
   const name = input.customerName?.trim();
   return name ? { ok: true, customerId: null, customerName: name } : { ok: false, error: "“Mijozga” uchun mijozni tanlang yoki ismini yozing." };
 }
+/** Who owns a new order: the actor; for WORKSHOP ("Sotuvchi nomidan") the chosen active seller, whose customers are offered and who confirms it. */
+async function orderOwner(actor: Actor, forSellerId?: string | null): Promise<Result<{ seller: Actor; onBehalf: boolean }>> {
+  if (actor.role !== "WORKSHOP") return { ok: true, seller: actor, onBehalf: false };
+  const seller = forSellerId ? await getDb().adminUser.findFirst({ where: { id: forSellerId, ...ACTIVE_SELLER }, select: { id: true, name: true, role: true, salesPersonId: true } }) : null;
+  return seller ? { ok: true, seller, onBehalf: true } : { ok: false, error: "“Kim uchun?” — faol sotuvchini tanlang." };
+}
 const dueDateOf = (value: string | null) => (value ? new Date(`${value}T00:00:00.000Z`) : null);
 
 /** requestId: one id per form submit; confirmDuplicate: the seller answered "Ha" to "Baribir yana yuborasizmi?". */
@@ -63,7 +69,7 @@ const isUniqueViolation = (error: unknown) => !!error && typeof error === "objec
 
 /** condenserId: vazdushniy agregat condenser (product); composition / manualPrice: chiller (null price = "kelishiladi"). */
 export type AgregatInput = OrderCommon & { groupKey: string; modelKey: string; assembly: Assembly; liters: string | null; hp: string | null; condenserId: string | null; composition: string | null; manualPrice: number | null; qty: number };
-export async function createAgregatOrder(actor: Actor, input: AgregatInput, meta: SubmitMeta = { requestId: null, confirmDuplicate: false }): Promise<CreateResult> {
+export async function createAgregatOrder(actor: Actor, input: AgregatInput, meta: SubmitMeta = { requestId: null, confirmDuplicate: false }, forSellerId?: string | null): Promise<CreateResult> {
   const again = await sameRequest(meta.requestId);
   if (again) return again;
   const catalog = await loadZborkaCatalog();
@@ -71,42 +77,47 @@ export async function createAgregatOrder(actor: Actor, input: AgregatInput, meta
   if (!group || !model) return { ok: false, error: "Kompressor praysda topilmadi." };
   const quote = quoteZborka(model, group, catalog, { assembly: input.assembly, liters: input.liters, hp: input.hp, condenserId: input.condenserId, composition: input.composition, manualPrice: input.manualPrice });
   if (!quote.ok) return quote;
-  const customer = await resolveCustomer(actor, input);
+  const owner = await orderOwner(actor, forSellerId);
+  if (!owner.ok) return owner;
+  const customer = await resolveCustomer(owner.seller, input);
   if (!customer.ok) return customer;
   if (!meta.confirmDuplicate) {
-    const duplicate = await recentDuplicate({ sellerId: actor.id, type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, items: [{ ref: quote.product.id, title: quote.title, qty: input.qty }] });
+    const duplicate = await recentDuplicate({ sellerId: owner.seller.id, type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, items: [{ ref: quote.product.id, title: quote.title, qty: input.qty }] });
     if (duplicate) return { ok: false, error: duplicateWarning(duplicate), duplicate: { number: duplicate.number } };
   }
   const snapshot: PriceSnapshot = { unitBaseUsd: quote.base, totalBaseUsd: Math.round(quote.base * input.qty * 100) / 100, standardBaseUsd: quote.negotiated ? null : quote.standard, ...(quote.negotiated ? { negotiated: true } : {}) };
   const created = await createOnce(meta.requestId, findByRequest, () => createNumbered((tx, slot) => tx.workshopOrder.create({
     data: {
       ...slot, requestId: meta.requestId, type: "AGREGAT", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: input.qty, dueDate: dueDateOf(input.dueDate), note: input.note,
-      sellerId: actor.id, createdById: actor.id, priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+      sellerId: owner.seller.id, createdById: actor.id, ...(owner.onBehalf ? { sellerConfirm: "PENDING" as const } : {}), priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
       items: { create: [{ kind: "PRODUCT", productId: quote.product.id, title: quote.title, qty: input.qty, baseUsd: quote.negotiated ? null : money(quote.base), changedFromStandard: quote.changes.length > 0, options: { assembly: input.assembly, ...quote.options, standard: { liters: model.liters, hp: model.hp, fn: model.fn }, changes: quote.telegram, priceList: group.label, ...(quote.negotiated ? { negotiated: true } : {}) } as Prisma.InputJsonValue }] },
     },
     select: numbered,
   })), isUniqueViolation);
   if (created.repeated) return { ok: true, id: created.value.id, number: orderNumber(created.value), telegram: "sent", repeated: true };
   const order = created.value;
-  const telegram = await afterCreate(actor, order.id, `${orderNumber(order)} zborka zakazini berdi`, { title: quote.title, qty: input.qty, purpose: input.purpose, customer: customer.customerName, changes: quote.changes.length });
+  const telegram = await afterCreate(actor, order.id, `${orderNumber(order)} zborka zakazini ${owner.onBehalf ? `${owner.seller.name} nomidan kiritdi` : "berdi"}`, { title: quote.title, qty: input.qty, purpose: input.purpose, customer: customer.customerName, changes: quote.changes.length, ...(owner.onBehalf ? { sellerId: owner.seller.id, sellerConfirm: "PENDING" } : {}) }, owner.onBehalf);
   const change = frameChange({ assembly: input.assembly, fn: quote.options.fn, standard: { fn: model.fn } });
-  if (change) await notifySuperAdmins(frameAlertText(orderNumber(order), actor.name, change));
+  if (change) await notifySuperAdmins(frameAlertText(orderNumber(order), owner.seller.name, change));
   return { ok: true, id: order.id, number: orderNumber(order), telegram };
 }
 
 /** productId: goods of a "Sehdan alohida chiqadi" category (Prays → Kategoriyalar); the old part list is not used any more. */
 export type ZapchastInput = OrderCommon & { items: Array<{ productId: string; qty: number }> };
 /** Spare-part request; `noRequestFor` = "Zayavkasiz chiqim" by the workshop for that seller (already handed out → ISSUED). */
-export async function createZapchastOrder(actor: Actor, input: ZapchastInput, noRequestFor?: string, meta: SubmitMeta = { requestId: null, confirmDuplicate: false }): Promise<CreateResult> {
+export async function createZapchastOrder(actor: Actor, input: ZapchastInput, noRequestFor?: string, meta: SubmitMeta = { requestId: null, confirmDuplicate: false }, forSellerId?: string | null): Promise<CreateResult> {
   const again = await sameRequest(meta.requestId);
   if (again) return again;
   const ids = [...new Set(input.items.map(item => item.productId))];
   const products = await getDb().product.findMany({ where: { id: { in: ids }, archivedAt: null }, select: { id: true, name: true, model: true, basePriceUsd: true, category: { select: { workshopIssue: true } } } });
   const byId = new Map(products.filter(product => isIssueCategory(product.category)).map(product => [product.id, product]));
   if (!input.items.length || input.items.some(item => !byId.has(item.productId))) return { ok: false, error: "Seh mahsulotini tanlang." };
-  const customer = await resolveCustomer(actor, input);
+  // "Zayavkasiz chiqim" keeps its own seller check below.
+  const owner: Result<{ seller: Actor; onBehalf: boolean }> = noRequestFor ? { ok: true, seller: actor, onBehalf: false } : await orderOwner(actor, forSellerId);
+  if (!owner.ok) return owner;
+  const customer = await resolveCustomer(owner.seller, input);
   if (!customer.ok) return customer;
-  let sellerId = actor.id;
+  let sellerId = owner.seller.id;
   if (noRequestFor) {
     const seller = await getDb().adminUser.findFirst({ where: { id: noRequestFor, role: "SELLER", isActive: true }, select: { id: true } });
     if (!seller) return { ok: false, error: "Sotuvchini tanlang." };
@@ -123,7 +134,7 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
   const created = await createOnce(meta.requestId, findByRequest, () => createNumbered((tx, slot) => tx.workshopOrder.create({
     data: {
       ...slot, requestId: meta.requestId, type: "ZAPCHAST", purpose: input.purpose, customerId: customer.customerId, customerName: customer.customerName, qty: 1, dueDate: dueDateOf(input.dueDate), note: input.note,
-      sellerId, createdById: actor.id, priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+      sellerId, createdById: actor.id, ...(owner.onBehalf ? { sellerConfirm: "PENDING" as const } : {}), priceSnapshot: snapshot as unknown as Prisma.InputJsonValue,
       ...(noRequestFor ? { noRequest: true, status: "ISSUED" as const, acceptedById: actor.id, acceptedAt: now, startedById: actor.id, startedAt: now, issuedById: actor.id, issuedAt: now } : {}),
       items: { create: input.items.map((item, index) => { const product = byId.get(item.productId)!; return { kind: "PRODUCT" as const, productId: product.id, title: product.model && !product.name.toUpperCase().includes(product.model.toUpperCase()) ? `${product.name} ${product.model}` : product.name, qty: item.qty, baseUsd: product.basePriceUsd, order: index }; }) },
     },
@@ -131,7 +142,7 @@ export async function createZapchastOrder(actor: Actor, input: ZapchastInput, no
   })), isUniqueViolation);
   if (created.repeated) return { ok: true, id: created.value.id, number: orderNumber(created.value), telegram: "sent", repeated: true };
   const order = created.value;
-  const telegram = await afterCreate(actor, order.id, noRequestFor ? `${orderNumber(order)} zayavkasiz chiqimni yozdi` : `${orderNumber(order)} zapchast zayavkasini berdi`, { items: input.items.length, purpose: input.purpose, customer: customer.customerName, noRequest: !!noRequestFor });
+  const telegram = await afterCreate(actor, order.id, noRequestFor ? `${orderNumber(order)} zayavkasiz chiqimni yozdi` : `${orderNumber(order)} zapchast zayavkasini ${owner.onBehalf ? `${owner.seller.name} nomidan kiritdi` : "berdi"}`, { items: input.items.length, purpose: input.purpose, customer: customer.customerName, noRequest: !!noRequestFor, ...(owner.onBehalf ? { sellerId, sellerConfirm: "PENDING" } : {}) }, owner.onBehalf);
   return { ok: true, id: order.id, number: orderNumber(order), telegram };
 }
 
@@ -141,9 +152,10 @@ async function notifySuperAdmins(text: string) {
   await Promise.all(admins.map(admin => sendMessage(admin.telegramChatId!, text).catch(error => console.error("Seh super admin alert failed", { name: error instanceof Error ? error.name : "UnknownError" }))));
 }
 
-async function afterCreate(actor: Actor, id: string, summary: string, after: Record<string, unknown>) {
+async function afterCreate(actor: Actor, id: string, summary: string, after: Record<string, unknown>, onBehalf = false) {
   await writeAudit(actor, { action: "CREATE", entityType: "WORKSHOP_ORDER", entityId: id, summary, after });
   const telegram = await notifyCreated(id);
+  if (onBehalf) await notifySellerConfirm(id);
   revalidatePath("/admin/seh");
   return telegram;
 }
@@ -234,6 +246,83 @@ export async function confirmNoRequest(actor: Actor, id: string): Promise<Result
   await writeAudit(actor, { action: "CONFIRM", entityType: "WORKSHOP_ORDER", entityId: id, summary: "Zayavkasiz chiqimni tasdiqladi", before: { sellerConfirmed: false }, after: { sellerConfirmed: true } });
   revalidatePath("/admin/seh");
   return { ok: true };
+}
+
+/**
+ * "Sotuvchi nomidan" answer — the one function behind the bot buttons and the site buttons. Only that seller; the same
+ * answer twice is a no-op. "Meniki emas" stops the order (CANCELLED while still in the workshop) for Super Admin.
+ */
+export async function answerSellerConfirm(actor: Actor, id: string, answer: "ok" | "no", reason: string | null, via: "site" | "telegram" = "site"): Promise<Result<{ already: boolean }>> {
+  const db = getDb();
+  const order = await db.workshopOrder.findUnique({ where: { id }, select: { monthKey: true, monthNo: true, sellerId: true, status: true, sellerConfirm: true, sellerMessageId: true } });
+  if (!order || actor.role !== "SELLER" || order.sellerId !== actor.id) return { ok: false, error: "Faqat shu zakaz sotuvchisi tasdiqlaydi." };
+  if (!canEditOrder(actor.role, order.monthKey)) return { ok: false, error: CLOSED_TEXT };
+  const step = sellerConfirmStep(order.sellerConfirm, answer);
+  if (!step.ok || step.already) return step.ok ? { ok: true, already: true } : step;
+  const now = new Date(), cleanReason = reason?.trim().slice(0, 300) || null, rejected = step.to === "REJECTED", stop = rejected && CANCELLABLE.includes(order.status);
+  const result = await db.workshopOrder.updateMany({
+    where: { id, sellerId: actor.id, sellerConfirm: "PENDING" },
+    data: { sellerConfirm: step.to, sellerConfirmedAt: now, ...(rejected ? { sellerRejectReason: cleanReason } : {}), ...(stop ? { status: "CANCELLED" as const, cancelledById: actor.id, cancelledAt: now, cancelReason: rejectCancelReason(cleanReason) } : {}) },
+  });
+  if (result.count !== 1) {
+    // Pressed in the bot and on the site at once: the first one went through.
+    const current = await db.workshopOrder.findUnique({ where: { id }, select: { sellerConfirm: true } });
+    const again = sellerConfirmStep(current?.sellerConfirm ?? null, answer);
+    return again.ok ? { ok: true, already: true } : again;
+  }
+  const number = orderNumber(order);
+  await writeAudit(actor, { action: rejected ? "REJECT" : "CONFIRM", entityType: "WORKSHOP_ORDER", entityId: id, entityName: number, summary: `${number}: sotuvchi ${rejected ? "“meniki emas” dedi" : "tasdiqladi"}${via === "telegram" ? " (Telegram orqali)" : ""}`, metadata: { via }, before: { sellerConfirm: "PENDING", status: order.status }, after: { sellerConfirm: step.to, ...(stop ? { status: "CANCELLED" } : {}), ...(cleanReason ? { reason: cleanReason } : {}) } });
+  await closeSellerMessage(order, rejected ? `❌ ${number} rad etildi — Super Admin hal qiladi` : `✅ ${number} tasdiqlandi`);
+  if (rejected) {
+    if (stop) await notifyCancelled(id);
+    await notifyStopped(id, cleanReason);
+    await notifySuperAdmins(`🔔 ${number}: ${actor.name} “meniki emas” dedi${cleanReason ? ` · ${cleanReason}` : ""}\nAdmin → Tasdiqlash kerak`);
+  }
+  revalidatePath("/admin/seh");
+  revalidatePath("/admin/customers/purchases");
+  return { ok: true, already: false };
+}
+
+/** "Tasdiqlash kerak" → a "Meniki emas" order: "Boshqa sotuvchiga o‘tkazish" (it resumes and that seller confirms it) or "Bekor qilish". */
+export async function resolveRejected(actor: Actor, id: string, toSellerId: string | null): Promise<Result> {
+  if (actor.role !== "SUPER_ADMIN") return { ok: false, error: "Faqat Super Admin hal qiladi." };
+  const db = getDb(), open = { id, sellerConfirm: "REJECTED" as const, sellerRejectResolvedAt: null };
+  const order = await db.workshopOrder.findFirst({ where: open, select: { monthKey: true, monthNo: true, status: true, cancelledById: true, sellerId: true, acceptedAt: true, startedAt: true, seller: { select: { name: true } } } });
+  if (!order) return { ok: false, error: "Allaqachon hal qilingan." };
+  const number = orderNumber(order);
+  if (!toSellerId) {
+    const result = await db.workshopOrder.updateMany({ where: open, data: { sellerRejectResolvedAt: new Date() } });
+    if (result.count !== 1) return { ok: false, error: "Allaqachon hal qilingan." };
+    await writeAudit(actor, { action: "CANCEL", entityType: "WORKSHOP_ORDER", entityId: id, entityName: number, summary: `${number}: “meniki emas” — bekor qilindi`, after: { status: order.status } });
+  } else {
+    const seller = await db.adminUser.findFirst({ where: { id: toSellerId, ...ACTIVE_SELLER }, select: { id: true, name: true } });
+    if (!seller) return { ok: false, error: "Faol sotuvchini tanlang." };
+    // Stopped by "Meniki emas" (cancelled by that seller) → back to the stage it was at.
+    const resume = order.status === "CANCELLED" && order.cancelledById === order.sellerId, status = resumedStatus(order);
+    const result = await db.workshopOrder.updateMany({ where: open, data: { sellerId: seller.id, sellerConfirm: "PENDING", sellerConfirmedAt: null, sellerRejectReason: null, sellerRemindedAt: null, sellerMessageId: null, ...(resume ? { status, cancelledById: null, cancelledAt: null, cancelReason: null } : {}) } });
+    if (result.count !== 1) return { ok: false, error: "Allaqachon hal qilingan." };
+    await writeAudit(actor, { action: "UPDATE", entityType: "WORKSHOP_ORDER", entityId: id, entityName: number, summary: `${number}: ${order.seller.name} → ${seller.name} (boshqa sotuvchiga o‘tkazildi)`, before: { sellerId: order.sellerId, status: order.status }, after: { sellerId: seller.id, sellerConfirm: "PENDING", ...(resume ? { status } : {}) } });
+    if (resume) await notifyChanged(id, true);
+    await notifySellerConfirm(id);
+  }
+  revalidatePath("/admin/seh");
+  revalidatePath("/admin/customers/purchases");
+  return { ok: true };
+}
+
+/** Cron: a "Sotuvchi nomidan" order still unanswered after 24 h → one reminder (sellerRemindedAt is claimed first, so never twice). */
+export async function remindSellerConfirm(now = new Date()) {
+  const db = getDb();
+  const due = await db.workshopOrder.findMany({ where: { sellerConfirm: "PENDING", sellerRemindedAt: null, createdAt: { lt: new Date(now.getTime() - SELLER_CONFIRM_REMIND_MS) } }, select: { id: true, monthKey: true, monthNo: true, createdById: true, createdBy: { select: { name: true } } } });
+  let sent = 0;
+  for (const order of due) {
+    const claimed = await db.workshopOrder.updateMany({ where: { id: order.id, sellerConfirm: "PENDING", sellerRemindedAt: null }, data: { sellerRemindedAt: now } });
+    if (claimed.count !== 1) continue;
+    const delivered = await notifySellerConfirm(order.id, true);
+    await writeAudit({ id: order.createdById, name: order.createdBy.name }, { action: "UPDATE", entityType: "WORKSHOP_ORDER", entityId: order.id, entityName: orderNumber(order), summary: `${orderNumber(order)}: sotuvchiga tasdiq eslatmasi ${delivered ? "yuborildi" : "— Telegram ulanmagan, faqat saytda"}`, metadata: { via: "cron" } });
+    sent++;
+  }
+  return sent;
 }
 
 // ---- Closed month: "Tuzatish so‘rash" and the SUPER_ADMIN edit -------------------------------------

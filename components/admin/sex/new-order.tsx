@@ -12,7 +12,10 @@ import { BusyLabel, LinkButton, PendingArea, startNavigationProgress } from "@/c
 
 type Option = { id: string; name: string };
 export type PartChoice = { id: string; label: string; group?: string; basePriceUsd?: number | null };
-type Props = { type: "agregat" | "zapchast"; userName: string; catalog: ZborkaCatalog; parts: PartChoice[]; customers: Option[] };
+type Seller = Option & { salesPersonId: string | null };
+/** sellers: "Sotuvchi nomidan" (WORKSHOP) — pick the seller first; customers carry their owner; hidePrices: no price anywhere. */
+type Props = { type: "agregat" | "zapchast"; userName: string; catalog: ZborkaCatalog; parts: PartChoice[]; customers: Array<Option & { ownerId?: string | null }>; sellers?: Seller[]; initialSeller?: string | null; hidePrices?: boolean };
+type FormProps = Props & { forSeller: Seller | null };
 const today = () => new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);
 
 /** Outcome of "Buyurtma berish": saved on the site, then sent to the Seh mas’uli in Telegram (never to the group). */
@@ -82,23 +85,44 @@ function DateField({ label, value, onChange }: { label: React.ReactNode; value: 
   </label>;
 }
 
+/** "Kim uchun? *": search + avatar rows; the chosen seller stays on top with "Almashtirish". */
+function SellerPicker({ sellers, value, onChange }: { sellers: Seller[]; value: Seller | null; onChange: (id: string) => void }) {
+  const [query, setQuery] = useState("");
+  const avatar = (name: string) => <span aria-hidden style={{ width: 30, height: 30, borderRadius: "50%", display: "grid", placeItems: "center", flex: "none", background: "var(--g)", color: "#fff", fontWeight: 800 }}>{name.trim().charAt(0).toUpperCase()}</span>;
+  const shown = sellers.filter(seller => seller.name.toLowerCase().includes(query.trim().toLowerCase()));
+  return <div className="sx-card" style={{ gap: 10 }}>
+    <span className="sx-section-label">Kim uchun? *</span>
+    {value ? <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>{avatar(value.name)}<b style={{ flex: 1, fontSize: 16 }}>{value.name}</b><button type="button" className="sx-btn is-md" onClick={() => onChange("")}>Almashtirish</button></div> : <>
+      <input className="sx-input" value={query} onChange={event => setQuery(event.target.value)} placeholder="Sotuvchini qidirish" aria-label="Sotuvchini qidirish"/>
+      <div className="sx-pick-list" role="list">{shown.length ? shown.map(seller => <button key={seller.id} type="button" role="listitem" style={{ flexDirection: "row", alignItems: "center", gap: 10 }} onClick={() => { onChange(seller.id); setQuery(""); }}>{avatar(seller.name)}<span>{seller.name}</span></button>) : <span className="sx-muted">Topilmadi</span>}</div>
+    </>}
+  </div>;
+}
+
 export function NewOrder(props: Props) {
   const router = useRouter();
   // Switching Zborka ↔ Zapchast keeps the current form visible (dimmed) until the other one is ready.
   const [switching, startSwitch] = useTransition();
+  const [sellerId, setSellerId] = useState(props.initialSeller ?? "");
+  const forSeller = props.sellers?.find(seller => seller.id === sellerId) ?? null;
+  // The chosen seller's own customers only.
+  const form: FormProps = { ...props, forSeller, customers: props.sellers ? props.customers.filter(item => !!forSeller?.salesPersonId && item.ownerId === forSeller.salesPersonId) : props.customers };
+  const href = (type: string) => `/admin/seh/new?type=${type}${props.sellers ? `&for=seller${sellerId ? `&seller=${sellerId}` : ""}` : ""}`;
   return <div className="sx">
     <div className="sx-head">
       <div><span className="sx-crumb">Seh / {props.type === "agregat" ? "Zborka buyurtmasi" : "Zapchast zayavkasi"}</span><h1>{props.type === "agregat" ? "Zborka buyurtmasi" : "Sehdan olish"}</h1><p className="sx-lead">{props.type === "agregat" ? "Prays bo‘yicha tanlang — buyurtma seh Telegram guruhiga avtomatik ketadi" : "Zayavka → Seh beradi → Krim qilinadi. Har qadamni bitta odam tasdiqlaydi."}</p></div>
       <div className="sx-actions">
-        <div className="sx-tabs" role="tablist" aria-label="Zakaz turi">{(["agregat", "zapchast"] as const).map(type => <button key={type} type="button" role="tab" className="sx-tab" aria-selected={props.type === type} disabled={switching} onClick={() => { if (type === props.type) return; startNavigationProgress(); startSwitch(() => router.push(`/admin/seh/new?type=${type}`)); }}>{type === "agregat" ? "Zborka (agregat)" : "Zapchast"}</button>)}</div>
+        <div className="sx-tabs" role="tablist" aria-label="Zakaz turi">{(["agregat", "zapchast"] as const).map(type => <button key={type} type="button" role="tab" className="sx-tab" aria-selected={props.type === type} disabled={switching} onClick={() => { if (type === props.type) return; startNavigationProgress(); startSwitch(() => router.push(href(type))); }}>{type === "agregat" ? "Zborka (agregat)" : "Zapchast"}</button>)}</div>
         <LinkButton className="sx-btn is-outline" href="/admin/seh">Zakazlar ro‘yxati →</LinkButton>
       </div>
     </div>
-    <PendingArea pending={switching}>{props.type === "agregat" ? <AgregatForm {...props}/> : <ZapchastForm {...props}/>}</PendingArea>
+    {props.sellers && <SellerPicker sellers={props.sellers} value={forSeller} onChange={setSellerId}/>}
+    {props.hidePrices && <p className="sx-pill is-yellow" role="note" style={{ margin: 0, borderRadius: 10, padding: "8px 12px", whiteSpace: "normal", fontSize: 13 }}>Narxlar sehga ko‘rinmaydi — prays narxi sotuvchiga chiqadi</p>}
+    <PendingArea pending={switching}>{props.type === "agregat" ? <AgregatForm {...form}/> : <ZapchastForm {...form}/>}</PendingArea>
   </div>;
 }
 
-function AgregatForm({ userName, catalog, customers }: Props) {
+function AgregatForm({ userName, catalog, customers, sellers, forSeller, hidePrices }: FormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [groupKey, setGroupKey] = useState(catalog.groups[0]?.key ?? "");
@@ -141,7 +165,7 @@ function AgregatForm({ userName, catalog, customers }: Props) {
   const qtyNumber = Number(qty);
   const price = quote?.ok ? quote.base : null;
   const fnPending = effective === "vz" && parts.some(part => part.key === "fn" && part.value === "" && !!fnCat);
-  const ready = quote?.ok && !fnPending && Number.isInteger(qtyNumber) && qtyNumber >= 1 && (purpose === "SHOP" || customer.trim()) && (effective !== "ch" || composition.trim().length >= 3);
+  const ready = quote?.ok && !fnPending && Number.isInteger(qtyNumber) && qtyNumber >= 1 && (purpose === "SHOP" || customer.trim()) && (effective !== "ch" || composition.trim().length >= 3) && (!sellers || forSeller);
   const known = customers.find(item => item.name === customer.trim());
   const submit = (confirmDuplicate = false) => {
     if (submittingRef.current) return;
@@ -149,7 +173,7 @@ function AgregatForm({ userName, catalog, customers }: Props) {
     startTransition(async () => {
       try {
         setResult(null); setDuplicate(null);
-        const response = await createAgregatOrderAction({ requestId, confirmDuplicate, groupKey: group.key, modelKey: model.key, assembly: effective, liters: null, hp: effective === "vd" ? hp : null, condenserId: effective === "vz" ? condenserId : null, composition: effective === "ch" ? composition.trim() : null, manualPrice: effective === "ch" ? manualNumber : null, qty: qtyNumber, dueDate: dueDate || null, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, note: note.trim() || null });
+        const response = await createAgregatOrderAction({ requestId, confirmDuplicate, groupKey: group.key, modelKey: model.key, assembly: effective, liters: null, hp: effective === "vd" ? hp : null, condenserId: effective === "vz" ? condenserId : null, composition: effective === "ch" ? composition.trim() : null, manualPrice: effective === "ch" ? manualNumber : null, qty: qtyNumber, dueDate: dueDate || null, purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, note: note.trim() || null, sellerId: forSeller?.id ?? null });
         if (!response.ok && response.duplicate) { setDuplicate(response.error); return; }
         setResult(sentResult(response, "Zakaz"));
         if (!response.ok) return;
@@ -188,7 +212,7 @@ function AgregatForm({ userName, catalog, customers }: Props) {
               </label>
               {part.disabledNote ? <span className="sx-pill is-yellow" role="alert" style={{ minHeight: 46, borderRadius: 10, padding: "6px 12px", whiteSpace: "normal", fontSize: 12 }}>⚠️ {part.disabledNote}</span>
                 : part.value === "" && fnPending ? <span className="sx-pill is-yellow" style={{ height: 46, borderRadius: 10, padding: "0 12px", fontSize: 13 }}>FN markasini tanlang</span>
-                : changed ? <span className="sx-pill is-yellow" style={{ height: 46, borderRadius: 10, padding: "0 12px", fontSize: 13 }}>standart {part.format(part.standard)} · {formatSignedUsd(Math.round(delta))}</span>
+                : changed ? <span className="sx-pill is-yellow" style={{ height: 46, borderRadius: 10, padding: "0 12px", fontSize: 13 }}>standart {part.format(part.standard)}{hidePrices ? "" : ` · ${formatSignedUsd(Math.round(delta))}`}</span>
                 : <span className="sx-pill is-green" style={{ height: 46, borderRadius: 10, padding: "0 12px", fontSize: 13 }}>standart</span>}
             </div>;
           })}
@@ -211,20 +235,20 @@ function AgregatForm({ userName, catalog, customers }: Props) {
         <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.3 }}>{quote?.ok ? quote.title : `${group.brand} ${model.model}`}</span>
         {quote?.ok && quote.lines.map(line => <div key={line.k} className="sx-summary-line"><span>{line.k}</span><b>{line.v}</b></div>)}
         <div className="sx-summary-line"><span>Soni</span><b>{qtyNumber || "—"}</b></div>
-        {price !== null && quote?.ok && <PriceBlock base={Math.round(price * Math.max(qtyNumber, 1) * 100) / 100} delta={quote.changes.length ? (quote.base - quote.standard) * Math.max(qtyNumber, 1) : null} negotiated={quote.negotiated}/>}
-        {quote?.ok && quote.frameChanged && <p className="sx-pill is-yellow" role="note" style={{ margin: 0, borderRadius: 10, padding: "8px 12px", whiteSpace: "normal", fontSize: 13, lineHeight: 1.4 }}>⚠️ Hurmatli {userName.trim().split(/\s+/)[0] || userName}, kondensator turi o‘zgargani uchun rama narxi hisobga qo‘shilmadi. Iltimos, rama xarajatini o‘zingiz qo‘shib hisoblang.</p>}
+        {!hidePrices && price !== null && quote?.ok && <PriceBlock base={Math.round(price * Math.max(qtyNumber, 1) * 100) / 100} delta={quote.changes.length ? (quote.base - quote.standard) * Math.max(qtyNumber, 1) : null} negotiated={quote.negotiated}/>}
+        {!hidePrices && quote?.ok && quote.frameChanged && <p className="sx-pill is-yellow" role="note" style={{ margin: 0, borderRadius: 10, padding: "8px 12px", whiteSpace: "normal", fontSize: 13, lineHeight: 1.4 }}>⚠️ Hurmatli {userName.trim().split(/\s+/)[0] || userName}, kondensator turi o‘zgargani uchun rama narxi hisobga qo‘shilmadi. Iltimos, rama xarajatini o‘zingiz qo‘shib hisoblang.</p>}
         {quote && !quote.ok && <p className="sx-note is-error">{quote.error}</p>}
         {duplicate && <DuplicateQuestion text={duplicate} busy={pending} onYes={() => submit(true)} onNo={() => setDuplicate(null)}/>}
         {result && <SentNote result={result} onResent={setResult}/>}
         <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} disabled={pending || !ready || !!duplicate} aria-busy={pending} onClick={() => submit()}><BusyLabel busy={pending}>{result?.ok ? "✓ Sehga yuborildi" : "Buyurtma berish"}</BusyLabel></button>
         {result?.ok && <button type="button" className="sx-btn" onClick={() => { setResult(null); setNote(""); }}>Yana buyurtma berish</button>}
       </div>
-      <TelegramPreview order={{ type: "AGREGAT", qty: qtyNumber || 1, purpose, customerName: customer || "…", dueDate: dueDate || null, note: note || null, sellerName: userName, details: quote?.ok ? quote.telegram : [], items: [{ title: quote?.ok ? quote.title : `${group.brand} ${model.model}`, qty: qtyNumber || 1 }] }}/>
+      <TelegramPreview order={{ type: "AGREGAT", qty: qtyNumber || 1, purpose, customerName: customer || "…", dueDate: dueDate || null, note: note || null, sellerName: forSeller?.name ?? userName, details: quote?.ok ? quote.telegram : [], items: [{ title: quote?.ok ? quote.title : `${group.brand} ${model.model}`, qty: qtyNumber || 1 }] }}/>
     </div>
   </div>;
 }
 
-function ZapchastForm({ userName, parts, customers }: Props) {
+function ZapchastForm({ userName, parts, customers, sellers, forSeller, hidePrices }: FormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [items, setItems] = useState([{ partId: "", qty: "1" }]), [purpose, setPurpose] = useState<"SHOP" | "CLIENT">("SHOP"), [customer, setCustomer] = useState(""), [dueDate, setDueDate] = useState(""), [note, setNote] = useState("");
@@ -232,7 +256,7 @@ function ZapchastForm({ userName, parts, customers }: Props) {
   const [duplicate, setDuplicate] = useState<string | null>(null);
   const { busy: submittingRef, requestId, renew } = useSubmitOnce();
   const byId = new Map(parts.map(part => [part.id, part]));
-  const ready = items.every(item => item.partId && Number(item.qty) >= 1) && (purpose === "SHOP" || customer.trim());
+  const ready = items.every(item => item.partId && Number(item.qty) >= 1) && (purpose === "SHOP" || customer.trim()) && (!sellers || forSeller);
   const total = Math.round(items.reduce((sum, item) => sum + (byId.get(item.partId)?.basePriceUsd ?? 0) * (Number(item.qty) || 0), 0) * 100) / 100;
   const known = customers.find(item => item.name === customer.trim());
   const submit = (confirmDuplicate = false) => {
@@ -241,7 +265,7 @@ function ZapchastForm({ userName, parts, customers }: Props) {
     startTransition(async () => {
       try {
         setResult(null); setDuplicate(null);
-        const response = await createZapchastOrderAction({ requestId, confirmDuplicate, items: items.map(item => ({ productId: item.partId, qty: Number(item.qty) })), purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, dueDate: dueDate || null, note: note.trim() || null });
+        const response = await createZapchastOrderAction({ requestId, confirmDuplicate, items: items.map(item => ({ productId: item.partId, qty: Number(item.qty) })), purpose, customerId: purpose === "CLIENT" ? known?.id ?? null : null, customerName: purpose === "CLIENT" ? customer.trim() : null, dueDate: dueDate || null, note: note.trim() || null, sellerId: forSeller?.id ?? null });
         if (!response.ok && response.duplicate) { setDuplicate(response.error); return; }
         setResult(sentResult(response, "Zayavka"));
         if (!response.ok) return;
@@ -255,21 +279,21 @@ function ZapchastForm({ userName, parts, customers }: Props) {
   return <div className="sx-split">
     <div className="sx-main">
       <div className="sx-card">
-        <div className="sx-card-head"><h2>Yangi zayavka</h2><span className="sx-muted">Sotuvchi: {userName}</span></div>
-        <PartRows parts={parts.map(part => ({ id: part.id, label: part.label, group: part.group }))} items={items} setItems={next => { setItems(next); setResult(null); }} priceOf={id => { const part = byId.get(id); return part?.basePriceUsd === null || part?.basePriceUsd === undefined ? null : `Prays: ${formatUsd(part.basePriceUsd)}`; }}/>
+        <div className="sx-card-head"><h2>Yangi zayavka</h2><span className="sx-muted">Sotuvchi: {forSeller?.name ?? (sellers ? "—" : userName)}</span></div>
+        <PartRows parts={parts.map(part => ({ id: part.id, label: part.label, group: part.group }))} items={items} setItems={next => { setItems(next); setResult(null); }} priceOf={hidePrices ? undefined : id => { const part = byId.get(id); return part?.basePriceUsd === null || part?.basePriceUsd === undefined ? null : `Prays: ${formatUsd(part.basePriceUsd)}`; }}/>
         <PurposePicker purpose={purpose} setPurpose={setPurpose} customer={customer} setCustomer={setCustomer} customers={customers}/>
         <div className="sx-fields">
           <DateField label={<>Kerak bo‘ladigan sana <small>(ixtiyoriy)</small></>} value={dueDate} onChange={setDueDate}/>
           <label className="sx-field">Izoh<input value={note} onChange={event => setNote(event.target.value)} maxLength={500}/></label>
         </div>
-        {total > 0 && <PriceBlock base={total} delta={null}/>}
+        {!hidePrices && total > 0 && <PriceBlock base={total} delta={null}/>}
         {duplicate && <DuplicateQuestion text={duplicate} busy={pending} onYes={() => submit(true)} onNo={() => setDuplicate(null)}/>}
         {result && <SentNote result={result} onResent={setResult}/>}
         <button type="button" className={`sx-btn is-block ${result?.ok ? "is-green" : "is-primary"}`} style={{ height: 50, fontSize: 15 }} disabled={pending || !ready || !!duplicate} aria-busy={pending} onClick={() => submit()}><BusyLabel busy={pending}>{result?.ok ? "✓ Sehga yuborildi" : "Zayavka yuborish"}</BusyLabel></button>
       </div>
     </div>
     <div className="sx-side">
-      <TelegramPreview order={{ type: "ZAPCHAST", qty: 1, purpose, customerName: customer || "…", dueDate: dueDate || null, note: note || null, sellerName: userName, details: [], items: items.filter(item => item.partId).map(item => ({ title: byId.get(item.partId)?.label ?? "—", qty: Number(item.qty) || 0 })) }}/>
+      <TelegramPreview order={{ type: "ZAPCHAST", qty: 1, purpose, customerName: customer || "…", dueDate: dueDate || null, note: note || null, sellerName: forSeller?.name ?? userName, details: [], items: items.filter(item => item.partId).map(item => ({ title: byId.get(item.partId)?.label ?? "—", qty: Number(item.qty) || 0 })) }}/>
     </div>
   </div>;
 }

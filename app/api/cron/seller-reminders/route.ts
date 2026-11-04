@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { sendSellerReminders } from "@/lib/customers/reminders";
-import { remindUnreceived } from "@/lib/sex/service";
+import { remindSellerConfirm, remindUnreceived } from "@/lib/sex/service";
 
 export const runtime = "nodejs";
 
@@ -18,7 +18,9 @@ export async function GET(request: Request) {
   try {
     // Also: Seh orders issued over 24 h ago and not yet taken into the store → Super Admin (once per order).
     const unreceived = await remindUnreceived().catch(error => { console.error("Store reminder failed", { type: error instanceof Error ? error.name : "UnknownError" }); return -1; });
-    return NextResponse.json({ ok: true, ...(await sendSellerReminders()), unreceived });
+    // And "Sotuvchi nomidan" orders the seller has not answered for 24 h → one reminder each.
+    const unconfirmed = await remindSellerConfirm().catch(error => { console.error("Seller confirm reminder failed", { type: error instanceof Error ? error.name : "UnknownError" }); return -1; });
+    return NextResponse.json({ ok: true, ...(await sendSellerReminders()), unreceived, unconfirmed });
   } catch (error) {
     console.error("Seller reminders failed", { type: error instanceof Error ? error.name : "UnknownError" });
     return NextResponse.json({ ok: false }, { status: 500 });

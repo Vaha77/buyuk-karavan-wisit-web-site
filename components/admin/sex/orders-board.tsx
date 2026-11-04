@@ -4,9 +4,9 @@ import { useEffect, useState, useSyncExternalStore, useTransition } from "react"
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { Dialog } from "@/components/admin/bklead/dialog";
-import { cancelOrderAction, confirmNoRequestAction, createNoRequestAction, editOrderAction, requestCorrectionAction, resendTelegramAction, setOrderTestAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
+import { answerSellerConfirmAction, cancelOrderAction, confirmNoRequestAction, createNoRequestAction, editOrderAction, requestCorrectionAction, resendTelegramAction, setOrderTestAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
 import type { OrderRow } from "@/lib/sex/queries";
-import { ACTION_LABEL, STATUS_LABEL, STATUS_TONE, actionFor, isClosedMonth, matchesOrder, monthName, partMatches, type OrderAction } from "@/lib/sex/rules";
+import { ACTION_LABEL, SELLER_CONFIRM_LABEL, STATUS_LABEL, STATUS_TONE, actionFor, isClosedMonth, matchesOrder, monthName, partMatches, type OrderAction } from "@/lib/sex/rules";
 import { formatUsd } from "@/lib/prays/rules";
 import { AcceptedBadge, WorkingStatus } from "./working-progress";
 import { BusyLabel, DownloadButton, LinkButton, PendingArea, startNavigationProgress } from "@/components/admin/feedback";
@@ -50,6 +50,12 @@ const STAGES = [
   { key: "work", label: "Terilmoqda", has: (status: OrderRow["status"]) => status === "STARTED" },
   { key: "done", label: "Tayyor", has: (status: OrderRow["status"]) => status === "ISSUED" || status === "RECEIVED" || status === "RECEIVED_STORE" || status === "CLIENT_LOADED" },
 ] as const;
+/** "🛠 seh kiritdi · ⏳ tasdiq kutilmoqda" / "· ✓ tasdiqlandi" / "✕ sotuvchi: meniki emas" (+ reason). */
+export function ConfirmBadge({ row }: { row: Pick<OrderRow, "sellerConfirm" | "sellerRejectReason"> }) {
+  if (!row.sellerConfirm) return null;
+  const tone = row.sellerConfirm === "PENDING" ? "is-yellow" : row.sellerConfirm === "CONFIRMED" ? "is-green" : "is-red";
+  return <span className={`sx-pill is-sm ${tone}`} style={{ marginTop: 4, whiteSpace: "normal" }}>{SELLER_CONFIRM_LABEL[row.sellerConfirm]}{row.sellerRejectReason ? ` · “${row.sellerRejectReason}”` : ""}</span>;
+}
 /** Filled bar per process step (design `.steps`). */
 export const StepBar = ({ row }: { row: OrderRow }) => <div className="steps" aria-hidden="true">{row.steps.map(step => <i key={step.label} className={step.state === "done" ? "f" : undefined}/>)}</div>;
 const queueLabel = (row: OrderRow) => (row.queue ? `${STATUS_LABEL.ACCEPTED} (${row.queue}-navbat)` : STATUS_LABEL.ACCEPTED);
@@ -70,7 +76,12 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
   const [cancelReason, setCancelReason] = useState("");
   const [asking, setAsking] = useState<OrderRow | null>(null), [askReason, setAskReason] = useState(""), [asked, setAsked] = useState("");
   const [editing, setEditing] = useState<{ row: OrderRow; requestId: string | null } | null>(() => { const row = fix && rows.find(item => item.id === fix.orderId); return row ? { row, requestId: fix.requestId } : null; });
-  const search = useOrderSearch(rows);
+  const boss = role === "SUPER_ADMIN", workshop = role === "WORKSHOP", seller = role === "SELLER", staff = !workshop && !seller;
+  // A seller sees the orders the workshop entered for them and still waits on their answer first.
+  const search = useOrderSearch(seller ? [...rows].sort((a, b) => Number(b.sellerConfirm === "PENDING") - Number(a.sellerConfirm === "PENDING")) : rows);
+  const [rejecting, setRejecting] = useState<OrderRow | null>(null), [rejectReason, setRejectReason] = useState("");
+  // Staff: "🛠 Seh kiritgan" / "⏳ Tasdiqsiz".
+  const [entered, setEntered] = useState<"all" | "pending" | null>(null);
   const [stage, setStage] = useState<(typeof STAGES)[number]["key"]>("all");
   // "Oktabrdan N ta zakaz o‘tdi": shown once per month on this device.
   const carried = rows.filter(row => row.monthKey === month.key && row.carriedFrom), bannerKey = `seh-carried-${month.key}`;
@@ -86,7 +97,6 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
   }, []);
   const cancelledView = view === "cancelled";
   const showView = (next: "active" | "cancelled" | "test") => { startNavigationProgress(); startMonth(() => router.push(`/admin/seh?month=${month.key}${next === "active" ? "" : `&status=${next}`}`)); };
-  const boss = role === "SUPER_ADMIN", workshop = role === "WORKSHOP", seller = role === "SELLER", staff = !workshop && !seller;
   const run = (task: () => Promise<{ ok: boolean; error?: string }>, after?: () => void, key: string | null = null) => {
     setBusyKey(key);
     startTransition(async () => {
@@ -107,7 +117,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
   const subtitle = workshop ? "Zapchast va agregat zakazlari · qabul qiling, chiqqach “Chiqib ketdi” bosing" : seller ? "Bergan zakazlaringiz va ularning holati" : boss ? "Hammasini ko‘rasiz · sizning tugmangiz faqat “Krimga oldim”" : "Hammasini ko‘rasiz · holatni seh va Super Admin o‘zgartiradi";
 
   const inStage = STAGES.find(item => item.key === stage)!.has;
-  const shown = (frameOnly ? search.shown.filter(row => row.frame) : search.shown).filter(row => view !== "active" || inStage(row.status));
+  const shown = (frameOnly ? search.shown.filter(row => row.frame) : search.shown).filter(row => (view !== "active" || inStage(row.status)) && (!entered || (entered === "pending" ? row.sellerConfirm === "PENDING" : !!row.sellerConfirm)));
   // One status cell and one action cell for the table and the phone cards.
   const statusCell = (row: OrderRow) => <>{row.status === "STARTED" ? <AcceptedBadge label={STATUS_LABEL.STARTED} dueDate={row.dueDate}/> : <span className={`sx-pill is-${STATUS_TONE[row.status]}`}>{row.status === "ACCEPTED" ? queueLabel(row) : STATUS_LABEL[row.status]}</span>}{row.overdue && <div className="sx-muted" style={{ color: "#fb7185", fontWeight: 700, marginTop: 4 }}>24 soatdan oshdi</div>}</>;
   const actions = (row: OrderRow) => {
@@ -115,6 +125,10 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
     const action = actionFor(role, row.status); return <>
               {row.closed && boss && <div style={{ marginBottom: 6 }}><button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => { setError(""); setEditing({ row, requestId: null }); }}>Tahrirlash</button></div>}
               {action ? <button type="button" className={`sx-btn is-md ${action === "receive" ? "is-red" : "is-primary"}`} disabled={pending} aria-busy={isBusy(`${row.id}:${action}`)} onClick={() => act(row, action)}><BusyLabel busy={isBusy(`${row.id}:${action}`)}>{ACTION_LABEL[action]}</BusyLabel></button>
+                : seller && row.sellerConfirm === "PENDING" ? <span className="sx-actions" style={{ flexWrap: "wrap" }}>
+                  <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => answerSellerConfirmAction({ id: row.id, answer: "ok" }), undefined, `${row.id}:ok`)}><BusyLabel busy={isBusy(`${row.id}:ok`)}>✓ To‘g‘ri</BusyLabel></button>
+                  <button type="button" className="sx-btn is-md is-danger-ghost" disabled={pending} onClick={() => { setError(""); setRejectReason(""); setRejecting(row); }}>✕ Meniki emas</button>
+                </span>
                 : seller && row.noRequest && !row.sellerConfirmed ? <button type="button" className="sx-btn is-md is-primary" disabled={pending} onClick={() => run(() => confirmNoRequestAction(row.id), undefined, `${row.id}:confirm`)}><BusyLabel busy={isBusy(`${row.id}:confirm`)}>Tasdiqlayman</BusyLabel></button>
                 : row.status !== "STARTED" && <span className="sx-muted">{row.status === "RECEIVED_STORE" && row.purpose === "SHOP" ? "✓ Omborda" : WAIT_TEXT[row.status]}</span>}
               {row.status === "STARTED" && row.startedAt && <WorkingStatus acceptedAt={row.startedAt} dueDate={row.dueDate}/>}
@@ -142,6 +156,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
       <button type="button" className="sx-chip" aria-pressed={view === "active"} disabled={monthPending} onClick={() => showView("active")}>Faol</button>
       <button type="button" className="sx-chip" aria-pressed={cancelledView} disabled={monthPending} onClick={() => showView("cancelled")}>Bekor qilingan</button>
       {staff && <button type="button" className="sx-chip" aria-pressed={view === "test"} disabled={monthPending} onClick={() => showView("test")}>Test</button>}
+      {staff && (["all", "pending"] as const).map(key => <button key={key} type="button" className="sx-chip" aria-pressed={entered === key} onClick={() => setEntered(entered === key ? null : key)}>{key === "all" ? "🛠 Seh kiritgan" : "⏳ Tasdiqsiz"} · {rows.filter(row => key === "all" ? !!row.sellerConfirm : row.sellerConfirm === "PENDING").length}</button>)}
       {frameCount > 0 && <button type="button" className="sx-chip" aria-pressed={frameOnly} onClick={() => setFrameOnly(!frameOnly)}>⚠️ Rama qo‘shilmagan: {frameCount} ta</button>}
     </div>}
     {view === "test" && <p className="sx-note">Test zakazlari statistika, Excel eksport va navbat raqamlariga kirmaydi.</p>}
@@ -157,7 +172,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
           return <tr key={row.id} id={`order-${row.id}`} className={row.overdue ? "is-late" : row.isNew ? "is-new" : ""}>
             <td><NumberCell row={row} month={month.key}/></td>
             <td style={{ color: "#f4f5fb", whiteSpace: "nowrap" }}>{row.day}</td>
-            <td><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.isTest && <><br/><span className="sx-pill is-sm is-grey" style={{ marginTop: 4 }}>Test</span></>}{row.noRequest && <><br/><span className="sx-pill is-sm is-orange" style={{ marginTop: 4 }}>Zayavkasiz</span></>}{row.frame && <><br/><span className="sx-pill is-sm is-yellow" style={{ marginTop: 4, whiteSpace: "nowrap" }}>⚠️ Rama qo‘shilmagan · {row.frame}</span></>}</td>
+            <td><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span>{row.isTest && <><br/><span className="sx-pill is-sm is-grey" style={{ marginTop: 4 }}>Test</span></>}{row.noRequest && <><br/><span className="sx-pill is-sm is-orange" style={{ marginTop: 4 }}>Zayavkasiz</span></>}{row.sellerConfirm && <><br/><ConfirmBadge row={row}/></>}{row.frame && <><br/><span className="sx-pill is-sm is-yellow" style={{ marginTop: 4, whiteSpace: "nowrap" }}>⚠️ Rama qo‘shilmagan · {row.frame}</span></>}</td>
             <td style={{ minWidth: 220, fontWeight: 600, lineHeight: 1.35 }}><div>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices}/>}{row.frame && <div className="sx-pill is-yellow" role="note" style={{ marginTop: 6, borderRadius: 8, padding: "6px 10px", whiteSpace: "normal", fontWeight: 600, lineHeight: 1.4 }}>{row.sellerName} zakazida kondensator turi o‘zgargan ({row.frame}). Rama narxi hisobga qo‘shilmagan — rama haqqini qo‘shib hisoblang.</div>}</div></td>
             <td><div style={{ display: "grid", gap: 2 }}><b style={{ fontWeight: 600 }}>{row.sellerName}</b><span className="sx-muted">{row.sellerAt}</span></div></td>
             <td style={{ fontWeight: 700, color: row.purpose === "SHOP" ? "#8b90a6" : "#b3a4ff" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</td>
@@ -171,7 +186,7 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
         // The last step that has happened (or is waiting) is the one that matters on a phone.
         const step = row.steps.filter(item => item.state === "done" || item.state === "wait").at(-1) ?? row.steps[0];
         return <li key={row.id} className="admin-mobile-card">
-          <div className="admin-mobile-card-head"><div><strong><span className="num-g" style={{ fontSize: 20 }}>{row.number}</span> · {row.day}</strong><NumberCell row={row} month={month.key} note/><small>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</small></div><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span></div>
+          <div className="admin-mobile-card-head"><div><strong><span className="num-g" style={{ fontSize: 20 }}>{row.number}</span> · {row.day}</strong><NumberCell row={row} month={month.key} note/><small>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</small><ConfirmBadge row={row}/></div><span className="sx-tag">{row.kind === "AGREGAT" ? "Agregat" : "Zapchast"}</span></div>
           <div style={{ fontWeight: 600, lineHeight: 1.35, overflowWrap: "anywhere" }}>{row.product}{row.dueDate && <div className="sx-muted" style={{ fontWeight: 500 }}>Muddat: {row.dueDate.split("-").reverse().join(".")}</div>}{row.note && <div className="sx-muted" style={{ fontWeight: 500 }}>Izoh: {row.note}</div>}{row.prices && <PriceLine prices={row.prices}/>}</div>
           <StepBar row={row}/>
           {step && <span className={`sx-step ${step.state === "done" ? "is-done" : step.state === "wait" ? "is-wait" : ""}`}><b>{step.label}:</b> {step.text}</span>}
@@ -197,6 +212,15 @@ export function OrdersBoard({ view = "active", role, userName, rows, month, mont
           <button type="button" className="sx-btn" onClick={() => setCancelling(null)} disabled={pending}>Yo‘q</button>
           <button type="submit" className="sx-btn is-red" disabled={pending || (boss && cancelReason.trim().length < 3)}><BusyLabel busy={isBusy(`${cancelling.id}:cancel`)} busyText="Bekor qilinmoqda…">Ha, bekor qilish</BusyLabel></button>
         </div>
+      </form>
+    </Dialog>}
+    {rejecting && <Dialog title={`${rejecting.number} · meniki emas`} onClose={() => setRejecting(null)} busy={pending}>
+      <form style={{ display: "grid", gap: 12 }} onSubmit={event => { event.preventDefault(); run(() => answerSellerConfirmAction({ id: rejecting.id, answer: "no", reason: rejectReason.trim() || null }), () => setRejecting(null), `${rejecting.id}:no`); }}>
+        <p className="sx-muted" style={{ fontSize: 14 }}>{rejecting.product}</p>
+        <p className="sx-note">Zakaz to‘xtatiladi, seh guruhiga xabar boradi, Super Admin hal qiladi.</p>
+        <label className="sx-field">Sabab <small>· ixtiyoriy</small><textarea value={rejectReason} onChange={event => setRejectReason(event.target.value)} maxLength={300} placeholder="Masalan: bu mijoz meniki emas"/></label>
+        {error && <p className="sx-note is-error" role="alert">{error}</p>}
+        <button type="submit" className="sx-btn is-red" disabled={pending}><BusyLabel busy={isBusy(`${rejecting.id}:no`)}>✕ Meniki emas</BusyLabel></button>
       </form>
     </Dialog>}
     {asking && <Dialog title={`${asking.number} · tuzatish so‘rash`} onClose={() => setAsking(null)} busy={pending}>

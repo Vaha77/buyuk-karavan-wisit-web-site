@@ -1,5 +1,6 @@
-// Seh bot texts and buttons (personal chats of WORKSHOP users + the Seh group report). Pure; never contains a price.
-import { shortDay, clock, type OrderStatus } from "./rules";
+// Seh bot texts and buttons (personal chats of WORKSHOP users + the Seh group report). Pure; no price — except the seller's own "sotuvchi nomidan" message.
+import { shortDay, clock, type OrderStatus, type PriceSnapshot } from "./rules";
+import { formatUsd } from "../prays/rules";
 
 export type BotItem = { title: string; qty: number; issuedQty?: number | null };
 export type BotOrder = {
@@ -144,3 +145,23 @@ export function parseStoreCallback(data: string | undefined): { action: "store" 
   const match = data?.match(/^omb:(store|diff|load):([a-z0-9]{10,40})$/i);
   return match ? { action: match[1].toLowerCase() as "store" | "diff" | "load", orderId: match[2] } : null;
 }
+
+// ---- "Sotuvchi nomidan zakaz": the seller's private message (the one seh text with a price-list price). ----
+export type SellerConfirmOrder = Pick<BotOrder, "id" | "number" | "type" | "qty" | "items" | "purpose" | "customerName" | "dueDate" | "note"> & { enteredByName: string; prices: Pick<PriceSnapshot, "unitBaseUsd" | "totalBaseUsd" | "negotiated"> | null };
+/** "🛠 Ikromjon sizning nomingizdan zakaz kiritdi" + goods, customer, due date, prays price (qty × price; chiller "kelishiladi"), note. */
+export function sellerConfirmText(order: SellerConfirmOrder, reminder = false) {
+  const price = !order.prices ? null : order.prices.negotiated ? "kelishiladi" : order.type === "AGREGAT" && order.qty > 1 ? `${formatUsd(order.prices.unitBaseUsd)} × ${order.qty} = ${formatUsd(order.prices.totalBaseUsd)}` : formatUsd(order.prices.totalBaseUsd);
+  return [
+    ...(reminder ? ["⏰ Eslatma: 24 soatdan beri tasdiqlanmadi"] : []),
+    `🛠 ${order.enteredByName} sizning nomingizdan zakaz kiritdi`, `${order.number} · ${itemLines(order).join(", ")}`,
+    [`Kimga: ${recipient(order)}`, order.dueDate && `Muddat: ${shortDay(order.dueDate)}`].filter(Boolean).join(" · "),
+    ...(price ? [`Prays narxi: ${price}`] : []), ...(order.note ? [`Izoh: ${order.note}`] : []),
+  ].join("\n");
+}
+export const sellerConfirmKeyboard = (orderId: string): Keyboard => ({ inline_keyboard: [[{ text: "✓ To‘g‘ri", callback_data: `sc:ok:${orderId}` }, { text: "✕ Meniki emas", callback_data: `sc:no:${orderId}` }]] });
+export function parseSellerConfirmCallback(data: string | undefined): { answer: "ok" | "no"; orderId: string } | null {
+  const match = data?.match(/^sc:(ok|no):([a-z0-9]{10,40})$/i);
+  return match ? { answer: match[1].toLowerCase() as "ok" | "no", orderId: match[2] } : null;
+}
+/** Seh group: an order the seller called "Meniki emas" is stopped until Super Admin decides. */
+export const stoppedText = (number: string, title: string, seller: string, reason: string | null) => `⏸ ${number} to‘xtatildi · ${title}\nSotuvchi ${seller}: “meniki emas”${reason ? ` · ${reason}` : ""}\nSuper Admin hal qiladi.`;

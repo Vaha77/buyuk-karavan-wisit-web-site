@@ -2,9 +2,10 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { TelegramApiError, editMessageText, getMe, sendMessage, telegramErrorDetails, telegramWorkshopChatId } from "@/lib/telegram/client";
-import { LINK_PREFIX, LINK_TTL_MS, cancelledText, deliveryPlan, groupIssuedMessage, personalKeyboard, personalMessage, storeKeyboard, storeMessage, type BotOrder, type DeliveryStatus } from "./bot-text";
+import { LINK_PREFIX, LINK_TTL_MS, cancelledText, deliveryPlan, groupIssuedMessage, orderTitle, personalKeyboard, personalMessage, sellerConfirmKeyboard, sellerConfirmText, stoppedText, storeKeyboard, storeMessage, type BotOrder, type DeliveryStatus } from "./bot-text";
+import { sellerChat } from "@/lib/customers/seller-telegram";
 import { sendToGroup } from "./group-send";
-import { orderNumber, queuePositions } from "./rules";
+import { orderNumber, queuePositions, type PriceSnapshot } from "./rules";
 
 // Seh bot delivery: personal messages to linked WORKSHOP users (edited on every status change) and the group report on ISSUED.
 // A Telegram failure never undoes a status change; it is logged and flagged on the order for "qayta yuborish".
@@ -117,6 +118,32 @@ export async function notifyStore(orderId: string) {
       await db.workshopOrderMessage.create({ data: { orderId, chatId: telegramChatId!, messageId: sent.message_id, store: true } });
     } catch (error) { console.error("Ombor Telegram send failed", telegramErrorDetails(error)); }
   }
+}
+
+// ---- "Sotuvchi nomidan zakaz": the seller's private message with [✓ To‘g‘ri] [✕ Meniki emas]. Best effort: no Telegram = site only. ----
+export async function notifySellerConfirm(orderId: string, reminder = false) {
+  const db = getDb();
+  const order = await db.workshopOrder.findUnique({ where: { id: orderId }, select: { id: true, monthKey: true, monthNo: true, type: true, qty: true, purpose: true, customerName: true, dueDate: true, note: true, sellerId: true, priceSnapshot: true, createdBy: { select: { name: true } }, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } } });
+  const chat = order && await sellerChat({ userId: order.sellerId }).catch(() => null);
+  if (!order || !chat) return false;
+  try {
+    const sent = await sendMessage(chat, sellerConfirmText({ ...order, number: orderNumber(order), enteredByName: order.createdBy.name, prices: order.priceSnapshot as PriceSnapshot | null }, reminder), sellerConfirmKeyboard(order.id));
+    await db.workshopOrder.update({ where: { id: orderId }, data: { sellerMessageId: sent.message_id } });
+    return true;
+  } catch (error) { console.error("Seller confirm message failed", telegramErrorDetails(error)); return false; }
+}
+/** After the answer (bot or site) the seller's message becomes "✅ Tasdiqlandi" / "❌ Rad etildi" without buttons. */
+export async function closeSellerMessage(order: { sellerId: string; sellerMessageId: number | null }, text: string) {
+  const chat = order.sellerMessageId && await sellerChat({ userId: order.sellerId }).catch(() => null);
+  if (chat) await editMessageText(chat, order.sellerMessageId!, text, { inline_keyboard: [] }).catch(error => { if (!notModified(error)) console.error("Seller confirm edit failed", telegramErrorDetails(error)); });
+}
+/** "Meniki emas": "⏸ … to‘xtatildi" to the Seh group (best effort). */
+export async function notifyStopped(orderId: string, reason: string | null) {
+  const chatId = telegramWorkshopChatId();
+  const order = chatId && await getDb().workshopOrder.findUnique({ where: { id: orderId }, select: { monthKey: true, monthNo: true, type: true, qty: true, seller: { select: { name: true } }, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } } });
+  if (!chatId || !order) return;
+  const sent = await sendToGroup(sendMessage, chatId, stoppedText(orderNumber(order), orderTitle(order), order.seller.name, reason));
+  if (!sent.ok) console.error("Seh stopped message failed", { error: sent.error });
 }
 
 /** "Telegramga yuborilmadi · qayta yuborish" on the site. */

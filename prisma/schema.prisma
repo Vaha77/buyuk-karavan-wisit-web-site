@@ -1131,6 +1131,12 @@ enum WorkshopOrderPurpose {
   CLIENT
 }
 
+enum SellerConfirm {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
 enum WorkshopOrderStatus {
   NEW
   // "Navbatda": accepted, waiting in the queue (ordered by acceptedAt).
@@ -1172,6 +1178,14 @@ model WorkshopOrder {
   // "Zayavkasiz chiqim": written by the workshop after handing goods out; the seller confirms it.
   noRequest         Boolean              @default(false)
   sellerConfirmedAt DateTime?
+  // "Sotuvchi nomidan" (entered by the workshop, createdById): the seller's answer; null = the seller's own order.
+  sellerConfirm          SellerConfirm?
+  sellerRejectReason     String?        @db.VarChar(300)
+  // The 24 h reminder went out; the seller's bot message (edited to "✅ Tasdiqlandi" / "❌ Rad etildi").
+  sellerRemindedAt       DateTime?
+  sellerMessageId        Int?
+  // "Tasdiqlash kerak": Super Admin closed a "Meniki emas" with "Bekor qilish".
+  sellerRejectResolvedAt DateTime?
   status            WorkshopOrderStatus  @default(NEW)
   acceptedById      String?
   acceptedAt        DateTime?

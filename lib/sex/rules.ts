@@ -51,6 +51,29 @@ export const ACTION_LABEL: Record<OrderAction, string> = { accept: "Qabul qildim
 export const isStaff = (role: string) => role === "SUPER_ADMIN" || role === "ADMIN" || role === "MANAGER";
 export const canCreateOrders = (role: string) => role === "SELLER" || isStaff(role);
 
+// ---- "Sotuvchi nomidan zakaz": the workshop enters an order for a seller, the seller answers "✓ To‘g‘ri" / "✕ Meniki emas". ----
+/** Prisma `where` of the sellers an order may be entered for (the same list as the "Kim uchun?" picker). */
+export const ACTIVE_SELLER = { role: "SELLER", isActive: true, approvalStatus: "APPROVED" } as const;
+/** WORKSHOP never orders for itself: only for a chosen seller. Everyone else orders as themselves (a sent sellerId is ignored). */
+export function orderSellerFor(role: string, sellerId: string | null | undefined): { ok: true; sellerId: string | null } | { ok: false; error: string } {
+  if (role === "WORKSHOP") return sellerId ? { ok: true, sellerId } : { ok: false, error: "“Kim uchun?” — sotuvchini tanlang." };
+  return canCreateOrders(role) ? { ok: true, sellerId: null } : { ok: false, error: "Zakaz berish huquqi yo‘q." };
+}
+export type SellerConfirm = "PENDING" | "CONFIRMED" | "REJECTED";
+/** The seller's answer: the same answer again is a no-op (bot and site, double click); the other answer after one is refused. */
+export function sellerConfirmStep(current: SellerConfirm | null, answer: "ok" | "no"): { ok: true; to: SellerConfirm; already: boolean } | { ok: false; error: string } {
+  const to = answer === "ok" ? "CONFIRMED" : "REJECTED";
+  if (!current) return { ok: false, error: "Bu o‘zingiz bergan zakaz — tasdiq kerak emas." };
+  if (current === to) return { ok: true, to, already: true };
+  if (current !== "PENDING") return { ok: false, error: current === "CONFIRMED" ? "Zakaz allaqachon tasdiqlangan." : "Zakaz allaqachon rad etilgan." };
+  return { ok: true, to, already: false };
+}
+export const SELLER_CONFIRM_LABEL: Record<SellerConfirm, string> = { PENDING: "🛠 seh kiritdi · ⏳ tasdiq kutilmoqda", CONFIRMED: "🛠 seh kiritdi · ✓ tasdiqlandi", REJECTED: "✕ sotuvchi: meniki emas" };
+export const rejectCancelReason = (reason: string | null) => `Sotuvchi: meniki emas${reason ? ` · ${reason}` : ""}`.slice(0, 300);
+/** "Boshqa sotuvchiga o‘tkazish": a "Meniki emas" order goes back to the stage it was stopped at. */
+export const resumedStatus = (order: { acceptedAt: Date | string | null; startedAt: Date | string | null }): OrderStatus => order.startedAt ? "STARTED" : order.acceptedAt ? "ACCEPTED" : "NEW";
+export const SELLER_CONFIRM_REMIND_MS = 24 * 60 * 60 * 1000;
+
 /** Statuses of the store stage: what the omborchi lists (besides their own requests). */
 export const STORE_STATUSES = ["ISSUED", "RECEIVED_STORE", "CLIENT_LOADED"] as const satisfies readonly OrderStatus[];
 /** Prisma `where` for the orders a viewer may list: a seller only their own, the workshop only open tasks, the omborchi the store stage (no "Zayavkasiz chiqim") and their own requests, staff everything. */
