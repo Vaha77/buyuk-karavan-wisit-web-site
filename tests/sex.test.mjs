@@ -545,6 +545,10 @@ test("cancel: seller only their own NEW order; SUPER_ADMIN until it leaves the w
   assert.equal(rules.checkTransition("WORKSHOP", "CANCELLED", "accept").ok, false, "a cancelled order cannot move on");
   assert.equal(rules.canCancel("SELLER", "NEW", true), true);
   assert.equal(rules.canCancel("SELLER", "ACCEPTED", true), false);
+  // "Sotuvchi nomidan" order still waiting on the seller: no "Bekor qilish", only "✕ Meniki emas" (site and server).
+  assert.equal(rules.canCancel("SELLER", "NEW", true, true), false);
+  assert.deepEqual(rules.checkCancel("SELLER", "NEW", true, null, true), { ok: false, error: "Seh kiritgan zakaz: “✕ Meniki emas” ni bosing." });
+  assert.deepEqual(rules.checkCancel("SUPER_ADMIN", "NEW", false, "sabab", true), { ok: true }, "Super Admin still cancels");
 
   // Telegram: the personal message becomes "❌ #0003 bekor qilindi" without buttons; nothing to the group.
   const cancelled = botOrder({ number: "10-03", status: "CANCELLED", cancelReason: "Mijoz fikridan qaytdi" });
