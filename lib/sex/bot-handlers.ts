@@ -3,11 +3,11 @@ import { getDb } from "@/lib/db";
 import { answerCallbackQuery, editMessageText, sendMessage, telegramErrorDetails } from "@/lib/telegram/client";
 import type { TelegramCallbackQuery, TelegramMessage } from "@/lib/telegram/types";
 import { consumeLinkCode } from "./bot";
-import { isBotCommand, limitKeyboard, limitQuestion, orderRecipient, orderTitle, parseSehCallback, parseStartPayload, parseStoreCallback, queueText, todayText } from "./bot-text";
+import { isBotCommand, limitKeyboard, limitQuestion, orderRecipient, orderTitle, parseSehCallback, parseSellerConfirmCallback, parseStartPayload, parseStoreCallback, queueText, todayText } from "./bot-text";
 import { workshopDay } from "./queries";
 import { closeMonths } from "./month";
 import { orderNumber, queuePositions, workingSince } from "./rules";
-import { transitionOrder } from "./service";
+import { answerSellerConfirm, transitionOrder } from "./service";
 import { linkedText } from "@/lib/telegram/start-rules";
 import { SITE_URL } from "@/lib/site-url";
 
@@ -43,9 +43,19 @@ async function handleStoreCallback(callback: TelegramCallbackQuery, parsed: NonN
   return true;
 }
 
+/** Seller [✓ To‘g‘ri] / [✕ Meniki emas]: the same answerSellerConfirm as the site (it also edits this message). */
+async function handleSellerConfirmCallback(callback: TelegramCallbackQuery, parsed: NonNullable<ReturnType<typeof parseSellerConfirmCallback>>) {
+  const user = await getDb().adminUser.findUnique({ where: { telegramChatId: String(callback.from.id) } });
+  const result = user && user.isActive && user.approvalStatus === "APPROVED" ? await answerSellerConfirm(user, parsed.orderId, parsed.answer, null, "telegram") : { ok: false as const, error: "Ruxsat yo‘q: faqat shu zakaz sotuvchisi uchun." };
+  await answerCallbackQuery(callback.id, result.ok ? (parsed.answer === "ok" ? "✅ Tasdiqlandi" : "❌ Rad etildi") : result.error, !result.ok).catch(log("Seller confirm answer failed"));
+  return true;
+}
+
 export async function handleSehCallback(callback: TelegramCallbackQuery) {
   const store = parseStoreCallback(callback.data);
   if (store) return handleStoreCallback(callback, store);
+  const confirm = parseSellerConfirmCallback(callback.data);
+  if (confirm) return handleSellerConfirmCallback(callback, confirm);
   const parsed = parseSehCallback(callback.data);
   if (!parsed) return false;
   const answer = (text: string, alert = false) => answerCallbackQuery(callback.id, text, alert).catch(log("Seh callback answer failed"));

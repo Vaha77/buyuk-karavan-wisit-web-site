@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, X } from "lucide-react";
 import { approvePurchaseAction, rejectPurchaseAction } from "@/app/admin/(protected)/customers/actions";
-import { checkStoreDiffAction, rejectCorrectionAction } from "@/app/admin/(sex)/seh/actions";
+import { checkStoreDiffAction, rejectCorrectionAction, resolveRejectedAction } from "@/app/admin/(sex)/seh/actions";
 import { LinkButton } from "@/components/admin/feedback";
 import { Dialog } from "./dialog";
 
@@ -73,5 +73,24 @@ export function StoreDiffButton({ id, label }: { id: string; label: string }) {
   return <div className="bk-actions" style={{ justifyContent: "flex-end" }}>
     <button type="button" className="bk-btn is-primary" disabled={pending} onClick={check} aria-label={`${label} — tasdiqlash`}><Check size={15}/>Tasdiqlash</button>
     {error && <span className="bk-muted" role="alert">{error}</span>}
+  </div>;
+}
+
+/** Seh "Meniki emas" (SUPER_ADMIN): "Boshqa sotuvchiga o‘tkazish" (the order resumes, that seller confirms it) or "Bekor qilish". */
+export function RejectedOrderButtons({ id, label, sellers }: { id: string; label: string; sellers: Array<{ id: string; name: string }> }) {
+  const router = useRouter();
+  const [sellerId, setSellerId] = useState(""), [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+  const run = (to: string | null) => startTransition(async () => {
+    setError("");
+    const result = await resolveRejectedAction({ id, sellerId: to });
+    if (!result.ok) { setError(result.error); return; }
+    router.refresh();
+  });
+  return <div className="bk-actions" style={{ justifyContent: "flex-end" }}>
+    <label className="bk-field" style={{ minWidth: 150 }}><select value={sellerId} onChange={event => setSellerId(event.target.value)} aria-label={`${label} — yangi sotuvchi`}><option value="">Sotuvchi…</option>{sellers.map(seller => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>
+    <button type="button" className="bk-btn is-primary" disabled={pending || !sellerId} onClick={() => run(sellerId)}>Boshqa sotuvchiga o‘tkazish</button>
+    <button type="button" className="bk-btn is-danger-ghost" disabled={pending} onClick={() => run(null)} aria-label={`${label} — bekor qilish`}><X size={15}/>Bekor qilish</button>
+    {error && <span className="bk-status-line is-bad" role="alert">{error}</span>}
   </div>;
 }

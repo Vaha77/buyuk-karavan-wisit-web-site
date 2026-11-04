@@ -4,7 +4,7 @@ import { frameChange } from "./zborka";
 import type { AdminUser, Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { closeMonths } from "./month";
-import { canCancel, canMarkTest, isClosedMonth, monthKeyOf, DEFAULT_WORKSHOP_DAILY_LIMIT, isReceiveOverdue, isStaff, monthRange, orderKind, orderNumber, orderScope, processSteps, queuePositions, RECEIVE_OVERDUE_MS, sellerQueue, stripPrices, tashkentDayStart, when, shortDay, type OrderStatus, type PriceSnapshot, type StepView } from "./rules";
+import { ACTIVE_SELLER, canCancel, canMarkTest, isClosedMonth, monthKeyOf, DEFAULT_WORKSHOP_DAILY_LIMIT, isReceiveOverdue, isStaff, monthRange, orderKind, orderNumber, orderScope, processSteps, queuePositions, RECEIVE_OVERDUE_MS, sellerQueue, stripPrices, tashkentDayStart, when, shortDay, type OrderStatus, type PriceSnapshot, type SellerConfirm, type StepView } from "./rules";
 
 type Viewer = Pick<AdminUser, "id" | "role" | "salesPersonId">;
 export type OrderRow = {
@@ -12,7 +12,9 @@ export type OrderRow = {
   /** number: "MM-NN"; closed: its month is closed (only SUPER_ADMIN changes it); carriedFrom: old "MM-NN" when moved from the previous month. */
   id: string; number: string; monthKey: string; closed: boolean; carriedFrom: string | null; day: string; type: "AGREGAT" | "ZAPCHAST"; kind: "AGREGAT" | "ZAPCHAST"; isTest: boolean; canMarkTest: boolean; product: string; qty: number;
   sellerName: string; sellerAt: string; purpose: "SHOP" | "CLIENT"; customerName: string | null; status: OrderStatus; steps: StepView[];
-  overdue: boolean; acceptedAt: string | null; startedAt: string | null; queue: number | null; telegramFailed: boolean; canCancel: boolean; cancelled: { at: string; by: string | null; reason: string | null } | null; noRequest: boolean; sellerConfirmed: boolean; isNew: boolean; dueDate: string | null; note: string | null;
+  overdue: boolean; acceptedAt: string | null; startedAt: string | null; queue: number | null; telegramFailed: boolean; canCancel: boolean; cancelled: { at: string; by: string | null; reason: string | null } | null; noRequest: boolean; sellerConfirmed: boolean;
+  /** "Sotuvchi nomidan": the seller's answer (null = their own order) and the "Meniki emas" reason. */
+  sellerConfirm: SellerConfirm | null; sellerRejectReason: string | null; isNew: boolean; dueDate: string | null; note: string | null;
   items: Array<{ id: string; title: string; qty: number; issuedQty?: number | null }>;
   /** Store stage (omborchi board): when it left the workshop / reached the store / was loaded, and a reported shortage. */
   /** Placed by this viewer (the omborchi's own "Sehdan so‘rash" requests). */
@@ -38,7 +40,7 @@ function toRow(order: Loaded, viewer: Viewer, now: Date, queue: Map<string, numb
   const base = {
     id: order.id, number: orderNumber(order), monthKey: order.monthKey, closed: isClosedMonth(order.monthKey, now), carriedFrom: order.carriedFrom, day: shortDay(order.createdAt), type: order.type, kind: kindOf(order), isTest: order.isTest, canMarkTest: canMarkTest(role), product, qty: order.qty,
     sellerName: order.seller.name, sellerAt: when(order.createdAt, now), purpose: order.purpose, customerName: order.customerName, status: order.status,
-    steps: processSteps(order, now), overdue: isReceiveOverdue(order, now), acceptedAt: order.acceptedAt?.toISOString() ?? null, startedAt: order.startedAt?.toISOString() ?? null, queue: queue.get(order.id) ?? null, telegramFailed: !!order.telegramFailedAt, canCancel: canCancel(role, order.status, order.sellerId === viewer.id), cancelled: order.cancelledAt ? { at: when(order.cancelledAt, now), by: order.cancelledBy?.name ?? null, reason: order.cancelReason } : null, noRequest: order.noRequest, sellerConfirmed: !!order.sellerConfirmedAt,
+    steps: processSteps(order, now), overdue: isReceiveOverdue(order, now), acceptedAt: order.acceptedAt?.toISOString() ?? null, startedAt: order.startedAt?.toISOString() ?? null, queue: queue.get(order.id) ?? null, telegramFailed: !!order.telegramFailedAt, canCancel: canCancel(role, order.status, order.sellerId === viewer.id), cancelled: order.cancelledAt ? { at: when(order.cancelledAt, now), by: order.cancelledBy?.name ?? null, reason: order.cancelReason } : null, noRequest: order.noRequest, sellerConfirmed: !!order.sellerConfirmedAt, sellerConfirm: order.sellerConfirm, sellerRejectReason: order.sellerRejectReason,
     frame: (role === "SUPER_ADMIN" || role === "ADMIN") && order.type === "AGREGAT" ? frameChange(order.items[0]?.options) : null,
     mine: order.sellerId === viewer.id,
     store: { issuedBy: order.issuedBy?.name ?? null, issuedAt: order.issuedAt?.toISOString() ?? null, receivedAt: order.receivedAt?.toISOString() ?? null, loadedAt: order.loadedAt?.toISOString() ?? null, receivedQty: order.receivedQty, receivedNote: order.receivedNote },
@@ -77,7 +79,7 @@ export async function listOrders(viewer: Viewer, month?: string, view: OrdersVie
 }
 
 async function closedSummary(range: { key: string; from: Date; to: Date }) {
-  const db = getDb(), real = { isTest: false };
+  const db = getDb(), real = { isTest: false, ...NOT_REJECTED };
   const [issued, carried, cancelled] = await Promise.all([
     db.workshopOrder.count({ where: { ...real, monthKey: range.key, status: { in: ["ISSUED", "RECEIVED", "RECEIVED_STORE", "CLIENT_LOADED"] } } }),
     db.workshopOrder.count({ where: { ...real, monthKey: { gt: range.key }, createdAt: { gte: range.from, lt: range.to } } }),
@@ -89,7 +91,7 @@ async function closedSummary(range: { key: string; from: Date; to: Date }) {
 /** Orders of one month (by monthKey: a carried order counts once, in the month it ended up in) for the Excel export (SUPER_ADMIN only — it carries prices). Test orders are left out. */
 export async function monthOrders(month?: string) {
   const range = monthRange(month);
-  const orders = await getDb().workshopOrder.findMany({ where: { monthKey: range.key, isTest: false }, include, orderBy: { monthNo: "asc" } });
+  const orders = await getDb().workshopOrder.findMany({ where: { monthKey: range.key, isTest: false, ...NOT_REJECTED }, include, orderBy: { monthNo: "asc" } });
   return { range, orders };
 }
 
@@ -120,8 +122,14 @@ export async function customerOptions(viewer: Viewer) {
 }
 
 export async function sellerOptions() {
-  return getDb().adminUser.findMany({ where: { role: "SELLER", isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  return getDb().adminUser.findMany({ where: ACTIVE_SELLER, select: { id: true, name: true, salesPersonId: true }, orderBy: { name: "asc" } });
 }
+/** "Sotuvchi nomidan" form: every seller's own regular customers (the form shows the chosen seller's). */
+export async function sellerCustomers() {
+  return getDb().regularCustomer.findMany({ where: { isActive: true, ownerId: { not: null } }, select: { id: true, name: true, ownerId: true }, orderBy: { name: "asc" }, take: 3000 });
+}
+/** Accounting (monthly figures, Excel): an order the seller called "Meniki emas" is left out; unanswered ones stay in. */
+export const NOT_REJECTED: Prisma.WorkshopOrderWhereInput = { OR: [{ sellerConfirm: null }, { sellerConfirm: { not: "REJECTED" } }] };
 
 /** "Seh navbati" for a seller page: every open order of the workshop, reduced by sellerQueue (no customer, no price). */
 export async function getSellerQueue(sellerId: string) {

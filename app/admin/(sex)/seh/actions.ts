@@ -1,9 +1,9 @@
 "use server";
 import { z } from "zod";
 import { requireSexUser } from "@/lib/auth/require-admin";
-import { canCreateOrders } from "@/lib/sex/rules";
+import { orderSellerFor } from "@/lib/sex/rules";
 import { transitionInputError, transitionInputSchema } from "@/lib/sex/validation";
-import { checkStoreDiff, cancelOrder, confirmNoRequest, editOrder, rejectCorrection, requestCorrection, setOrderTest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
+import { answerSellerConfirm, resolveRejected, checkStoreDiff, cancelOrder, confirmNoRequest, editOrder, rejectCorrection, requestCorrection, setOrderTest, createAgregatOrder, createZapchastOrder, transitionOrder } from "@/lib/sex/service";
 import { createLinkCode, resendOrder, sendPersonalTest } from "@/lib/sex/bot";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
@@ -21,6 +21,8 @@ const common = {
   // One id per form submit (idempotency) and the "Baribir yana yuborasizmi?" answer.
   requestId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/, "So‘rov identifikatori noto‘g‘ri.").nullable().default(null),
   confirmDuplicate: z.boolean().default(false),
+  // "Sotuvchi nomidan" (WORKSHOP only, required there; ignored for everyone else — see orderSellerFor).
+  sellerId: z.string().max(40).nullable().default(null),
 };
 const agregatSchema = z.object({
   ...common, groupKey: z.string().min(1).max(80), modelKey: z.string().min(1).max(60), assembly: z.enum(["k", "rb", "vd", "vz", "ch"]), liters: z.string().max(10).nullable(), hp: z.string().max(10).nullable(),
@@ -33,19 +35,21 @@ const firstIssue = (error: z.ZodError) => error.issues[0]?.message || "Ma’lumo
 
 export async function createAgregatOrderAction(raw: unknown): Promise<SexActionResult> {
   const user = await requireSexUser();
-  if (!canCreateOrders(user.role)) return { ok: false, error: "Zakaz berish huquqi yo‘q." };
   const parsed = agregatSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
-  const result = await createAgregatOrder(user, parsed.data, { requestId: parsed.data.requestId, confirmDuplicate: parsed.data.confirmDuplicate });
+  const owner = orderSellerFor(user.role, parsed.data.sellerId);
+  if (!owner.ok) return owner;
+  const result = await createAgregatOrder(user, parsed.data, { requestId: parsed.data.requestId, confirmDuplicate: parsed.data.confirmDuplicate }, owner.sellerId);
   return result.ok ? { ok: true, number: result.number, id: result.id, telegram: result.telegram, repeated: result.repeated } : result;
 }
 
 export async function createZapchastOrderAction(raw: unknown): Promise<SexActionResult> {
   const user = await requireSexUser();
-  if (!canCreateOrders(user.role)) return { ok: false, error: "Zakaz berish huquqi yo‘q." };
   const parsed = zapchastSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
-  const result = await createZapchastOrder(user, parsed.data, undefined, { requestId: parsed.data.requestId, confirmDuplicate: parsed.data.confirmDuplicate });
+  const owner = orderSellerFor(user.role, parsed.data.sellerId);
+  if (!owner.ok) return owner;
+  const result = await createZapchastOrder(user, parsed.data, undefined, { requestId: parsed.data.requestId, confirmDuplicate: parsed.data.confirmDuplicate }, owner.sellerId);
   return result.ok ? { ok: true, number: result.number, id: result.id, telegram: result.telegram, repeated: result.repeated } : result;
 }
 
@@ -72,6 +76,23 @@ export async function confirmNoRequestAction(id: unknown): Promise<SexActionResu
   const user = await requireSexUser();
   if (user.role !== "SELLER" || typeof id !== "string") return { ok: false, error: "Faqat sotuvchi tasdiqlaydi." };
   return confirmNoRequest(user, id);
+}
+
+/** "✓ To‘g‘ri" / "✕ Meniki emas" (optional reason) on a "Sotuvchi nomidan" order; the bot buttons call the same function. */
+export async function answerSellerConfirmAction(raw: unknown): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  const parsed = z.object({ id: z.string().min(1).max(40), answer: z.enum(["ok", "no"]), reason: z.string().trim().max(300).nullable().default(null) }).safeParse(raw);
+  if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+  const result = await answerSellerConfirm(user, parsed.data.id, parsed.data.answer, parsed.data.reason);
+  return result.ok ? { ok: true } : result;
+}
+
+/** "Tasdiqlash kerak": "Boshqa sotuvchiga o‘tkazish" (sellerId) or "Bekor qilish" (null) — SUPER_ADMIN, checked in resolveRejected. */
+export async function resolveRejectedAction(raw: unknown): Promise<SexActionResult> {
+  const user = await requireSexUser();
+  const parsed = z.object({ id: z.string().min(1).max(40), sellerId: z.string().min(1).max(40).nullable() }).safeParse(raw);
+  if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+  return resolveRejected(user, parsed.data.id, parsed.data.sellerId);
 }
 
 /** "Telegram ulash": a one-time deep link (15 min) that binds this user's private chat to the bot. */

@@ -7,7 +7,8 @@ import { AGREGAT_CATEGORY_PATTERN, orderNumber } from "@/lib/sex/rules";
 import { attentionReasons, fillWeeks, OPEN_STATUSES, UNACCEPTED_ALERT_MS, weekWindowStart } from "./workshop-rules";
 
 // Every block leaves out cancelled and test orders. Sums use the price-list total frozen on the order (priceSnapshot.totalBaseUsd).
-const REAL = Prisma.sql`o.status <> 'CANCELLED' AND NOT o."isTest"`;
+// "Meniki emas" (sotuvchi nomidan) orders never count; unanswered ones do.
+const REAL = Prisma.sql`o.status <> 'CANCELLED' AND NOT o."isTest" AND o."sellerConfirm" IS DISTINCT FROM 'REJECTED'`;
 // Agregat / Zapchast from the goods' product category, the same rule as orderKind() in lib/sex/rules.ts.
 const KIND_JOIN = Prisma.sql`LEFT JOIN LATERAL (
   SELECT bool_or(concat_ws(' ', c.slug, c.name) ~* ${AGREGAT_CATEGORY_PATTERN}) AS agregat, bool_or(i."partId" IS NOT NULL OR c.id IS NOT NULL) AS known

@@ -186,3 +186,13 @@ export function quoteZborka(model: ZborkaModel, group: Pick<ZborkaGroup, "label"
   }
   return { ok: true, title, base: Math.round(base * 100) / 100, standard: product.base, negotiated: false, frameChanged, product, changes, lines, telegram, options: { liters, hp, fn, condenserId, condenser, composition: null } };
 }
+
+/** The same catalog with every price set to 0 (WORKSHOP: the form still works, the server prices the order from Prays). */
+export function withoutPrices(catalog: ZborkaCatalog): ZborkaCatalog {
+  const free = <T extends { base: number } | null>(item: T) => (item ? { ...item, base: 0 } : item);
+  const zero = (table: Record<string, number>) => Object.fromEntries(Object.keys(table).map(key => [key, 0]));
+  return {
+    ...catalog, receivers: zero(catalog.receivers), condensers: catalog.condensers.map(free),
+    groups: catalog.groups.map(group => ({ ...group, hpTable: zero(group.hpTable), models: group.models.map(model => ({ ...model, k: free(model.k), rb: free(model.rb), vd: free(model.vd), vz: free(model.vz) })) })),
+  };
+}

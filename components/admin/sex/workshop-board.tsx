@@ -3,11 +3,11 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, Dialog } from "@/components/admin/bklead/dialog";
-import { BusyLabel } from "@/components/admin/feedback";
+import { BusyLabel, LinkButton } from "@/components/admin/feedback";
 import { createNoRequestAction, transitionOrderAction } from "@/app/admin/(sex)/seh/actions";
 import type { OrderRow } from "@/lib/sex/queries";
 import { ACTION_LABEL, dailyCapView, daysPastDue, workingSince, type OrderAction } from "@/lib/sex/rules";
-import { CarriedNote, IssueForm, NoRequestForm, useOrderSearch } from "./orders-board";
+import { CarriedNote, ConfirmBadge, IssueForm, NoRequestForm, useOrderSearch } from "./orders-board";
 import { TelegramLink } from "./telegram-link";
 
 type Option = { id: string; name: string };
@@ -68,7 +68,8 @@ export function WorkshopBoard({ telegramLinked, userName, rows, started, limit, 
       <div><span className="sx-crumb">Seh / Mening vazifalarim</span><h1>Salom, {firstName}</h1><p className="sx-lead">Qabul qiling → navbatda turadi → terishni boshlang → tayyor bo‘lgach “Chiqib ketdi”</p></div>
       <div className="sx-actions">
         <div className="sx-cap"><span>Bugun terish boshlandi</span><div><b className={cap.tone === "red" ? "is-red" : ""}>{started} / {limit}</b><small className={cap.tone === "red" ? "is-red" : ""}>{cap.note}</small></div></div>
-        <button type="button" className="sx-btn is-warn" style={{ height: 48 }} onClick={() => setNoRequestOpen(true)} disabled={!parts.length}>+ Zayavkasiz chiqim</button>
+        <LinkButton className="sx-btn is-primary is-tall" href="/admin/seh/new?type=agregat&for=seller">＋ Sotuvchi nomidan zakaz</LinkButton>
+        <button type="button" className="sx-btn is-warn" style={{ height: 48 }} onClick={() => setNoRequestOpen(true)} disabled={!parts.length}>＋ Zayavkasiz chiqim</button>
       </div>
     </div>
     <div className="sx-card" style={{ padding: 14, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -99,7 +100,7 @@ export function WorkshopBoard({ telegramLinked, userName, rows, started, limit, 
               <hr className="sx-dash"/>
               <dl className="sx-receipt-meta">
                 <dt>Kimga</dt><dd style={{ color: row.purpose === "SHOP" ? "#8b90a6" : "#7c5cff" }}>{row.purpose === "SHOP" ? "Vitrina" : `Mijoz: ${row.customerName ?? "—"}`}</dd>
-                <dt>Sotuvchi</dt><dd>{row.sellerName}</dd>
+                <dt>Sotuvchi</dt><dd>{row.sellerName}{row.sellerConfirm && <><br/><ConfirmBadge row={row}/></>}</dd>
                 <dt>Muddat</dt><dd style={{ color: late ? "#fb7185" : undefined }}>{row.dueDate ? dueLabel(row.dueDate) : "—"}</dd>
                 <dt>Keldi</dt><dd style={{ fontWeight: 400 }}>{row.sellerAt}</dd>
               </dl>

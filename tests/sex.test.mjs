@@ -366,7 +366,7 @@ test("Seh group gets only the ISSUED report (no buttons, no price)", async () =>
   assert.equal(zap, "✅ Sehdan chiqdi 10-18\nVibro shlang F28 ×8\nGlazok 3/8 ×2\nKimga: Magazin (vitrina)\nZayavka bergan: Abduraxmon\nSeh mas’uli: Ikromjon\n⚠️ Zayavkasiz chiqim");
   const delivery = await readFile(new URL("../lib/sex/bot.ts", import.meta.url), "utf8");
   assert.match(delivery, /if \(!chatId \|\| order\.status !== "ISSUED"\) return;/, "group report only for ISSUED");
-  assert.equal((delivery.match(/telegramWorkshopChatId\(\)/g) ?? []).length, 2, "the group chat is used only by the report and its test");
+  assert.equal((delivery.match(/telegramWorkshopChatId\(\)/g) ?? []).length, 3, "the group chat: the ISSUED report, its test and the \"Meniki emas\" stop notice");
   assert.doesNotMatch(delivery.slice(delivery.indexOf("async function sendGroupReport"), delivery.indexOf("/** Sends the personal message")), /Keyboard|inline_keyboard/);
 });
 

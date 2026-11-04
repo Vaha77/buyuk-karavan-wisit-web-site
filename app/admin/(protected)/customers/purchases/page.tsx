@@ -5,7 +5,9 @@ import { orderNumber } from "@/lib/sex/rules";
 import { getDb } from "@/lib/db";
 import { PURCHASE_STATUS } from "@/lib/customers/seller-rules";
 import { formatDecimal, formatUsd } from "@/lib/dashboard/format";
-import { CorrectionReviewButtons, PurchaseReviewButtons, StoreDiffButton } from "@/components/admin/bklead/purchase-review";
+import { CorrectionReviewButtons, PurchaseReviewButtons, RejectedOrderButtons, StoreDiffButton } from "@/components/admin/bklead/purchase-review";
+import { sellerOptions } from "@/lib/sex/queries";
+import { orderTitle } from "@/lib/sex/bot-text";
 
 export const metadata: Metadata = { title: "Tasdiqlash kerak — Admin | BUYUK KARAVAN" };
 
@@ -14,13 +16,17 @@ const money = (amount: { toString(): string }, currency: string) => `${formatDec
 export default async function PurchasesReviewPage() {
   const user = await requireRole("SUPER_ADMIN", "ADMIN");
   const select = { id: true, date: true, amount: true, currency: true, amountUsd: true, note: true, status: true, rejectReason: true, createdAt: true, reviewedAt: true, customer: { select: { name: true } }, seller: { select: { name: true } }, reviewedBy: { select: { name: true } } } as const;
-  const [pending, recent, corrections, storeDiffs, kassaDrafts] = await Promise.all([
+  const boss = user.role === "SUPER_ADMIN";
+  const [pending, recent, corrections, storeDiffs, kassaDrafts, rejected, sellers] = await Promise.all([
     getDb().customerPurchase.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" }, select }),
     getDb().customerPurchase.findMany({ where: { status: { not: "PENDING" } }, orderBy: { reviewedAt: "desc" }, take: 20, select }),
     user.role === "SUPER_ADMIN" ? getDb().workshopCorrectionRequest.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" }, select: { id: true, reason: true, createdAt: true, requester: { select: { name: true } }, order: { select: { id: true, monthKey: true, monthNo: true } } } }) : [],
     // Omborchi "Kamchilik bor / Soni boshqa" reports.
     user.role === "SUPER_ADMIN" ? getDb().workshopOrder.findMany({ where: { receivedNote: { not: null }, receivedCheckedAt: null }, orderBy: { receivedAt: "asc" }, select: { id: true, monthKey: true, monthNo: true, receivedAt: true, receivedQty: true, receivedNote: true, receivedBy: { select: { name: true } } } }) : [],
     user.role === "SUPER_ADMIN" ? getDb().kassaDraft.count({ where: { status: "PENDING" } }) : 0,
+    // Seh "Sotuvchi nomidan" orders the seller called "Meniki emas".
+    boss ? getDb().workshopOrder.findMany({ where: { sellerConfirm: "REJECTED", sellerRejectResolvedAt: null }, orderBy: { sellerConfirmedAt: "asc" }, select: { id: true, monthKey: true, monthNo: true, type: true, qty: true, sellerConfirmedAt: true, sellerRejectReason: true, seller: { select: { name: true } }, createdBy: { select: { name: true } }, items: { orderBy: { order: "asc" }, select: { title: true, qty: true, issuedQty: true } } } }) : [],
+    boss ? sellerOptions() : [],
   ]);
   return <div className="bk">
     <div className="bk-head"><div><h1>Tasdiqlash kerak</h1><p className="bk-muted">Tasdiqlangan xarid mijozning o‘sha oydagi savdosiga qo‘shiladi; rad etilsa sotuvchi sababni ko‘radi</p></div></div>
@@ -43,6 +49,16 @@ export default async function PurchasesReviewPage() {
         <tbody>{corrections.map(row => <tr key={row.id}>
           <td>{row.createdAt.toISOString().slice(0, 10)}</td><td className="is-left is-strong">{orderNumber(row.order)}</td><td className="is-left">{row.requester.name}</td><td className="is-left" style={{ whiteSpace: "normal", minWidth: 160 }}>{row.reason}</td>
           <td><CorrectionReviewButtons id={row.id} href={`/admin/seh?month=${row.order.monthKey}&fix=${row.id}#order-${row.order.id}`} label={`${orderNumber(row.order)} · ${row.requester.name}: ${row.reason}`}/></td>
+        </tr>)}</tbody>
+      </table></div>
+    </section>}
+    {rejected.length > 0 && <section className="bk-card" aria-labelledby="pr-reject-title">
+      <div className="bk-card-head"><div><h2 id="pr-reject-title">Seh zakazi: “meniki emas”</h2><span className="bk-muted">Seh sotuvchi nomidan kiritgan, sotuvchi rad etgan · zakaz to‘xtatilgan</span></div></div>
+      <div className="bk-table-wrap"><table className="bk-table">
+        <thead><tr><th>Sana</th><th className="is-left">Zakaz</th><th className="is-left">Sotuvchi</th><th className="is-left">Kiritgan</th><th className="is-left">Sabab</th><th><span className="bk-sr-only">Amallar</span></th></tr></thead>
+        <tbody>{rejected.map(row => <tr key={row.id}>
+          <td>{row.sellerConfirmedAt?.toISOString().slice(0, 10) ?? "—"}</td><td className="is-left is-strong" style={{ whiteSpace: "normal", minWidth: 160 }}>{orderNumber(row)} · {orderTitle(row)}</td><td className="is-left">{row.seller.name}</td><td className="is-left">{row.createdBy.name}</td><td className="is-left" style={{ whiteSpace: "normal", minWidth: 120 }}>{row.sellerRejectReason ?? "—"}</td>
+          <td><RejectedOrderButtons id={row.id} label={`${orderNumber(row)} · ${row.seller.name}`} sellers={sellers}/></td>
         </tr>)}</tbody>
       </table></div>
     </section>}
