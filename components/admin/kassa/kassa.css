@@ -307,3 +307,6 @@
 .foizim-val{position:absolute;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:#cfd2e2;white-space:nowrap;opacity:0;pointer-events:none}.in .foizim-val{opacity:1;animation:debt-fade .4s ease backwards}
 .foizim-sum{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:1000px){.foizim-sum{grid-template-columns:repeat(2,minmax(0,1fr))}.foizim-val{display:none}}
+.foizim-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.foizim-cards .staff-prog{display:block;margin-top:8px}
+.foizim-who b{display:flex;align-items:center;gap:6px}.foizim-who b i{font-style:normal}.foizim-io{margin-top:4px}
+.foizim-close .dokon-line small,.hodim-sheet .dokon-line small{color:var(--muted)}

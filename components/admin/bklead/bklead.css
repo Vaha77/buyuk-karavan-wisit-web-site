@@ -369,3 +369,11 @@
 .sp-rank-list{display:grid}.sp-rank-list>div{display:grid;gap:7px;padding:10px 0;border-top:1px solid rgba(255,255,255,.05)}.sp-rank-list>div>div:first-child{display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:700}.sp-rank-list b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sp-rank-list span{white-space:nowrap}
 .bk-head>.chips{display:flex;max-width:100%}
 .bk-latest-orders{margin-top:14px}@media(max-width:767px){.bk-latest-orders{display:none}}
+/* Sotuv rejasi · "Mening foizim — sotuvchilar bo‘yicha" (Super Admin only) */
+.sp-foizim-months{display:flex;flex-wrap:wrap;gap:6px}
+.sp-foizim-table{margin-top:10px;overflow:hidden}
+.sp-foizim-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) 80px minmax(0,1fr) minmax(40px,1fr);gap:10px;align-items:center;padding:9px 4px;border-top:1px solid rgba(255,255,255,.06);font-size:13px}
+.sp-foizim-row>*{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sp-foizim-row>:nth-child(2),.sp-foizim-row>:nth-child(3),.sp-foizim-row>:nth-child(4){text-align:right}
+.sp-foizim-row>:last-child{height:8px;border-radius:6px;background:rgba(255,255,255,.07)}.sp-foizim-row>:last-child i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#34d399,#22d3ee)}
+.sp-foizim-row.is-head{border-top:0;font-size:11.5px;color:var(--muted,#9aa0b4)}.sp-foizim-row.is-head>:last-child,.sp-foizim-row.is-total>:last-child{background:none}.sp-foizim-row.is-total{font-weight:800}
+@media (max-width:700px){.sp-foizim-row{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 46px minmax(0,1fr);font-size:12px}.sp-foizim-row>:last-child{display:none}}
