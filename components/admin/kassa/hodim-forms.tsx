@@ -7,7 +7,7 @@ import { money } from "@/lib/kassa/rules";
 import { groupDigits, nowLocal, toLocal } from "./entry-form";
 
 /** Bottom sheet on a phone, centred modal on a computer: open while its URL param is set, closing returns to `closeHref`. */
-function Sheet({ title, closeHref, children }: { title: string; closeHref: string; children: ReactNode }) {
+export function Sheet({ title, closeHref, children }: { title: string; closeHref: string; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null), router = useRouter();
   useEffect(() => { ref.current?.showModal(); }, []);
   return <dialog ref={ref} className="glass hodim-sheet" onClose={() => router.replace(closeHref, { scroll: false })}>
@@ -16,7 +16,7 @@ function Sheet({ title, closeHref, children }: { title: string; closeHref: strin
   </dialog>;
 }
 
-function useSave<R extends { ok: true } | { ok: false; error: string }>(action: (form: FormData) => Promise<R>, done: (result: R) => void) {
+export function useSave<R extends { ok: true } | { ok: false; error: string }>(action: (form: FormData) => Promise<R>, done: (result: R) => void) {
   const [error, setError] = useState(""), [pending, start] = useTransition();
   const submit = (form: FormData) => { setError(""); start(async () => { const result = await action(form); if (result.ok) done(result); else setError(result.error); }); };
   return { error, pending, submit };

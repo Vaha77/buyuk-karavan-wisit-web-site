@@ -5,11 +5,12 @@ import { Reveal } from "./dokon-charts";
 import { debtTone } from "@/lib/employees/rules";
 import { money } from "@/lib/kassa/rules";
 
-/** Phone only (kassa.css): Dashboard · Kassa · Hodimlar above the Do‘kon pages. */
-export function DokonTabs({ on }: { on: "dashboard" | "kassa" | "hodimlar" }) {
+/** Phone only (kassa.css): Dashboard · Kassa · Foizim · Hodimlar above the Do‘kon pages. */
+export function DokonTabs({ on }: { on: "dashboard" | "kassa" | "foizim" | "hodimlar" }) {
   return <ChipGroup label="Do‘kon" className="dokon-tabs">
     <Chip href="/admin/dokon" on={on === "dashboard"}>Dashboard</Chip>
     <Chip href="/admin/kassa" on={on === "kassa"}>Kassa</Chip>
+    <Chip href="/admin/kassa/foizim" on={on === "foizim"}>Foizim</Chip>
     <Chip href="/admin/kassa/hodimlar" on={on === "hodimlar"}>Hodimlar</Chip>
   </ChipGroup>;
 }
