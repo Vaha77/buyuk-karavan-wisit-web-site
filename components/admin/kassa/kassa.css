@@ -302,3 +302,8 @@
 .foizim-g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .foizim-calc{margin:8px 0 0;padding:10px 12px;border-radius:13px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.35);font-size:12.5px}.foizim-calc b{color:#34d399}
 @media (max-width:1000px){.foizim-bars>div{grid-template-columns:minmax(0,110px) minmax(30px,1fr) auto}.foizim-row{grid-template-areas:"date note amt"}.foizim-who{grid-area:note}}
+.foizim-col{background:linear-gradient(180deg,#34d399,#059669)}.foizim-col.is-now{background:linear-gradient(180deg,#a78bfa,#7c5cff)}.foizim-plot>button>i{width:60%;max-width:34px}
+.foizim-cum-key{background:#22d3ee;height:3px!important;vertical-align:middle}.foizim-plot .debt-yr{color:#22d3ee}.foizim-dot{background:#22d3ee;box-shadow:0 0 10px 2px rgba(34,211,238,.6)}
+.foizim-val{position:absolute;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:#cfd2e2;white-space:nowrap;opacity:0;pointer-events:none}.in .foizim-val{opacity:1;animation:debt-fade .4s ease backwards}
+.foizim-sum{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:1000px){.foizim-sum{grid-template-columns:repeat(2,minmax(0,1fr))}.foizim-val{display:none}}

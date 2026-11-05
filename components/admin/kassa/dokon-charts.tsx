@@ -134,3 +134,33 @@ export function KassaPanels({ charts, debts, latest }: { charts: Record<Currency
     </div>
   </>;
 }
+
+type Month = { label: string; full: string; sum: number; cum: number | null; current: boolean };
+/** "Mening foizim · oylar bo‘yicha": monthly bars (this month purple) on the left axis, the running year total on the right (DebtChart's plot and animation). */
+export function CommissionChart({ months }: { months: Month[] }) {
+  const [active, setActive] = useState<number | null>(null), drawn = months.filter(month => month.cum !== null);
+  const left = barAxis(Math.max(...months.map(month => month.sum))), top = left[left.length - 1];
+  const right = barAxis(Math.max(...drawn.map(month => month.cum!))), high = right[right.length - 1], x = (index: number) => (index + .5) / months.length;
+  const path = drawn.map((month, index) => `${index ? "L" : "M"}${(x(index) * 1000).toFixed(1)} ${(200 * (1 - month.cum! / high)).toFixed(1)}`).join("");
+  const shown = active === null ? null : months[active];
+  return <>
+    <div className="dokon-legend"><span><i className="foizim-col"/>Oylik foiz</span><span><i className="foizim-col is-now"/>Joriy oy</span><span><i className="foizim-cum-key"/>Yil boshidan jami</span></div>
+    <Reveal className="debt-reveal"><div className="debt-plot foizim-plot" onMouseLeave={() => setActive(null)}>
+      <div className="debt-yl" aria-hidden>{left.map(value => <span key={value} style={{ bottom: `${value / top * 100}%` }}>{shortUsd(value)}</span>)}</div>
+      <div className="debt-yr" aria-hidden>{right.map(value => <span key={value} style={{ bottom: `${value / high * 100}%` }}>{shortUsd(value)}</span>)}</div>
+      {left.map(value => <div key={value} className="debt-grid" style={{ bottom: `${value / top * 100}%` }}/>)}
+      {months.map((month, index) => <button key={month.full} type="button" aria-label={`${month.full}: ${money(month.sum, "USD")}${month.cum === null ? "" : `, yig‘ma ${money(month.cum, "USD")}`}`} onMouseEnter={() => setActive(index)} onFocus={() => setActive(index)} onClick={() => setActive(index)}>
+        <i className={`foizim-col${month.current ? " is-now" : ""}`} style={{ height: `${month.sum / top * 100}%`, animationDelay: `${index * 70}ms` }}/>
+        {month.sum > 0 && <b className="foizim-val" style={{ bottom: `calc(${month.sum / top * 100}% + 4px)`, animationDelay: `${900 + index * 70}ms` }}>{shortUsd(month.sum)}</b>}
+        <em>{month.label}</em>
+      </button>)}
+      {drawn.length > 1 && <svg viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden>
+        <defs><linearGradient id="foizim-area" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#22d3ee" stopOpacity=".22"/><stop offset="1" stopColor="#22d3ee" stopOpacity="0"/></linearGradient></defs>
+        <path className="debt-fill" d={`${path}L${(x(drawn.length - 1) * 1000).toFixed(1)} 200L${(x(0) * 1000).toFixed(1)} 200Z`} fill="url(#foizim-area)"/>
+        <path className="debt-stroke" d={path} pathLength={1} fill="none" stroke="#22d3ee" strokeWidth="3" vectorEffect="non-scaling-stroke"/>
+      </svg>}
+      {drawn.map((month, index) => <i key={month.full} className="debt-dot foizim-dot" style={{ left: `${x(index) * 100}%`, bottom: `${month.cum! / high * 100}%`, animationDelay: `${2.2 + index * .08}s` }}/>)}
+      {shown && <div className="debt-tip" style={{ left: `clamp(85px, ${x(active!) * 100}%, calc(100% - 85px))` }}><b>{shown.full}</b><span>Oylik<u>{money(shown.sum, "USD")}</u></span>{shown.cum !== null && <span>Yig‘ma<u>{money(shown.cum, "USD")}</u></span>}</div>}
+    </div></Reveal>
+  </>;
+}

@@ -91,3 +91,17 @@ test("only SUPER_ADMIN: page, actions, Excel and the menu", async () => {
   assert.ok(at("/>Dashboard<") < at("/>Kassa<") && at("/>Kassa<") < at("/>Mening foizim<") && at("/>Mening foizim<") < at("/>Hodimlar</>"), "Dashboard · Kassa · Mening foizim · Hodimlar");
   assert.match(await source("components/admin/kassa/dokon-tabs.tsx"), /Kassa<\/Chip>\n.*Foizim<\/Chip>\n.*Hodimlar<\/Chip>/);
 });
+
+test("Grafiklar: months Yan–Dek with the running total up to this month; cards; year donut top 4 + Boshqalar", () => {
+  const now = new Date("2026-11-05T12:00:00+05:00");
+  const rows = [row("2026-01-01T00:00", "A", 600), row("2025-12-31T23:59", "A", 999), row("2026-07-10T10:00", "B", 2350), row("2026-11-04T10:00", "C", 1840), row("2026-11-05T10:00", "D", 10), row("2026-11-05T11:00", "E", 5), row("2026-11-05T11:30", "F", 1)];
+  const stats = rules.yearStats(rows, now);
+  assert.equal(stats.months.length, 12);
+  assert.deepEqual([stats.months[0].label, stats.months[5].label, stats.months[6].label], ["Yan", "Iyn", "Iyl"]);
+  assert.deepEqual(stats.months.map(month => month.cum), [600, 600, 600, 600, 600, 600, 2950, 2950, 2950, 2950, 4806, null]);
+  assert.equal(stats.months[10].current, true);
+  assert.deepEqual([stats.month, stats.total, stats.average, stats.best.full], [1856, 4806, 436.91, "Iyul 2026"]);
+  assert.deepEqual(stats.top.map(item => item.name), ["B", "C", "A", "D", "Boshqalar"]);
+  assert.equal(stats.top.at(-1).sum, 6);
+  assert.equal(rules.yearStats([], now).best, null);
+});

@@ -1,6 +1,7 @@
 // "Mening foizim": the Super Admin's own commission, USD only (tests/foizim.test.mjs). Touches only MyCommission / MyCommissionLog.
 import type { Prisma } from "../../generated/prisma/client";
-import { startOfDay } from "../dashboard/period";
+import { MONTHS_LONG, MONTHS_SHORT } from "../dashboard/format";
+import { dayKey, startOfDay } from "../dashboard/period";
 import { employeeRange } from "../dokon/stats";
 import { diffEntry, parseAmount, parseLocalTime, round } from "../kassa/rules";
 
@@ -27,6 +28,17 @@ export function byFrom(rows: CommissionRow[], top = 10) {
   const sorted = [...sums].sort((a, b) => b[1] - a[1]).map(([name, sum]) => ({ name, sum: round(sum) }));
   const rest = sumOf(sorted.slice(top).map(item => ({ amount: item.sum })));
   return [...sorted.slice(0, top), ...(sorted.length > top ? [{ name: "Boshqalar", sum: rest }] : [])];
+}
+
+/** "Grafiklar": the Tashkent year by month (Yan–Dek) with the running total up to this month, plus the four cards and the year's donut. */
+export function yearStats(rows: CommissionRow[], now = new Date()) {
+  const today = dayKey(now), year = today.slice(0, 4), current = Number(today.slice(5, 7)) - 1, sums = Array<number>(12).fill(0);
+  for (const row of rows) { const day = dayKey(row.occurredAt); if (day.startsWith(year)) sums[Number(day.slice(5, 7)) - 1] += row.amount; }
+  let running = 0;
+  const months = sums.map((sum, index) => ({ label: MONTHS_SHORT[index][0].toUpperCase() + MONTHS_SHORT[index].slice(1), full: `${MONTHS_LONG[index]} ${year}`, sum: round(sum), cum: index <= current ? running = round(running + sum) : null, current: index === current }));
+  const best = months.reduce((top, month) => month.sum > top.sum ? month : top, months[0]), total = running;
+  const top = byFrom(rows.filter(row => dayKey(row.occurredAt).startsWith(year)), 4);
+  return { year, months, total, month: months[current].sum, average: round(total / (current + 1)), best: best.sum ? best : null, top, parts: top.map(item => ({ name: item.name, value: item.sum, pct: total ? Math.round(item.sum / total * 100) : 0 })).filter(part => part.pct > 0) };
 }
 
 /** Name hints under "Kimdan": the most used first. */
