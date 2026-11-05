@@ -211,3 +211,12 @@ test("old rows stay IN / OTHER_IN; sotuv rejasi block sums SELLER_COMMISSION onl
   assert.equal(rules.wholeMonth(rules.commissionRange({ p: "otgan" }, new Date("2026-11-05T12:00:00+05:00"))), "2026-10");
   assert.equal(rules.wholeMonth(rules.commissionRange({ p: "yil" }, new Date("2026-11-05T12:00:00+05:00"))), null);
 });
+
+test("a salary counts in its salaryMonth: November's pay written on 03.12 closes November, not December", () => {
+  const rows = [money("2026-11-05T10:00", "IN", "SELLER_COMMISSION", 1840), { ...money("2026-12-03T10:00", "OUT", "SALARY", 400), salaryMonth: "2026-11" }, money("2026-12-04T10:00", "IN", "OTHER_IN", 100)];
+  const { months, shortage, open } = month.monthCloses(rows, [short("2026-11-01T09:00", "OPENING", 14500)], new Date("2026-12-05T12:00:00+05:00"));
+  assert.deepEqual([months[0].key, months[0].salary, months[0].salaryCount, months[0].result, months[0].deducted, months[0].shortageAfter, months[0].carry], ["2026-11", 400, 1, 1440, 1440, 13060, 0]);
+  assert.deepEqual([open.key, open.salary, open.in, open.result], ["2026-12", 0, 100, 100]);
+  assert.equal(shortage, 13060);
+  assert.equal(month.rowMonth({ ...rows[1], salaryMonth: null }), "2026-12", "no month: the paid date");
+});
