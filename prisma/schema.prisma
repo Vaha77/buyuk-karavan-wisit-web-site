@@ -482,6 +482,9 @@ model AdminUser {
   employeeDebtEntries   EmployeeDebtEntry[]         @relation("EmployeeDebtCreator")
   employeeDebtsDeleted  EmployeeDebtEntry[]         @relation("EmployeeDebtDeleter")
   employeeDebtLogs      EmployeeDebtLog[]
+  myCommissions         MyCommission[]              @relation("MyCommissionCreator")
+  myCommissionsDeleted  MyCommission[]              @relation("MyCommissionDeleter")
+  myCommissionLogs      MyCommissionLog[]
 
   @@index([approvalStatus, isActive])
 }
@@ -1940,6 +1943,42 @@ model EmployeeDebtLog {
   createdAt DateTime          @default(now())
   entry     EmployeeDebtEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
   user      AdminUser         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([entryId, createdAt])
+}
+
+// "Mening foizim" (Super Admin only): personal commission income in USD, typed by hand. Never touches the kassa or hodim debts.
+model MyCommission {
+  id            String            @id @default(cuid())
+  fromName      String            @db.VarChar(100)
+  amountUsd     Decimal           @db.Decimal(18, 2)
+  // "Foizdan hisoblash": the sale and the percent the amount came from (the amount itself may be typed over).
+  baseAmountUsd Decimal?          @db.Decimal(18, 2)
+  percent       Decimal?          @db.Decimal(6, 3)
+  note          String?           @db.VarChar(300)
+  occurredAt    DateTime          @default(now())
+  createdById   String
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  deletedAt     DateTime?
+  deletedById   String?
+  deleteReason  String?           @db.VarChar(200)
+  createdBy     AdminUser         @relation("MyCommissionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  deletedBy     AdminUser?        @relation("MyCommissionDeleter", fields: [deletedById], references: [id], onDelete: SetNull)
+  logs          MyCommissionLog[]
+
+  @@index([occurredAt])
+}
+
+// One row per action: { field: [old, new] }.
+model MyCommissionLog {
+  id        String       @id @default(cuid())
+  entryId   String
+  userId    String
+  changes   Json
+  createdAt DateTime     @default(now())
+  entry     MyCommission @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user      AdminUser    @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([entryId, createdAt])
 }
