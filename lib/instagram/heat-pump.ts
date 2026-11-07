@@ -13,7 +13,7 @@ export const HUMAN_MUTE_MS = 24 * 3_600_000;
 
 // ---- m² from a comment / message ----------------------------------------------------------------------------
 
-const UNIT = String.raw`(?:kv\.?\s*m|kvadrat\p{L}*|kvd|kv|m2|m²|metr\p{L}*|кв\.?\s*м|квадрат\p{L}*|кв|м2|м²|метр\p{L}*)(?!\p{L})`;
+const UNIT = String.raw`(?:kv\.?\s*m|kvadrat\p{L}*|kvd|kv|m2|m²|metr\p{L}*|кв\.?\s*м|квадрат\p{L}*|кв|км|м2|м²|метр\p{L}*)(?!\p{L})`;
 const num = (value: string) => Number(value.replace(",", "."));
 const inRange = (value: number) => Number.isFinite(value) && value >= 20 && value <= 3000 ? Math.round(value) : null;
 const isYear = (value: number) => value >= 1900 && value <= 2099;
@@ -38,7 +38,9 @@ export function extractM2(input: string | null | undefined) {
   if (house) return isYear(num(house[1])) ? null : inRange(num(house[1]));
   const bare = /^\D*?(\d{2,4})\D*$/u.exec(text);
   if (bare && !/\p{L}/u.test(text)) return isYear(num(bare[1])) ? null : inRange(num(bare[1]));
-  return null;
+  // Fallback: exactly one number of 20–1000 with an unclear unit is the area; percents are not.
+  const numbers = text.replace(/\d+\s*%/g, " ").match(/\d+(?:[.,]\d+)?/g) ?? [];
+  return numbers.length === 1 && num(numbers[0]) >= 20 && num(numbers[0]) <= 1000 ? Math.round(num(numbers[0])) : null;
 }
 
 // ---- Model choice ------------------------------------------------------------------------------------------

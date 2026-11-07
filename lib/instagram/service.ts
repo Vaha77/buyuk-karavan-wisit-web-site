@@ -188,7 +188,11 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   let comment = await db.instagramComment.findUnique({ where: { commentId } });
   if (!comment || comment.status !== "PENDING") return "skipped";
   const update = async (data: Parameters<typeof db.instagramComment.update>[0]["data"]) => { comment = await db.instagramComment.update({ where: { commentId }, data }); };
-  const finish = async (status: "FAILED" | "SKIPPED" | "SENT" | "NOTIFIED", reason: string | null, extra: Parameters<typeof db.instagramComment.update>[0]["data"] = {}) => update({ status, reason, lockedUntil: null, ...extra });
+  const finish = async (status: "FAILED" | "SKIPPED" | "SENT" | "NOTIFIED", reason: string | null, extra: Parameters<typeof db.instagramComment.update>[0]["data"] = {}) => {
+    // Why a comment got no reply (parse_failed = its kind / m² was not understood).
+    if (status === "SKIPPED" || status === "FAILED") console.info("Instagram comment unanswered", { commentId, code: comment?.kind === "UNKNOWN" ? "parse_failed" : status.toLowerCase(), reason });
+    return update({ status, reason, lockedUntil: null, ...extra });
+  };
   if (tooOld(comment.createdAt)) { await finish("SKIPPED", "7 kundan eski komment"); return "skipped"; }
 
   const rule: RuleWithProduct | null = await db.instagramMediaRule.findUnique({ where: { mediaId: comment.mediaId }, include: { product: RULE_PRODUCT, secondProduct: RULE_PRODUCT } });
