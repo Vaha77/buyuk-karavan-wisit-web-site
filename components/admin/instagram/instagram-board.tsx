@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Camera, ExternalLink, Film, RefreshCw, Search, X } from "lucide-react";
-import { runInstagramQueueAction, saveInstagramGeneralAction, saveMediaRuleAction } from "@/app/admin/(protected)/instagram/actions";
+import { runInstagramQueueAction, saveHeatPumpTableAction, saveInstagramGeneralAction, saveMediaRuleAction } from "@/app/admin/(protected)/instagram/actions";
 import { BusyLabel } from "@/components/admin/feedback";
 import type { BoardMedia, InstagramBoard as Board } from "@/lib/instagram/queries";
 import { COMMENT_KINDS, CONTACT_PLACEHOLDERS, DEFAULT_DAILY_REPLY_LIMIT, DEFAULT_DM_TEMPLATE, DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY_VARIANTS, DEFAULT_QUESTION_DM, DEFAULT_QUESTION_REPLY, KIND_LABELS, PLACEHOLDERS, SECOND_PLACEHOLDERS, type CommentKind } from "@/lib/instagram/constants";
@@ -48,7 +48,9 @@ function ProductPicker({ products, value, onChange }: { products: Product[]; val
   </div>;
 }
 
-function MediaCard({ accountId, media, rule, stats, products, canEdit }: { accountId: string; media: BoardMedia; rule: Board["rules"][string] | undefined; stats: Board["stats"][string] | undefined; products: Product[]; canEdit: boolean }) {
+type Chain = NonNullable<Board["heatPump"]>["chain"][string];
+function MediaCard({ accountId, media, rule, stats, products, canEdit, heatPumpEnabled, chain }: { accountId: string; media: BoardMedia; rule: Board["rules"][string] | undefined; stats: Board["stats"][string] | undefined; products: Product[]; canEdit: boolean; heatPumpEnabled: boolean; chain?: Chain }) {
+  const [heatPump, setHeatPump] = useState(heatPumpEnabled && !!rule?.heatPump);
   const [productId, setProductId] = useState<string | null>(rule?.productId ?? null);
   const [secondProductId, setSecondProductId] = useState<string | null>(rule?.secondProductId ?? null);
   const [isActive, setActive] = useState(rule?.isActive ?? true);
@@ -61,7 +63,7 @@ function MediaCard({ accountId, media, rule, stats, products, canEdit }: { accou
   const { pending, save, note, clear } = useSave();
   const change = <T,>(setter: (value: T) => void) => (value: T) => { setter(value); clear(); };
   const product = products.find(item => item.id === productId);
-  const state = !rule ? "Sozlanmagan" : !rule.isActive ? "O‘chiq" : rule.productId ? "Faol" : rule.priceText ? "Narx matni" : "Mahsulot yo‘q";
+  const state = !rule ? "Sozlanmagan" : !rule.isActive ? "O‘chiq" : heatPumpEnabled && rule.heatPump ? "Teplonasos" : rule.productId ? "Faol" : rule.priceText ? "Narx matni" : "Mahsulot yo‘q";
 
   return <article className={`bk-card ig-media ${rule?.isActive && rule.productId ? "is-live" : ""}`}>
     <div className="ig-media-top">
@@ -75,23 +77,60 @@ function MediaCard({ accountId, media, rule, stats, products, canEdit }: { accou
         <p className="ig-caption">{media.caption || <span className="bk-muted">Izohsiz</span>}</p>
         <p className="bk-muted">{media.postedAt ? day(media.postedAt) : "—"}{media.commentsCount !== null && ` · ${media.commentsCount} komment`}{!media.fromApi && " · eski post"}</p>
         <p className="ig-stats"><span>{stats?.comments ?? 0} komment</span><span>{stats?.sent ?? 0} javob</span><span>{stats?.leads ?? 0} lid</span>{!!stats?.failed && <span className="is-bad">{stats.failed} xato</span>}</p>
-        <p><span className={`ig-tag ${state === "Faol" || state === "Narx matni" ? "is-ok" : ""}`}>{state}</span>{product && <span className="ig-product"> {product.name}</span>}</p>
+        <p><span className={`ig-tag ${state === "Faol" || state === "Narx matni" || state === "Teplonasos" ? "is-ok" : ""}`}>{state}</span>{product && !heatPump && <span className="ig-product"> {product.name}</span>}</p>
+        {heatPumpEnabled && rule?.heatPump && <p className="ig-stats"><span>{chain?.comments ?? 0} komment</span><span>→ {chain?.direct ?? 0} Direct</span><span>→ {chain?.m2 ?? 0} m²</span><span>→ {chain?.phone ?? 0} telefon</span></p>}
       </div>
     </div>
     {canEdit && <button type="button" className="bk-btn" onClick={() => setOpen(value => !value)} aria-expanded={open}>{open ? "Yopish" : "Sozlash"}</button>}
-    {canEdit && open && <form className="ig-rule" onSubmit={event => { event.preventDefault(); save(() => saveMediaRuleAction({ accountId, mediaId: media.id, priceText: productId ? "" : priceText, productId, secondProductId, isActive, keywords, dmTemplate, publicReplyEnabled, publicReplyText: variants.split("\n").map(item => item.trim()).find(Boolean) ?? "", publicReplyVariants: variants, permalink: media.permalink, caption: media.caption || null, postedAt: media.postedAt })); }}>
+    {canEdit && open && <form className="ig-rule" onSubmit={event => { event.preventDefault(); save(() => saveMediaRuleAction({ accountId, mediaId: media.id, priceText: productId ? "" : priceText, productId, secondProductId, isActive, keywords, dmTemplate, publicReplyEnabled, publicReplyText: variants.split("\n").map(item => item.trim()).find(Boolean) ?? "", publicReplyVariants: variants, permalink: media.permalink, caption: media.caption || null, postedAt: media.postedAt, heatPump })); }}>
+      {heatPumpEnabled && <label className="bk-field"><span>Post turi</span><select value={heatPump ? "heat" : "price"} onChange={event => change(setHeatPump)(event.target.value === "heat")}><option value="price">Narx / savol (mahsulot)</option><option value="heat">Teplonasos (m² + suhbat)</option></select></label>}
+      <label className="ig-switch"><input type="checkbox" checked={isActive} onChange={event => change(setActive)(event.target.checked)}/><span>Avto-javoblar faol (shu post uchun barcha turlar)</span></label>
+      {heatPump ? <p className="bk-muted">Kommentdan m² olinadi, Direct’ga Teplonasos jadvali bo‘yicha hisob yuboriladi va bot faqat shu postdan boshlangan Direct’da qisqa suhbat qiladi.</p> : <>
       <div className="bk-field"><span>Mahsulot</span><ProductPicker products={products} value={productId} onChange={change(setProductId)}/></div>
       {!productId && <label className="bk-field"><span>Narx matni <small className="bk-muted">(mahsulotsiz post: narx so‘ralsa shu Direct’ga ketadi; bo‘sh — akkauntning “narx telefonda” matni; {CONTACT_PLACEHOLDERS.join(" ")})</small></span><textarea rows={3} value={priceText} onChange={event => change(setPriceText)(event.target.value)} placeholder="Masalan: Eshik narxi 2 500 000 so‘mdan. Batafsil: {telefon}" maxLength={900}/></label>}
       <div className="bk-field"><span>Qo‘shimcha mahsulot <small className="bk-muted">(ixtiyoriy; matnda {SECOND_PLACEHOLDERS.join(" ")} — yo‘q bo‘lsa shu qatorlar yuborilmaydi)</small></span><ProductPicker products={products.filter(item => item.id !== productId)} value={secondProductId} onChange={change(setSecondProductId)}/></div>
-      <label className="ig-switch"><input type="checkbox" checked={isActive} onChange={event => change(setActive)(event.target.checked)}/><span>Avto-javoblar faol (shu post uchun barcha turlar)</span></label>
       <label className="bk-field"><span>Narx kalit so‘zlari <small className="bk-muted">(vergul bilan; “+” va “?” faqat komment shu belgilardan iborat bo‘lsa)</small></span><input value={keywords} onChange={event => change(setKeywords)(event.target.value)}/></label>
       <label className="bk-field"><span>Direct matni <small className="bk-muted">erkin matn; ixtiyoriy: {[...PLACEHOLDERS, ...SECOND_PLACEHOLDERS].join(" ")}</small></span><textarea rows={5} value={dmTemplate} onChange={event => change(setTemplate)(event.target.value)}/></label>
       <button type="button" className="ig-link-btn" onClick={() => change(setTemplate)(DEFAULT_DM_TEMPLATE)}>Standart matnni tiklash</button>
       <label className="ig-switch"><input type="checkbox" checked={publicReplyEnabled} onChange={event => change(setPublic)(event.target.checked)}/><span>Narx kommentiga ochiq javob</span></label>
       {publicReplyEnabled && <label className="bk-field"><span>Ochiq javob variantlari <small className="bk-muted">(har qatorda bittasi, tasodifiy tanlanadi)</small></span><textarea rows={3} value={variants} onChange={event => change(setVariants)(event.target.value)}/></label>}
+      </>}
       <div className="bk-actions"><button type="submit" className="bk-btn is-primary" disabled={pending}><BusyLabel busy={pending}>Saqlash</BusyLabel></button>{note}</div>
     </form>}
   </article>;
+}
+
+type HeatPump = NonNullable<Board["heatPump"]>;
+type HeatPumpRow = Omit<HeatPump["models"][number], "id"> & { id: string | null };
+type HeatPumpDraft = Record<keyof HeatPumpRow, string | boolean | null>;
+const HEAT_COLUMNS: Array<{ key: "brand" | "model" | "hp" | "nominalKw" | "winterKw" | "priceUsd"; label: string }> = [{ key: "brand", label: "Brend" }, { key: "model", label: "Model" }, { key: "hp", label: "HP" }, { key: "nominalKw", label: "Nominal kW" }, { key: "winterKw", label: "Qishki kW (A-12W41)" }, { key: "priceUsd", label: "Narx $" }];
+
+/** Teplonasos jadvali (only @buyuk_karavan): selling prices, no markup is added. */
+function HeatPumpTable({ data }: { data: HeatPump }) {
+  const [rows, setRows] = useState<HeatPumpDraft[]>(data.models.map(row => ({ ...row, hp: String(row.hp), nominalKw: String(row.nominalKw), winterKw: String(row.winterKw), priceUsd: String(row.priceUsd), voltage: String(row.voltage) })));
+  const [buffer, setBuffer] = useState({ usd: String(data.bufferUsd), liters: String(data.bufferLiters) });
+  const { pending, save, note, clear } = useSave();
+  const set = (index: number, key: keyof HeatPumpRow, value: string | boolean) => { setRows(list => list.map((row, i) => i === index ? { ...row, [key]: value } : row)); clear(); };
+  const toNumber = (value: unknown) => Number(String(value).replace(",", "."));
+  const submit = () => save(() => saveHeatPumpTableAction({ rows: rows.map((row): HeatPumpRow => ({ id: typeof row.id === "string" ? row.id : null, brand: String(row.brand), model: String(row.model), hp: toNumber(row.hp), nominalKw: toNumber(row.nominalKw), winterKw: toNumber(row.winterKw), voltage: toNumber(row.voltage), priceUsd: toNumber(row.priceUsd), bufferIncluded: !!row.bufferIncluded, isActive: !!row.isActive })), bufferUsd: toNumber(buffer.usd), bufferLiters: toNumber(buffer.liters) }));
+  return <form className="bk-card" onSubmit={event => { event.preventDefault(); submit(); }}>
+    <div><h2>Teplonasos jadvali</h2><p className="bk-muted">Model qishki kW bo‘yicha tanlanadi (yaxshi uteplit: m² × 80 W, uteplitsiz: m² × 130 W). Narx — sotiladigan narx, ustama qo‘shilmaydi; so‘m CBU kursi bo‘yicha.</p></div>
+    <div className="bk-table-wrap"><table className="bk-table"><thead><tr>{HEAT_COLUMNS.map(column => <th key={column.key} className="is-left">{column.label}</th>)}<th>Tok</th><th>Bufer bak narxda</th><th>Faol</th><th/></tr></thead><tbody>
+      {rows.map((row, index) => <tr key={typeof row.id === "string" ? row.id : `new-${index}`}>
+        {HEAT_COLUMNS.map(column => <td key={column.key} className="is-left"><input aria-label={column.label} value={String(row[column.key] ?? "")} onChange={event => set(index, column.key, event.target.value)} size={column.key === "brand" || column.key === "model" ? 8 : 5}/></td>)}
+        <td><select aria-label="Kuchlanish" value={String(row.voltage)} onChange={event => set(index, "voltage", event.target.value)}><option value="220">220V</option><option value="380">380V</option></select></td>
+        <td><input type="checkbox" aria-label="Bufer bak narxga kiradi" checked={!!row.bufferIncluded} onChange={event => set(index, "bufferIncluded", event.target.checked)}/></td>
+        <td><input type="checkbox" aria-label="Faol" checked={!!row.isActive} onChange={event => set(index, "isActive", event.target.checked)}/></td>
+        <td><button type="button" className="bk-icon-btn" aria-label="Qatorni o‘chirish" onClick={() => { setRows(list => list.filter((_, i) => i !== index)); clear(); }}><X size={15}/></button></td>
+      </tr>)}
+    </tbody></table></div>
+    <button type="button" className="ig-link-btn" onClick={() => { setRows(list => [...list, { id: null, brand: "Aire", model: "", hp: "", nominalKw: "", winterKw: "", priceUsd: "", voltage: "220", bufferIncluded: true, isActive: true }]); clear(); }}>+ Model qo‘shish</button>
+    <div className="bk-actions">
+      <label className="bk-field"><span>Bufer bak hajmi, L <small className="bk-muted">(bufer baksiz modellar uchun tavsiya)</small></span><input value={buffer.liters} inputMode="numeric" onChange={event => { setBuffer(value => ({ ...value, liters: event.target.value })); clear(); }}/></label>
+      <label className="bk-field"><span>Bufer bak narxi, $</span><input value={buffer.usd} inputMode="decimal" onChange={event => { setBuffer(value => ({ ...value, usd: event.target.value })); clear(); }}/></label>
+    </div>
+    <div className="bk-actions"><button type="submit" className="bk-btn is-primary" disabled={pending}><BusyLabel busy={pending}>Saqlash</BusyLabel></button>{note}</div>
+  </form>;
 }
 
 type Account = NonNullable<Board["account"]>;
@@ -152,22 +191,22 @@ function GeneralSettings({ account, repliesToday }: { account: Account; repliesT
 }
 
 const STATUS: Record<string, { label: string; className: string }> = { SENT: { label: "Yuborildi", className: "is-ok" }, FAILED: { label: "Xato", className: "is-bad" }, SKIPPED: { label: "O‘tkazildi", className: "" }, PENDING: { label: "Navbatda", className: "is-wait" }, NOTIFIED: { label: "Adminga", className: "is-bad" } };
-const KIND_CLASS: Record<string, string> = { PRICE: "is-ok", POSITIVE: "is-ok", QUESTION: "is-wait", NEGATIVE: "is-bad", SPAM: "", UNKNOWN: "", PHONE: "is-wait", ADDRESS: "is-wait", HOURS: "is-wait" };
+const KIND_CLASS: Record<string, string> = { HEAT_PUMP: "is-ok", PRICE: "is-ok", POSITIVE: "is-ok", QUESTION: "is-wait", NEGATIVE: "is-bad", SPAM: "", UNKNOWN: "", PHONE: "is-wait", ADDRESS: "is-wait", HOURS: "is-wait" };
 const usd = (value: number) => `$${value < 0.01 ? value.toFixed(5) : value.toFixed(2)}`;
 
 function KindStats({ board }: { board: Board }) {
   return <section className="bk-card ig-kinds" aria-label="Turlar bo‘yicha">
-    {COMMENT_KINDS.map(kind => <div key={kind}><span className={`ig-tag ${KIND_CLASS[kind]}`}>{KIND_LABELS[kind]}</span><strong>{board.kinds[kind] ?? 0}</strong></div>)}
+    {COMMENT_KINDS.filter(kind => kind !== "HEAT_PUMP" || board.heatPump).map(kind => <div key={kind}><span className={`ig-tag ${KIND_CLASS[kind]}`}>{KIND_LABELS[kind]}</span><strong>{board.kinds[kind] ?? 0}</strong></div>)}
     <div><span className="ig-tag">AI xarajati</span><strong>{usd(board.aiCostUsd)}</strong><small className="bk-muted">{board.aiTokens.toLocaleString("en-US")} token</small></div>
   </section>;
 }
 
-function Journal({ rows, accountId }: { rows: Board["journal"]; accountId: string }) {
+function Journal({ rows, accountId, heatPump }: { rows: Board["journal"]; accountId: string; heatPump: boolean }) {
   const [filter, setFilter] = useState<string>("ALL");
   const counts = rows.reduce<Record<string, number>>((all, row) => ({ ...all, [row.status]: (all[row.status] ?? 0) + 1, ...(row.kind ? { [row.kind]: (all[row.kind] ?? 0) + 1 } : {}) }), {});
   const shown = filter === "ALL" ? rows : rows.filter(row => row.status === filter || row.kind === filter);
   const { pending, save, note } = useSave();
-  const filters = ["ALL", "SENT", "NOTIFIED", "FAILED", "SKIPPED", "PENDING", ...COMMENT_KINDS];
+  const filters = ["ALL", "SENT", "NOTIFIED", "FAILED", "SKIPPED", "PENDING", ...COMMENT_KINDS.filter(kind => kind !== "HEAT_PUMP" || heatPump)];
   return <section className="bk-card" aria-labelledby="ig-journal">
     <div className="bk-card-head"><div><h2 id="ig-journal">Jurnal</h2><p className="bk-muted">Oxirgi 150 komment · lidlar “Mijoz so‘rovlari”da (manba: Instagram)</p></div>
       <div className="bk-actions">{!!counts.PENDING && <button type="button" className="bk-btn" disabled={pending} onClick={() => save(() => runInstagramQueueAction(accountId))}><RefreshCw size={14}/><BusyLabel busy={pending} busyText="Yuborilmoqda…">Navbatni hozir yuborish</BusyLabel></button>}{note}</div>
@@ -199,7 +238,8 @@ export function InstagramBoard({ board, canConnect }: { board: Board; canConnect
     </div>
     <KindStats board={board}/>
     <div className="ig-toolbar"><h2>Postlar va Reels</h2><label className="ig-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Izoh bo‘yicha qidirish" aria-label="Postlarni qidirish"/></label></div>
-    {media.length ? <div className="ig-grid">{media.map(item => <MediaCard key={item.id} accountId={accountId} media={item} rule={board.rules[item.id]} stats={board.stats[item.id]} products={board.products} canEdit/>)}</div> : <div className="bk-empty">Post topilmadi</div>}
-    <Journal rows={board.journal} accountId={accountId}/>
+    {media.length ? <div className="ig-grid">{media.map(item => <MediaCard key={item.id} accountId={accountId} media={item} rule={board.rules[item.id]} stats={board.stats[item.id]} products={board.products} canEdit heatPumpEnabled={!!board.heatPump} chain={board.heatPump?.chain[item.id]}/>)}</div> : <div className="bk-empty">Post topilmadi</div>}
+    {board.heatPump && <HeatPumpTable data={board.heatPump}/>}
+    <Journal rows={board.journal} accountId={accountId} heatPump={!!board.heatPump}/>
   </div>;
 }

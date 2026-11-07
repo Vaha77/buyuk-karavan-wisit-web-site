@@ -35,9 +35,9 @@ Faqat JSON qaytar: {"reply": "..."}`,
 /** Second product (optional): lines with these are dropped from the DM when the post has none. */
 export const SECOND_PLACEHOLDERS = ["{mahsulot2}", "{narx_som2}", "{havola2}"] as const;
 
-export const COMMENT_KINDS = ["PRICE", "POSITIVE", "QUESTION", "NEGATIVE", "SPAM", "UNKNOWN", "PHONE", "ADDRESS", "HOURS"] as const;
+export const COMMENT_KINDS = ["PRICE", "POSITIVE", "QUESTION", "NEGATIVE", "SPAM", "UNKNOWN", "PHONE", "ADDRESS", "HOURS", "HEAT_PUMP"] as const;
 export type CommentKind = (typeof COMMENT_KINDS)[number];
 /** Contact questions, only for accounts with contactRepliesEnabled (else they are plain QUESTIONs). */
 export const CONTACT_KINDS = ["PHONE", "ADDRESS", "HOURS"] as const;
 export type ContactKind = (typeof CONTACT_KINDS)[number];
-export const KIND_LABELS: Record<CommentKind, string> = { PRICE: "Narx", POSITIVE: "Ijobiy", QUESTION: "Savol", NEGATIVE: "Salbiy", SPAM: "Spam", UNKNOWN: "Aniqlanmadi", PHONE: "Telefon", ADDRESS: "Manzil", HOURS: "Ish vaqti" };
+export const KIND_LABELS: Record<CommentKind, string> = { PRICE: "Narx", POSITIVE: "Ijobiy", QUESTION: "Savol", NEGATIVE: "Salbiy", SPAM: "Spam", UNKNOWN: "Aniqlanmadi", PHONE: "Telefon", ADDRESS: "Manzil", HOURS: "Ish vaqti", HEAT_PUMP: "Teplonasos" };

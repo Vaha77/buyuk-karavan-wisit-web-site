@@ -15,6 +15,7 @@ import { DEFAULT_QUESTION_DM, DEFAULT_QUESTION_REPLY } from "@/lib/instagram/con
 import { dismissConversation } from "@/lib/instagram/direct";
 import { refreshInsights } from "@/lib/instagram/insights";
 import { parseMinute } from "@/lib/instagram/direct-rules";
+import { isHeatPumpAccount } from "@/lib/instagram/heat-pump";
 import { DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY, errorReason, parseKeywords, parseVariants } from "@/lib/instagram/rules";
 import { accountToken, processQueue, refreshTokenIfDue, syncMissedComments } from "@/lib/instagram/service";
 
@@ -111,6 +112,7 @@ const ruleSchema = z.object({
   permalink: z.string().trim().url().max(500).nullable(),
   caption: z.string().max(5000).nullable(),
   postedAt: z.string().max(40).nullable(),
+  heatPump: z.boolean().optional().default(false),
 });
 
 export async function saveMediaRuleAction(raw: unknown): Promise<Result> {
@@ -130,7 +132,9 @@ export async function saveMediaRuleAction(raw: unknown): Promise<Result> {
   if (secondProductId && !await getDb().product.findFirst({ where: { id: secondProductId, archivedAt: null }, select: { id: true } })) return { ok: false, error: "Qo‘shimcha mahsulot topilmadi." };
   const keywords = parseKeywords(value.keywords);
   const postedAt = value.postedAt ? new Date(value.postedAt) : null;
-  const data = { accountId: value.accountId, priceText: value.priceText || null, productId: value.productId, secondProductId, isActive: value.isActive, keywords: keywords.length ? keywords : DEFAULT_KEYWORDS, dmTemplate: value.dmTemplate, publicReplyEnabled: value.publicReplyEnabled, publicReplyText: variants[0] ?? (value.publicReplyText || DEFAULT_PUBLIC_REPLY), publicReplyVariants: variants, permalink: value.permalink, caption: value.caption?.slice(0, 500) ?? null, postedAt: postedAt && !Number.isNaN(postedAt.getTime()) ? postedAt : null, updatedById: actor.id };
+  // Teplonasos posts exist only on the "global" account (@buyuk_karavan).
+  if (value.heatPump && !isHeatPumpAccount(value.accountId)) return { ok: false, error: "Teplonasos turi faqat @buyuk_karavan uchun." };
+  const data = { accountId: value.accountId, heatPump: value.heatPump, priceText: value.priceText || null, productId: value.productId, secondProductId, isActive: value.isActive, keywords: keywords.length ? keywords : DEFAULT_KEYWORDS, dmTemplate: value.dmTemplate, publicReplyEnabled: value.publicReplyEnabled, publicReplyText: variants[0] ?? (value.publicReplyText || DEFAULT_PUBLIC_REPLY), publicReplyVariants: variants, permalink: value.permalink, caption: value.caption?.slice(0, 500) ?? null, postedAt: postedAt && !Number.isNaN(postedAt.getTime()) ? postedAt : null, updatedById: actor.id };
   await getDb().instagramMediaRule.upsert({ where: { mediaId: value.mediaId }, create: { mediaId: value.mediaId, ...data }, update: data });
   await writeAudit(actor, { action: "UPDATE", entityType: "INSTAGRAM_MEDIA", entityId: value.mediaId, entityName: value.permalink ?? value.mediaId, summary: `Instagram post sozlamasini saqladi (${value.isActive ? "faol" : "o‘chiq"})`, after: { productId: value.productId, secondProductId, isActive: value.isActive, keywords: data.keywords, publicReplyEnabled: value.publicReplyEnabled } });
   revalidatePath("/admin/instagram");
@@ -218,4 +222,34 @@ export async function refreshInsightsAction(accountId: string): Promise<Result> 
   revalidatePath("/admin/instagram");
   if (!result.ok) return { ok: false, error: result.errors[0] ?? "Ma’lumot olinmadi." };
   return { ok: true, message: `Yangilandi ✓ ${result.days} kun, ${result.media} post${result.audience ? ", auditoriya" : ""}${result.errors.length ? ` · ${result.errors.length} ta ogohlantirish` : ""}` };
+}
+
+// ---- Teplonasos jadvali ("global" account only) -----------------------------------------------------------
+
+const heatPumpSchema = z.object({
+  rows: z.array(z.object({
+    id: z.string().trim().max(40).nullable(),
+    brand: z.string().trim().min(1, "Brendni yozing.").max(40), model: z.string().trim().min(1, "Modelni yozing.").max(60),
+    hp: z.number().positive().max(1000), nominalKw: z.number().positive().max(1000), winterKw: z.number().positive().max(1000),
+    voltage: z.union([z.literal(220), z.literal(380)]), priceUsd: z.number().positive().max(1_000_000),
+    bufferIncluded: z.boolean(), isActive: z.boolean(),
+  })).max(50),
+  bufferUsd: z.number().min(0).max(100_000), bufferLiters: z.number().int().min(1).max(10_000),
+});
+
+/** Saves the whole table (rows left out are deleted) and the buffer tank price. */
+export async function saveHeatPumpTableAction(raw: unknown): Promise<Result> {
+  const actor = await requireRole("SUPER_ADMIN", "ADMIN");
+  const parsed = heatPumpSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Ma’lumotlarni tekshiring." };
+  const { rows, bufferUsd, bufferLiters } = parsed.data;
+  const db = getDb();
+  await db.$transaction([
+    db.heatPumpModel.deleteMany({ where: { id: { notIn: rows.map(row => row.id).filter((rowId): rowId is string => !!rowId) } } }),
+    ...rows.map(({ id: rowId, ...row }) => rowId ? db.heatPumpModel.upsert({ where: { id: rowId }, create: { id: rowId, ...row }, update: row }) : db.heatPumpModel.create({ data: row })),
+    db.siteSettings.upsert({ where: { id: "global" }, create: { id: "global", heatPumpBufferUsd: bufferUsd, heatPumpBufferLiters: bufferLiters }, update: { heatPumpBufferUsd: bufferUsd, heatPumpBufferLiters: bufferLiters } }),
+  ]);
+  await writeAudit(actor, { action: "UPDATE", entityType: "SITE_SETTINGS", entityId: "heat-pump", entityName: "Teplonasos jadvali", summary: `Teplonasos jadvalini saqladi (${rows.length} model)`, after: parsed.data });
+  revalidatePath("/admin/instagram");
+  return { ok: true, message: "Saqlandi ✓" };
 }

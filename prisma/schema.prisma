@@ -218,6 +218,9 @@ model SiteSettings {
   workshopDailyLimit Int     @default(5)
   // Zborka: the condenser category whose price is the "standart" one (price difference = chosen − standard).
   standardCondenserCategoryId String? @db.VarChar(40)
+  // Teplonasos: buffer tank for models sold without one.
+  heatPumpBufferUsd    Decimal @default(145) @db.Decimal(10, 2)
+  heatPumpBufferLiters Int     @default(60)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -1337,6 +1340,8 @@ enum InstagramCommentKind {
   PHONE
   ADDRESS
   HOURS
+  // Teplonasos post (only the first account, "global"): m² → calculation in Direct.
+  HEAT_PUMP
 }
 
 // Connected professional accounts (the first one, from before multi-account, has id "global"). The token is AES-256-GCM
@@ -1431,6 +1436,8 @@ model InstagramMediaRule {
   publicReplyText    String    @default("Narxini Direct'ga yubordik ✅")
   // Variants for the PRICE public reply, one is picked at random; empty = publicReplyText.
   publicReplyVariants String[]  @default([])
+  // "Teplonasos (m² + suhbat)" post (only the "global" account): m² → calculation DM, short Direct chat.
+  heatPump           Boolean   @default(false)
   permalink          String?
   caption            String?
   postedAt           DateTime?
@@ -1466,6 +1473,9 @@ model InstagramComment {
   // Reply to another comment (parent_id): never answered.
   parentId         String?              @db.VarChar(64)
   kind             InstagramCommentKind?
+  // Teplonasos post: m² found in the comment and what was sent ("calc" | "ask" | "question" | "other").
+  heatPumpM2       Int?
+  heatPumpIntent   String?              @db.VarChar(10)
   // "KEYWORD" | "AI" | "KEYWORD_FALLBACK"
   classifiedBy     String?              @db.VarChar(20)
   aiTokens         Int                  @default(0)
@@ -2047,4 +2057,46 @@ model ShopShortageLog {
   user      AdminUser    @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([entryId, createdAt])
+}
+
+// Instagram "Teplonasos jadvali" (admin-editable). priceUsd is the selling price, no markup is added.
+model HeatPumpModel {
+  id             String   @id @default(cuid())
+  brand          String   @db.VarChar(40)
+  model          String   @db.VarChar(60)
+  hp             Decimal  @db.Decimal(6, 1)
+  nominalKw      Decimal  @db.Decimal(6, 1)
+  // Heating output at A-12W41 (winter); the calculation picks by this.
+  winterKw       Decimal  @db.Decimal(6, 1)
+  voltage        Int      @default(220)
+  priceUsd       Decimal  @db.Decimal(10, 2)
+  bufferIncluded Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// A Direct thread started from a teplonasos post comment: the only Direct threads the bot answers.
+model HeatPumpThread {
+  id          String    @id @default(cuid())
+  accountId   String    @db.VarChar(64)
+  igsid       String    @db.VarChar(64)
+  mediaId     String    @db.VarChar(64)
+  username    String?
+  m2          Int?
+  model       String?
+  phone       String?
+  leadId      String?
+  botReplies  Int       @default(0)
+  // A person wrote in the thread: the bot keeps quiet until then.
+  mutedUntil  DateTime?
+  lastBotText String?
+  lastBotMid  String?   @db.VarChar(255)
+  lastBotAt   DateTime?
+  lastInMid   String?   @db.VarChar(255)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([accountId, igsid])
+  @@index([mediaId])
 }
