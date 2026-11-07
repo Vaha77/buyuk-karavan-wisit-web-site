@@ -5,7 +5,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { CommentKind } from "./constants";
-import { aiCostUsd, aiReplyProblem, firstGoodReply, isShortComment, tooSimilar, validPositiveReply } from "./rules";
+import { ESHIK_INTENTS, aiCostUsd, aiReplyProblem, eshikmasterKind, firstGoodReply, isShortComment, tooSimilar, validPositiveReply } from "./rules";
 
 const DEFAULT_MODEL = "gpt-4.1-mini";
 export const instagramModel = () => process.env.OPENAI_INSTAGRAM_MODEL?.trim() || DEFAULT_MODEL;
@@ -14,9 +14,9 @@ const ZERO: AiUsage = { tokens: 0, costUsd: 0 };
 export const addUsage = (a: AiUsage, b: AiUsage): AiUsage => ({ tokens: a.tokens + b.tokens, costUsd: a.costUsd === null || b.costUsd === null ? null : Math.round((a.costUsd + b.costUsd) * 1e6) / 1e6 });
 
 const client = () => process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 15_000, maxRetries: 1 }) : null;
-function usageOf(response: { usage?: { input_tokens?: number; output_tokens?: number } | null }): AiUsage {
+function usageOf(response: { usage?: { input_tokens?: number; output_tokens?: number } | null }, model = instagramModel()): AiUsage {
   const input = response.usage?.input_tokens ?? 0, output = response.usage?.output_tokens ?? 0;
-  return { tokens: input + output, costUsd: aiCostUsd(instagramModel(), input, output) };
+  return { tokens: input + output, costUsd: aiCostUsd(model, input, output) };
 }
 const safe = (error: unknown) => ({ type: error instanceof Error ? error.name : "UnknownError", status: (error as { status?: number })?.status });
 
@@ -75,7 +75,7 @@ Faqat JSON qaytar: {"reply": "..."}`;
  * `relaxed`, the aiReplyAll accounts: 2 tries, only aiReplyProblem's bans). null when the AI is unavailable; `reply: null`
  * with the `reason` when it never produced a usable reply — then no reply goes out.
  */
-export async function writePositiveReply(comment: string, recent: string[], brand: string, options: { prompt?: string | null; relaxed?: boolean } = {}): Promise<{ reply: string | null; usage: AiUsage; reason: string } | null> {
+export async function writePositiveReply(comment: string, recent: string[], brand: string, options: { prompt?: string | null; relaxed?: boolean; simpleThanks?: boolean } = {}): Promise<{ reply: string | null; usage: AiUsage; reason: string } | null> {
   const openai = client();
   if (!openai) return null;
   let usage = ZERO;
@@ -86,7 +86,7 @@ export async function writePositiveReply(comment: string, recent: string[], bran
   try {
     const result = await firstGoodReply(relaxed ? 2 : 3, async rejected => {
       const retry = relaxed && rejected ? `\nOldingi javobing rad etildi (${rejected}). Boshqacha javob yoz.` : "";
-      const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 120, temperature: 1, input: [{ role: "system", content: options.prompt?.trim() || replyPrompt(brand) }, { role: "user", content: `Oldingi javoblar: ${JSON.stringify(avoid.slice(-20))}\nKomment: ${JSON.stringify(comment.slice(0, 600))}${hint}${retry}` }], text: { format: zodTextFormat(positiveReply, "positive_reply") } });
+      const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 120, temperature: 1, input: [{ role: "system", content: (options.prompt?.trim() || replyPrompt(brand)) + (options.simpleThanks ? SIMPLE_THANKS : "") }, { role: "user", content: `Oldingi javoblar: ${JSON.stringify(avoid.slice(-20))}\nKomment: ${JSON.stringify(comment.slice(0, 600))}${hint}${retry}` }], text: { format: zodTextFormat(positiveReply, "positive_reply") } });
       usage = addUsage(usage, usageOf(response));
       const reply = response.output_parsed?.reply?.trim() ?? "";
       if (reply) avoid.push(reply);
@@ -151,6 +151,61 @@ export async function heatPumpChat(message: string, lastBotText: string | null) 
     return parsed && (parsed.reply.trim() || parsed.m2) ? { reply: parsed.reply.trim().slice(0, 600), m2: parsed.m2, usage: usageOf(response) } : null;
   } catch (error) {
     console.warn("Instagram AI heat pump reply failed", safe(error));
+    return null;
+  }
+}
+
+// ---- @eshikmaster: every comment through a reliable model ------------------------------------------------
+
+/** Not a mini model: the comments are hurried, misspelt, dialect, Latin / Cyrillic mixed. */
+export const ESHIKMASTER_MODEL = "gpt-4.1";
+const SIMPLE_THANKS = `\n- Ijobiy kommentga javob oddiy va samimiy bo'lsin, balandparvoz emas. Masalan: "Rahmat, aka! 🔥", "Rahmat, xursandmiz 🙌".`;
+
+export const ESHIKMASTER_EXAMPLES: ReadonlyArray<readonly [string, (typeof ESHIK_INTENTS)[number]]> = [
+  ["Necplga qberasla", "price"], ["nchpl", "price"], ["qanchaga qilasiz", "price"], ["Narxi qancha isuzuga", "price"], ["нечпул", "price"], ["сколько стоит", "price"],
+  ["manzl qatta", "address"], ["qayda turasiz", "address"], ["адрес скиньте", "address"],
+  ["nomer tashavoring", "phone"], ["tel raqam", "phone"],
+  ["soat nechigacha ishlaysiz", "hours"],
+  ["damasniyam qilasizmi", "question"], ["eshigim yopilmayapti, kelib berasizmi", "question"],
+  ["🔥🔥", "positive"], ["zor ish", "positive"], ["Miyyani qaydan topkansz", "positive"], ["Rahmat usta", "positive"],
+  ["aldoqchilar", "negative"], ["sahifamga obuna bo'ling", "spam"],
+];
+
+export const ESHIKMASTER_PROMPT = `Komment avto eshik ustasi sahifasida. Mijozlar shoshib, xato, qisqartirib, lotin/kirill aralash, sheva bilan yozadi. Ma'noni tushun.
+intent:
+- price: narx so'rash (qancha, nech pul, qanchaga qilasiz).
+- address: manzil, joylashuv so'rash.
+- phone: telefon raqami so'rash.
+- hours: ish vaqti so'rash.
+- question: boshqa savol yoki iltimos (qila olasizmi, kelib berasizmi, bormi).
+- positive: maqtov, minnatdorchilik, emoji.
+- negative: shikoyat, haqorat, tanqid.
+- spam: reklama, havola, aloqasiz taklif.
+Qoidalar:
+- Savol yoki iltimos ohangidagi komment HECH QACHON positive emas.
+- reply faqat positive va question uchun (qolganlarida ""): 1 qisqa gap, kommentning tilida, oddiy va samimiy, balandparvoz emas. Masalan: "Rahmat, aka! 🔥", "Rahmat, xursandmiz 🙌".
+- reply'da narx, raqam, telefon, ish vaqti, havola, @belgi, chegirma, kafolat, va'da YOZMA, hech narsani to'qima.
+Misollar:
+${ESHIKMASTER_EXAMPLES.map(([text, intent]) => `"${text}" → ${intent}`).join("\n")}
+Faqat JSON qaytar: {"intent":"price|address|phone|hours|question|positive|negative|spam", "reply": "..."}`;
+
+const eshikIntent = z.object({ intent: z.enum(ESHIK_INTENTS), reply: z.string() });
+
+/**
+ * @eshikmaster: the comment's kind and (positive / question) a reply in one call, or null (no key / error) — then the
+ * keywords decide. A question that came back "positive" becomes QUESTION and its thanks-reply is dropped.
+ */
+export async function classifyEshikmaster(comment: string, openai: Pick<OpenAI, "responses"> | null = client()) {
+  if (!openai) return null;
+  try {
+    const response = await openai.responses.parse({ model: ESHIKMASTER_MODEL, store: false, max_output_tokens: 120, input: [{ role: "system", content: ESHIKMASTER_PROMPT }, { role: "user", content: `Komment: ${JSON.stringify(comment.slice(0, 600))}` }], text: { format: zodTextFormat(eshikIntent, "eshik_comment") } });
+    const parsed = response.output_parsed;
+    if (!parsed) return null;
+    const kind = eshikmasterKind(parsed.intent, comment);
+    const keepReply = (kind === "POSITIVE" || kind === "QUESTION") && !(parsed.intent === "positive" && kind === "QUESTION");
+    return { kind, reply: keepReply ? parsed.reply.trim() : "", usage: usageOf(response, ESHIKMASTER_MODEL) };
+  } catch (error) {
+    console.warn("Instagram AI eshikmaster classify failed", safe(error));
     return null;
   }
 }

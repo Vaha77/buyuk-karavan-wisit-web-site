@@ -32,6 +32,8 @@ Qoidalar:
 - Quyidagi oldingi javoblarni takrorlama, so'zlari ham boshqacha bo'lsin.
 Faqat JSON qaytar: {"reply": "..."}`,
 };
+/** @eshikmaster (by username): its own AI understanding of comments; no other account ever gets it. */
+export const isEshikmaster = (account: { username: string }) => account.username.trim().toLowerCase() === "eshikmaster";
 /** Second product (optional): lines with these are dropped from the DM when the post has none. */
 export const SECOND_PLACEHOLDERS = ["{mahsulot2}", "{narx_som2}", "{havola2}"] as const;
 

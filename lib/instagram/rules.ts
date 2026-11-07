@@ -421,6 +421,21 @@ export function isSimilar(a: string, b: string) {
 }
 export const tooSimilar = (reply: string, recent: readonly string[]) => recent.some(item => isSimilar(reply, item));
 
+// ---- @eshikmaster: AI intent → comment kind ------------------------------------------------------------
+
+export const ESHIK_INTENTS = ["price", "address", "phone", "hours", "question", "positive", "negative", "spam"] as const;
+export type EshikIntent = (typeof ESHIK_INTENTS)[number];
+const INTENT_KIND: Record<EshikIntent, CommentKind> = { price: "PRICE", address: "ADDRESS", phone: "PHONE", hours: "HOURS", question: "QUESTION", positive: "POSITIVE", negative: "NEGATIVE", spam: "SPAM" };
+
+/** A question or a request: "?", a word with the "-mi" particle ("qilasizmi"), "iltimos". */
+export function asksSomething(comment: string) {
+  const text = normalizeText(comment);
+  return /[?？]/.test(text) || /iltimos|илтимос|пожалуйста/.test(text) || text.split(/[^\p{L}']+/u).some(word => word.length > 3 && /(?:mi|ми)$/.test(word));
+}
+
+/** The AI's intent; a question / request is never POSITIVE (then QUESTION). */
+export const eshikmasterKind = (intent: EshikIntent, comment: string): CommentKind => intent === "positive" && asksSomething(comment) ? "QUESTION" : INTENT_KIND[intent];
+
 // ---- Pacing, daily limit, AI cost ----------------------------------------------------------------------
 
 export const MIN_GAP_MS = 8_000;
@@ -435,7 +450,8 @@ export function tashkentDayStart(now = new Date()) {
 }
 
 /** USD per 1M tokens (input, output); unknown model → null cost (tokens are still logged). */
-const PRICES: Record<string, [number, number]> = { "gpt-4.1-mini": [0.4, 1.6], "gpt-4.1-nano": [0.1, 0.4], "gpt-4o-mini": [0.15, 0.6], "gpt-5-mini": [0.25, 2], "gpt-5-nano": [0.05, 0.4] };
+// The full models last, so a dated "gpt-4.1-mini-…" finds its mini price first.
+const PRICES: Record<string, [number, number]> = { "gpt-4.1-mini": [0.4, 1.6], "gpt-4.1-nano": [0.1, 0.4], "gpt-4o-mini": [0.15, 0.6], "gpt-5-mini": [0.25, 2], "gpt-5-nano": [0.05, 0.4], "gpt-4.1": [2, 8], "gpt-4o": [2.5, 10] };
 export function aiCostUsd(model: string, inputTokens: number, outputTokens: number) {
   const price = PRICES[model] ?? PRICES[Object.keys(PRICES).find(key => model.startsWith(`${key}-`)) ?? ""];
   if (!price) return null;
