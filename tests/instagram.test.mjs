@@ -259,7 +259,7 @@ test("queue cron: CRON_SECRET required (constant-time), the queue runs only when
   assert.equal(cronAuthorized("Bearer s3cret", "s3cret"), true);
 
   const route = await read("../app/api/cron/instagram-queue/route.ts");
-  assert.match(route, /handleQueueCron\(request\.headers\.get\("authorization"\), process\.env\.CRON_SECRET, \(\) => processQueue\(\{ budgetMs: 50_000 \}\)\)/);
+  assert.match(route, /handleQueueCron\(request\.headers\.get\("authorization"\), process\.env\.CRON_SECRET, async \(\) => \(\{ catchUp: await syncAllMissedComments\(\{ mediaLimit: 5 \}\), \.\.\.await processQueue\(\{ budgetMs: 50_000 \}\) \}\)\)/);
   assert.doesNotMatch(route, /refreshTokenIfDue|syncMissedComments/, "light: the queue only");
   const service = await read("../lib/instagram/service.ts");
   const queue = service.slice(service.indexOf("export async function processQueue"));
