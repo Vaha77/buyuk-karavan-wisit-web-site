@@ -245,6 +245,35 @@ test("m² coming later: one more calculation + public reply despite the one-repl
 
 test("saving a teplonasos post skips the product / price text / DM template checks", async () => {
   const actions = await read("../app/admin/(protected)/instagram/actions.ts");
-  assert.match(actions, /if \(!value\.heatPump\) \{\n\s*\/\/ Free text; \{narx_som\} \/ \{mahsulot\} \/ \{havola\} need a product\.\n\s*if \(\/\\{\(mahsulot\|narx_som\|havola\)\\}\/\.test\(value\.dmTemplate\)/);
+  assert.match(actions, /if \(!value\.heatPump\) \{\n[^\n]*DM matni bo‘sh bo‘lmasin[^\n]*\n\s*\/\/ Free text; \{narx_som\} \/ \{mahsulot\} \/ \{havola\} need a product\.\n\s*if \(\/\\{\(mahsulot\|narx_som\|havola\)\\}\/\.test\(value\.dmTemplate\)/);
   assert.match(actions, /if \(!value\.heatPump\) \{[\s\S]*?Narx matnida[\s\S]*?\n  \}\n/, "price text check inside the block");
+});
+
+test("reply to another person: leading @mentions are dropped before classifying", () => {
+  assert.equal(hp.stripMentions("@____abdulvohid__ 60 kvd qancha"), "60 kvd qancha");
+  assert.equal(hp.stripMentions("@a.b @c_d, 150"), "150");
+  assert.equal(hp.stripMentions("narx @shop"), "narx @shop", "only at the start");
+
+  const first = hp.heatPumpByKeywords("@____abdulvohid__ 60 kvd qancha");
+  assert.deepEqual(first, { kind: "HEAT_PUMP", intent: "calc", m2: 60 });
+  const three = hp.calcMessage(first.m2, MODELS, RATE, BUFFER);
+  assert.match(three.text, /🔥 Aire 3 HP · 10 kW — 60 m² uyingizni isitadi/);
+  assert.equal(hp.heatPumpOutgoing("calc", { m2: 60, calc: three.text }).reply, "60 m² uchun hisobni Direct'ga yubordik 📩");
+
+  const second = hp.heatPumpByKeywords("@qobiljonnasimjanov 260");
+  assert.deepEqual(second, { kind: "HEAT_PUMP", intent: "calc", m2: 260 });
+  assert.match(hp.calcMessage(260, MODELS, RATE, BUFFER).text, /🔥 Aire 12 HP · 36 kW — 260 m²/);
+
+  assert.deepEqual(hp.heatPumpByKeywords("@user narxi qancha"), { kind: "HEAT_PUMP", intent: "ask", m2: null });
+  assert.equal(hp.heatPumpReplyAnswered("HEAT_PUMP", "calc", false), false, "the same reply on another post type → no answer");
+});
+
+test("m² units: kvd, kv., kvm, kvadrat metr, м², кв.м", () => {
+  for (const text of ["60 kvd", "60kvd", "60 kv.", "60 kvm", "60 kvadrat metr", "60 м²", "60 кв.м", "60кв.м"]) assert.equal(hp.extractM2(text), 60, text);
+});
+
+test("saving a teplonasos post: the price post's DM template is not required", async () => {
+  const actions = await read("../app/admin/(protected)/instagram/actions.ts");
+  assert.match(actions, /dmTemplate: z\.string\(\)\.trim\(\)\.max\(900, "DM matni 900 belgidan oshmasin\."\),/, "no min(5) in the schema");
+  assert.match(actions, /if \(!value\.heatPump\) \{\n\s*if \(value\.dmTemplate\.length < 5\) return \{ ok: false, error: "DM matni bo‘sh bo‘lmasin\." \};/);
 });

@@ -105,7 +105,7 @@ const ruleSchema = z.object({
   secondProductId: z.string().trim().min(1).max(100).nullable().optional().default(null),
   isActive: z.boolean(),
   keywords: z.string().max(2000),
-  dmTemplate: z.string().trim().min(5, "DM matni bo‘sh bo‘lmasin.").max(900, "DM matni 900 belgidan oshmasin."),
+  dmTemplate: z.string().trim().max(900, "DM matni 900 belgidan oshmasin."),
   publicReplyEnabled: z.boolean(),
   publicReplyText: z.string().trim().max(300, "Ochiq javob 300 belgidan oshmasin."),
   publicReplyVariants: z.string().max(4000).default(""),
@@ -126,6 +126,7 @@ export async function saveMediaRuleAction(raw: unknown): Promise<Result> {
   if (value.productId && !await getDb().product.findFirst({ where: { id: value.productId, archivedAt: null }, select: { id: true } })) return { ok: false, error: "Mahsulot topilmadi." };
   // Teplonasos posts do not use the product, price text or DM template, so they are not checked.
   if (!value.heatPump) {
+    if (value.dmTemplate.length < 5) return { ok: false, error: "DM matni bo‘sh bo‘lmasin." };
     // Free text; {narx_som} / {mahsulot} / {havola} need a product.
     if (/\{(mahsulot|narx_som|havola)\}/.test(value.dmTemplate) && !value.productId && !value.priceText) return { ok: false, error: "Matnda {mahsulot}/{narx_som}/{havola} bor — mahsulot tanlang yoki ularni olib tashlang." };
     if (value.publicReplyEnabled && !variants.length && !value.publicReplyText) return { ok: false, error: "Ochiq javob matnini yozing yoki o‘chiring." };
