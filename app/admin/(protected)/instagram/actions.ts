@@ -120,16 +120,19 @@ export async function saveMediaRuleAction(raw: unknown): Promise<Result> {
   const parsed = ruleSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Ma’lumotlarni tekshiring." };
   const value = parsed.data;
-  // Free text; {narx_som} / {mahsulot} / {havola} need a product.
-  if (/\{(mahsulot|narx_som|havola)\}/.test(value.dmTemplate) && !value.productId && !value.priceText) return { ok: false, error: "Matnda {mahsulot}/{narx_som}/{havola} bor — mahsulot tanlang yoki ularni olib tashlang." };
   const variants = parseVariants(value.publicReplyVariants);
-  if (value.publicReplyEnabled && !variants.length && !value.publicReplyText) return { ok: false, error: "Ochiq javob matnini yozing yoki o‘chiring." };
-  if (value.productId && !await getDb().product.findFirst({ where: { id: value.productId, archivedAt: null }, select: { id: true } })) return { ok: false, error: "Mahsulot topilmadi." };
-  // {mahsulot2} {narx_som2} {havola2} without a second product are fine: their lines are dropped when the DM is sent.
-  const secondProductId = value.secondProductId && value.secondProductId !== value.productId ? value.secondProductId : null;
+  const secondProductId = !value.heatPump && value.secondProductId && value.secondProductId !== value.productId ? value.secondProductId : null;
   if (!await getDb().instagramAccount.findUnique({ where: { id: value.accountId }, select: { id: true } })) return { ok: false, error: "Akkaunt topilmadi." };
-  if (/\{(mahsulot|narx_som|havola)\}/.test(value.priceText)) return { ok: false, error: "Narx matnida {mahsulot}/{narx_som}/{havola} ishlatilmaydi — narxni o‘zingiz yozing." };
-  if (secondProductId && !await getDb().product.findFirst({ where: { id: secondProductId, archivedAt: null }, select: { id: true } })) return { ok: false, error: "Qo‘shimcha mahsulot topilmadi." };
+  if (value.productId && !await getDb().product.findFirst({ where: { id: value.productId, archivedAt: null }, select: { id: true } })) return { ok: false, error: "Mahsulot topilmadi." };
+  // Teplonasos posts do not use the product, price text or DM template, so they are not checked.
+  if (!value.heatPump) {
+    // Free text; {narx_som} / {mahsulot} / {havola} need a product.
+    if (/\{(mahsulot|narx_som|havola)\}/.test(value.dmTemplate) && !value.productId && !value.priceText) return { ok: false, error: "Matnda {mahsulot}/{narx_som}/{havola} bor — mahsulot tanlang yoki ularni olib tashlang." };
+    if (value.publicReplyEnabled && !variants.length && !value.publicReplyText) return { ok: false, error: "Ochiq javob matnini yozing yoki o‘chiring." };
+    // {mahsulot2} {narx_som2} {havola2} without a second product are fine: their lines are dropped when the DM is sent.
+    if (/\{(mahsulot|narx_som|havola)\}/.test(value.priceText)) return { ok: false, error: "Narx matnida {mahsulot}/{narx_som}/{havola} ishlatilmaydi — narxni o‘zingiz yozing." };
+    if (secondProductId && !await getDb().product.findFirst({ where: { id: secondProductId, archivedAt: null }, select: { id: true } })) return { ok: false, error: "Qo‘shimcha mahsulot topilmadi." };
+  }
   const keywords = parseKeywords(value.keywords);
   const postedAt = value.postedAt ? new Date(value.postedAt) : null;
   // Teplonasos posts exist only on the "global" account (@buyuk_karavan).

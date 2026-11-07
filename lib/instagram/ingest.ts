@@ -6,7 +6,10 @@ export type CommentRow = { commentId: string; mediaId: string; fromId: string; u
 export type IngestStore = {
   /** false when the comment id is already in the journal (unique key) — then nothing else happens for it. */
   insertComment: (row: CommentRow) => Promise<boolean>;
+  /** Replies on this post are queued (teplonasos posts of the "global" account); absent = never. */
+  allowsReply?: (mediaId: string) => Promise<boolean>;
 };
+const replyAllowed = (store: IngestStore, parentId: string | null, mediaId: string) => parentId && store.allowsReply ? store.allowsReply(mediaId) : false;
 
 /**
  * Stores every comment on our media once (comment id = unique key). Returns the queued comment ids (classified and
@@ -18,7 +21,7 @@ export async function ingestWebhook(payload: unknown, account: IngestAccount, st
   const queued: string[] = [];
   let duplicates = 0;
   for (const event of comments.filter(item => item.accountId === account.igUserId)) {
-    const decision = decideIngest(event, account, now);
+    const decision = decideIngest(event, account, now, await replyAllowed(store, event.parentId, event.mediaId));
     if (decision.action === "ignore") continue;
     const inserted = await store.insertComment({ commentId: event.commentId, mediaId: event.mediaId, fromId: event.fromId, username: event.username, text: event.text, parentId: event.parentId, status: decision.action === "queue" ? "PENDING" : "SKIPPED", reason: decision.action === "skip" ? decision.reason : null, createdAt: event.time, nextAttemptAt: now });
     if (!inserted) { duplicates++; continue; }
@@ -55,7 +58,7 @@ export async function ingestFetchedComments(media: MediaComments[], account: Ing
       const time = graphTime(comment.timestamp), fromId = comment.from?.id ? String(comment.from.id) : null;
       if (!comment.id || !fromId || !time || now.getTime() - time.getTime() > windowMs) continue;
       const fields = { commentId: String(comment.id), mediaId, fromId, username: comment.from?.username ?? comment.username ?? null, text: typeof comment.text === "string" ? comment.text.slice(0, 2000) : "", parentId: comment.parent_id ? String(comment.parent_id) : null };
-      const decision = decideIngest({ ...fields, time }, account, now);
+      const decision = decideIngest({ ...fields, time }, account, now, await replyAllowed(store, fields.parentId, mediaId));
       if (decision.action === "ignore") continue;
       found++;
       const inserted = await store.insertComment({ ...fields, status: decision.action === "queue" ? "PENDING" : "SKIPPED", reason: decision.action === "skip" ? decision.reason : null, createdAt: time, nextAttemptAt: now });

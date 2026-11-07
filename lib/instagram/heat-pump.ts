@@ -162,12 +162,19 @@ export function heatPumpFromAi(ai: { m2: number | null; topic: "heatpump" | "oth
   return { kind: "HEAT_PUMP", intent: ai.topic === "heatpump" ? "question" : "other", m2: null };
 }
 
-/** One public reply and one Direct per person per post; an inactive post gets nothing. */
-export function heatPumpAction(rule: { isActive: boolean } | null, alreadyAnswered: boolean, underLimit: boolean) {
+/**
+ * One public reply and one Direct per person per post; an inactive post gets nothing. Exception (`lateM2`): the first m²
+ * from a person who was answered without a calculation still gets the calculation and its public reply.
+ */
+export function heatPumpAction(rule: { isActive: boolean } | null, alreadyAnswered: boolean, underLimit: boolean, lateM2 = false) {
   if (rule && !rule.isActive) return { type: "skip" as const, reason: "Post uchun avto-javoblar o‘chirilgan" };
-  if (alreadyAnswered) return { type: "skip" as const, reason: "Bu odamga shu postda javob berilgan — suhbat Direct’da" };
+  if (alreadyAnswered && !lateM2) return { type: "skip" as const, reason: "Bu odamga shu postda javob berilgan — suhbat Direct’da" };
   return { type: "heatpump" as const, publicReply: underLimit };
 }
+
+/** A reply-comment is answered only on a teplonasos post, and only with m², a price ask or a teplonasos question. */
+export const heatPumpReplyAnswered = (kind: string, intent: string | null, heatPumpPost: boolean) =>
+  heatPumpPost && kind === "HEAT_PUMP" && (intent === "calc" || intent === "ask" || intent === "question");
 
 /** Public reply and Direct text for a HEAT_PUMP comment; an off-topic one gets the call-center reply and no Direct. */
 export function heatPumpOutgoing(intent: HeatPumpIntent, input: { m2?: number | null; calc?: string | null; answer?: string | null }, lang: Lang = "uz") {
