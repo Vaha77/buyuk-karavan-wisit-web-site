@@ -98,3 +98,59 @@ export async function writePositiveReply(comment: string, recent: string[], bran
     return usage.tokens ? { reply: null, usage, reason: `AI xatosi (${safe(error).type})` } : null;
   }
 }
+
+// ---- Teplonasos ("global" account only) -------------------------------------------------------------------
+
+const heatPumpComment = z.object({ m2: z.number().nullable(), topic: z.enum(["heatpump", "other", "praise", "spam"]) });
+const HEAT_PUMP_CLASSIFY = `Teplonasos (issiqlik nasosi) posti ostidagi kommentni tahlil qil.
+m2: kommentda uy maydoni bo'lsa son (20–3000): "10x12" → 120, "2 qavat 100 dan" → 200; telefon raqami, yil va narx m² emas; bo'lmasa null.
+topic: heatpump — teplonasos, isitish, narx yoki uy haqida savol; other — mavzudan tashqari savol; praise — maqtov, emoji, minnatdorchilik; spam — reklama, havola, bot.
+Faqat JSON qaytar.`;
+
+/** { m2, topic } of a comment on a teplonasos post, or null (no key / error). */
+export async function classifyHeatPumpComment(comment: string) {
+  const openai = client();
+  if (!openai) return null;
+  try {
+    const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 60, input: [{ role: "system", content: HEAT_PUMP_CLASSIFY }, { role: "user", content: `Komment: ${JSON.stringify(comment.slice(0, 600))}` }], text: { format: zodTextFormat(heatPumpComment, "heat_pump_comment") } });
+    return response.output_parsed ? { ...response.output_parsed, usage: usageOf(response) } : null;
+  } catch (error) {
+    console.warn("Instagram AI heat pump classify failed", safe(error));
+    return null;
+  }
+}
+
+/** The only facts the bot may use (no invented numbers or promises). */
+export const HEAT_PUMP_PROMPT = `Sen Buyuk Karavan do'konining Instagram Direct'dagi teplonasos (issiqlik nasosi) yordamchisisan.
+Faqat quyidagi ma'lumotlardan foydalan; boshqa raqam, narx, muddat yoki va'da TO'QIMA:
+- 1 kW tok → ~3.5 kW issiqlik. 19 kW modelning plastinkasi: tok 5.4 kW; −12°C da 12.5–13.6 kW; −20°C da 9.7–11.6 kW; sovutish 12.6 kW; R32.
+- Qishda −20°C gacha ishlaydi, quvvat sovuqda pasayadi.
+- Yozda sovutadi.
+- Issiq suv: ha — vanna, dush va oshxona uchun suv isitadi (ulash sxemasini mutaxassis aytadi).
+- Ichki qismi: fankoyl, tyoplыy pol yoki radiator; fankoyl alohida, qo'shimcha.
+- Yetkazib berish: butun O'zbekiston bo'ylab, narxi kelishilgan holda qo'shiladi.
+- Muddatli to'lov (rassrochka): yo'q.
+- Montaj narxi va kafolat: "Mutaxassis aniq aytadi: +998 99 520 99 99".
+- Oylik svet puli: so'mda hisoblama; faqat "1 kW tok → 3.5 kW issiqlik" de va mutaxassis raqamini ber: +998 99 520 99 99.
+- Model narxini o'zing aytma: narx uy maydoni (m²) bo'yicha alohida hisob bilan yuboriladi — m² so'ra.
+Qoidalar:
+- Teplonasosga aloqasi yo'q savol → aynan shu javob: "Bu savol bo'yicha call-centerimizga murojaat qiling: +998 91 637 77 77".
+- Javob 2–3 gapdan oshmasin, mijoz yozgan tilda (o'zbek yoki rus).
+- m2: mijoz uy maydonini yozgan bo'lsa son (20–3000), aks holda null. Telefon, yil va narx m² emas.
+Faqat JSON qaytar: {"reply": "...", "m2": number|null}`;
+
+const heatPumpReply = z.object({ reply: z.string(), m2: z.number().nullable() });
+
+/** A short Direct answer (and the m² if the customer wrote one), or null (no key / error / empty). */
+export async function heatPumpChat(message: string, lastBotText: string | null) {
+  const openai = client();
+  if (!openai) return null;
+  try {
+    const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 300, input: [{ role: "system", content: HEAT_PUMP_PROMPT }, ...(lastBotText ? [{ role: "assistant" as const, content: lastBotText.slice(0, 1000) }] : []), { role: "user", content: message.slice(0, 1000) }], text: { format: zodTextFormat(heatPumpReply, "heat_pump_reply") } });
+    const parsed = response.output_parsed;
+    return parsed && (parsed.reply.trim() || parsed.m2) ? { reply: parsed.reply.trim().slice(0, 600), m2: parsed.m2, usage: usageOf(response) } : null;
+  } catch (error) {
+    console.warn("Instagram AI heat pump reply failed", safe(error));
+    return null;
+  }
+}

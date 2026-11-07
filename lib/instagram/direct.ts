@@ -11,6 +11,7 @@ import type { InlineKeyboard } from "@/lib/telegram/types";
 import { getUserProfile, sendDirectMessage } from "./graph";
 import { DISMISS_REASONS, cardText, digestDue, digestText, directLink, directRecipients, dueReminder, extractPhone, isAutoEcho, isWorkTime, onEcho, onIncoming, personLabel, reminderText, reportDue, reportText, tashkentDate, workingMs, type DirectStatus, type Recipient } from "./direct-rules";
 import { openSignature } from "./direct-sign";
+import { isHeatPumpAccount } from "./heat-pump";
 import { accountName, type MessageEvent } from "./rules";
 
 type Card = { chatId: string; messageId: number; adminId: string };
@@ -106,7 +107,9 @@ export async function recordDirectEvents(events: MessageEvent[], account: Instag
   // Our automatic messages: comment Private Replies (id or text) and the Direct auto message.
   const since = new Date(Date.now() - 30 * 60_000);
   const autos = await db.instagramComment.findMany({ where: { accountId: account.id, dmSentAt: { gte: since } }, select: { dmMessageId: true, dmText: true, dmSentAt: true } });
-  const marks = { mids: new Set(autos.map(row => row.dmMessageId).filter((mid): mid is string => !!mid)), texts: [...autos.filter(row => row.dmText).map(row => ({ text: row.dmText!, at: row.dmSentAt! })), ...(account.directAutoAckEnabled ? [{ text: account.directAutoAckText, at: new Date() }] : [])] };
+  // Teplonasos bot answers ("global" only) are automatic too.
+  const bots = isHeatPumpAccount(account.id) ? await db.heatPumpThread.findMany({ where: { accountId: account.id, lastBotAt: { gte: since } }, select: { lastBotMid: true, lastBotText: true, lastBotAt: true } }) : [];
+  const marks = { mids: new Set([...autos.map(row => row.dmMessageId), ...bots.map(row => row.lastBotMid)].filter((mid): mid is string => !!mid)), texts: [...autos.filter(row => row.dmText).map(row => ({ text: row.dmText!, at: row.dmSentAt! })), ...bots.filter(row => row.lastBotText).map(row => ({ text: row.lastBotText!, at: row.lastBotAt! })), ...(account.directAutoAckEnabled ? [{ text: account.directAutoAckText, at: new Date() }] : [])] };
 
   for (const event of events) {
     const echo = event.isEcho || event.fromId === account.igUserId;
@@ -123,7 +126,8 @@ export async function recordDirectEvents(events: MessageEvent[], account: Instag
       await db.instagramMessage.createMany({ data: [{ mid: event.mid, accountId: account.id, fromId: event.fromId, toId: event.recipientId, text: event.text, hasAttachments: event.hasAttachments, kind: event.kind, sentAt: event.time, direction: "IN", conversationId: conversation.id }], skipDuplicates: true });
       touched.add(conversation.id);
       const phone = extractPhone(event.text);
-      if (phone && !conversation.leadId) phones.push({ conversationId: conversation.id, phone, text: event.text ?? "" });
+      // A teplonasos thread's phone goes to its own lead (lib/instagram/heat-pump-bot.ts).
+      if (phone && !conversation.leadId && !(isHeatPumpAccount(account.id) && await db.heatPumpThread.findUnique({ where: { accountId_igsid: { accountId: account.id, igsid: customer } }, select: { id: true } }))) phones.push({ conversationId: conversation.id, phone, text: event.text ?? "" });
       continue;
     }
     const auto = isAutoEcho({ mid: event.mid, text: event.text, time: event.time }, marks) || (!!existing?.autoAckAt && event.text?.trim() === account.directAutoAckText.trim() && Math.abs(existing.autoAckAt.getTime() - event.time.getTime()) < 15 * 60_000);
@@ -155,6 +159,8 @@ export async function afterDirectEvents(result: Awaited<ReturnType<typeof record
       const claimed = await db.instagramConversation.updateMany({ where: { id, autoAckAt: null }, data: { autoAckAt: new Date() } });
       if (claimed.count !== 1) continue;
       const conversation = await db.instagramConversation.findUnique({ where: { id }, select: { igsid: true } });
+      // The teplonasos bot answers its own threads.
+      if (conversation && isHeatPumpAccount(account.id) && await db.heatPumpThread.findUnique({ where: { accountId_igsid: { accountId: account.id, igsid: conversation.igsid } }, select: { id: true } })) continue;
       if (conversation) await sendDirectMessage(token, account.igUserId, conversation.igsid, account.directAutoAckText.slice(0, 1000));
     } catch (error) { console.error("Instagram Direct auto message failed", { type: safeType(error) }); }
   }
@@ -202,6 +208,11 @@ export async function dismissConversation(conversationId: string, reason: string
   return count === 1;
 }
 export const dismissReason = (code: string) => DISMISS_REASONS[code] ?? null;
+
+/** A plain notice to the account's Direct recipients (group, or the admins who receive Instagram). */
+export async function notifyDirectRecipients(account: Pick<InstagramAccount, "id" | "directChatId">, text: string) {
+  return broadcast(await recipients(account), (await accountTag(account.id)) + text);
+}
 
 // ---- Tick: reminders, digest, report ---------------------------------------------------------------------
 

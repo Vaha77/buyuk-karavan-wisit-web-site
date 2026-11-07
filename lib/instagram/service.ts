@@ -8,12 +8,14 @@ import { getPublicHomeContent } from "@/lib/home/content";
 import { expireDashboard } from "@/lib/referrals/tracking";
 import { SITE_URL } from "@/lib/site-url";
 import { publishLeadToTelegram } from "@/lib/telegram/service";
-import { addUsage, classifyWithAi, writePositiveReply, type AiUsage } from "./ai";
+import { addUsage, classifyWithAi, heatPumpChat, writePositiveReply, type AiUsage } from "./ai";
 import { DEFAULT_PUBLIC_REPLY, type CommentKind } from "./constants";
 import { GraphError, getMediaPermalink, listComments, listMedia, refreshLongLived, replyToComment, sendPrivateReply } from "./graph";
 import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComments } from "./ingest";
 import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { notifyNegative } from "./telegram";
+import { bindThread, buildCalc, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
+import { heatPumpAction, heatPumpOutgoing, isHeatPumpAccount, langOf, type HeatPumpIntent } from "./heat-pump";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
 /** The account connected before multi-account (Buyuk Karavan): its rows were migrated with this id. */
@@ -66,7 +68,7 @@ export async function ingestNotification(payload: unknown) {
     // Direct off (e.g. @eshikmaster): no conversations, cards or Direct leads.
     const direct = account.directEnabled ? await recordDirectEvents(result.direct, account) : { touched: [], created: [], phones: [] };
     await getDb().instagramAccount.update({ where: { id: account.id }, data: { lastWebhookAt: new Date() } }).catch(() => undefined);
-    results.push({ queued: result.queued, direct, account });
+    results.push({ queued: result.queued, direct, events: result.direct, account });
   }
   return results;
 }
@@ -74,6 +76,7 @@ export async function ingestNotification(payload: unknown) {
 /** Background part of the webhook, each account on its own (own queue, pacing and lock). Never throws. */
 export async function afterNotification(results: NonNullable<Awaited<ReturnType<typeof ingestNotification>>>) {
   await Promise.all(results.map(async result => {
+    if (isHeatPumpAccount(result.account.id) && result.events.length) await handleHeatPumpDirect(result.events, result.account, accountToken(result.account));
     if (result.direct.touched.length || result.direct.phones.length) await afterDirectEvents(result.direct, result.account, accountToken(result.account)).catch(error => console.error("Instagram Direct failed", { type: safeType(error) }));
     if (result.queued.length) await processQueue({ accountId: result.account.id, budgetMs: 240_000 });
   }));
@@ -115,7 +118,12 @@ type Context = { account: InstagramAccount; token: string; rate: string | null; 
 type Outcome = "sent" | "failed" | "skipped" | "notified" | "retry" | "rate-limited" | "wait";
 
 /** Keywords first; when they are unclear the AI decides; without the AI the keyword fallback, else UNKNOWN (no reply). */
-async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage }> {
+async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage; m2?: number | null; intent?: HeatPumpIntent | null }> {
+  // Teplonasos post: only the "global" account (@eshikmaster never gets this flow).
+  if (rule?.heatPump && isHeatPumpAccount(account.id)) {
+    const { result, by, usage } = await classifyHeatPump(comment.text);
+    return { kind: result?.kind ?? "UNKNOWN", by, usage, ...(result?.kind === "HEAT_PUMP" ? { m2: result.m2, intent: result.intent } : {}) };
+  }
   const keywords = classifyByKeywords(comment.text, rule?.keywords ?? [], { contact: account.contactRepliesEnabled, asks: account.aiReplyAll });
   // aiReplyAll: a keyword QUESTION still goes to the AI, which may find an address / phone / price ask.
   if (keywords.definite && !(account.aiReplyAll && keywords.definite === "QUESTION")) return { kind: keywords.definite, by: "KEYWORD", usage: { tokens: 0, costUsd: 0 } };
@@ -177,7 +185,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   const rule: RuleWithProduct | null = await db.instagramMediaRule.findUnique({ where: { mediaId: comment.mediaId }, include: { product: RULE_PRODUCT, secondProduct: RULE_PRODUCT } });
   if (!comment.kind) {
     const result = await classify(comment, rule, context.account);
-    await update({ kind: result.kind, classifiedBy: result.by, aiTokens: result.usage.tokens, aiCostUsd: result.usage.costUsd, productId: rule?.product?.id ?? null, productName: rule?.product?.name ?? null });
+    await update({ kind: result.kind, classifiedBy: result.by, aiTokens: result.usage.tokens, aiCostUsd: result.usage.costUsd, productId: rule?.product?.id ?? null, productName: rule?.product?.name ?? null, heatPumpM2: result.m2 ?? null, heatPumpIntent: result.intent ?? null });
   }
   const kind = comment.kind as CommentKind;
   const account = context.account;
@@ -185,7 +193,9 @@ async function processComment(commentId: string, context: Context): Promise<Outc
     db.instagramComment.count({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, OR: [{ dmSentAt: { not: null } }, { publicReplyAt: { not: null } }] } }),
     db.instagramComment.count({ where: { accountId: account.id, publicReplyAt: { gte: tashkentDayStart() } } }),
   ]);
-  const action: Action = chooseAction(kind, account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
+  const heatPump = kind === "HEAT_PUMP" && !!rule?.heatPump && isHeatPumpAccount(account.id);
+  if (kind === "HEAT_PUMP" && !heatPump) { await finish("SKIPPED", "Teplonasos posti emas"); return "skipped"; }
+  const action: Action | ReturnType<typeof heatPumpAction> = heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit) : chooseAction(kind, account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
 
   if (action.type === "skip") { await finish("SKIPPED", action.reason); return "skipped"; }
   if (action.type === "notify") {
@@ -209,7 +219,15 @@ async function processComment(commentId: string, context: Context): Promise<Outc
 
   // Texts for the DM (PRICE / QUESTION / contact) are checked before a slot is taken. PRICE without a product: the post's
   // price text, else the account's "no price" DM.
-  let dm: string | null = null;
+  let dm: string | null = null, heatReply: string | null = null, heatSummary: string | null = null;
+  if (action.type === "heatpump") {
+    const intent = comment.heatPumpIntent as HeatPumpIntent, m2 = comment.heatPumpM2, lang = langOf(comment.text);
+    const calc = intent === "calc" && m2 ? await buildCalc(m2, context.rate, lang) : null;
+    const answer = intent === "question" ? await heatPumpChat(comment.text, null) : null;
+    if (answer) await update({ aiTokens: comment.aiTokens + answer.usage.tokens, aiCostUsd: addUsage({ tokens: 0, costUsd: comment.aiCostUsd === null ? null : Number(comment.aiCostUsd) }, answer.usage).costUsd });
+    const out = heatPumpOutgoing(intent, { m2, calc: calc?.text, answer: answer?.reply }, lang);
+    dm = out.dm; heatReply = out.reply; heatSummary = calc?.summary ?? null;
+  }
   if (action.type === "price" || action.type === "question" || action.type === "contact") {
     const contactTemplates = { PHONE: account.phoneDmTemplate, ADDRESS: account.addressDmTemplate, HOURS: account.hoursDmTemplate };
     const template = action.type === "contact" ? contactTemplates[action.kind]
@@ -243,15 +261,19 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   const reply = action.type === "price" && rule?.productId && !account.aiReplyAll && action.publicReply ? pickVariant(rule?.publicReplyVariants ?? [], rule && !rule.publicReplyEnabled ? "" : rule?.publicReplyText || DEFAULT_PUBLIC_REPLY)
     : (action.type === "question" || action.type === "contact" || (action.type === "price" && (!rule?.productId || account.aiReplyAll))) && action.publicReply ? account.questionReplyText
     : action.type === "general" ? account.generalReplyText
-    : action.type === "positive" ? positive : null;
+    : action.type === "positive" ? positive
+    : action.type === "heatpump" && action.publicReply ? heatReply : null;
   const publicReply = action.type === "price" && rule && !rule.publicReplyEnabled ? null : reply?.trim() || null;
 
+  // Teplonasos: the thread is marked before the DM goes out (the customer's answer may come at once).
+  let thread = dm && action.type === "heatpump" ? await openThread({ accountId: account.id, igsid: comment.fromId, mediaId: comment.mediaId, username: comment.username, dm, m2: comment.heatPumpM2, summary: heatSummary }) : null;
   if (dm) {
     // Saved before sending: the echo of this DM may arrive before the API call returns, and must count as automatic.
     await update({ dmText: dm, dmSentAt: new Date() });
     try {
       const sent = await sendPrivateReply(context.token, account.igUserId, commentId, dm);
       await update({ dmText: dm, dmMessageId: sent.message_id ?? null, dmSentAt: new Date(), attempts: { increment: 1 } });
+      if (thread) thread = await bindThread(thread.id, account.id, comment.fromId, sent).catch(error => { console.error("Instagram heat pump thread bind failed", { type: safeType(error) }); return thread; });
     } catch (error) {
       const info = errorInfo(error), attempts = comment.attempts + 1;
       console.error("Instagram private reply failed", { type: safeType(error) });
@@ -285,8 +307,19 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   }
 
   const reason = action.type === "general" ? "Postga mahsulot biriktirilmagan · umumiy javob yozildi"
-    : (action.type === "price" || action.type === "question" || action.type === "contact") && !action.publicReply ? "Kunlik limit — faqat Direct" : null;
+    : action.type === "heatpump" && comment.heatPumpIntent === "other" ? "Mavzudan tashqari — call-center"
+    : (action.type === "price" || action.type === "question" || action.type === "contact" || action.type === "heatpump") && !action.publicReply ? "Kunlik limit — faqat Direct" : null;
   await finish("SENT", reason);
+  // Teplonasos lead: m² written or price asked.
+  if (account.leadsEnabled && action.type === "heatpump" && dm && (comment.heatPumpIntent === "calc" || comment.heatPumpIntent === "ask")) {
+    try {
+      const saved = thread && await getDb().heatPumpThread.findUnique({ where: { id: thread.id } });
+      const leadId = saved && await upsertHeatPumpLead(saved, account, comment.text);
+      if (leadId) { await update({ leadId }); await getDb().heatPumpThread.update({ where: { id: saved.id }, data: { leadId } }); }
+    } catch (error) {
+      console.error("Instagram heat pump lead failed", { type: safeType(error) });
+    }
+  }
   if (account.leadsEnabled && (action.type === "price" || action.type === "question" || action.type === "contact")) {
     try {
       const leadId = await createInstagramLead(comment, rule, action.type === "price" ? "PRICE" : "QUESTION", account);

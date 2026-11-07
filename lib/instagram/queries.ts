@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { appConfig, GraphError, listMedia, type IgMedia } from "./graph";
 import { needsInsightsReconnect } from "./insights-rules";
 import { errorReason, isReel, tashkentDayStart } from "./rules";
+import { isHeatPumpAccount } from "./heat-pump";
 import { accountName, accountToken, getInstagramAccount, listInstagramAccounts } from "./service";
 
 /** The account switcher: every connected account, the first connected first. */
@@ -51,6 +52,17 @@ export async function getInstagramBoard(accountId: string) {
     db.instagramComment.aggregate({ where: own, _sum: { aiCostUsd: true, aiTokens: true } }),
     db.instagramComment.count({ where: { ...own, publicReplyAt: { gte: tashkentDayStart() } } }),
   ]);
+  // Teplonasos ("global" only): the table and the chain komment → Direct → m² → telefon per post.
+  const heatPump = isHeatPumpAccount(account?.id) ? await Promise.all([
+    db.heatPumpModel.findMany({ orderBy: [{ winterKw: "asc" }] }),
+    db.siteSettings.findUnique({ where: { id: "global" }, select: { heatPumpBufferUsd: true, heatPumpBufferLiters: true } }),
+    db.instagramComment.groupBy({ by: ["mediaId"], where: { ...own, kind: "HEAT_PUMP" }, _count: { _all: true, dmSentAt: true } }),
+    db.heatPumpThread.groupBy({ by: ["mediaId"], where: own, _count: { m2: true, phone: true } }),
+  ]).then(([models, settings, comments, threads]) => ({
+    models: models.map(row => ({ id: row.id, brand: row.brand, model: row.model, hp: Number(row.hp), nominalKw: Number(row.nominalKw), winterKw: Number(row.winterKw), voltage: row.voltage, priceUsd: Number(row.priceUsd), bufferIncluded: row.bufferIncluded, isActive: row.isActive })),
+    bufferUsd: Number(settings?.heatPumpBufferUsd ?? 145), bufferLiters: settings?.heatPumpBufferLiters ?? 60,
+    chain: Object.fromEntries(comments.map(row => { const thread = threads.find(item => item.mediaId === row.mediaId); return [row.mediaId, { comments: row._count._all, direct: row._count.dmSentAt, m2: thread?._count.m2 ?? 0, phone: thread?._count.phone ?? 0 }]; })) as Record<string, { comments: number; direct: number; m2: number; phone: number }>,
+  })) : null;
   const perMedia: Record<string, { comments: number; sent: number; failed: number; leads: number }> = {};
   for (const row of stats) {
     const item = perMedia[row.mediaId] ??= { comments: 0, sent: 0, failed: 0, leads: 0 };
@@ -74,7 +86,8 @@ export async function getInstagramBoard(accountId: string) {
     repliesToday,
     media: list,
     mediaError,
-    rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { productId: rule.productId, secondProductId: rule.secondProductId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText, publicReplyVariants: rule.publicReplyVariants, priceText: rule.priceText ?? "" }])),
+    heatPump,
+    rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { heatPump: rule.heatPump, productId: rule.productId, secondProductId: rule.secondProductId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText, publicReplyVariants: rule.publicReplyVariants, priceText: rule.priceText ?? "" }])),
     stats: perMedia,
     journal: journal.map(row => ({ ...row, createdAt: row.createdAt.toISOString(), reviewedAt: row.reviewedAt?.toISOString() ?? null, aiCostUsd: row.aiCostUsd === null ? null : Number(row.aiCostUsd), permalink: permalinks.get(row.mediaId) ?? null })),
     products: products.map(item => ({ id: item.id, name: item.name, model: item.model, hasPrice: item.priceUsd !== null, isVisible: item.isVisible })),
