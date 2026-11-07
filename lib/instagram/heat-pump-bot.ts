@@ -11,7 +11,7 @@ import { sendMessage } from "@/lib/telegram/client";
 import type { InlineKeyboard, TelegramMessage } from "@/lib/telegram/types";
 import { extractPhone } from "./direct-rules";
 import { sendDirectMessage } from "./graph";
-import { HUMAN_MUTE_MS, calcMessage, deliverPrivate, isHeatPumpContact, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
+import { HUMAN_MUTE_MS, backlogText, calcMessage, deliverPrivate, isHeatPumpContact, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
 import { randomGapMs, type MessageEvent } from "./rules";
 
 const safeType = (error: unknown) => error instanceof Error ? error.name : "UnknownError";
@@ -42,7 +42,18 @@ export async function handleHeatPumpBinding(message: TelegramMessage) {
   }
   await getDb().telegramChatBinding.upsert({ where: { key: "heatpump" }, create: { key: "heatpump", chatId, phone: message.contact.phone_number }, update: { chatId, phone: message.contact.phone_number } });
   await sendMessage(chatId, "✅ Teplonasos lidlari endi shu chatga keladi.", { remove_keyboard: true });
+  await flushHeatPumpBacklog().catch(error => console.error("Teplonasos backlog failed", { type: safeType(error) }));
   return true;
+}
+
+/** Right after linking: every teplonasos lead that was not sent (no chat / errors) goes in one message. */
+export async function flushHeatPumpBacklog() {
+  const db = getDb();
+  const leads = await db.lead.findMany({ where: { submissionKey: { startsWith: "ighp:" }, telegramNotificationStatus: "FAILED" }, orderBy: { createdAt: "asc" }, take: 200, select: { id: true, customerName: true, dimensions: true, product: true, phone: true } });
+  if (!leads.length) return 0;
+  const message = await sendHeatPumpTelegram(backlogText(leads));
+  if (message) await db.lead.updateMany({ where: { id: { in: leads.map(lead => lead.id) } }, data: { telegramNotificationStatus: "PUBLISHED", telegramChatId: String(message.chat.id), telegramMessageId: message.message_id, telegramPublishedAt: new Date(), telegramPublishFailedAt: null } });
+  return message ? leads.length : 0;
 }
 
 /** The HISOB XABARI with the current table, buffer tank price and CBU rate (`rate` when the caller already has it). */

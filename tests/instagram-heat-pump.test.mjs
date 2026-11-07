@@ -385,3 +385,23 @@ test("Telegram binding: only the own contact of +998 91 637 77 77 is accepted", 
   const sql = (await read("../prisma/migrations/20261110090000_heatpump_telegram/migration.sql")).replace(/^--.*$/gm, "");
   assert.doesNotMatch(sql, /DROP|DELETE|ALTER/i, "additive");
 });
+
+test("backlog: leads not sent while no chat was linked go in one message right after linking", async () => {
+  const leads = [{ customerName: "@ali", dimensions: "150 m²", product: "Aire 6 HP · 19 kW — $2 650", phone: "+998901234567" }, { customerName: "@vali", dimensions: null, product: null, phone: null }];
+  const text = hp.backlogText(leads);
+  assert.match(text, /^📬 Ulanmagan paytdagi 2 ta xabar \(teplonasos\):\n\n1\. @ali · 150 m² · Aire 6 HP · 19 kW — \$2 650 · 📞 \+998901234567\n2\. @vali$/);
+  const many = hp.backlogText(Array.from({ length: 200 }, (_, index) => ({ customerName: `@user_${index}_${"x".repeat(30)}`, dimensions: "150 m²", product: "Aire 6 HP · 19 kW — $2 650", phone: "+998901234567" })));
+  assert.ok(many.length <= 4096, `Telegram limit: ${many.length}`);
+  assert.match(many, /^📬 Ulanmagan paytdagi 200 ta xabar[\s\S]*… va yana \d+ ta \(Mijoz so‘rovlarida\)$/);
+  const bot = await read("../lib/instagram/heat-pump-bot.ts");
+  assert.match(bot, /"✅ Teplonasos lidlari endi shu chatga keladi\.", \{ remove_keyboard: true \}\);\n\s*await flushHeatPumpBacklog\(\)/, "sent as soon as the chat is linked");
+  assert.match(bot, /where: \{ submissionKey: \{ startsWith: "ighp:" \}, telegramNotificationStatus: "FAILED" \}/, "only teplonasos leads that were not sent");
+  assert.match(bot, /const message = await sendHeatPumpTelegram\(backlogText\(leads\)\);\n\s*if \(message\) await db\.lead\.updateMany/, "one message; marked sent only when it went out");
+});
+
+test("20:00 report: teplonasos conversations leave the group list and go to the private chat as a short list", async () => {
+  assert.equal(hp.heatWaitingText("2026-11-07", [{ label: "@ali", waited: "2 soat" }]), "🔥 Teplonasos Direct · 2026-11-07 — javob kutayotganlar: 1\n1. @ali — 2 soat");
+  const direct = await read("../lib/instagram/direct.ts");
+  assert.match(direct, /waiting: waiting\.filter\(row => !heatIds\.has\(row\.igsid\)\)\.map/, "the group list without teplonasos");
+  assert.match(direct, /if \(heatWaiting\.length\) await sendHeatPumpTelegram\(heatWaitingText\(today,/);
+});
