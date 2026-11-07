@@ -10,7 +10,7 @@ import { classifyHeatPumpComment, heatPumpChat, type AiUsage } from "./ai";
 import { notifyDirectRecipients } from "./direct";
 import { extractPhone } from "./direct-rules";
 import { sendDirectMessage } from "./graph";
-import { HUMAN_MUTE_MS, calcMessage, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
+import { HUMAN_MUTE_MS, calcMessage, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
 import { randomGapMs, type MessageEvent } from "./rules";
 
 const safeType = (error: unknown) => error instanceof Error ? error.name : "UnknownError";
@@ -31,7 +31,7 @@ export async function buildCalc(m2: number, rate?: string | null, lang: Lang = "
 export async function classifyHeatPump(text: string): Promise<{ result: HeatPumpComment | null; by: string; usage: AiUsage }> {
   const keywords = heatPumpByKeywords(text);
   if (keywords) return { result: keywords, by: "KEYWORD", usage: { tokens: 0, costUsd: 0 } };
-  const ai = await classifyHeatPumpComment(text);
+  const ai = await classifyHeatPumpComment(stripMentions(text) || text);
   return ai ? { result: heatPumpFromAi(ai), by: "AI", usage: ai.usage } : { result: null, by: "KEYWORD_FALLBACK", usage: { tokens: 0, costUsd: 0 } };
 }
 

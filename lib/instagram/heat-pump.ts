@@ -13,7 +13,7 @@ export const HUMAN_MUTE_MS = 24 * 3_600_000;
 
 // ---- m² from a comment / message ----------------------------------------------------------------------------
 
-const UNIT = String.raw`(?:kv\.?\s*m|kvadrat\p{L}*|kv|m2|m²|metr\p{L}*|кв\.?\s*м|квадрат\p{L}*|кв|м2|м²|метр\p{L}*)(?!\p{L})`;
+const UNIT = String.raw`(?:kv\.?\s*m|kvadrat\p{L}*|kvd|kv|m2|m²|metr\p{L}*|кв\.?\s*м|квадрат\p{L}*|кв|м2|м²|метр\p{L}*)(?!\p{L})`;
 const num = (value: string) => Number(value.replace(",", "."));
 const inRange = (value: number) => Number.isFinite(value) && value >= 20 && value <= 3000 ? Math.round(value) : null;
 const isYear = (value: number) => value >= 1900 && value <= 2099;
@@ -142,8 +142,12 @@ export function calcMessage(m2: number, models: readonly HeatPumpRow[], rate: st
 export type HeatPumpIntent = "calc" | "ask" | "question" | "other";
 export type HeatPumpComment = { kind: "HEAT_PUMP"; intent: HeatPumpIntent; m2: number | null } | { kind: "SPAM" | "NEGATIVE" | "POSITIVE" };
 
+/** "@user @other 60 kvd qancha" → "60 kvd qancha": a reply starts with the people it answers. */
+export const stripMentions = (text: string) => text.replace(/^\s*(?:@[\w.]+[\s,:]*)+/u, "").trim();
+
 /** Keywords first: spam / negative, m², a price ask, praise; null = the AI decides. */
-export function heatPumpByKeywords(text: string): HeatPumpComment | null {
+export function heatPumpByKeywords(input: string): HeatPumpComment | null {
+  const text = stripMentions(input);
   const keywords = classifyByKeywords(text, DEFAULT_KEYWORDS);
   if (keywords.fallback === "SPAM" || keywords.fallback === "NEGATIVE") return { kind: keywords.fallback };
   const m2 = extractM2(text);
