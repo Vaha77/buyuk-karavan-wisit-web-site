@@ -2100,3 +2100,11 @@ model HeatPumpThread {
   @@unique([accountId, igsid])
   @@index([mediaId])
 }
+
+// A private Telegram chat bound by sharing a verified contact ("heatpump": +998 91 637 77 77 gets the teplonasos leads).
+model TelegramChatBinding {
+  key       String   @id @db.VarChar(40)
+  chatId    String   @db.VarChar(32)
+  phone     String?  @db.VarChar(20)
+  updatedAt DateTime @updatedAt
+}

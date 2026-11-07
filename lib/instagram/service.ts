@@ -13,8 +13,8 @@ import { DEFAULT_PUBLIC_REPLY, isEshikmaster, type CommentKind } from "./constan
 import { GraphError, getMediaPermalink, listComments, listMedia, refreshLongLived, replyToComment, sendPrivateReply } from "./graph";
 import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComments } from "./ingest";
 import { afterDirectEvents, recordDirectEvents } from "./direct";
-import { notifyNegative } from "./telegram";
-import { bindThread, buildCalc, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
+import { negativeText, notifyNegative } from "./telegram";
+import { bindThread, buildCalc, sendHeatPumpTelegram, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
 import { heatPumpAction, heatPumpOutgoing, heatPumpReplyAnswered, isHeatPumpAccount, langOf, texts, type HeatPumpIntent } from "./heat-pump";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, aiReplyProblem, tooSimilar, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
@@ -225,7 +225,8 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   if (action.type === "notify") {
     let permalink = rule?.permalink ?? null;
     if (!permalink) permalink = await getMediaPermalink(context.token, comment.mediaId).catch(() => null);
-    const sent = await notifyNegative({ commentId, username: comment.username, text: comment.text, permalink, createdAt: comment.createdAt, accountUsername: account.username, accountName: accountName(account), groupChatId: account.negativeChatId });
+    // Teplonasos post: only the private chat of +998 91 637 77 77.
+    const sent = heatPost ? (await sendHeatPumpTelegram(negativeText({ username: comment.username, text: comment.text, permalink, createdAt: comment.createdAt, accountName: accountName(account) })) ? 1 : 0) : await notifyNegative({ commentId, username: comment.username, text: comment.text, permalink, createdAt: comment.createdAt, accountUsername: account.username, accountName: accountName(account), groupChatId: account.negativeChatId });
     if (sent) { await finish("NOTIFIED", "Salbiy — adminga yuborildi", { notifiedAt: new Date() }); return "notified"; }
     await finish("FAILED", "Salbiy — Telegram ulangan Super Admin topilmadi yoki xabar ketmadi");
     return "failed";

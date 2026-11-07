@@ -53,6 +53,7 @@ export async function getInstagramBoard(accountId: string) {
     db.instagramComment.count({ where: { ...own, publicReplyAt: { gte: tashkentDayStart() } } }),
   ]);
   // Teplonasos ("global" only): the table and the chain komment → Direct → m² → telefon per post.
+  const telegramLinked = isHeatPumpAccount(account?.id) && !!(process.env.HEATPUMP_TELEGRAM_CHAT_ID?.trim() || await db.telegramChatBinding.findUnique({ where: { key: "heatpump" }, select: { key: true } }).catch(() => null));
   const heatPump = isHeatPumpAccount(account?.id) ? await Promise.all([
     db.heatPumpModel.findMany({ orderBy: [{ winterKw: "asc" }] }),
     db.siteSettings.findUnique({ where: { id: "global" }, select: { heatPumpBufferUsd: true, heatPumpBufferLiters: true } }),
@@ -60,7 +61,7 @@ export async function getInstagramBoard(accountId: string) {
     db.heatPumpThread.groupBy({ by: ["mediaId"], where: own, _count: { m2: true, phone: true } }),
   ]).then(([models, settings, comments, threads]) => ({
     models: models.map(row => ({ id: row.id, brand: row.brand, model: row.model, hp: Number(row.hp), nominalKw: Number(row.nominalKw), winterKw: Number(row.winterKw), voltage: row.voltage, priceUsd: Number(row.priceUsd), bufferIncluded: row.bufferIncluded, isActive: row.isActive })),
-    bufferUsd: Number(settings?.heatPumpBufferUsd ?? 145), bufferLiters: settings?.heatPumpBufferLiters ?? 60,
+    bufferUsd: Number(settings?.heatPumpBufferUsd ?? 145), bufferLiters: settings?.heatPumpBufferLiters ?? 60, telegramLinked,
     chain: Object.fromEntries(comments.map(row => { const thread = threads.find(item => item.mediaId === row.mediaId); return [row.mediaId, { comments: row._count._all, direct: row._count.dmSentAt, m2: thread?._count.m2 ?? 0, phone: thread?._count.phone ?? 0 }]; })) as Record<string, { comments: number; direct: number; m2: number; phone: number }>,
   })) : null;
   const perMedia: Record<string, { comments: number; sent: number; failed: number; leads: number }> = {};

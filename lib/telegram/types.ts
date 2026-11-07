@@ -1,10 +1,12 @@
 export type TelegramUser = { id: number; is_bot: boolean; first_name: string; last_name?: string; username?: string };
 export type TelegramChat = { id: number; type: "private"|"group"|"supergroup"|"channel"; title?: string };
-export type TelegramMessage = { message_id: number; chat: TelegramChat; from?: TelegramUser; text?: string; new_chat_members?: TelegramUser[] };
+export type TelegramMessage = { message_id: number; chat: TelegramChat; from?: TelegramUser; text?: string; new_chat_members?: TelegramUser[]; contact?: { phone_number: string; user_id?: number } };
 export type TelegramCallbackQuery = { id: string; from: TelegramUser; message?: TelegramMessage; data?: string };
 export type TelegramUpdate = { update_id: number; message?: TelegramMessage; callback_query?: TelegramCallbackQuery };
 // A button either sends callback_data to the bot or opens a URL.
 export type InlineKeyboard = { inline_keyboard: Array<Array<{ text: string; callback_data: string } | { text: string; url: string }>> };
+// The "share my number" button, and removing it.
+export type ReplyKeyboard = { keyboard: Array<Array<{ text: string; request_contact?: boolean }>>; resize_keyboard?: boolean; one_time_keyboard?: boolean } | { remove_keyboard: true };
 
 export function isTelegramUpdate(value: unknown): value is TelegramUpdate {
   return Boolean(value && typeof value === "object" && "update_id" in value && Number.isSafeInteger((value as TelegramUpdate).update_id));
