@@ -7,13 +7,43 @@ import { getUsdUzsRate } from "@/lib/currency/cbu";
 import { getDb } from "@/lib/db";
 import { expireDashboard } from "@/lib/referrals/tracking";
 import { classifyHeatPumpComment, heatPumpChat, type AiUsage } from "./ai";
-import { notifyDirectRecipients } from "./direct";
+import { sendMessage } from "@/lib/telegram/client";
+import type { InlineKeyboard, TelegramMessage } from "@/lib/telegram/types";
 import { extractPhone } from "./direct-rules";
 import { sendDirectMessage } from "./graph";
-import { HUMAN_MUTE_MS, calcMessage, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
+import { HUMAN_MUTE_MS, calcMessage, deliverPrivate, isHeatPumpContact, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
 import { randomGapMs, type MessageEvent } from "./rules";
 
 const safeType = (error: unknown) => error instanceof Error ? error.name : "UnknownError";
+
+/** The private chat of +998 91 637 77 77: env HEATPUMP_TELEGRAM_CHAT_ID, else the one bound in the bot; null = none. */
+export async function heatPumpChatId() {
+  const env = process.env.HEATPUMP_TELEGRAM_CHAT_ID?.trim();
+  if (env) return env;
+  const row = await getDb().telegramChatBinding.findUnique({ where: { key: "heatpump" }, select: { chatId: true } }).catch(error => { console.error("Teplonasos chat_id o‘qilmadi", { type: safeType(error) }); return null; });
+  return row?.chatId ?? null;
+}
+/** Every teplonasos Telegram message (lead, phone, Direct card, reminder, negative comment) goes through here. */
+export const sendHeatPumpTelegram = async (text: string, keyboard?: InlineKeyboard) => deliverPrivate(await heatPumpChatId(), chatId => sendMessage(chatId, text, keyboard));
+
+/** "/start teplonasos" → the contact button; only the own contact of +998 91 637 77 77 binds this chat. */
+export async function handleHeatPumpBinding(message: TelegramMessage) {
+  if (message.chat.type !== "private" || !message.from) return false;
+  const chatId = String(message.chat.id);
+  if (/^\/start\s+(?:teplonasos|heatpump)\b/i.test(message.text?.trim() ?? "")) {
+    await sendMessage(chatId, "Teplonasos lidlarini shu chatga olish uchun raqamingizni ulashing 👇", { keyboard: [[{ text: "📱 Raqamni ulashish", request_contact: true }]], resize_keyboard: true, one_time_keyboard: true });
+    return true;
+  }
+  if (!message.contact) return false;
+  if (!isHeatPumpContact(message.contact, message.from.id)) {
+    console.warn("Teplonasos Telegram: boshqa raqam rad etildi", { chatId });
+    await sendMessage(chatId, "Bu raqam teplonasos lidlari uchun qabul qilinmaydi.", { remove_keyboard: true });
+    return true;
+  }
+  await getDb().telegramChatBinding.upsert({ where: { key: "heatpump" }, create: { key: "heatpump", chatId, phone: message.contact.phone_number }, update: { chatId, phone: message.contact.phone_number } });
+  await sendMessage(chatId, "✅ Teplonasos lidlari endi shu chatga keladi.", { remove_keyboard: true });
+  return true;
+}
 
 /** The HISOB XABARI with the current table, buffer tank price and CBU rate (`rate` when the caller already has it). */
 export async function buildCalc(m2: number, rate?: string | null, lang: Lang = "uz") {
@@ -115,7 +145,7 @@ async function answer(thread: HeatPumpThread, event: MessageEvent, account: Inst
   if (phone) {
     thread = await db.heatPumpThread.update({ where: { id: thread.id }, data: { phone } });
     await saveLead(thread, account);
-    await notifyDirectRecipients(account, ["🔥 Teplonasos: telefon qoldirdi", thread.username ? `@${thread.username}` : `Instagram ${thread.igsid}`, `m²: ${thread.m2 ?? "—"}`, `Model: ${thread.model ?? "—"}`, `Telefon: ${phone}`].join("\n"));
+    await sendHeatPumpTelegram(["🔥 Teplonasos: telefon qoldirdi", thread.username ? `@${thread.username}` : `Instagram ${thread.igsid}`, `m²: ${thread.m2 ?? "—"}`, `Model: ${thread.model ?? "—"}`, `Telefon: ${phone}`].join("\n"));
   }
   const step = directBotStep(thread);
   if (step === "silent") return;

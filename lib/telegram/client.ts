@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import type { InlineKeyboard } from "./types";
+import type { InlineKeyboard, ReplyKeyboard } from "./types";
 
 type TelegramResponse<T> = { ok: boolean; result?: T; error_code?: number; description?: string; parameters?: { migrate_to_chat_id?: number; retry_after?: number } };
 type SentMessage = { message_id: number; chat: { id: number } };
@@ -65,7 +65,7 @@ async function call<T>(method:string,payload:Record<string,unknown>):Promise<T>{
 }
 /** Bot identity (username for t.me deep links). */
 export function getMe(){return call<{id:number;username?:string}>("getMe",{});}
-export function sendMessage(chatId:string,text:string,replyMarkup?:InlineKeyboard){return call<SentMessage>("sendMessage",{chat_id:chatId,text,...(replyMarkup?{reply_markup:replyMarkup}:{})});}
+export function sendMessage(chatId:string,text:string,replyMarkup?:InlineKeyboard|ReplyKeyboard){return call<SentMessage>("sendMessage",{chat_id:chatId,text,...(replyMarkup?{reply_markup:replyMarkup}:{})});}
 export function editMessageText(chatId:string,messageId:number,text:string,replyMarkup:InlineKeyboard={inline_keyboard:[]}){return call<SentMessage>("editMessageText",{chat_id:chatId,message_id:messageId,text,reply_markup:replyMarkup});}
 /** "BK Zborka sehi" group for workshop orders; null when TELEGRAM_WORKSHOP_CHAT_ID is not set (orders still work, nothing is posted). */
 /** A video by public URL (Telegram downloads it: ≤20 MB). */

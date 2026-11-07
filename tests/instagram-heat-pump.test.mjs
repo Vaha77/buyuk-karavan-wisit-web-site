@@ -124,7 +124,7 @@ test("Direct chat wiring: only teplonasos threads, phone → lead + Telegram + t
   assert.match(bot, /if \(!isHeatPumpAccount\(account\.id\) \|\| !token\) return;/);
   assert.match(bot, /heatPumpThread\.findUnique[^\n]*\n\s*if \(!thread\) continue;/, "no thread → no answer");
   assert.match(bot, /mutedUntil: new Date\(event\.time\.getTime\(\) \+ HUMAN_MUTE_MS\)/);
-  assert.match(bot, /data: \{ phone \} \}\);\n\s*await saveLead\(thread, account\);\n\s*await notifyDirectRecipients/);
+  assert.match(bot, /data: \{ phone \} \}\);\n\s*await saveLead\(thread, account\);\n\s*await sendHeatPumpTelegram/);
   assert.match(bot, /phone \? t\.thanks/);
   assert.match(bot, /phone: thread\.phone/, "the phone is written to the lead");
   const direct = await read("../lib/instagram/direct.ts");
@@ -334,4 +334,54 @@ test("“67км🔥” gets the public reply and the calculation in Direct", () 
   assert.equal(hp.langOf("дом 150 кв"), "ru");
   assert.match(out.dm, /Aire 3 HP · 10 kW/);
   assert.match(out.dm, /\$1 300/);
+});
+
+test("Telegram: a teplonasos lead goes only to the private chat (with 3 retries), never the group; others to the group", async () => {
+  assert.equal(hp.isHeatPumpLead({ submissionKey: "ighp:9001" }), true);
+  for (const key of ["ig:9001:p1", "igdm:9001", null, undefined]) assert.equal(hp.isHeatPumpLead({ submissionKey: key }), false, String(key));
+
+  const sends = [], logs = [];
+  const log = (message, details) => logs.push({ message, details });
+  const ok = await hp.deliverPrivate("555", async chatId => { sends.push(chatId); return { chat: { id: 555 }, message_id: 1 }; }, log, async () => {});
+  assert.deepEqual(sends, ["555"], "the private chat only");
+  assert.equal(ok.message_id, 1);
+
+  let tries = 0;
+  const failed = await hp.deliverPrivate("555", async chatId => { tries++; assert.equal(chatId, "555", "never another chat"); throw new Error("Forbidden"); }, log, async () => {});
+  assert.equal(failed, null);
+  assert.equal(tries, 4, "first try + 3 retries");
+  assert.equal(logs.filter(item => item.message === "Teplonasos Telegram yuborilmadi").length, 4, "each failure logged");
+
+  const telegram = await read("../lib/telegram/service.ts");
+  assert.match(telegram, /if\(isHeatPumpLead\(row\)\)\{const message=await sendHeatPumpTelegram\(newLeadGroupText\(lead\)\);[^\n]*return !!message;\}\n\s*\/\/ The link's/, "returns before any group send, also on failure");
+  assert.match(telegram, /sendMessage\(telegramGroupChatId\(\),newLeadGroupText\(lead\),claimKeyboard\(lead\.id\)\)/, "other leads: the group, as before");
+  const bot = await read("../lib/instagram/heat-pump-bot.ts");
+  assert.match(bot, /deliverPrivate\(await heatPumpChatId\(\), chatId => sendMessage\(chatId, text, keyboard\)\)/);
+  assert.doesNotMatch(bot, /telegramGroupChatId|directChatId|notifyDirectRecipients/, "the teplonasos sender never knows a group");
+  const direct = await read("../lib/instagram/direct.ts");
+  assert.match(direct, /const people = account && !heat \? await recipients\(account\) : \[\];/, "a teplonasos Direct card: no group recipients");
+  assert.match(direct, /if \(await isHeatThread\(row\)\) await sendHeatPumpTelegram\(text,/, "reminders too");
+  assert.match(await read("../lib/instagram/service.ts"), /const sent = heatPost \? \(await sendHeatPumpTelegram\(negativeText\(/, "a negative comment on a teplonasos post too");
+});
+
+test("Telegram: no chat_id → logged, nothing sent anywhere", async () => {
+  const logs = [];
+  let sent = false;
+  assert.equal(await hp.deliverPrivate(null, async () => { sent = true; }, (message, details) => logs.push({ message, details })), null);
+  assert.equal(sent, false);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0].message, /chat_id yo‘q/);
+});
+
+test("Telegram binding: only the own contact of +998 91 637 77 77 is accepted", async () => {
+  assert.equal(hp.isHeatPumpContact({ phone_number: "+998916377777", user_id: 42 }, 42), true);
+  assert.equal(hp.isHeatPumpContact({ phone_number: "998 91 637 77 77", user_id: 42 }, 42), true);
+  assert.equal(hp.isHeatPumpContact({ phone_number: "+998916377777", user_id: 7 }, 42), false, "someone else's contact card");
+  assert.equal(hp.isHeatPumpContact({ phone_number: "+998901234567", user_id: 42 }, 42), false, "another number");
+  assert.equal(hp.isHeatPumpContact(undefined, 42), false);
+  const bot = await read("../lib/instagram/heat-pump-bot.ts");
+  assert.match(bot, /process\.env\.HEATPUMP_TELEGRAM_CHAT_ID/);
+  assert.match(bot, /request_contact: true/);
+  const sql = (await read("../prisma/migrations/20261110090000_heatpump_telegram/migration.sql")).replace(/^--.*$/gm, "");
+  assert.doesNotMatch(sql, /DROP|DELETE|ALTER/i, "additive");
 });

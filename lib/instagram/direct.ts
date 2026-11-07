@@ -12,6 +12,7 @@ import { getUserProfile, sendDirectMessage } from "./graph";
 import { DISMISS_REASONS, cardText, digestDue, digestText, directLink, directRecipients, dueReminder, extractPhone, isAutoEcho, isWorkTime, onEcho, onIncoming, personLabel, reminderText, reportDue, reportText, tashkentDate, workingMs, type DirectStatus, type Recipient } from "./direct-rules";
 import { openSignature } from "./direct-sign";
 import { isHeatPumpAccount } from "./heat-pump";
+import { sendHeatPumpTelegram } from "./heat-pump-bot";
 import { accountName, type MessageEvent } from "./rules";
 
 type Card = { chatId: string; messageId: number; adminId: string };
@@ -70,21 +71,25 @@ export async function syncCards(conversationId: string) {
     for (const card of cards) await editMessageText(card.chatId, card.messageId, text, keyboard(conversation, card.adminId)).catch(() => undefined);
     return;
   }
-  if (conversation.deferred || (conversation.status !== "UNREAD" && conversation.status !== "OPENED")) return;
+  // A teplonasos thread's card goes at once to the private chat only (never the group, never the 09:00 digest).
+  const heat = await isHeatThread(conversation);
+  if ((conversation.deferred && !heat) || (conversation.status !== "UNREAD" && conversation.status !== "OPENED")) return;
   // One sender per conversation: the first webhook that takes the lock sends, the others leave it.
   const now = new Date();
   const lock = await db.instagramConversation.updateMany({ where: { id: conversationId, OR: [{ cardLockUntil: null }, { cardLockUntil: { lt: now } }] }, data: { cardLockUntil: new Date(now.getTime() + 60_000) } });
   if (lock.count !== 1) return;
   try {
     const account = await db.instagramAccount.findUnique({ where: { id: conversation.accountId }, select: { directChatId: true } });
-    const people = account ? await recipients(account) : [];
+    const people = account && !heat ? await recipients(account) : [];
     const text = await renderCard(conversation, tag);
     const sent: Card[] = [];
+    const private_ = heat ? await sendHeatPumpTelegram(text, keyboard(conversation, "")) : null;
+    if (private_) sent.push({ chatId: String(private_.chat.id), messageId: private_.message_id, adminId: "" });
     for (const person of people) {
       try { const message = await sendMessage(person.chatId, text, keyboard(conversation, person.id)); sent.push({ chatId: person.chatId, messageId: message.message_id, adminId: person.id }); }
       catch (error) { console.error("Instagram Direct card failed", { type: safeType(error) }); }
     }
-    conversation = await db.instagramConversation.update({ where: { id: conversationId }, data: { telegramCards: sent, cardLockUntil: null } });
+    conversation = await db.instagramConversation.update({ where: { id: conversationId }, data: { telegramCards: sent, cardLockUntil: null, ...(heat ? { deferred: false } : {}) } });
     // Messages that arrived while sending: one edit brings the card up to date.
     const fresh = await renderCard(conversation, tag);
     if (fresh !== text) for (const card of sent) await editMessageText(card.chatId, card.messageId, fresh, keyboard(conversation, card.adminId)).catch(() => undefined);
@@ -93,6 +98,10 @@ export async function syncCards(conversationId: string) {
     throw error;
   }
 }
+
+/** A conversation started on a teplonasos post ("global" only). */
+const isHeatThread = async (conversation: { accountId: string; igsid: string }) =>
+  isHeatPumpAccount(conversation.accountId) && !!await getDb().heatPumpThread.findUnique({ where: { accountId_igsid: { accountId: conversation.accountId, igsid: conversation.igsid } }, select: { id: true } });
 
 // ---- Webhook events --------------------------------------------------------------------------------------
 
@@ -209,11 +218,6 @@ export async function dismissConversation(conversationId: string, reason: string
 }
 export const dismissReason = (code: string) => DISMISS_REASONS[code] ?? null;
 
-/** A plain notice to the account's Direct recipients (group, or the admins who receive Instagram). */
-export async function notifyDirectRecipients(account: Pick<InstagramAccount, "id" | "directChatId">, text: string) {
-  return broadcast(await recipients(account), (await accountTag(account.id)) + text);
-}
-
 // ---- Tick: reminders, digest, report ---------------------------------------------------------------------
 
 async function broadcast(people: Recipient[], text: string, buttons?: (person: Recipient) => InlineKeyboard) {
@@ -272,9 +276,9 @@ async function accountTick(accountId: string, options: { force?: boolean; now?: 
       if (!due) continue;
       const claimed = await db.instagramConversation.updateMany({ where: { id: row.id, ...(due === "first" ? { reminded30At: null } : { reminded2hAt: null }) }, data: due === "first" ? { reminded30At: now } : { reminded2hAt: now, reminded30At: row.reminded30At ?? now } });
       if (claimed.count !== 1) continue;
-      const people = await recipients(account, due !== "first");
       const text = tag + reminderText(due, row, await lastOf(row.id), workingMs(row.waitingSince!, now, start, end));
-      await broadcast(people, text, person => ({ inline_keyboard: [[{ text: "Instagram’da ochish ↗", url: openUrl(row, person.id) }]] }));
+      if (await isHeatThread(row)) await sendHeatPumpTelegram(text, { inline_keyboard: [[{ text: "Instagram’da ochish ↗", url: openUrl(row, "") }]] });
+      else await broadcast(await recipients(account, due !== "first"), text, person => ({ inline_keyboard: [[{ text: "Instagram’da ochish ↗", url: openUrl(row, person.id) }]] }));
       result.reminders++;
     }
   }

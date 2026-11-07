@@ -6,6 +6,8 @@ import { contactedKeyboard,handleCrmCallback,handleCrmText,mainMenu } from "./cr
 import type { TelegramCallbackQuery,TelegramMessage,TelegramUpdate } from "./types";
 import { handleSehCallback,handleSehMessage } from "@/lib/sex/bot-handlers";
 import { handleInstagramCallback } from "@/lib/instagram/telegram";
+import { handleHeatPumpBinding, sendHeatPumpTelegram } from "@/lib/instagram/heat-pump-bot";
+import { isHeatPumpLead } from "@/lib/instagram/heat-pump";
 import { handleStoryCallback } from "@/lib/stories/telegram";
 import { SITE_URL } from "@/lib/site-url";
 import { pendingAgentText,profileMenuText,startDecision } from "./start-rules";
@@ -33,9 +35,11 @@ export async function publishLeadToTelegram(leadId:string){
   if(reserved.count!==1)return false;
   try{
     const db=getDb();
-    const row=await db.lead.findUnique({where:{id:leadId},select:{id:true,customerName:true,region:true,requestType:true,product:true,temperature:true,source:true,assignedAgentId:true,referralLink:{select:{name:true,ownerAgent:true}}}});
+    const row=await db.lead.findUnique({where:{id:leadId},select:{id:true,submissionKey:true,customerName:true,region:true,requestType:true,product:true,temperature:true,source:true,assignedAgentId:true,referralLink:{select:{name:true,ownerAgent:true}}}});
     if(!row)throw new Error("Lead missing");
     const lead={...row,referralName:row.referralLink?.name??null};
+    // Teplonasos leads: only the private chat of +998 91 637 77 77, never the group (not even when that fails).
+    if(isHeatPumpLead(row)){const message=await sendHeatPumpTelegram(newLeadGroupText(lead));await db.lead.update({where:{id:leadId},data:message?{telegramNotificationStatus:"PUBLISHED",telegramChatId:String(message.chat.id),telegramMessageId:message.message_id,telegramPublishedAt:new Date(),telegramPublishFailedAt:null}:{telegramNotificationStatus:"FAILED",telegramPublishFailedAt:new Date()}});return !!message;}
     // The link's "Mas’ul sotuvchi": the lead goes straight to them (no claim button); otherwise the group claims it.
     const owner=row.referralLink?.ownerAgent;
     const assigned=!row.assignedAgentId&&owner?.isApproved&&owner.isActive?(await db.lead.updateMany({where:{id:leadId,assignedAgentId:null},data:{assignedAgentId:owner.id,claimedAt:new Date()}})).count===1:false;
@@ -113,4 +117,4 @@ async function claimLead(callback:TelegramCallbackQuery,metrics?:WebhookPerforma
   await Promise.all([groupUpdate,privateMessage]);
   return true;
 }
-export async function handleTelegramUpdate(update:TelegramUpdate,metrics?:WebhookPerformance){if(update.message){if(await reportChatIdentity(update.message))return;if(await reportUserId(update.message))return;if(await handleSehMessage(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await handleStoryCallback(update.callback_query))return;if(await handleInstagramCallback(update.callback_query))return;if(await handleSehCallback(update.callback_query))return;if(await claimLead(update.callback_query,metrics))return;await handleCrmCallback(update.callback_query);}}
+export async function handleTelegramUpdate(update:TelegramUpdate,metrics?:WebhookPerformance){if(update.message){if(await reportChatIdentity(update.message))return;if(await reportUserId(update.message))return;if(await handleHeatPumpBinding(update.message))return;if(await handleSehMessage(update.message))return;if(await registerAgent(update.message))return;if(await welcomeMembers(update.message))return;if(await handleCrmText(update.message))return;}if(update.callback_query){if(await handleStoryCallback(update.callback_query))return;if(await handleInstagramCallback(update.callback_query))return;if(await handleSehCallback(update.callback_query))return;if(await claimLead(update.callback_query,metrics))return;await handleCrmCallback(update.callback_query);}}

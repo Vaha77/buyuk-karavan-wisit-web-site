@@ -9,6 +9,28 @@ export const isHeatPumpAccount = (accountId: string | null | undefined) => accou
 export const SPECIALIST_PHONE = "+998 99 520 99 99";
 export const CALL_CENTER_PHONE = "+998 91 637 77 77";
 export const MAX_BOT_REPLIES = 5;
+
+// ---- Telegram: teplonasos messages go only to one private chat, never to a group --------------------------
+
+export const HEAT_PUMP_TELEGRAM_PHONE = "998916377777";
+/** The lead was made by the teplonasos bot (Lead.submissionKey "ighp:<igsid>"). */
+export const isHeatPumpLead = (lead: { submissionKey?: string | null }) => !!lead.submissionKey?.startsWith("ighp:");
+/** The shared contact is the sender's own and is +998 91 637 77 77. */
+export const isHeatPumpContact = (contact: { phone_number?: string; user_id?: number } | undefined, fromId: number | undefined) =>
+  !!contact && contact.user_id === fromId && contact.phone_number?.replace(/\D/g, "") === HEAT_PUMP_TELEGRAM_PHONE;
+
+/** Sends to the private chat: no chat_id → logged, nothing sent; a failure → logged and retried 3 times. Never a group. */
+export async function deliverPrivate<T>(chatId: string | null, send: (chatId: string) => Promise<T>, log: (message: string, details: Record<string, unknown>) => void = console.error, wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))): Promise<T | null> {
+  if (!chatId) { log("Teplonasos Telegram: chat_id yo‘q — xabar yuborilmadi", { hint: "+998 91 637 77 77 botga “/start teplonasos” yozib, raqamini ulashsin" }); return null; }
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try { return await send(chatId); }
+    catch (error) {
+      log("Teplonasos Telegram yuborilmadi", { attempt, type: error instanceof Error ? error.name : "UnknownError" });
+      if (attempt < 4) await wait(attempt * 1000);
+    }
+  }
+  return null;
+}
 export const HUMAN_MUTE_MS = 24 * 3_600_000;
 
 // ---- m² from a comment / message ----------------------------------------------------------------------------
