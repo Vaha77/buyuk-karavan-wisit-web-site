@@ -9,9 +9,9 @@ import { SITE_URL } from "@/lib/site-url";
 import { editMessageText, sendMessage } from "@/lib/telegram/client";
 import type { InlineKeyboard } from "@/lib/telegram/types";
 import { getUserProfile, sendDirectMessage } from "./graph";
-import { DISMISS_REASONS, cardText, digestDue, digestText, directLink, directRecipients, dueReminder, extractPhone, isAutoEcho, isWorkTime, onEcho, onIncoming, personLabel, reminderText, reportDue, reportText, tashkentDate, workingMs, type DirectStatus, type Recipient } from "./direct-rules";
+import { DISMISS_REASONS, cardText, digestDue, digestText, directLink, directRecipients, dueReminder, duration, extractPhone, isAutoEcho, isWorkTime, onEcho, onIncoming, personLabel, reminderText, reportDue, reportText, tashkentDate, workingMs, type DirectStatus, type Recipient } from "./direct-rules";
 import { openSignature } from "./direct-sign";
-import { isHeatPumpAccount } from "./heat-pump";
+import { heatWaitingText, isHeatPumpAccount } from "./heat-pump";
 import { sendHeatPumpTelegram } from "./heat-pump-bot";
 import { accountName, type MessageEvent } from "./rules";
 
@@ -291,9 +291,13 @@ async function accountTick(accountId: string, options: { force?: boolean; now?: 
       const [incoming, answers, waiting] = await Promise.all([
         db.instagramMessage.findMany({ where: { accountId, direction: "IN", sentAt: { gte: dayStart }, conversationId: { not: null } }, select: { conversationId: true }, distinct: ["conversationId"] }),
         db.instagramMessage.findMany({ where: { accountId, direction: "OUT", isAuto: false, responseMs: { not: null }, sentAt: { gte: dayStart } }, select: { responseMs: true } }),
-        db.instagramConversation.findMany({ where: { accountId, status: { in: ["UNREAD", "OPENED"] }, waitingSince: { not: null } }, select: { username: true, name: true, waitingSince: true } }),
+        db.instagramConversation.findMany({ where: { accountId, status: { in: ["UNREAD", "OPENED"] }, waitingSince: { not: null } }, select: { username: true, name: true, waitingSince: true, igsid: true } }),
       ]);
-      await broadcast(await recipients(account, true), tag + reportText(today, { conversations: incoming.length, answered: answers.length, responseMs: answers.map(row => row.responseMs!), waiting: waiting.map(row => ({ username: row.username, name: row.name, waitingMs: now.getTime() - row.waitingSince!.getTime() })) }));
+      // Teplonasos conversations: not in the group's list, a short list of their own to the private chat.
+      const heatIds = isHeatPumpAccount(accountId) && waiting.length ? new Set((await db.heatPumpThread.findMany({ where: { accountId, igsid: { in: waiting.map(row => row.igsid) } }, select: { igsid: true } })).map(row => row.igsid)) : new Set<string>();
+      const heatWaiting = waiting.filter(row => heatIds.has(row.igsid));
+      await broadcast(await recipients(account, true), tag + reportText(today, { conversations: incoming.length, answered: answers.length, responseMs: answers.map(row => row.responseMs!), waiting: waiting.filter(row => !heatIds.has(row.igsid)).map(row => ({ username: row.username, name: row.name, waitingMs: now.getTime() - row.waitingSince!.getTime() })) }));
+      if (heatWaiting.length) await sendHeatPumpTelegram(heatWaitingText(today, heatWaiting.map(row => ({ label: personLabel(row), waited: duration(now.getTime() - row.waitingSince!.getTime()) }))));
       result.report = true;
     }
   }

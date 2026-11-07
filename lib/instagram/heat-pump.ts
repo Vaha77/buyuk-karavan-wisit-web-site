@@ -19,6 +19,22 @@ export const isHeatPumpLead = (lead: { submissionKey?: string | null }) => !!lea
 export const isHeatPumpContact = (contact: { phone_number?: string; user_id?: number } | undefined, fromId: number | undefined) =>
   !!contact && contact.user_id === fromId && contact.phone_number?.replace(/\D/g, "") === HEAT_PUMP_TELEGRAM_PHONE;
 
+export type BacklogLead = { customerName: string | null; dimensions: string | null; product: string | null; phone: string | null };
+/** The leads that could not be sent while no chat was linked, in one message (Telegram's limit is 4096 chars). */
+export function backlogText(leads: readonly BacklogLead[]) {
+  const lines = leads.map((lead, index) => `${index + 1}. ${[lead.customerName ?? "Instagram", lead.dimensions, lead.product, lead.phone ? `📞 ${lead.phone}` : null].filter(Boolean).join(" · ")}`);
+  let text = `📬 Ulanmagan paytdagi ${leads.length} ta xabar (teplonasos):\n\n`;
+  for (const [index, line] of lines.entries()) {
+    if (text.length + line.length > 3900) { text += `… va yana ${lines.length - index} ta (Mijoz so‘rovlarida)`; break; }
+    text += `${line}\n`;
+  }
+  return text.trim();
+}
+
+/** 20:00 report: the teplonasos conversations still waiting, only for the private chat. */
+export const heatWaitingText = (date: string, rows: ReadonlyArray<{ label: string; waited: string }>) =>
+  [`🔥 Teplonasos Direct · ${date} — javob kutayotganlar: ${rows.length}`, ...rows.slice(0, 40).map((row, index) => `${index + 1}. ${row.label} — ${row.waited}`)].join("\n");
+
 /** Sends to the private chat: no chat_id → logged, nothing sent; a failure → logged and retried 3 times. Never a group. */
 export async function deliverPrivate<T>(chatId: string | null, send: (chatId: string) => Promise<T>, log: (message: string, details: Record<string, unknown>) => void = console.error, wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))): Promise<T | null> {
   if (!chatId) { log("Teplonasos Telegram: chat_id yo‘q — xabar yuborilmadi", { hint: "+998 91 637 77 77 botga “/start teplonasos” yozib, raqamini ulashsin" }); return null; }
