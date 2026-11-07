@@ -201,10 +201,11 @@ export type IngestDecision = { action: "ignore" } | { action: "queue" } | { acti
  * Our own comments (and our public replies coming back as events) are ignored, not even logged. Replies to another comment
  * (reply to a reply), comments older than 7 days are logged as skipped. Everything else is queued: it is classified and
  * answered in the background (classification may call the AI, so it never runs inside the webhook request).
+ * `allowReply`: a reply on a teplonasos post ("global" only) is queued too — it is answered only with m² or a question.
  */
-export function decideIngest(event: Pick<CommentEvent, "fromId" | "username" | "parentId" | "time">, account: { igUserId: string; username: string }, now = new Date()): IngestDecision {
+export function decideIngest(event: Pick<CommentEvent, "fromId" | "username" | "parentId" | "time">, account: { igUserId: string; username: string }, now = new Date(), allowReply = false): IngestDecision {
   if (event.fromId === account.igUserId || (event.username && account.username && event.username.toLowerCase() === account.username.toLowerCase())) return { action: "ignore" };
-  if (event.parentId) return { action: "skip", reason: "Javob-komment (reply) — javob berilmaydi" };
+  if (event.parentId && !allowReply) return { action: "skip", reason: "Javob-komment (reply) — javob berilmaydi" };
   if (tooOld(event.time, now)) return { action: "skip", reason: "7 kundan eski komment" };
   return { action: "queue" };
 }

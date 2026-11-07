@@ -15,7 +15,7 @@ import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComme
 import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { notifyNegative } from "./telegram";
 import { bindThread, buildCalc, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
-import { heatPumpAction, heatPumpOutgoing, isHeatPumpAccount, langOf, type HeatPumpIntent } from "./heat-pump";
+import { heatPumpAction, heatPumpOutgoing, heatPumpReplyAnswered, isHeatPumpAccount, langOf, type HeatPumpIntent } from "./heat-pump";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
 /** The account connected before multi-account (Buyuk Karavan): its rows were migrated with this id. */
@@ -48,6 +48,8 @@ const storeFor = (accountId: string): IngestStore => ({
     const result = await getDb().instagramComment.createMany({ data: [{ ...row, accountId }], skipDuplicates: true });
     return result.count === 1;
   },
+  // Teplonasos posts only, and only on the "global" account.
+  ...(isHeatPumpAccount(accountId) ? { allowsReply: async (mediaId: string) => !!await getDb().instagramMediaRule.findFirst({ where: { mediaId, accountId, heatPump: true }, select: { mediaId: true } }) } : {}),
 });
 
 /**
@@ -189,13 +191,16 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   }
   const kind = comment.kind as CommentKind;
   const account = context.account;
-  const [answered, repliesToday] = await Promise.all([
+  if (comment.parentId && !heatPumpReplyAnswered(kind, comment.heatPumpIntent, !!rule?.heatPump && isHeatPumpAccount(account.id))) { await finish("SKIPPED", "Javob-komment (reply) — javob berilmaydi"); return "skipped"; }
+  const [answered, repliesToday, calcSent] = await Promise.all([
     db.instagramComment.count({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, OR: [{ dmSentAt: { not: null } }, { publicReplyAt: { not: null } }] } }),
     db.instagramComment.count({ where: { accountId: account.id, publicReplyAt: { gte: tashkentDayStart() } } }),
+    // Teplonasos: did this person already get a calculation on this post (m² coming later is answered once more)?
+    kind === "HEAT_PUMP" ? db.instagramComment.count({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, heatPumpIntent: "calc", dmSentAt: { not: null } } }) : 0,
   ]);
   const heatPump = kind === "HEAT_PUMP" && !!rule?.heatPump && isHeatPumpAccount(account.id);
   if (kind === "HEAT_PUMP" && !heatPump) { await finish("SKIPPED", "Teplonasos posti emas"); return "skipped"; }
-  const action: Action | ReturnType<typeof heatPumpAction> = heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit) : chooseAction(kind, account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
+  const action: Action | ReturnType<typeof heatPumpAction> = heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit, comment.heatPumpIntent === "calc" && !calcSent) : chooseAction(kind, account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
 
   if (action.type === "skip") { await finish("SKIPPED", action.reason); return "skipped"; }
   if (action.type === "notify") {

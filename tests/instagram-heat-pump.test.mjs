@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./ts-resolve.mjs", import.meta.url);
 const hp = await import("../lib/instagram/heat-pump.ts");
-const read = path => readFile(new URL(path, import.meta.url), "utf8");
+const read = async path => (await readFile(new URL(path, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 
 const MODELS = [
   { brand: "Aire", hp: 3, nominalKw: 10, winterKw: 6.6, voltage: 220, priceUsd: 1300, bufferIncluded: false, isActive: true },
@@ -201,4 +201,50 @@ test("Russian: Cyrillic comment → calculation, big project and m² ask in Russ
   assert.match(hp.heatPumpOutgoing("question", { answer: "Да, греет воду." }, "ru").dm, /^Здравствуйте! Да, греет воду\.\n\nЧтобы подобрать/);
   assert.equal(hp.heatPumpOutgoing("ask", {}).dm, "Assalomu alaykum! Mos teplonasos va narxini aytishimiz uchun uyingiz necha m²?", "Uzbek stays the default");
   assert.equal(hp.texts("ru").limit, "Чтобы обсудить подробнее, позвоните: +998 99 520 99 99");
+});
+
+test("reply-comments: queued only on teplonasos posts of the global account; our own comments are always ignored", async () => {
+  const rules = await import("../lib/instagram/rules.ts");
+  const { ingestWebhook } = await import("../lib/instagram/ingest.ts");
+  const account = { igUserId: "1784100", username: "buyuk_karavan" }, now = new Date("2026-11-07T10:00:00Z");
+  const reply = { fromId: "9001", username: "mijoz", parentId: "c-parent", time: now };
+  assert.equal(rules.decideIngest(reply, account, now).action, "skip", "default: replies are not answered");
+  assert.equal(rules.decideIngest(reply, account, now, true).action, "queue", "teplonasos post");
+  assert.equal(rules.decideIngest({ ...reply, fromId: account.igUserId }, account, now, true).action, "ignore", "our own reply");
+  assert.equal(rules.decideIngest({ ...reply, username: "Buyuk_Karavan" }, account, now, true).action, "ignore");
+
+  const payload = (mediaId, id) => ({ object: "instagram", entry: [{ id: account.igUserId, time: Math.floor(now.getTime() / 1000), changes: [{ field: "comments", value: { id, text: "150 kv", parent_id: "c-parent", from: { id: "9001", username: "mijoz" }, media: { id: mediaId } } }] }] });
+  const rows = [];
+  const store = allows => ({ insertComment: async row => { rows.push(row); return true; }, ...(allows ? { allowsReply: async mediaId => mediaId === "m-heat" } : {}) });
+  assert.deepEqual((await ingestWebhook(payload("m-heat", "r1"), account, store(true), now)).queued, ["r1"]);
+  assert.deepEqual((await ingestWebhook(payload("m-price", "r2"), account, store(true), now)).queued, [], "another post type: reply rule unchanged");
+  assert.deepEqual((await ingestWebhook(payload("m-heat", "r3"), account, store(false), now)).queued, [], "a store without allowsReply (@eshikmaster): unchanged");
+  assert.equal(rows.find(row => row.commentId === "r2").reason, "Javob-komment (reply) — javob berilmaydi");
+
+  const service = await read("../lib/instagram/service.ts");
+  assert.match(service, /\.\.\.\(isHeatPumpAccount\(accountId\) \? \{ allowsReply: async \(mediaId: string\) => !!await getDb\(\)\.instagramMediaRule\.findFirst\(\{ where: \{ mediaId, accountId, heatPump: true \}/);
+  assert.match(service, /if \(comment\.parentId && !heatPumpReplyAnswered\(kind, comment\.heatPumpIntent, !!rule\?\.heatPump && isHeatPumpAccount\(account\.id\)\)\) \{ await finish\("SKIPPED", "Javob-komment \(reply\) — javob berilmaydi"\)/);
+});
+
+test("reply-comment is answered only with m², a price ask or a teplonasos question", () => {
+  for (const intent of ["calc", "ask", "question"]) assert.equal(hp.heatPumpReplyAnswered("HEAT_PUMP", intent, true), true, intent);
+  assert.equal(hp.heatPumpReplyAnswered("HEAT_PUMP", "other", true), false, "off-topic reply: nothing");
+  for (const kind of ["POSITIVE", "NEGATIVE", "SPAM", "UNKNOWN", "PRICE"]) assert.equal(hp.heatPumpReplyAnswered(kind, null, true), false, kind);
+  assert.equal(hp.heatPumpReplyAnswered("HEAT_PUMP", "calc", false), false, "not a teplonasos post");
+  assert.equal(hp.heatPumpOutgoing("calc", { m2: 150, calc: "HISOB" }).reply, "150 m² uchun hisobni Direct'ga yubordik 📩");
+});
+
+test("m² coming later: one more calculation + public reply despite the one-reply rule, but only once", async () => {
+  assert.deepEqual(hp.heatPumpAction({ isActive: true }, true, true, true), { type: "heatpump", publicReply: true }, "answered before without m² → calc goes out");
+  assert.equal(hp.heatPumpAction({ isActive: true }, true, true, false).type, "skip", "a calc was already sent → silent");
+  assert.equal(hp.heatPumpAction({ isActive: false }, true, true, true).type, "skip", "inactive post");
+  const service = await read("../lib/instagram/service.ts");
+  assert.match(service, /heatPumpIntent: "calc", dmSentAt: \{ not: null \} \} \}\) : 0,/);
+  assert.match(service, /heatPumpAction\(rule, answered > 0, repliesToday < account\.dailyReplyLimit, comment\.heatPumpIntent === "calc" && !calcSent\)/);
+});
+
+test("saving a teplonasos post skips the product / price text / DM template checks", async () => {
+  const actions = await read("../app/admin/(protected)/instagram/actions.ts");
+  assert.match(actions, /if \(!value\.heatPump\) \{\n\s*\/\/ Free text; \{narx_som\} \/ \{mahsulot\} \/ \{havola\} need a product\.\n\s*if \(\/\\{\(mahsulot\|narx_som\|havola\)\\}\/\.test\(value\.dmTemplate\)/);
+  assert.match(actions, /if \(!value\.heatPump\) \{[\s\S]*?Narx matnida[\s\S]*?\n  \}\n/, "price text check inside the block");
 });
