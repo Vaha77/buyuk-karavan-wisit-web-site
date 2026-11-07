@@ -277,3 +277,16 @@ test("saving a teplonasos post: the price post's DM template is not required", a
   assert.match(actions, /dmTemplate: z\.string\(\)\.trim\(\)\.max\(900, "DM matni 900 belgidan oshmasin\."\),/, "no min(5) in the schema");
   assert.match(actions, /if \(!value\.heatPump\) \{\n\s*if \(value\.dmTemplate\.length < 5\) return \{ ok: false, error: "DM matni bo‘sh bo‘lmasin\." \};/);
 });
+
+test("m² parser: км typo, units in any case, and a lone 20–1000 number as the fallback", () => {
+  for (const [text, m2] of [["67км🔥", 67], ["90 kvd", 90], ["240m2", 240], ["120 кв.м", 120], ["150", 150], ["60 KV.M", 60], ["60 Кв М", 60], ["60 KVM", 60], ["60 Kvadrat", 60], ["60 КВАДРАТ", 60], ["60 М2", 60], ["60 км", 60], ["uyim 85 kvm atrofida", 85], ["67 sotix 🔥", 67]]) {
+    assert.equal(hp.extractM2(text), m2, text);
+    assert.deepEqual(hp.heatPumpByKeywords(text), { kind: "HEAT_PUMP", intent: "calc", m2 }, `${text} gets the calculation`);
+  }
+  for (const text of ["10 ta 🔥", "1500 tadan ko'p", "100% zo'r", "2 ta 300 lik", "zo'r🔥"]) assert.equal(hp.extractM2(text), null, text);
+  assert.deepEqual(hp.heatPumpByKeywords("zo'r🔥"), { kind: "POSITIVE" }, "praise: a friendly reply, not the m² one");
+});
+
+test("an unanswered comment logs why (parse_failed / skipped / failed)", async () => {
+  assert.match(await read("../lib/instagram/service.ts"), /console\.info\("Instagram comment unanswered", \{ commentId, code: comment\?\.kind === "UNKNOWN" \? "parse_failed" : status\.toLowerCase\(\), reason \}\)/);
+});
