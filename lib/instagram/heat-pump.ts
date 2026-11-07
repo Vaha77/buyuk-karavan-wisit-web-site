@@ -8,11 +8,6 @@ export const isHeatPumpAccount = (accountId: string | null | undefined) => accou
 
 export const SPECIALIST_PHONE = "+998 99 520 99 99";
 export const CALL_CENTER_PHONE = "+998 91 637 77 77";
-export const OFF_TOPIC_TEXT = `Bu savol bo'yicha call-centerimizga murojaat qiling: ${CALL_CENTER_PHONE}`;
-export const M2_QUESTION = "Mos teplonasos va narxini aytishimiz uchun uyingiz necha m²?";
-export const ASK_DM = `Assalomu alaykum! ${M2_QUESTION}`;
-export const LIMIT_TEXT = `Batafsil gaplashish uchun qo'ng'iroq qiling: ${SPECIALIST_PHONE}`;
-export const PHONE_THANKS = "Rahmat, mutaxassis tez orada qo'ng'iroq qiladi";
 export const MAX_BOT_REPLIES = 5;
 export const HUMAN_MUTE_MS = 24 * 3_600_000;
 
@@ -72,36 +67,74 @@ export const usdText = (usd: number) => `$${group(usd)}`;
 /** $ × CBU rate in million so‘m, one decimal ("33.8"); null without a rate. */
 export const mlnSom = (usd: number, rate: string | number | null | undefined) => rate && Number(rate) > 0 ? (usd * Number(rate) / 1e6).toFixed(1) : null;
 
-const FOOTER = [
-  "ℹ️ Bu hisob-kitob AI tomonidan internetdagi umumiy ma'lumotlar asosida berildi. Uyingizning uteplit holati va derazalariga qarab mutaxassis aniqroq maslahat va taklif beradi:",
-  `👨‍🔧 Teplonasos mutaxassisi: ${SPECIALIST_PHONE}`,
-  `🏪 Buyuk Karavan do'kon call-center: ${CALL_CENTER_PHONE}`,
-  "",
-  "📞 Telefon raqamingizni qoldiring — mutaxassis o'zi qo'ng'iroq qiladi.",
-].join("\n");
+export type Lang = "uz" | "ru";
+/**
+ * Russian when the first text with letters is Cyrillic without the Uzbek-only letters ў қ ғ ҳ ("уй 150" in Uzbek
+ * Cyrillic stays Uzbek); otherwise, and when no text has letters, Uzbek.
+ */
+export function langOf(...texts: Array<string | null | undefined>): Lang {
+  const text = texts.find(item => item && /\p{L}/u.test(item));
+  return text && /[а-яё]/i.test(text) && !/[ўқғҳ]/i.test(text) ? "ru" : "uz";
+}
+
+const T = {
+  uz: {
+    hello: "Assalomu alaykum!",
+    footer: ["ℹ️ Bu hisob-kitob AI tomonidan internetdagi umumiy ma'lumotlar asosida berildi. Uyingizning uteplit holati va derazalariga qarab mutaxassis aniqroq maslahat va taklif beradi:", `👨‍🔧 Teplonasos mutaxassisi: ${SPECIALIST_PHONE}`, `🏪 Buyuk Karavan do'kon call-center: ${CALL_CENTER_PHONE}`, "", "📞 Telefon raqamingizni qoldiring — mutaxassis o'zi qo'ng'iroq qiladi."],
+    big: (m2: number, hp: number, kw: number) => `${m2} m² uyingizni isitish uchun taxminan ${hp} HP · ${kw} kW quvvatli teplonasos kerak (qishki hisob, uy yaxshi uteplit qilingan bo'lsa). Uteplit sust bo'lsa, bundan ham kattaroq quvvat kerak bo'ladi. Bunday uy uchun loyiha individual tuziladi — narx va eng yaxshi variantni mutaxassis aytadi.`,
+    title: (m2: number) => `${m2} m² uyingiz uchun mos teplonasos:`,
+    heats: (m2: number) => `${m2} m² uyingizni isitadi, agar uyingiz yaxshi uteplit qilingan bo'lsa.`,
+    bigger: (label: string) => ` Uteplitsiz bo'lsa, quvvat yetmay qolishi mumkin — unda ${label} kerak bo'ladi.`,
+    price: "💵 Narxi:", som: (mln: string) => `~${mln} mln so'm`, rate: ", MB kursi bo'yicha", withBuffer: " — bufer bak bilan",
+    noBuffer: (liters: number, usd: string, som: string) => `⚠️ Bufer bak narxga kirmaydi — ${liters} L, ${usd}${som}.`,
+    volt: "⚡ Bu model 380V (3 faza) tokda ishlaydi.",
+    fancoil: "⚠️ Narx faqat tashqi blok uchun. Xonalarga fankoyl (ichki blok) o'rnatish qo'shimcha.",
+    delivery: "🚚 Butun O'zbekiston bo'ylab yetkazib beramiz (narxi kelishiladi).",
+    m2Question: "Mos teplonasos va narxini aytishimiz uchun uyingiz necha m²?",
+    replyCalc: (m2: number) => `${m2} m² uchun hisobni Direct'ga yubordik 📩`, replyAsk: "Uyingiz necha m²? Direct'ga yozdik 📩", replyQuestion: "Javobni Direct'ga yozdik 📩",
+    offTopic: `Bu savol bo'yicha call-centerimizga murojaat qiling: ${CALL_CENTER_PHONE}`,
+    limit: `Batafsil gaplashish uchun qo'ng'iroq qiling: ${SPECIALIST_PHONE}`, thanks: "Rahmat, mutaxassis tez orada qo'ng'iroq qiladi",
+  },
+  ru: {
+    hello: "Здравствуйте!",
+    footer: ["ℹ️ Этот расчёт сделан ИИ на основе общих данных из интернета. С учётом утепления и окон вашего дома специалист даст более точную консультацию и предложение:", `👨‍🔧 Специалист по тепловым насосам: ${SPECIALIST_PHONE}`, `🏪 Call-центр магазина Buyuk Karavan: ${CALL_CENTER_PHONE}`, "", "📞 Оставьте номер телефона — специалист сам вам позвонит."],
+    big: (m2: number, hp: number, kw: number) => `Для обогрева дома ${m2} м² нужен тепловой насос мощностью примерно ${hp} HP · ${kw} kW (зимний расчёт, если дом хорошо утеплён). При слабом утеплении понадобится ещё большая мощность. Для такого дома проект составляется индивидуально — цену и лучший вариант подскажет специалист.`,
+    title: (m2: number) => `Подходящий тепловой насос для вашего дома ${m2} м²:`,
+    heats: (m2: number) => `обогреет ваш дом ${m2} м², если дом хорошо утеплён.`,
+    bigger: (label: string) => ` Если дом не утеплён, мощности может не хватить — тогда понадобится ${label}.`,
+    price: "💵 Цена:", som: (mln: string) => `~${mln} млн сум`, rate: ", по курсу ЦБ", withBuffer: " — с буферным баком",
+    noBuffer: (liters: number, usd: string, som: string) => `⚠️ Буферный бак не входит в цену — ${liters} л, ${usd}${som}.`,
+    volt: "⚡ Эта модель работает от сети 380V (3 фазы).",
+    fancoil: "⚠️ Цена только за наружный блок. Установка фанкойлов (внутренних блоков) в комнатах — дополнительно.",
+    delivery: "🚚 Доставляем по всему Узбекистану (стоимость доставки по договорённости).",
+    m2Question: "Чтобы подобрать тепловой насос и назвать цену, подскажите, какая площадь вашего дома в м²?",
+    replyCalc: (m2: number) => `Расчёт для ${m2} м² отправили в Direct 📩`, replyAsk: "Какая площадь дома в м²? Написали вам в Direct 📩", replyQuestion: "Ответ отправили в Direct 📩",
+    offTopic: `По этому вопросу обратитесь в наш call-центр: ${CALL_CENTER_PHONE}`,
+    limit: `Чтобы обсудить подробнее, позвоните: ${SPECIALIST_PHONE}`, thanks: "Спасибо, специалист скоро вам позвонит",
+  },
+} as const;
+export const texts = (lang: Lang) => T[lang];
 
 export type HeatPumpCalc = { text: string; m2: number; big: boolean; summary: string; priceUsd: number | null };
 
-/** The HISOB XABARI for m² (Instagram's limit is 1000 chars). */
-export function calcMessage(m2: number, models: readonly HeatPumpRow[], rate: string | number | null, buffer: { usd: number; liters: number }): HeatPumpCalc {
+/** The HISOB XABARI for m², in Uzbek or Russian (Instagram's limit is 1000 chars). */
+export function calcMessage(m2: number, models: readonly HeatPumpRow[], rate: string | number | null, buffer: { usd: number; liters: number }, lang: Lang = "uz"): HeatPumpCalc {
+  const t = T[lang], footer = t.footer.join("\n");
   const pick = pickHeatPump(m2, models);
-  if (pick.big) {
-    const body = `${m2} m² uyingizni isitish uchun taxminan ${pick.hp} HP · ${pick.kw} kW quvvatli teplonasos kerak (qishki hisob, uy yaxshi uteplit qilingan bo'lsa). Uteplit sust bo'lsa, bundan ham kattaroq quvvat kerak bo'ladi. Bunday uy uchun loyiha individual tuziladi — narx va eng yaxshi variantni mutaxassis aytadi.`;
-    return { text: `Assalomu alaykum! ${body}\n\n${FOOTER}`, m2, big: true, summary: `Katta loyiha: ~${pick.hp} HP · ${pick.kw} kW`, priceUsd: null };
-  }
+  if (pick.big) return { text: `${t.hello} ${t.big(m2, pick.hp, pick.kw)}\n\n${footer}`, m2, big: true, summary: `Katta loyiha: ~${pick.hp} HP · ${pick.kw} kW`, priceUsd: null };
   const { model, bigger } = pick;
   const som = (usd: number) => mlnSom(usd, rate);
   const price = som(model.priceUsd), bufferSom = som(buffer.usd);
   const lines = [
-    `Assalomu alaykum! ${m2} m² uyingiz uchun mos teplonasos:`,
-    `🔥 ${modelLabel(model)} — ${m2} m² uyingizni isitadi, agar uyingiz yaxshi uteplit qilingan bo'lsa.${bigger ? ` Uteplitsiz bo'lsa, quvvat yetmay qolishi mumkin — unda ${modelLabel(bigger)} kerak bo'ladi.` : ""}`,
-    `💵 Narxi: ${usdText(model.priceUsd)}${price ? ` (~${price} mln so'm, MB kursi bo'yicha)` : ""}${model.bufferIncluded ? " — bufer bak bilan" : ""}`,
-    ...(model.bufferIncluded ? [] : [`⚠️ Bufer bak narxga kirmaydi — ${buffer.liters} L, ${usdText(buffer.usd)}${bufferSom ? ` (~${bufferSom} mln so'm)` : ""}.`]),
-    ...(model.voltage >= 380 ? ["⚡ Bu model 380V (3 faza) tokda ishlaydi."] : []),
-    "⚠️ Narx faqat tashqi blok uchun. Xonalarga fankoyl (ichki blok) o'rnatish qo'shimcha.",
-    "🚚 Butun O'zbekiston bo'ylab yetkazib beramiz (narxi kelishiladi).",
+    `${t.hello} ${t.title(m2)}`,
+    `🔥 ${modelLabel(model)} — ${t.heats(m2)}${bigger ? t.bigger(modelLabel(bigger)) : ""}`,
+    `${t.price} ${usdText(model.priceUsd)}${price ? ` (${t.som(price)}${t.rate})` : ""}${model.bufferIncluded ? t.withBuffer : ""}`,
+    ...(model.bufferIncluded ? [] : [t.noBuffer(buffer.liters, usdText(buffer.usd), bufferSom ? ` (${t.som(bufferSom)})` : "")]),
+    ...(model.voltage >= 380 ? [t.volt] : []),
+    t.fancoil,
+    t.delivery,
   ];
-  return { text: `${lines.join("\n")}\n\n${FOOTER}`, m2, big: false, summary: `${modelLabel(model)} — ${usdText(model.priceUsd)}`, priceUsd: model.priceUsd };
+  return { text: `${lines.join("\n")}\n\n${footer}`, m2, big: false, summary: `${modelLabel(model)} — ${usdText(model.priceUsd)}`, priceUsd: model.priceUsd };
 }
 
 // ---- Comment on a teplonasos post -------------------------------------------------------------------------
@@ -137,12 +170,18 @@ export function heatPumpAction(rule: { isActive: boolean } | null, alreadyAnswer
 }
 
 /** Public reply and Direct text for a HEAT_PUMP comment; an off-topic one gets the call-center reply and no Direct. */
-export function heatPumpOutgoing(intent: HeatPumpIntent, input: { m2?: number | null; calc?: string | null; answer?: string | null }) {
-  if (intent === "calc" && input.m2 && input.calc) return { reply: `${input.m2} m² uchun hisobni Direct'ga yubordik 📩`, dm: input.calc };
-  if (intent === "ask") return { reply: "Uyingiz necha m²? Direct'ga yozdik 📩", dm: ASK_DM };
-  if (intent === "question") return { reply: "Javobni Direct'ga yozdik 📩", dm: `Assalomu alaykum! ${input.answer?.trim() ? `${input.answer.trim()}\n\n` : ""}${M2_QUESTION}` };
-  return { reply: OFF_TOPIC_TEXT, dm: null };
+export function heatPumpOutgoing(intent: HeatPumpIntent, input: { m2?: number | null; calc?: string | null; answer?: string | null }, lang: Lang = "uz") {
+  const t = T[lang];
+  if (intent === "calc" && input.m2 && input.calc) return { reply: t.replyCalc(input.m2), dm: input.calc };
+  if (intent === "ask") return { reply: t.replyAsk, dm: `${t.hello} ${t.m2Question}` };
+  if (intent === "question") return { reply: t.replyQuestion, dm: `${t.hello} ${input.answer?.trim() ? `${input.answer.trim()}
+
+` : ""}${t.m2Question}` };
+  return { reply: t.offTopic, dm: null };
 }
+
+/** The Direct thread belongs to the recipient_id of the Private Reply's answer; the comment author's id is the fallback. */
+export const threadIgsid = (fromId: string, sent: { recipient_id?: string | null } | null | undefined) => sent?.recipient_id?.trim() || fromId;
 
 // ---- Direct thread -----------------------------------------------------------------------------------------
 

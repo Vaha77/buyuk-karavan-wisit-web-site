@@ -10,13 +10,13 @@ import { classifyHeatPumpComment, heatPumpChat, type AiUsage } from "./ai";
 import { notifyDirectRecipients } from "./direct";
 import { extractPhone } from "./direct-rules";
 import { sendDirectMessage } from "./graph";
-import { HUMAN_MUTE_MS, LIMIT_TEXT, PHONE_THANKS, calcMessage, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, type HeatPumpComment } from "./heat-pump";
+import { HUMAN_MUTE_MS, calcMessage, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
 import { randomGapMs, type MessageEvent } from "./rules";
 
 const safeType = (error: unknown) => error instanceof Error ? error.name : "UnknownError";
 
 /** The HISOB XABARI with the current table, buffer tank price and CBU rate (`rate` when the caller already has it). */
-export async function buildCalc(m2: number, rate?: string | null) {
+export async function buildCalc(m2: number, rate?: string | null, lang: Lang = "uz") {
   const db = getDb();
   const [rows, settings, cbu] = await Promise.all([
     db.heatPumpModel.findMany({ where: { isActive: true } }),
@@ -24,7 +24,7 @@ export async function buildCalc(m2: number, rate?: string | null) {
     rate === undefined ? getUsdUzsRate().then(value => value?.rate ?? null).catch(() => null) : rate,
   ]);
   const models = rows.map(row => ({ ...row, hp: Number(row.hp), nominalKw: Number(row.nominalKw), winterKw: Number(row.winterKw), priceUsd: Number(row.priceUsd) }));
-  return calcMessage(m2, models, cbu, { usd: Number(settings?.heatPumpBufferUsd ?? 145), liters: settings?.heatPumpBufferLiters ?? 60 });
+  return calcMessage(m2, models, cbu, { usd: Number(settings?.heatPumpBufferUsd ?? 145), liters: settings?.heatPumpBufferLiters ?? 60 }, lang);
 }
 
 /** Keywords first, then the AI; without the AI an unclear comment stays UNKNOWN (no reply). */
@@ -39,6 +39,20 @@ export async function classifyHeatPump(text: string): Promise<{ result: HeatPump
 export async function openThread(input: { accountId: string; igsid: string; mediaId: string; username: string | null; dm: string; m2: number | null; summary: string | null }) {
   const data = { username: input.username, lastBotText: input.dm, lastBotAt: new Date(), ...(input.m2 ? { m2: input.m2, model: input.summary } : {}) };
   return getDb().heatPumpThread.upsert({ where: { accountId_igsid: { accountId: input.accountId, igsid: input.igsid } }, create: { accountId: input.accountId, igsid: input.igsid, mediaId: input.mediaId, ...data }, update: data });
+}
+
+/**
+ * After the Private Reply: the thread moves to the recipient_id Meta returned (the id Direct webhooks use); the comment
+ * author's id stays only when the answer has none. A thread already under that id gets this one's data.
+ */
+export async function bindThread(threadId: string, accountId: string, fromId: string, sent: { recipient_id?: string; message_id?: string }) {
+  const db = getDb(), igsid = threadIgsid(fromId, sent);
+  const mid = sent.message_id ? { lastBotMid: sent.message_id } : {};
+  if (igsid === fromId) return db.heatPumpThread.update({ where: { id: threadId }, data: mid });
+  const other = await db.heatPumpThread.findUnique({ where: { accountId_igsid: { accountId, igsid } } });
+  if (!other) return db.heatPumpThread.update({ where: { id: threadId }, data: { igsid, ...mid } });
+  const moved = await db.heatPumpThread.delete({ where: { id: threadId } });
+  return db.heatPumpThread.update({ where: { id: other.id }, data: { username: moved.username, m2: moved.m2 ?? other.m2, model: moved.model ?? other.model, leadId: other.leadId ?? moved.leadId, lastBotText: moved.lastBotText, lastBotAt: moved.lastBotAt, ...mid } });
 }
 
 /** One lead per person ("ighp:<igsid>"), kept up to date with m², model / price, phone. Returns its id. */
@@ -95,6 +109,8 @@ export async function handleHeatPumpDirect(events: MessageEvent[], account: Inst
 
 async function answer(thread: HeatPumpThread, event: MessageEvent, account: InstagramAccount, token: string) {
   const db = getDb(), text = event.text!.trim();
+  // The customer's language; a message without letters ("150") keeps the language of our last message.
+  const lang = langOf(text, thread.lastBotText), t = texts(lang);
   const phone = extractPhone(text);
   if (phone) {
     thread = await db.heatPumpThread.update({ where: { id: thread.id }, data: { phone } });
@@ -107,7 +123,7 @@ async function answer(thread: HeatPumpThread, event: MessageEvent, account: Inst
   const claimed = await db.heatPumpThread.updateMany({ where: { id: thread.id, botReplies: thread.botReplies, OR: [{ lastInMid: null }, { lastInMid: { not: event.mid } }] }, data: { botReplies: { increment: 1 }, lastInMid: event.mid } });
   if (claimed.count !== 1) return;
 
-  let reply: string | null = step === "limit" ? LIMIT_TEXT : phone ? PHONE_THANKS : null;
+  let reply: string | null = step === "limit" ? t.limit : phone ? t.thanks : null;
   if (!reply) {
     let m2 = extractM2(text);
     if (!m2) {
@@ -116,7 +132,7 @@ async function answer(thread: HeatPumpThread, event: MessageEvent, account: Inst
       reply = ai?.reply || null;
     }
     if (m2) {
-      const calc = await buildCalc(m2);
+      const calc = await buildCalc(m2, undefined, lang);
       reply = calc.text;
       thread = await db.heatPumpThread.update({ where: { id: thread.id }, data: { m2, model: calc.summary } });
       await saveLead(thread, account);

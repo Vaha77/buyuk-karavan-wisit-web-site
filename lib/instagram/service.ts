@@ -14,8 +14,8 @@ import { GraphError, getMediaPermalink, listComments, listMedia, refreshLongLive
 import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComments } from "./ingest";
 import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { notifyNegative } from "./telegram";
-import { buildCalc, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
-import { heatPumpAction, heatPumpOutgoing, isHeatPumpAccount, type HeatPumpIntent } from "./heat-pump";
+import { bindThread, buildCalc, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
+import { heatPumpAction, heatPumpOutgoing, isHeatPumpAccount, langOf, type HeatPumpIntent } from "./heat-pump";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
 /** The account connected before multi-account (Buyuk Karavan): its rows were migrated with this id. */
@@ -221,11 +221,11 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   // price text, else the account's "no price" DM.
   let dm: string | null = null, heatReply: string | null = null, heatSummary: string | null = null;
   if (action.type === "heatpump") {
-    const intent = comment.heatPumpIntent as HeatPumpIntent, m2 = comment.heatPumpM2;
-    const calc = intent === "calc" && m2 ? await buildCalc(m2, context.rate) : null;
+    const intent = comment.heatPumpIntent as HeatPumpIntent, m2 = comment.heatPumpM2, lang = langOf(comment.text);
+    const calc = intent === "calc" && m2 ? await buildCalc(m2, context.rate, lang) : null;
     const answer = intent === "question" ? await heatPumpChat(comment.text, null) : null;
     if (answer) await update({ aiTokens: comment.aiTokens + answer.usage.tokens, aiCostUsd: addUsage({ tokens: 0, costUsd: comment.aiCostUsd === null ? null : Number(comment.aiCostUsd) }, answer.usage).costUsd });
-    const out = heatPumpOutgoing(intent, { m2, calc: calc?.text, answer: answer?.reply });
+    const out = heatPumpOutgoing(intent, { m2, calc: calc?.text, answer: answer?.reply }, lang);
     dm = out.dm; heatReply = out.reply; heatSummary = calc?.summary ?? null;
   }
   if (action.type === "price" || action.type === "question" || action.type === "contact") {
@@ -266,13 +266,14 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   const publicReply = action.type === "price" && rule && !rule.publicReplyEnabled ? null : reply?.trim() || null;
 
   // Teplonasos: the thread is marked before the DM goes out (the customer's answer may come at once).
-  if (dm && action.type === "heatpump") await openThread({ accountId: account.id, igsid: comment.fromId, mediaId: comment.mediaId, username: comment.username, dm, m2: comment.heatPumpM2, summary: heatSummary });
+  let thread = dm && action.type === "heatpump" ? await openThread({ accountId: account.id, igsid: comment.fromId, mediaId: comment.mediaId, username: comment.username, dm, m2: comment.heatPumpM2, summary: heatSummary }) : null;
   if (dm) {
     // Saved before sending: the echo of this DM may arrive before the API call returns, and must count as automatic.
     await update({ dmText: dm, dmSentAt: new Date() });
     try {
       const sent = await sendPrivateReply(context.token, account.igUserId, commentId, dm);
       await update({ dmText: dm, dmMessageId: sent.message_id ?? null, dmSentAt: new Date(), attempts: { increment: 1 } });
+      if (thread) thread = await bindThread(thread.id, account.id, comment.fromId, sent).catch(error => { console.error("Instagram heat pump thread bind failed", { type: safeType(error) }); return thread; });
     } catch (error) {
       const info = errorInfo(error), attempts = comment.attempts + 1;
       console.error("Instagram private reply failed", { type: safeType(error) });
@@ -312,9 +313,9 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   // Teplonasos lead: m² written or price asked.
   if (account.leadsEnabled && action.type === "heatpump" && dm && (comment.heatPumpIntent === "calc" || comment.heatPumpIntent === "ask")) {
     try {
-      const thread = await getDb().heatPumpThread.findUnique({ where: { accountId_igsid: { accountId: account.id, igsid: comment.fromId } } });
-      const leadId = thread && await upsertHeatPumpLead(thread, account, comment.text);
-      if (leadId) { await update({ leadId }); await getDb().heatPumpThread.update({ where: { id: thread.id }, data: { leadId } }); }
+      const saved = thread && await getDb().heatPumpThread.findUnique({ where: { id: thread.id } });
+      const leadId = saved && await upsertHeatPumpLead(saved, account, comment.text);
+      if (leadId) { await update({ leadId }); await getDb().heatPumpThread.update({ where: { id: saved.id }, data: { leadId } }); }
     } catch (error) {
       console.error("Instagram heat pump lead failed", { type: safeType(error) });
     }
