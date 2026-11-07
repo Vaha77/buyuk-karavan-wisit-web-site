@@ -139,7 +139,7 @@ test("@eshikmaster never enters the teplonasos flow (m² / price comments includ
   assert.doesNotMatch(JSON.stringify(ESHIKMASTER_PRESET), /teplonasos|heat/i, "preset unchanged");
   const service = await read("../lib/instagram/service.ts");
   assert.match(service, /if \(rule\?\.heatPump && isHeatPumpAccount\(account\.id\)\) \{/, "classification: account check");
-  assert.match(service, /const heatPump = kind === "HEAT_PUMP" && !!rule\?\.heatPump && isHeatPumpAccount\(account\.id\);\n\s*if \(kind === "HEAT_PUMP" && !heatPump\) \{ await finish\("SKIPPED"/, "action: account check");
+  assert.match(service, /const heatPost = !!rule\?\.heatPump && isHeatPumpAccount\(account\.id\), heatPump = kind === "HEAT_PUMP" && heatPost;\n[^\n]*\n\s*if \(kind === "HEAT_PUMP" && !heatPump\) \{ await finish\("SKIPPED"/, "action: account check");
   assert.match(service, /if \(isHeatPumpAccount\(result\.account\.id\) && result\.events\.length\) await handleHeatPumpDirect/, "Direct: account check");
   assert.match(await read("../app/admin/(protected)/instagram/actions.ts"), /if \(value\.heatPump && !isHeatPumpAccount\(value\.accountId\)\) return \{ ok: false/, "the post type cannot be saved for another account");
   assert.match(await read("../lib/instagram/queries.ts"), /const heatPump = isHeatPumpAccount\(account\?\.id\) \?/, "table / post type hidden for other accounts");
@@ -279,14 +279,59 @@ test("saving a teplonasos post: the price post's DM template is not required", a
 });
 
 test("m² parser: км typo, units in any case, and a lone 20–1000 number as the fallback", () => {
-  for (const [text, m2] of [["67км🔥", 67], ["90 kvd", 90], ["240m2", 240], ["120 кв.м", 120], ["150", 150], ["60 KV.M", 60], ["60 Кв М", 60], ["60 KVM", 60], ["60 Kvadrat", 60], ["60 КВАДРАТ", 60], ["60 М2", 60], ["60 км", 60], ["uyim 85 kvm atrofida", 85], ["67 sotix 🔥", 67]]) {
+  for (const [text, m2] of [["67км🔥", 67], ["90 kvd", 90], ["240m2", 240], ["120 кв.м", 120], ["150", 150], ["60 KV.M", 60], ["60 Кв М", 60], ["60 KVM", 60], ["60 Kvadrat", 60], ["60 КВАДРАТ", 60], ["60 М2", 60], ["60 км", 60], ["uyim 85 kvm atrofida", 85]]) {
     assert.equal(hp.extractM2(text), m2, text);
     assert.deepEqual(hp.heatPumpByKeywords(text), { kind: "HEAT_PUMP", intent: "calc", m2 }, `${text} gets the calculation`);
   }
-  for (const text of ["10 ta 🔥", "1500 tadan ko'p", "100% zo'r", "2 ta 300 lik", "zo'r🔥"]) assert.equal(hp.extractM2(text), null, text);
+  for (const text of ["10 ta 🔥", "1500 tadan ko'p", "100% zo'r", "2 ta 300 lik", "zo'r🔥", "67 sotix", "67 sotix 🔥", "5 HP", "25 HP", "50 ga", "200 kg", "30 tonna", "100 litr", "24 kVt", "36 kW", "50 ot kuchi", "300 so'm", "500 sum", "40$"]) assert.equal(hp.extractM2(text), null, text);
   assert.deepEqual(hp.heatPumpByKeywords("zo'r🔥"), { kind: "POSITIVE" }, "praise: a friendly reply, not the m² one");
 });
 
 test("an unanswered comment logs why (parse_failed / skipped / failed)", async () => {
   assert.match(await read("../lib/instagram/service.ts"), /console\.info\("Instagram comment unanswered", \{ commentId, code: comment\?\.kind === "UNKNOWN" \? "parse_failed" : status\.toLowerCase\(\), reason \}\)/);
+});
+
+test("no comment on a teplonasos post stays silent: parse / calc / Direct errors → the friendly reply, logged", async () => {
+  assert.equal(hp.texts("uz").friendly, "Rahmat! 🙌 Savollaringiz bo'lsa, Direct'ga yozing.");
+  assert.equal(hp.texts("ru").friendly, "Спасибо! 🙌 Если есть вопросы, пишите в Direct.");
+  const service = await read("../lib/instagram/service.ts");
+  assert.match(service, /await classifyHeatPump\(comment\.text\)\.catch\(error => \{\n\s*console\.error\("Instagram heat pump parse failed"[^\n]*\n\s*return \{ result: null, by: "PARSE_FAILED"/, "parse error → logged");
+  assert.match(service, /return \{ kind: result\?\.kind \?\? "POSITIVE", by, usage,/, "not understood → friendly reply, not UNKNOWN");
+  assert.match(service, /chooseAction\(kind, heatPost \? \{ \.\.\.account, positiveEnabled: true \} : account,/, "the friendly reply is not switched off on a teplonasos post");
+  assert.match(service, /if \(!written\?\.reply && !friendly\) \{[^\n]*\n\s*positive = written\?\.reply \|\| friendly;/, "AI reply failed → fixed friendly text");
+  assert.match(service, /\} catch \(error\) \{\n\s*console\.error\("Instagram heat pump calc failed"[^\n]*\n\s*heatReply = friendly;/, "calc error → friendly reply");
+  assert.match(service, /if \(action\.type !== "heatpump" \|\| !publicReply\) \{ await finish\("FAILED"[^\n]*\n\s*dmFailed = errorReason\(info\);\n[^\n]*\n\s*publicReply = friendly;\n\s*dm = null;/, "Direct failed → friendly public reply, no lead");
+});
+
+test("catch-up every 10 minutes: latest 5 posts, a known comment id is never answered twice, our own comments ignored", async () => {
+  const { ingestFetchedComments } = await import("../lib/instagram/ingest.ts");
+  const account = { igUserId: "1784100", username: "buyuk_karavan" }, now = new Date("2026-11-07T10:00:00Z");
+  const seen = new Set();
+  const store = { insertComment: async row => seen.has(row.commentId) ? false : (seen.add(row.commentId), true) };
+  const media = [{ mediaId: "m1", comments: [
+    { id: "c1", text: "67км🔥", timestamp: "2026-11-07T09:50:00+0000", from: { id: "9001", username: "mijoz" } },
+    { id: "c2", text: "Hisob Direct'da", timestamp: "2026-11-07T09:51:00+0000", from: { id: account.igUserId, username: "buyuk_karavan" } },
+    { id: "c3", text: "rahmat", timestamp: "2026-11-07T09:52:00+0000", from: { id: account.igUserId, username: "buyuk_karavan" }, parent_id: "c1" },
+  ] }];
+  const first = await ingestFetchedComments(media, account, store, { now });
+  assert.deepEqual(first.queued, ["c1"], "our comment and our reply are ignored");
+  const second = await ingestFetchedComments(media, account, store, { now });
+  assert.deepEqual(second.queued, [], "next run: already in the journal → no second reply");
+  assert.equal(second.duplicates, 1);
+  const route = await read("../app/api/cron/instagram-queue/route.ts");
+  assert.match(route, /catchUp: await syncAllMissedComments\(\{ mediaLimit: 5 \}\)/);
+  assert.match(await read("../.github/workflows/instagram-queue-cron.yml"), /\*\/10 \* \* \* \*/, "every 10 minutes (Vercel Hobby allows only daily crons)");
+});
+
+test("“67км🔥” gets the public reply and the calculation in Direct", () => {
+  const parsed = hp.heatPumpByKeywords("67км🔥");
+  assert.deepEqual(parsed, { kind: "HEAT_PUMP", intent: "calc", m2: 67 });
+  assert.deepEqual(hp.heatPumpAction({ isActive: true }, false, true), { type: "heatpump", publicReply: true });
+  const calc = hp.calcMessage(parsed.m2, MODELS, RATE, BUFFER, hp.langOf("67км🔥"));
+  const out = hp.heatPumpOutgoing(parsed.intent, { m2: parsed.m2, calc: calc.text }, hp.langOf("67км🔥"));
+  assert.equal(out.reply, "67 m² uchun hisobni Direct'ga yubordik 📩", "a unit typo does not switch to Russian");
+  assert.equal(hp.langOf("120 кв.м"), "uz");
+  assert.equal(hp.langOf("дом 150 кв"), "ru");
+  assert.match(out.dm, /Aire 3 HP · 10 kW/);
+  assert.match(out.dm, /\$1 300/);
 });

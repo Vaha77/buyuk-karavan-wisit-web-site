@@ -38,7 +38,9 @@ export function extractM2(input: string | null | undefined) {
   if (house) return isYear(num(house[1])) ? null : inRange(num(house[1]));
   const bare = /^\D*?(\d{2,4})\D*$/u.exec(text);
   if (bare && !/\p{L}/u.test(text)) return isYear(num(bare[1])) ? null : inRange(num(bare[1]));
-  // Fallback: exactly one number of 20–1000 with an unclear unit is the area; percents are not.
+  // Fallback: exactly one number of 20–1000 with an unclear unit is the area; percents and other units (land, weight,
+  // volume, power, money) are not.
+  if (/\d\s*(?:sotix|сотих|сотка|сотик|gektar|гектар|ga|га|kg|кг|tonna|тонна|litr|литр|kvt|квт|kw|hp|ot kuchi|от кучи|so'?m|sum|сум|сўм|\$)(?!\p{L})/u.test(text)) return null;
   const numbers = text.replace(/\d+\s*%/g, " ").match(/\d+(?:[.,]\d+)?/g) ?? [];
   return numbers.length === 1 && num(numbers[0]) >= 20 && num(numbers[0]) <= 1000 ? Math.round(num(numbers[0])) : null;
 }
@@ -76,7 +78,8 @@ export type Lang = "uz" | "ru";
  */
 export function langOf(...texts: Array<string | null | undefined>): Lang {
   const text = texts.find(item => item && /\p{L}/u.test(item));
-  return text && /[а-яё]/i.test(text) && !/[ўқғҳ]/i.test(text) ? "ru" : "uz";
+  // A Cyrillic word of 3+ letters: a unit alone ("67км", "кв.м") does not make the comment Russian.
+  return text && /[а-яё]{3}/i.test(text) && !/[ўқғҳ]/i.test(text) ? "ru" : "uz";
 }
 
 const T = {
@@ -96,6 +99,7 @@ const T = {
     replyCalc: (m2: number) => `${m2} m² uchun hisobni Direct'ga yubordik 📩`, replyAsk: "Uyingiz necha m²? Direct'ga yozdik 📩", replyQuestion: "Javobni Direct'ga yozdik 📩",
     offTopic: `Bu savol bo'yicha call-centerimizga murojaat qiling: ${CALL_CENTER_PHONE}`,
     limit: `Batafsil gaplashish uchun qo'ng'iroq qiling: ${SPECIALIST_PHONE}`, thanks: "Rahmat, mutaxassis tez orada qo'ng'iroq qiladi",
+    friendly: "Rahmat! 🙌 Savollaringiz bo'lsa, Direct'ga yozing.",
   },
   ru: {
     hello: "Здравствуйте!",
@@ -113,6 +117,7 @@ const T = {
     replyCalc: (m2: number) => `Расчёт для ${m2} м² отправили в Direct 📩`, replyAsk: "Какая площадь дома в м²? Написали вам в Direct 📩", replyQuestion: "Ответ отправили в Direct 📩",
     offTopic: `По этому вопросу обратитесь в наш call-центр: ${CALL_CENTER_PHONE}`,
     limit: `Чтобы обсудить подробнее, позвоните: ${SPECIALIST_PHONE}`, thanks: "Спасибо, специалист скоро вам позвонит",
+    friendly: "Спасибо! 🙌 Если есть вопросы, пишите в Direct.",
   },
 } as const;
 export const texts = (lang: Lang) => T[lang];

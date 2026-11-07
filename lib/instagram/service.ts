@@ -15,7 +15,7 @@ import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComme
 import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { notifyNegative } from "./telegram";
 import { bindThread, buildCalc, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
-import { heatPumpAction, heatPumpOutgoing, heatPumpReplyAnswered, isHeatPumpAccount, langOf, type HeatPumpIntent } from "./heat-pump";
+import { heatPumpAction, heatPumpOutgoing, heatPumpReplyAnswered, isHeatPumpAccount, langOf, texts, type HeatPumpIntent } from "./heat-pump";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, aiReplyProblem, tooSimilar, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
 /** The account connected before multi-account (Buyuk Karavan): its rows were migrated with this id. */
@@ -123,8 +123,12 @@ type Outcome = "sent" | "failed" | "skipped" | "notified" | "retry" | "rate-limi
 async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage; m2?: number | null; intent?: HeatPumpIntent | null; reply?: string }> {
   // Teplonasos post: only the "global" account (@eshikmaster never gets this flow).
   if (rule?.heatPump && isHeatPumpAccount(account.id)) {
-    const { result, by, usage } = await classifyHeatPump(comment.text);
-    return { kind: result?.kind ?? "UNKNOWN", by, usage, ...(result?.kind === "HEAT_PUMP" ? { m2: result.m2, intent: result.intent } : {}) };
+    const { result, by, usage } = await classifyHeatPump(comment.text).catch(error => {
+      console.error("Instagram heat pump parse failed", { commentId: comment.commentId, type: safeType(error) });
+      return { result: null, by: "PARSE_FAILED", usage: { tokens: 0, costUsd: 0 } };
+    });
+    // Nothing on a teplonasos post stays silent: not understood → the friendly reply.
+    return { kind: result?.kind ?? "POSITIVE", by, usage, ...(result?.kind === "HEAT_PUMP" ? { m2: result.m2, intent: result.intent } : {}) };
   }
   // @eshikmaster: every comment goes to the AI; the keywords only when the AI does not answer.
   if (isEshikmaster(account)) {
@@ -212,9 +216,10 @@ async function processComment(commentId: string, context: Context): Promise<Outc
     // Teplonasos: did this person already get a calculation on this post (m² coming later is answered once more)?
     kind === "HEAT_PUMP" ? db.instagramComment.count({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, heatPumpIntent: "calc", dmSentAt: { not: null } } }) : 0,
   ]);
-  const heatPump = kind === "HEAT_PUMP" && !!rule?.heatPump && isHeatPumpAccount(account.id);
+  const heatPost = !!rule?.heatPump && isHeatPumpAccount(account.id), heatPump = kind === "HEAT_PUMP" && heatPost;
+  const friendly = heatPost ? texts(langOf(comment.text)).friendly : null;
   if (kind === "HEAT_PUMP" && !heatPump) { await finish("SKIPPED", "Teplonasos posti emas"); return "skipped"; }
-  const action: Action | ReturnType<typeof heatPumpAction> = heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit, comment.heatPumpIntent === "calc" && !calcSent) : chooseAction(kind, account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
+  const action: Action | ReturnType<typeof heatPumpAction> = heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit, comment.heatPumpIntent === "calc" && !calcSent) : chooseAction(kind, heatPost ? { ...account, positiveEnabled: true } : account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
 
   if (action.type === "skip") { await finish("SKIPPED", action.reason); return "skipped"; }
   if (action.type === "notify") {
@@ -233,8 +238,8 @@ async function processComment(commentId: string, context: Context): Promise<Outc
     const ready = classifiedReply && !aiReplyProblem(classifiedReply) && !tooSimilar(classifiedReply, recent) ? { reply: classifiedReply, usage: { tokens: 0, costUsd: 0 }, reason: "" } : null;
     const written = ready ?? await writePositiveReply(comment.text, recent, accountBrand(account), { prompt: account.aiPrompt, relaxed: account.aiReplyAll, simpleThanks: isEshikmaster(account) });
     if (written) await update({ aiTokens: comment.aiTokens + written.usage.tokens, aiCostUsd: addUsage({ tokens: 0, costUsd: comment.aiCostUsd === null ? null : Number(comment.aiCostUsd) }, written.usage).costUsd });
-    if (!written?.reply) { await finish("SKIPPED", written ? `AI mos javob yozmadi: ${written.reason}` : "AI ishlamadi — javobsiz"); return "skipped"; }
-    positive = written.reply;
+    if (!written?.reply && !friendly) { await finish("SKIPPED", written ? `AI mos javob yozmadi: ${written.reason}` : "AI ishlamadi — javobsiz"); return "skipped"; }
+    positive = written?.reply || friendly;
   }
 
   // Texts for the DM (PRICE / QUESTION / contact) are checked before a slot is taken. PRICE without a product: the post's
@@ -242,11 +247,16 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   let dm: string | null = null, heatReply: string | null = null, heatSummary: string | null = null;
   if (action.type === "heatpump") {
     const intent = comment.heatPumpIntent as HeatPumpIntent, m2 = comment.heatPumpM2, lang = langOf(comment.text);
-    const calc = intent === "calc" && m2 ? await buildCalc(m2, context.rate, lang) : null;
-    const answer = intent === "question" ? await heatPumpChat(comment.text, null) : null;
-    if (answer) await update({ aiTokens: comment.aiTokens + answer.usage.tokens, aiCostUsd: addUsage({ tokens: 0, costUsd: comment.aiCostUsd === null ? null : Number(comment.aiCostUsd) }, answer.usage).costUsd });
-    const out = heatPumpOutgoing(intent, { m2, calc: calc?.text, answer: answer?.reply }, lang);
-    dm = out.dm; heatReply = out.reply; heatSummary = calc?.summary ?? null;
+    try {
+      const calc = intent === "calc" && m2 ? await buildCalc(m2, context.rate, lang) : null;
+      const answer = intent === "question" ? await heatPumpChat(comment.text, null) : null;
+      if (answer) await update({ aiTokens: comment.aiTokens + answer.usage.tokens, aiCostUsd: addUsage({ tokens: 0, costUsd: comment.aiCostUsd === null ? null : Number(comment.aiCostUsd) }, answer.usage).costUsd });
+      const out = heatPumpOutgoing(intent, { m2, calc: calc?.text, answer: answer?.reply }, lang);
+      dm = out.dm; heatReply = out.reply; heatSummary = calc?.summary ?? null;
+    } catch (error) {
+      console.error("Instagram heat pump calc failed", { commentId, type: safeType(error) });
+      heatReply = friendly;
+    }
   }
   if (action.type === "price" || action.type === "question" || action.type === "contact") {
     const contactTemplates = { PHONE: account.phoneDmTemplate, ADDRESS: account.addressDmTemplate, HOURS: account.hoursDmTemplate };
@@ -283,7 +293,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
     : action.type === "general" ? account.generalReplyText
     : action.type === "positive" ? positive
     : action.type === "heatpump" && action.publicReply ? heatReply : null;
-  const publicReply = action.type === "price" && rule && !rule.publicReplyEnabled ? null : reply?.trim() || null;
+  let publicReply = action.type === "price" && rule && !rule.publicReplyEnabled ? null : reply?.trim() || null, dmFailed: string | null = null;
 
   // Teplonasos: the thread is marked before the DM goes out (the customer's answer may come at once).
   let thread = dm && action.type === "heatpump" ? await openThread({ accountId: account.id, igsid: comment.fromId, mediaId: comment.mediaId, username: comment.username, dm, m2: comment.heatPumpM2, summary: heatSummary }) : null;
@@ -302,8 +312,12 @@ async function processComment(commentId: string, context: Context): Promise<Outc
         await update({ attempts, nextAttemptAt: new Date(Date.now() + backoffMs(attempts)), reason: `Qayta urinadi: ${errorReason(info)}`, lockedUntil: null });
         return isRateLimit(info) ? "rate-limited" : "retry";
       }
-      await finish("FAILED", errorReason(info), { attempts });
-      return "failed";
+      // Teplonasos: the Direct did not go out, the comment still gets the friendly public reply.
+      if (action.type !== "heatpump" || !publicReply) { await finish("FAILED", errorReason(info), { attempts }); return "failed"; }
+      dmFailed = errorReason(info);
+      console.error("Instagram heat pump Direct failed, friendly reply instead", { commentId, reason: dmFailed });
+      publicReply = friendly;
+      dm = null;
     }
   }
 
@@ -326,7 +340,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
     }
   }
 
-  const reason = action.type === "general" ? "Postga mahsulot biriktirilmagan · umumiy javob yozildi"
+  const reason = dmFailed ? `Direct ketmadi (${dmFailed}) — do‘stona javob yozildi` : action.type === "general" ? "Postga mahsulot biriktirilmagan · umumiy javob yozildi"
     : action.type === "heatpump" && comment.heatPumpIntent === "other" ? "Mavzudan tashqari — call-center"
     : (action.type === "price" || action.type === "question" || action.type === "contact" || action.type === "heatpump") && !action.publicReply ? "Kunlik limit — faqat Direct" : null;
   await finish("SENT", reason);
