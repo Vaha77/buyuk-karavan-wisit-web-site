@@ -8,15 +8,15 @@ import { getPublicHomeContent } from "@/lib/home/content";
 import { expireDashboard } from "@/lib/referrals/tracking";
 import { SITE_URL } from "@/lib/site-url";
 import { publishLeadToTelegram } from "@/lib/telegram/service";
-import { addUsage, classifyWithAi, heatPumpChat, writePositiveReply, type AiUsage } from "./ai";
-import { DEFAULT_PUBLIC_REPLY, type CommentKind } from "./constants";
+import { addUsage, classifyEshikmaster, classifyWithAi, heatPumpChat, writePositiveReply, type AiUsage } from "./ai";
+import { DEFAULT_PUBLIC_REPLY, isEshikmaster, type CommentKind } from "./constants";
 import { GraphError, getMediaPermalink, listComments, listMedia, refreshLongLived, replyToComment, sendPrivateReply } from "./graph";
 import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComments } from "./ingest";
 import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { notifyNegative } from "./telegram";
 import { bindThread, buildCalc, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
 import { heatPumpAction, heatPumpOutgoing, heatPumpReplyAnswered, isHeatPumpAccount, langOf, type HeatPumpIntent } from "./heat-pump";
-import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
+import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, aiReplyProblem, tooSimilar, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
 /** The account connected before multi-account (Buyuk Karavan): its rows were migrated with this id. */
 export const FIRST_ACCOUNT_ID = "global";
@@ -120,11 +120,18 @@ type Context = { account: InstagramAccount; token: string; rate: string | null; 
 type Outcome = "sent" | "failed" | "skipped" | "notified" | "retry" | "rate-limited" | "wait";
 
 /** Keywords first; when they are unclear the AI decides; without the AI the keyword fallback, else UNKNOWN (no reply). */
-async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage; m2?: number | null; intent?: HeatPumpIntent | null }> {
+async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage; m2?: number | null; intent?: HeatPumpIntent | null; reply?: string }> {
   // Teplonasos post: only the "global" account (@eshikmaster never gets this flow).
   if (rule?.heatPump && isHeatPumpAccount(account.id)) {
     const { result, by, usage } = await classifyHeatPump(comment.text);
     return { kind: result?.kind ?? "UNKNOWN", by, usage, ...(result?.kind === "HEAT_PUMP" ? { m2: result.m2, intent: result.intent } : {}) };
+  }
+  // @eshikmaster: every comment goes to the AI; the keywords only when the AI does not answer.
+  if (isEshikmaster(account)) {
+    const ai = await classifyEshikmaster(comment.text);
+    if (ai) return { kind: ai.kind, by: "AI", usage: ai.usage, reply: ai.reply };
+    const fallback = classifyByKeywords(comment.text, rule?.keywords ?? [], { contact: account.contactRepliesEnabled, asks: true });
+    return { kind: fallback.definite ?? fallback.fallback ?? "UNKNOWN", by: "KEYWORD_FALLBACK", usage: { tokens: 0, costUsd: 0 } };
   }
   const keywords = classifyByKeywords(comment.text, rule?.keywords ?? [], { contact: account.contactRepliesEnabled, asks: account.aiReplyAll });
   // aiReplyAll: a keyword QUESTION still goes to the AI, which may find an address / phone / price ask.
@@ -185,8 +192,11 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   if (tooOld(comment.createdAt)) { await finish("SKIPPED", "7 kundan eski komment"); return "skipped"; }
 
   const rule: RuleWithProduct | null = await db.instagramMediaRule.findUnique({ where: { mediaId: comment.mediaId }, include: { product: RULE_PRODUCT, secondProduct: RULE_PRODUCT } });
+  // @eshikmaster: the reply written together with the classification (not kept for a retry, then it is written anew).
+  let classifiedReply = "";
   if (!comment.kind) {
     const result = await classify(comment, rule, context.account);
+    classifiedReply = result.reply ?? "";
     await update({ kind: result.kind, classifiedBy: result.by, aiTokens: result.usage.tokens, aiCostUsd: result.usage.costUsd, productId: rule?.product?.id ?? null, productName: rule?.product?.name ?? null, heatPumpM2: result.m2 ?? null, heatPumpIntent: result.intent ?? null });
   }
   const kind = comment.kind as CommentKind;
@@ -216,7 +226,8 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   let positive: string | null = null;
   if (action.type === "positive") {
     const recent = (await db.instagramComment.findMany({ where: { accountId: account.id, kind: "POSITIVE", publicReplyText: { not: null } }, orderBy: { publicReplyAt: "desc" }, take: 20, select: { publicReplyText: true } })).map(row => row.publicReplyText!);
-    const written = await writePositiveReply(comment.text, recent, accountBrand(account), { prompt: account.aiPrompt, relaxed: account.aiReplyAll });
+    const ready = classifiedReply && !aiReplyProblem(classifiedReply) && !tooSimilar(classifiedReply, recent) ? { reply: classifiedReply, usage: { tokens: 0, costUsd: 0 }, reason: "" } : null;
+    const written = ready ?? await writePositiveReply(comment.text, recent, accountBrand(account), { prompt: account.aiPrompt, relaxed: account.aiReplyAll, simpleThanks: isEshikmaster(account) });
     if (written) await update({ aiTokens: comment.aiTokens + written.usage.tokens, aiCostUsd: addUsage({ tokens: 0, costUsd: comment.aiCostUsd === null ? null : Number(comment.aiCostUsd) }, written.usage).costUsd });
     if (!written?.reply) { await finish("SKIPPED", written ? `AI mos javob yozmadi: ${written.reason}` : "AI ishlamadi — javobsiz"); return "skipped"; }
     positive = written.reply;
