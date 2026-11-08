@@ -210,16 +210,17 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   const kind = comment.kind as CommentKind;
   const account = context.account;
   if (comment.parentId && !heatPumpReplyAnswered(kind, comment.heatPumpIntent, !!rule?.heatPump && isHeatPumpAccount(account.id))) { await finish("SKIPPED", "Javob-komment (reply) — javob berilmaydi"); return "skipped"; }
-  const [answered, repliesToday, calcSent] = await Promise.all([
+  const [answered, repliesToday, calcs] = await Promise.all([
     db.instagramComment.count({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, OR: [{ dmSentAt: { not: null } }, { publicReplyAt: { not: null } }] } }),
     db.instagramComment.count({ where: { accountId: account.id, publicReplyAt: { gte: tashkentDayStart() } } }),
-    // Teplonasos: did this person already get a calculation on this post (m² coming later is answered once more)?
-    kind === "HEAT_PUMP" ? db.instagramComment.count({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, heatPumpIntent: "calc", dmSentAt: { not: null } } }) : 0,
+    // Teplonasos: the calculations this person already got on this post (repeated m² silent, 5 per 24 h).
+    kind === "HEAT_PUMP" ? db.instagramComment.findMany({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, heatPumpIntent: "calc", dmSentAt: { not: null } }, select: { heatPumpM2: true, dmSentAt: true } }) : [],
   ]);
+  const calc = comment.heatPumpIntent === "calc" && comment.heatPumpM2 ? { m2: comment.heatPumpM2, previous: calcs.map(row => row.heatPumpM2 ?? 0), today: calcs.filter(row => row.dmSentAt!.getTime() > Date.now() - 86_400_000).length } : undefined;
   const heatPost = !!rule?.heatPump && isHeatPumpAccount(account.id), heatPump = kind === "HEAT_PUMP" && heatPost;
   const friendly = heatPost ? texts(langOf(comment.text)).friendly : null;
   if (kind === "HEAT_PUMP" && !heatPump) { await finish("SKIPPED", "Teplonasos posti emas"); return "skipped"; }
-  const action: Action | ReturnType<typeof heatPumpAction> = heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit, comment.heatPumpIntent === "calc" && !calcSent) : chooseAction(kind, heatPost ? { ...account, positiveEnabled: true } : account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
+  const action: Action | ReturnType<typeof heatPumpAction> = heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit, calc) : chooseAction(kind, heatPost ? { ...account, positiveEnabled: true } : account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
 
   if (action.type === "skip") { await finish("SKIPPED", action.reason); return "skipped"; }
   if (action.type === "notify") {
@@ -246,7 +247,8 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   // Texts for the DM (PRICE / QUESTION / contact) are checked before a slot is taken. PRICE without a product: the post's
   // price text, else the account's "no price" DM.
   let dm: string | null = null, heatReply: string | null = null, heatSummary: string | null = null;
-  if (action.type === "heatpump") {
+  if (action.type === "heatpump" && "limit" in action) heatReply = texts(langOf(comment.text)).calcLimit;
+  else if (action.type === "heatpump") {
     const intent = comment.heatPumpIntent as HeatPumpIntent, m2 = comment.heatPumpM2, lang = langOf(comment.text);
     try {
       const calc = intent === "calc" && m2 ? await buildCalc(m2, context.rate, lang) : null;
@@ -342,6 +344,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   }
 
   const reason = dmFailed ? `Direct ketmadi (${dmFailed}) — do‘stona javob yozildi` : action.type === "general" ? "Postga mahsulot biriktirilmagan · umumiy javob yozildi"
+    : action.type === "heatpump" && "limit" in action ? "Sutkalik 5 ta hisob — mutaxassis telefoni yozildi"
     : action.type === "heatpump" && comment.heatPumpIntent === "other" ? "Mavzudan tashqari — call-center"
     : (action.type === "price" || action.type === "question" || action.type === "contact" || action.type === "heatpump") && !action.publicReply ? "Kunlik limit — faqat Direct" : null;
   await finish("SENT", reason);
