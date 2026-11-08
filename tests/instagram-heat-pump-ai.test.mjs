@@ -137,6 +137,19 @@ test("Direct “fankoil necha pul?” / “montaj qancha?” → smooth exit, no
   assert.match(notice, /@ali\nSavol: «fankoil necha pul\?»\nOxirgi hisob: Aire 6 HP · 19 kW — \$2 650\nSuhbat: https:\/\/ig\.me\/m\/ali/);
 });
 
+test("Direct money filter: a sum the code did not calculate (“fankoil $300”) → rejected, smooth exit + Telegram", async () => {
+  const sums = [...MODELS.map(model => model.priceUsd), 145];
+  assert.equal(hp.inventedMoney("Fankoil $300 turadi", sums, RATE), true);
+  assert.equal(hp.inventedMoney("Fankoil 300$ dan", sums, RATE), true);
+  assert.equal(hp.inventedMoney("Montaj 2 mln so'm", sums, RATE), true);
+  assert.equal(hp.inventedMoney("Montaj 500 000 so'm", sums, RATE), true, "plain so'm never comes from the code");
+  assert.equal(hp.inventedMoney("8 HP $3 250 (~41.4 mln so'm), bufer bak $145", sums, RATE), false, "the table / buffer sums are fine");
+  assert.equal(hp.inventedMoney("Issiq suvni ham isitadi, 1 kW tok → 3.5 kW issiqlik", sums, RATE), false, "no sum");
+  assert.match(hp.specialistReply("Fankoil $300 turadi"), /^Bu savolga mutaxassisimiz aniq javob beradi/);
+  const bot = await read("../lib/instagram/heat-pump-bot.ts");
+  assert.match(bot, /\} else if \(ai\?\.specialist \|\| \(ai\?\.reply && await priceInvented\(ai\.reply\)\)\) \{\n[^\n]*\n\s*reply = specialistReply\(ai\.reply, lang\);\n\s*await needSpecialist\(thread, account, text\);/);
+});
+
 test("Direct: after an admin writes, the bot is silent (24 h)", () => {
   assert.equal(hp.directBotStep({ botReplies: 1, mutedUntil: new Date(Date.now() + 3_600_000) }), "silent");
   assert.deepEqual(hp.directValues("onamga 200 kerak", null), { m2: 200, kw: null });

@@ -316,6 +316,19 @@ export function hpPriceLine(hp: number, models: readonly HeatPumpRow[], rate: st
   return `🔥 ${modelLabel(model)} — ${usdText(model.priceUsd)}${mln ? ` (${T[lang].som(mln)}${T[lang].rate})` : ""}${model.bufferIncluded ? T[lang].withBuffer : ""}`;
 }
 
+const AMOUNT = String.raw`(\d{1,3}(?:[  ]\d{3})+|\d+)`;
+/**
+ * A money sum in an AI text ($ / so'm / mln) that is none of the code's sums (`usdSums`: table prices, buffer tank, and
+ * their CBU mln so'm) → true; a plain so'm sum never comes from the code. No sum → false.
+ */
+export function inventedMoney(text: string, usdSums: readonly number[], rate: string | number | null) {
+  const value = normalizeText(text);
+  const usd = new Set(usdSums.map(Math.round)), mln = new Set(usdSums.map(sum => mlnSom(sum, rate)).filter(Boolean));
+  for (const match of value.matchAll(new RegExp(String.raw`\$\s*${AMOUNT}|${AMOUNT}\s*(?:\$|usd|dollar\p{L}*|доллар\p{L}*)`, "gu"))) if (!usd.has(Number((match[1] ?? match[2]).replace(/\s/g, "")))) return true;
+  for (const match of value.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:mln|млн)/gu)) if (!mln.has(match[1].replace(",", "."))) return true;
+  return new RegExp(String.raw`\d\s*(?:so'?m|сум|сўм)(?!\p{L})`, "u").test(value.replace(/(\d+(?:[.,]\d+)?)\s*(?:mln|млн)\s*(?:so'?m|сум|сўм)?/gu, " "));
+}
+
 const SPECIALIST_TEXT = {
   uz: `Bu savolga mutaxassisimiz aniq javob beradi — ozgina kuting 🙏 Tezroq bo'lishi uchun qo'ng'iroq qilsangiz ham bo'ladi: ${SPECIALIST_PHONE}`,
   ru: `На этот вопрос точно ответит наш специалист — подождите немного 🙏 Чтобы быстрее, можно позвонить: ${SPECIALIST_PHONE}`,

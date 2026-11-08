@@ -11,7 +11,7 @@ import { sendMessage } from "@/lib/telegram/client";
 import type { InlineKeyboard, TelegramMessage } from "@/lib/telegram/types";
 import { directLink, extractPhone } from "./direct-rules";
 import { sendDirectMessage, sendSenderAction } from "./graph";
-import { HUMAN_MUTE_MS, backlogText, calcKwMessage, calcMessage, directValues, heatPumpFromAiReply, hpPriceLine, specialistNotice, specialistReply, deliverPrivate, isHeatPumpContact, m2List, directBotStep, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
+import { HUMAN_MUTE_MS, backlogText, calcKwMessage, calcMessage, directValues, heatPumpFromAiReply, hpPriceLine, inventedMoney, specialistNotice, specialistReply, deliverPrivate, isHeatPumpContact, m2List, directBotStep, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
 import type { MessageEvent } from "./rules";
 import { coolerTexts, coolerTurn, kitPrice, type CoolerKitRow } from "./cooler";
 import { DEFAULT_MARKUP, clampMarkup } from "@/lib/prays/rules";
@@ -65,6 +65,13 @@ const loadModels = async () => (await getDb().heatPumpModel.findMany({ where: { 
 async function chatHistory(accountId: string, igsid: string, mid: string): Promise<ChatTurn[]> {
   const rows = await getDb().instagramMessage.findMany({ where: { accountId, mid: { not: mid }, text: { not: null }, OR: [{ fromId: igsid }, { toId: igsid }] }, orderBy: { sentAt: "desc" }, take: 10, select: { fromId: true, text: true } });
   return rows.reverse().map(row => ({ role: row.fromId === igsid ? "user" : "assistant", text: row.text! }));
+}
+
+/** The AI's Direct text names a $ / so'm / mln sum that is not one of the table / buffer tank sums (CBU rate). */
+async function priceInvented(text: string) {
+  if (!/\$|so'?m|сум|сўм|mln|млн|usd|dollar|доллар/iu.test(text)) return false;
+  const [models, settings, rate] = await Promise.all([loadModels(), getDb().siteSettings.findUnique({ where: { id: "global" }, select: { heatPumpBufferUsd: true } }), getUsdUzsRate().then(value => value?.rate ?? null).catch(() => null)]);
+  return inventedMoney(text, [...models.map(model => model.priceUsd), Number(settings?.heatPumpBufferUsd ?? 145)], rate);
 }
 
 /** Telegram "Mutaxassis javobi kerak" (teplonasos private chat) and the mark on the lead. */
@@ -221,7 +228,7 @@ async function answer(thread: HeatPumpThread, event: MessageEvent, account: Inst
       reply = calc.text;
       thread = await db.heatPumpThread.update({ where: { id: thread.id }, data: { ...(m2 ? { m2 } : {}), model: calc.summary } });
       await saveLead(thread, account);
-    } else if (ai?.specialist) {
+    } else if (ai?.specialist || (ai?.reply && await priceInvented(ai.reply))) {
       // Not in the knowledge base (fan-coil / montaj price, another brand…): nothing invented, the specialist is told.
       reply = specialistReply(ai.reply, lang);
       await needSpecialist(thread, account, text);
