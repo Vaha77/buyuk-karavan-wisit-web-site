@@ -234,13 +234,37 @@ test("reply-comment is answered only with m², a price ask or a teplonasos quest
   assert.equal(hp.heatPumpOutgoing("calc", { m2: 150, calc: "HISOB" }).reply, "150 m² uchun hisobni Direct'ga yubordik 📩");
 });
 
-test("m² coming later: one more calculation + public reply despite the one-reply rule, but only once", async () => {
-  assert.deepEqual(hp.heatPumpAction({ isActive: true }, true, true, true), { type: "heatpump", publicReply: true }, "answered before without m² → calc goes out");
-  assert.equal(hp.heatPumpAction({ isActive: true }, true, true, false).type, "skip", "a calc was already sent → silent");
-  assert.equal(hp.heatPumpAction({ isActive: false }, true, true, true).type, "skip", "inactive post");
+test("several calculations per person per post: each new m² gets one, a repeated m² is silent, the 6th → specialist", async () => {
+  const rule = { isActive: true }, sent = [];
+  const step = (m2, today = sent.length) => hp.heatPumpAction(rule, sent.length > 0, true, { m2, previous: sent, today });
+  assert.deepEqual(step(450), { type: "heatpump", publicReply: true }, "450 → calculation");
+  sent.push(450);
+  assert.deepEqual(step(200), { type: "heatpump", publicReply: true }, "then 200 → calculation");
+  sent.push(200);
+  assert.deepEqual(step(450), { type: "skip", reason: "Takroriy m² — javobsiz" }, "450 again → silent");
+  sent.push(100, 120, 130);
+  assert.deepEqual(step(300), { type: "heatpump", publicReply: true, limit: true }, "6th new m² in 24 h → specialist line only");
+  assert.equal(step(300, 4).limit, undefined, "older calculations do not count for the 24 h limit");
+  assert.equal(hp.heatPumpAction(rule, true, false, { m2: 300, previous: sent, today: 5 }).type, "skip", "limit + no public reply left → silent");
+  assert.equal(hp.texts("uz").calcLimit, "Ko'proq hisob uchun mutaxassisga qo'ng'iroq qiling: +998 99 520 99 99");
+  assert.equal(hp.heatPumpOutgoing("calc", { m2: 200, calc: "HISOB" }).reply, "200 m² uchun hisobni Direct'ga yubordik 📩");
+  // Without m² the one-reply rule stays.
+  assert.equal(hp.heatPumpAction(rule, true, true).type, "skip");
+  assert.equal(hp.heatPumpAction({ isActive: false }, false, true, { m2: 450, previous: [], today: 0 }).type, "skip", "inactive post");
   const service = await read("../lib/instagram/service.ts");
-  assert.match(service, /heatPumpIntent: "calc", dmSentAt: \{ not: null \} \} \}\) : 0,/);
-  assert.match(service, /heatPumpAction\(rule, answered > 0, repliesToday < account\.dailyReplyLimit, comment\.heatPumpIntent === "calc" && !calcSent\)/);
+  assert.match(service, /heatPumpIntent: "calc", dmSentAt: \{ not: null \} \}, select: \{ heatPumpM2: true, dmSentAt: true \} \}\) : \[\],/);
+  assert.match(service, /heatPumpAction\(rule, answered > 0, repliesToday < account\.dailyReplyLimit, calc\)/);
+  assert.match(service, /if \(action\.type === "heatpump" && "limit" in action\) heatReply = texts\(langOf\(comment\.text\)\)\.calcLimit;/);
+});
+
+test("every new m² is added to the one lead (450, 200), never a second lead", async () => {
+  assert.equal(hp.m2List(null, 450), "450 m²");
+  assert.equal(hp.m2List("450 m²", 200), "450, 200 m²");
+  assert.equal(hp.m2List("450, 200 m²", 450), "450, 200 m²", "repeated m² not duplicated");
+  assert.equal(hp.m2List(null, null), null);
+  assert.equal(hp.extractM2("onamga 200 kerak"), 200, "a new m² inside the Direct chat");
+  const bot = await read("../lib/instagram/heat-pump-bot.ts");
+  assert.match(bot, /const dimensions = m2List\(existing\?\.dimensions, thread\.m2\);/);
 });
 
 test("saving a teplonasos post skips the product / price text / DM template checks", async () => {

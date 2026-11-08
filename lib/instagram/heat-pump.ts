@@ -9,6 +9,8 @@ export const isHeatPumpAccount = (accountId: string | null | undefined) => accou
 export const SPECIALIST_PHONE = "+998 99 520 99 99";
 export const CALL_CENTER_PHONE = "+998 91 637 77 77";
 export const MAX_BOT_REPLIES = 5;
+/** Calculations per person per post in 24 h (comments); more → the specialist's phone in the public reply. */
+export const MAX_CALCS_PER_DAY = 5;
 
 // ---- Telegram: teplonasos messages go only to one private chat, never to a group --------------------------
 
@@ -136,7 +138,7 @@ const T = {
     m2Question: "Mos teplonasos va narxini aytishimiz uchun uyingiz necha m²?",
     replyCalc: (m2: number) => `${m2} m² uchun hisobni Direct'ga yubordik 📩`, replyAsk: "Uyingiz necha m²? Direct'ga yozdik 📩", replyQuestion: "Javobni Direct'ga yozdik 📩",
     offTopic: `Bu savol bo'yicha call-centerimizga murojaat qiling: ${CALL_CENTER_PHONE}`,
-    limit: `Batafsil gaplashish uchun qo'ng'iroq qiling: ${SPECIALIST_PHONE}`, thanks: "Rahmat, mutaxassis tez orada qo'ng'iroq qiladi",
+    limit: `Batafsil gaplashish uchun qo'ng'iroq qiling: ${SPECIALIST_PHONE}`, calcLimit: `Ko'proq hisob uchun mutaxassisga qo'ng'iroq qiling: ${SPECIALIST_PHONE}`, thanks: "Rahmat, mutaxassis tez orada qo'ng'iroq qiladi",
     friendly: "Rahmat! 🙌 Savollaringiz bo'lsa, Direct'ga yozing.",
   },
   ru: {
@@ -154,7 +156,7 @@ const T = {
     m2Question: "Чтобы подобрать тепловой насос и назвать цену, подскажите, какая площадь вашего дома в м²?",
     replyCalc: (m2: number) => `Расчёт для ${m2} м² отправили в Direct 📩`, replyAsk: "Какая площадь дома в м²? Написали вам в Direct 📩", replyQuestion: "Ответ отправили в Direct 📩",
     offTopic: `По этому вопросу обратитесь в наш call-центр: ${CALL_CENTER_PHONE}`,
-    limit: `Чтобы обсудить подробнее, позвоните: ${SPECIALIST_PHONE}`, thanks: "Спасибо, специалист скоро вам позвонит",
+    limit: `Чтобы обсудить подробнее, позвоните: ${SPECIALIST_PHONE}`, calcLimit: `Для дополнительных расчётов позвоните специалисту: ${SPECIALIST_PHONE}`, thanks: "Спасибо, специалист скоро вам позвонит",
     friendly: "Спасибо! 🙌 Если есть вопросы, пишите в Direct.",
   },
 } as const;
@@ -212,13 +214,26 @@ export function heatPumpFromAi(ai: { m2: number | null; topic: "heatpump" | "oth
 }
 
 /**
- * One public reply and one Direct per person per post; an inactive post gets nothing. Exception (`lateM2`): the first m²
- * from a person who was answered without a calculation still gets the calculation and its public reply.
+ * An inactive post gets nothing. A comment with m² (`calc`): every new m² of the person on this post gets its own
+ * calculation and public reply; an m² already calculated there is silent; the 6th calculation in 24 h gets only the
+ * specialist line (`limit`). Other comments: one public reply and one Direct per person per post.
  */
-export function heatPumpAction(rule: { isActive: boolean } | null, alreadyAnswered: boolean, underLimit: boolean, lateM2 = false) {
+export function heatPumpAction(rule: { isActive: boolean } | null, alreadyAnswered: boolean, underLimit: boolean, calc?: { m2: number; previous: readonly number[]; today: number }) {
   if (rule && !rule.isActive) return { type: "skip" as const, reason: "Post uchun avto-javoblar o‘chirilgan" };
-  if (alreadyAnswered && !lateM2) return { type: "skip" as const, reason: "Bu odamga shu postda javob berilgan — suhbat Direct’da" };
+  if (calc) {
+    if (calc.previous.includes(calc.m2)) return { type: "skip" as const, reason: "Takroriy m² — javobsiz" };
+    if (calc.today >= MAX_CALCS_PER_DAY) return underLimit ? { type: "heatpump" as const, publicReply: true, limit: true } : { type: "skip" as const, reason: "Sutkalik hisob limiti va kunlik javob limiti" };
+    return { type: "heatpump" as const, publicReply: underLimit };
+  }
+  if (alreadyAnswered) return { type: "skip" as const, reason: "Bu odamga shu postda javob berilgan — suhbat Direct’da" };
   return { type: "heatpump" as const, publicReply: underLimit };
+}
+
+/** "450, 200 m²": the lead's m² list with `m2` added once (new m² never opens a second lead). */
+export function m2List(dimensions: string | null | undefined, m2: number | null | undefined) {
+  const list = (dimensions?.match(/\d+/g) ?? []).map(Number);
+  if (m2 && !list.includes(m2)) list.push(m2);
+  return list.length ? `${list.join(", ")} m²` : null;
 }
 
 /** A reply-comment is answered only on a teplonasos post, and only with m², a price ask or a teplonasos question. */
