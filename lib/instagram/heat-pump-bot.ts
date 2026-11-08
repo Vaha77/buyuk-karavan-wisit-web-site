@@ -11,7 +11,7 @@ import { sendMessage } from "@/lib/telegram/client";
 import type { InlineKeyboard, TelegramMessage } from "@/lib/telegram/types";
 import { directLink, extractPhone } from "./direct-rules";
 import { sendDirectMessage, sendSenderAction } from "./graph";
-import { HUMAN_MUTE_MS, backlogText, calcKwMessage, calcMessage, directValues, heatPumpFromAiReply, hpPriceLine, inventedMoney, specialistNotice, specialistReply, deliverPrivate, isHeatPumpContact, m2List, directBotStep, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
+import { HUMAN_MUTE_MS, backlogText, calcKwMessage, calcMessage, directValues, powerText, heatPumpFromAiReply, hpPriceLine, inventedMoney, specialistNotice, specialistReply, deliverPrivate, isHeatPumpContact, m2List, directBotStep, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type CalcStyle, type HeatPumpComment, type Lang } from "./heat-pump";
 import type { MessageEvent } from "./rules";
 import { coolerTexts, coolerTurn, kitPrice, type CoolerKitRow } from "./cooler";
 import { DEFAULT_MARKUP, clampMarkup } from "@/lib/prays/rules";
@@ -82,7 +82,7 @@ async function needSpecialist(thread: HeatPumpThread, account: InstagramAccount,
   if (leadId) await getDb().lead.update({ where: { id: leadId }, data: { managerNote: `⚠️ Mutaxassis javobi kerak: «${question.slice(0, 300)}»` } });
 }
 
-export async function buildCalc(m2: number, rate?: string | null, lang: Lang = "uz", kw?: number | null) {
+export async function buildCalc(m2: number, rate?: string | null, lang: Lang = "uz", kw?: number | null, style: CalcStyle = {}) {
   const db = getDb();
   const [models, settings, cbu] = await Promise.all([
     loadModels(),
@@ -90,7 +90,7 @@ export async function buildCalc(m2: number, rate?: string | null, lang: Lang = "
     rate === undefined ? getUsdUzsRate().then(value => value?.rate ?? null).catch(() => null) : rate,
   ]);
   const buffer = { usd: Number(settings?.heatPumpBufferUsd ?? 145), liters: settings?.heatPumpBufferLiters ?? 60 };
-  return kw ? calcKwMessage(kw, models, cbu, buffer, lang) : calcMessage(m2, models, cbu, buffer, lang);
+  return kw ? calcKwMessage(kw, models, cbu, buffer, lang, style) : calcMessage(m2, models, cbu, buffer, lang, style);
 }
 
 /** Admin switch "AI javob" (SiteSettings.heatPumpAi, on by default). */
@@ -123,7 +123,7 @@ export async function classifyHeatPump(text: string, history: readonly string[] 
  */
 export async function openThread(input: { accountId: string; igsid: string; mediaId: string; username: string | null; dm: string; m2: number | null; summary: string | null; tons?: number }) {
   const flow = input.tons ? { flow: "cooler", tons: input.tons, step: "chambers", chambers: null, region: null, misses: 0, botReplies: 0, model: null, m2: null } : { flow: "heat" };
-  const data = { username: input.username, lastBotText: input.dm, lastBotAt: new Date(), mediaId: input.mediaId, ...flow, ...(input.m2 ? { m2: input.m2, model: input.summary } : {}) };
+  const data = { username: input.username, lastBotText: input.dm, lastBotAt: new Date(), mediaId: input.mediaId, ...flow, ...(input.m2 ? { m2: input.m2 } : {}), ...(input.summary ? { model: input.summary } : {}) };
   return getDb().heatPumpThread.upsert({ where: { accountId_igsid: { accountId: input.accountId, igsid: input.igsid } }, create: { accountId: input.accountId, igsid: input.igsid, ...data }, update: data });
 }
 
@@ -218,13 +218,18 @@ async function answer(thread: HeatPumpThread, event: MessageEvent, account: Inst
   if (!reply && !cooler) {
     // AI on: the AI reads the message (with the last ~10 messages) first, the parser fills in what it missed; off: the parser first.
     const aiOn = await heatPumpAiEnabled();
-    const quick = aiOn ? null : directValues(text, null);
-    const ai = quick?.m2 || quick?.kw ? null : await heatPumpChat(text, aiOn ? await chatHistory(account.id, thread.igsid, event.mid) : thread.lastBotText);
-    const { m2, kw } = quick?.m2 || quick?.kw ? quick : directValues(text, ai);
-    reply = ai?.reply || null;
+    const quick = aiOn ? null : directValues(text, null), hit = !!quick && Object.values(quick).some(Boolean);
+    const ai = hit ? null : await heatPumpChat(text, aiOn ? await chatHistory(account.id, thread.igsid, event.mid) : thread.lastBotText);
+    const values = hit ? quick! : directValues(text, ai), { m2, kw } = values;
+    // Only the chat's first message greets.
+    reply = (thread.lastBotText ? ai?.reply.replace(/^\s*(?:assalomu alaykum|ассалому алайкум|здравствуйте)[\s!,.]*/iu, "") : ai?.reply) || null;
     console.info("Instagram heat pump Direct", { m2, kw, hp: ai?.hp ?? null, specialist: !!ai?.specialist, by: ai ? "AI" : "PARSER" });
-    if (m2 || kw) {
-      const calc = await buildCalc(m2 ?? 0, undefined, lang, kw);
+    if (values.absurd) reply = t.joke;
+    else if (values.clarify) reply = t.clarify(values.clarify);
+    else if (values.power) reply = powerText(values.power, lang);
+    else if (m2 || kw) {
+      // The AI note, phones and "leave your phone" go only with the first calculation.
+      const calc = await buildCalc(m2 ?? 0, undefined, lang, kw, { hello: !thread.lastBotText, footer: !thread.model });
       reply = calc.text;
       thread = await db.heatPumpThread.update({ where: { id: thread.id }, data: { ...(m2 ? { m2 } : {}), model: calc.summary } });
       await saveLead(thread, account);

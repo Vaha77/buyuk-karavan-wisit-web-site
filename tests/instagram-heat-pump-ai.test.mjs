@@ -34,12 +34,12 @@ test("“180KW 🙌” → POWER_KW → big project (≈273 kW nominal, ≈91 HP
   assert.equal(hp.extractKw("180KW 🙌"), 180, "the parser alone too");
   for (const text of ["180 квт", "180 kvt", "180 kW"]) assert.equal(hp.extractKw(text), 180, text);
   assert.equal(hp.extractM2("180KW"), null, "kW is never m²");
-  const mapped = hp.heatPumpFromAiReply(AI({ intent: "POWER_KW", kw: 180 }));
+  const mapped = hp.heatPumpFromAiReply(AI({ intent: "POWER_KW", kw: 180 }), "180KW 🙌");
   assert.deepEqual(mapped.result, { kind: "HEAT_PUMP", intent: "kw", m2: null, kw: 180 });
   const calc = hp.calcKwMessage(180, MODELS, RATE, BUFFER);
   assert.equal(calc.big, true);
   assert.equal(calc.priceUsd, null);
-  assert.match(calc.text, /180 kW issiqlik uchun taxminan 91 HP · 273 kW nominal/);
+  assert.match(calc.text, /180 kW issiqlik uchun taxminan 91 HP quvvatli/);
   assert.match(calc.text, /\+998 99 520 99 99/);
   assert.match(calc.text, /necha m² va qayerda/);
   assert.doesNotMatch(calc.text, /\$|yo'q emas|bizda yo'q/);
@@ -50,13 +50,13 @@ test("12 kW → the table model with its price; ≤ 23.7 kW is never a big proje
   const calc = hp.calcKwMessage(12, MODELS, RATE, BUFFER);
   assert.equal(calc.big, false);
   assert.equal(calc.priceUsd, 2650);
-  assert.match(calc.text, /Aire 6 HP · 19 kW — qishda \(−12°C\) 12\.5 kW/);
+  assert.match(calc.text, /Aire 6 HP · 12.5 kW — qishda \(−12°C\) 12\.5 kW/);
   assert.match(calc.text, /\$2 650 \(~33\.8 mln so'm/);
   assert.equal(hp.calcKwMessage(23.7, MODELS, RATE, BUFFER).priceUsd, 4100);
 });
 
 test("“1000 kvadiratka ustana o'rtatib bera oladimi” → calculation + the montaj answer in the DM", () => {
-  const mapped = hp.heatPumpFromAiReply(AI({ intent: "AREA_M2", m2: 1000, topic: "montaj", dm_extra: "Montajni mutaxassisimiz aniq aytadi: +998 99 520 99 99" }));
+  const mapped = hp.heatPumpFromAiReply(AI({ intent: "AREA_M2", m2: 1000, topic: "montaj", dm_extra: "Montajni mutaxassisimiz aniq aytadi: +998 99 520 99 99" }), "1000 kvadiratka ustana o'rtatib bera oladimi");
   assert.deepEqual(mapped.result, { kind: "HEAT_PUMP", intent: "calc", m2: 1000 });
   const calc = hp.calcMessage(1000, MODELS, RATE, BUFFER);
   const out = hp.heatPumpOutgoing("calc", { m2: 1000, calc: calc.text, extra: mapped.extra });
@@ -123,7 +123,7 @@ test("Direct: last ~10 messages as context, real time (one try, 6 s), hot water 
 });
 
 test("Direct “8 HP necha pul?” → the table price in $ and so‘m (from the code)", () => {
-  assert.equal(hp.hpPriceLine(8, MODELS, RATE), "🔥 Aire 8 HP · 24 kW — $3 250 (~41.4 mln so'm, MB kursi bo'yicha) — bufer bak bilan");
+  assert.equal(hp.hpPriceLine(8, MODELS, RATE), "🔥 Aire 8 HP · 15.8 kW — $3 250 (~41.4 mln so'm, MB kursi bo'yicha) — bufer bak bilan");
   assert.equal(hp.hpPriceLine(10, MODELS, RATE), null, "not in the table → specialist");
 });
 
@@ -193,7 +193,7 @@ test("“shisha nimadan yasaladi 😂” → a short joke", () => {
 test("Direct: after an admin writes, the bot is silent (24 h)", () => {
   assert.equal(hp.directBotStep({ botReplies: 1, mutedUntil: new Date(Date.now() + 3_600_000) }), "silent");
   assert.deepEqual(hp.directValues("onamga 200 kerak", null), { m2: 200, kw: null });
-  assert.deepEqual(hp.directValues("…", { m2: null, kw: 180 }), { m2: null, kw: 180 });
+  assert.deepEqual(hp.directValues("quvvati 15.5", { m2: null, kw: 15.5 }), { m2: null, kw: 16 });
 });
 
 test("wiring: AI-first only on teplonasos posts of the global account, real-time Direct, admin switch", async () => {
@@ -206,4 +206,62 @@ test("wiring: AI-first only on teplonasos posts of the global account, real-time
   assert.match(bot, /cooler \? await coolerReply\(thread, text, step, lang, account\)/, "xolodilnik flow kept");
   assert.match(board, /AI javob — komment va Direct avval AI bilan tushuniladi/);
   assert.doesNotMatch(migration, /DROP |DELETE FROM|RENAME /i, "additive");
+});
+
+test("AI numbers must be in the text: “Uyim 180🙌” → 180 m² (not the AI's 51); “180 kwadrat dedim” → 180 m²; “Hazil” → no calculation", () => {
+  assert.deepEqual(hp.heatPumpFromAiReply(AI({ intent: "AREA_M2", m2: 51 }), "Uyim 180🙌").result, { kind: "HEAT_PUMP", intent: "calc", m2: 180 });
+  assert.deepEqual(hp.directValues("Uyim 180🙌", { m2: null, kw: 51 }), { m2: 180, kw: null });
+  assert.deepEqual(hp.directValues("180 kwadrat dedim", { m2: null, kw: 180 }), { m2: 180, kw: null });
+  assert.deepEqual(hp.directValues("yo'q, 150 dedim", { m2: 54, kw: null }), { m2: 150, kw: null }, "a correction: the new value, the old mistake is gone");
+  assert.deepEqual(hp.directValues("Hazil", { m2: 180, kw: null }), { m2: null, kw: null });
+});
+
+test("second calculation: no greeting, no AI note / phones; only winter kW in the text", async () => {
+  const first = hp.calcMessage(150, MODELS, RATE, BUFFER), second = hp.calcMessage(150, MODELS, RATE, BUFFER, "uz", { hello: false, footer: false });
+  assert.match(first.text, /^Assalomu alaykum!/);
+  assert.match(first.text, /520 99 99/);
+  assert.doesNotMatch(second.text, /Assalomu|AI tomonidan|520 99 99|637 77 77|Telefon raqamingizni/);
+  assert.match(second.text, /^150 m² uyingiz uchun mos teplonasos:\n🔥 Aire 6 HP · 12\.5 kW/);
+  assert.doesNotMatch(hp.calcKwMessage(180, MODELS, RATE, BUFFER).text, /nominal|273/);
+  assert.match(hp.calcKwMessage(15, MODELS, RATE, BUFFER).text, /Aire 8 HP · 15\.8 kW/);
+  const bot = await read("../lib/instagram/heat-pump-bot.ts");
+  assert.match(bot, /hello: !thread\.lastBotText, footer: !thread\.model/);
+  assert.match(await read("../lib/instagram/service.ts"), /calcs\.length \? \{ hello: false, footer: false \}/);
+});
+
+test("“9800kw🙌” → a joke, no calculation", () => {
+  assert.equal(hp.extractKw("9800kw🙌"), null);
+  assert.deepEqual(hp.directValues("9800kw🙌", null), { m2: null, kw: null, absurd: true });
+  const mapped = hp.heatPumpFromAiReply(AI({ intent: "POWER_KW", kw: 9800 }), "9800kw🙌");
+  assert.deepEqual(mapped.result, { kind: "POSITIVE" });
+  assert.equal(mapped.reply, hp.texts("uz").joke);
+  assert.deepEqual(hp.directValues("uyim 200000 kv", { m2: 200000, kw: null }).absurd, true);
+});
+
+test("“5,4 kw tok bir oyda qancha” → ~1620 kWh/oy, approximate, so'm by the specialist", () => {
+  assert.deepEqual(hp.directValues("5,4 kw tok bir oyda qancha", { m2: null, kw: 5.4 }), { m2: null, kw: null, power: 5.4 });
+  const text = hp.powerText(5.4);
+  assert.match(text, /5\.4 kW .*~1620 kWh\/oy/);
+  assert.match(text, /taxminan, ish rejimiga bog'liq/);
+  assert.match(text, /mutaxassis aytadi: \+998 99 520 99 99/);
+  assert.equal(hp.heatPumpFromAiReply(AI({ intent: "QUESTION", kw: 5.4 }), "5,4 kw tok bir oyda qancha").extra, text);
+});
+
+test("“170 кв радиатор система” read as kW by the AI → “170 m² mi yoki 170 kW?”", () => {
+  assert.deepEqual(hp.directValues("170 кв радиатор система", { m2: null, kw: 170 }), { m2: null, kw: null, clarify: 170 });
+  assert.deepEqual(hp.directValues("170 кв радиатор система", { m2: 170, kw: null }), { m2: 170, kw: null }, "the AI agrees with m² → calculation");
+  const mapped = hp.heatPumpFromAiReply(AI({ intent: "POWER_KW", kw: 170 }), "170 кв радиатор система");
+  assert.equal(hp.heatPumpOutgoing(mapped.result.intent, { answer: mapped.extra }, mapped.lang).dm, "Assalomu alaykum! 170 m² mi yoki 170 kW?");
+});
+
+test("“1200 kW issiqxona” → big project (no price, specialist); “9800kw🙌” → joke; “quvvati 180” → 180 kW", () => {
+  assert.deepEqual(hp.directValues("1200 kW issiqxona", null), { m2: null, kw: 1200 });
+  const big = hp.calcKwMessage(1200, MODELS, RATE, BUFFER);
+  assert.equal(big.big, true);
+  assert.equal(big.priceUsd, null);
+  assert.match(big.text, /520 99 99/);
+  assert.equal(hp.directValues("9800kw🙌", null).absurd, true);
+  assert.deepEqual(hp.directValues("quvvati 180", null), { m2: null, kw: 180 });
+  assert.equal(hp.extractKw("мощность 24"), 24);
+  assert.equal(hp.extractKw("quvvat 380V"), null, "volts are not kW");
 });

@@ -266,7 +266,9 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   else if (action.type === "heatpump") {
     const intent = comment.heatPumpIntent as HeatPumpIntent, m2 = comment.heatPumpM2, kw = comment.heatPumpKw, lang = heatLang;
     try {
-      const calc = intent === "calc" && m2 ? await buildCalc(m2, context.rate, lang) : intent === "kw" && kw ? await buildCalc(0, context.rate, lang, kw) : null;
+      // A later calculation on the post: no greeting, no contacts footer.
+      const style = calcs.length ? { hello: false, footer: false } : {};
+      const calc = intent === "calc" && m2 ? await buildCalc(m2, context.rate, lang, null, style) : intent === "kw" && kw ? await buildCalc(0, context.rate, lang, kw, style) : null;
       // The AI-first answer came with the classification; otherwise (AI off / retry) the Direct AI writes one.
       const answer = intent === "question" && !classifiedExtra ? await heatPumpChat(comment.text, null) : null;
       if (answer) await update({ aiTokens: comment.aiTokens + answer.usage.tokens, aiCostUsd: addUsage({ tokens: 0, costUsd: comment.aiCostUsd === null ? null : Number(comment.aiCostUsd) }, answer.usage).costUsd });

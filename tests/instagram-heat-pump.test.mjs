@@ -32,23 +32,23 @@ test("m²: phones, years, prices, emoji and out-of-range numbers are not areas",
 test("model choice: insulated need picks the model, the uninsulated line names a bigger one", () => {
   const pick = m2 => hp.pickHeatPump(m2, MODELS);
   const label = model => model && hp.modelLabel(model);
-  const cases = { 60: ["Aire 3 HP · 10 kW", "Aire 6 HP · 19 kW"], 80: ["Aire 3 HP · 10 kW", "Aire 6 HP · 19 kW"], 150: ["Aire 6 HP · 19 kW", "Aire 12 HP · 36 kW"], 155: ["Aire 6 HP · 19 kW", "Aire 12 HP · 36 kW"], 160: ["Aire 8 HP · 24 kW", "Aire 12 HP · 36 kW"], 200: ["Aire 12 HP · 36 kW", null], 290: ["Aire 12 HP · 36 kW", null] };
+  const cases = { 60: ["Aire 3 HP · 6.6 kW", "Aire 6 HP · 12.5 kW"], 80: ["Aire 3 HP · 6.6 kW", "Aire 6 HP · 12.5 kW"], 150: ["Aire 6 HP · 12.5 kW", "Aire 12 HP · 23.7 kW"], 155: ["Aire 6 HP · 12.5 kW", "Aire 12 HP · 23.7 kW"], 160: ["Aire 8 HP · 15.8 kW", "Aire 12 HP · 23.7 kW"], 200: ["Aire 12 HP · 23.7 kW", null], 290: ["Aire 12 HP · 23.7 kW", null] };
   for (const [m2, [model, bigger]] of Object.entries(cases)) {
     const result = pick(Number(m2));
     assert.equal(result.big, false, m2);
     assert.equal(label(result.model), model, `${m2} model`);
     assert.equal(label(result.bigger), bigger, `${m2} bigger`);
   }
-  assert.deepEqual(pick(300), { big: true, hp: 12, kw: 36 });
-  assert.deepEqual(pick(500), { big: true, hp: 20, kw: 61 });
-  assert.equal(label(hp.pickHeatPump(60, MODELS.map(item => item.hp === 3 ? { ...item, isActive: false } : item)).model), "Aire 6 HP · 19 kW", "inactive models are skipped");
+  assert.deepEqual(pick(300), { big: true, hp: 12, kw: 24 });
+  assert.deepEqual(pick(500), { big: true, hp: 20, kw: 40 });
+  assert.equal(label(hp.pickHeatPump(60, MODELS.map(item => item.hp === 3 ? { ...item, isActive: false } : item)).model), "Aire 6 HP · 12.5 kW", "inactive models are skipped");
 });
 
 test("HISOB XABARI: price as is (no markup), so‘m from the rate, buffer / 380V / fankoyl / AI note / both phones", () => {
   const six = hp.calcMessage(150, MODELS, RATE, BUFFER).text;
   assert.match(six, /^Assalomu alaykum! 150 m² uyingiz uchun mos teplonasos:/);
   assert.match(six, /💵 Narxi: \$2 650 \(~33\.8 mln so'm, MB kursi bo'yicha\) — bufer bak bilan/);
-  assert.match(six, /Uteplitsiz bo'lsa, quvvat yetmay qolishi mumkin — unda Aire 12 HP · 36 kW kerak bo'ladi\./);
+  assert.match(six, /Uteplitsiz bo'lsa, quvvat yetmay qolishi mumkin — unda Aire 12 HP · 23.7 kW kerak bo'ladi\./);
   assert.doesNotMatch(six, /Bufer bak narxga kirmaydi|380V/);
   for (const line of ["Xonalarga fankoyl (ichki blok) o'rnatish qo'shimcha", "AI tomonidan", "+998 99 520 99 99", "+998 91 637 77 77", "📞 Telefon raqamingizni qoldiring"]) assert.ok(six.includes(line), line);
 
@@ -65,7 +65,7 @@ test("HISOB XABARI: price as is (no markup), so‘m from the rate, buffer / 380V
 });
 
 test("big project: HP / kW only, no price, never “yo'q”", () => {
-  for (const [m2, hpValue, kw] of [[300, 12, 36], [500, 20, 61]]) {
+  for (const [m2, hpValue, kw] of [[300, 12, 24], [500, 20, 40]]) {
     const calc = hp.calcMessage(m2, MODELS, RATE, BUFFER);
     assert.equal(calc.big, true);
     assert.equal(calc.priceUsd, null);
@@ -183,7 +183,7 @@ test("Russian: Cyrillic comment → calculation, big project and m² ask in Russ
   const six = hp.calcMessage(150, MODELS, RATE, BUFFER, "ru").text;
   assert.match(six, /^Здравствуйте! Подходящий тепловой насос для вашего дома 150 м²:/);
   assert.match(six, /💵 Цена: \$2 650 \(~33\.8 млн сум, по курсу ЦБ\) — с буферным баком/);
-  assert.match(six, /тогда понадобится Aire 12 HP · 36 kW/);
+  assert.match(six, /тогда понадобится Aire 12 HP · 23.7 kW/);
   for (const line of ["фанкойлов", "ИИ", "+998 99 520 99 99", "+998 91 637 77 77", "📞 Оставьте номер телефона"]) assert.ok(six.includes(line), line);
   assert.doesNotMatch(six, /Assalomu|narx|uyingiz/i);
   const three = hp.calcMessage(60, MODELS, RATE, BUFFER, "ru").text;
@@ -192,7 +192,7 @@ test("Russian: Cyrillic comment → calculation, big project and m² ask in Russ
   assert.match(hp.calcMessage(200, MODELS, RATE, BUFFER, "ru").text, /⚡ Эта модель работает от сети 380V \(3 фазы\)\./);
 
   const big = hp.calcMessage(500, MODELS, RATE, BUFFER, "ru");
-  assert.match(big.text, /^Здравствуйте! Для обогрева дома 500 м² нужен тепловой насос мощностью примерно 20 HP · 61 kW/);
+  assert.match(big.text, /^Здравствуйте! Для обогрева дома 500 м² нужен тепловой насос мощностью примерно 20 HP · 40 kW/);
   assert.doesNotMatch(big.text, /\$|млн сум|нет в наличии|yo'q/);
 
   const ask = hp.heatPumpOutgoing("ask", {}, "ru");
@@ -281,12 +281,12 @@ test("reply to another person: leading @mentions are dropped before classifying"
   const first = hp.heatPumpByKeywords("@____abdulvohid__ 60 kvd qancha");
   assert.deepEqual(first, { kind: "HEAT_PUMP", intent: "calc", m2: 60 });
   const three = hp.calcMessage(first.m2, MODELS, RATE, BUFFER);
-  assert.match(three.text, /🔥 Aire 3 HP · 10 kW — 60 m² uyingizni isitadi/);
+  assert.match(three.text, /🔥 Aire 3 HP · 6.6 kW — 60 m² uyingizni isitadi/);
   assert.equal(hp.heatPumpOutgoing("calc", { m2: 60, calc: three.text }).reply, "60 m² uchun hisobni Direct'ga yubordik 📩");
 
   const second = hp.heatPumpByKeywords("@qobiljonnasimjanov 260");
   assert.deepEqual(second, { kind: "HEAT_PUMP", intent: "calc", m2: 260 });
-  assert.match(hp.calcMessage(260, MODELS, RATE, BUFFER).text, /🔥 Aire 12 HP · 36 kW — 260 m²/);
+  assert.match(hp.calcMessage(260, MODELS, RATE, BUFFER).text, /🔥 Aire 12 HP · 23.7 kW — 260 m²/);
 
   assert.deepEqual(hp.heatPumpByKeywords("@user narxi qancha"), { kind: "HEAT_PUMP", intent: "ask", m2: null });
   assert.equal(hp.heatPumpReplyAnswered("HEAT_PUMP", "calc", false), false, "the same reply on another post type → no answer");
@@ -356,7 +356,7 @@ test("“67км🔥” gets the public reply and the calculation in Direct", () 
   assert.equal(out.reply, "67 m² uchun hisobni Direct'ga yubordik 📩", "a unit typo does not switch to Russian");
   assert.equal(hp.langOf("120 кв.м"), "uz");
   assert.equal(hp.langOf("дом 150 кв"), "ru");
-  assert.match(out.dm, /Aire 3 HP · 10 kW/);
+  assert.match(out.dm, /Aire 3 HP · 6.6 kW/);
   assert.match(out.dm, /\$1 300/);
 });
 
@@ -411,10 +411,10 @@ test("Telegram binding: only the own contact of +998 91 637 77 77 is accepted", 
 });
 
 test("backlog: leads not sent while no chat was linked go in one message right after linking", async () => {
-  const leads = [{ customerName: "@ali", dimensions: "150 m²", product: "Aire 6 HP · 19 kW — $2 650", phone: "+998901234567" }, { customerName: "@vali", dimensions: null, product: null, phone: null }];
+  const leads = [{ customerName: "@ali", dimensions: "150 m²", product: "Aire 6 HP · 12.5 kW — $2 650", phone: "+998901234567" }, { customerName: "@vali", dimensions: null, product: null, phone: null }];
   const text = hp.backlogText(leads);
-  assert.match(text, /^📬 Ulanmagan paytdagi 2 ta xabar \(teplonasos\):\n\n1\. @ali · 150 m² · Aire 6 HP · 19 kW — \$2 650 · 📞 \+998901234567\n2\. @vali$/);
-  const many = hp.backlogText(Array.from({ length: 200 }, (_, index) => ({ customerName: `@user_${index}_${"x".repeat(30)}`, dimensions: "150 m²", product: "Aire 6 HP · 19 kW — $2 650", phone: "+998901234567" })));
+  assert.match(text, /^📬 Ulanmagan paytdagi 2 ta xabar \(teplonasos\):\n\n1\. @ali · 150 m² · Aire 6 HP · 12.5 kW — \$2 650 · 📞 \+998901234567\n2\. @vali$/);
+  const many = hp.backlogText(Array.from({ length: 200 }, (_, index) => ({ customerName: `@user_${index}_${"x".repeat(30)}`, dimensions: "150 m²", product: "Aire 6 HP · 12.5 kW — $2 650", phone: "+998901234567" })));
   assert.ok(many.length <= 4096, `Telegram limit: ${many.length}`);
   assert.match(many, /^📬 Ulanmagan paytdagi 200 ta xabar[\s\S]*… va yana \d+ ta \(Mijoz so‘rovlarida\)$/);
   const bot = await read("../lib/instagram/heat-pump-bot.ts");
