@@ -96,7 +96,7 @@ export async function buildCalc(m2: number, rate?: string | null, lang: Lang = "
 /** Admin switch "AI javob" (SiteSettings.heatPumpAi, on by default). */
 export const heatPumpAiEnabled = async () => (await getDb().siteSettings.findUnique({ where: { id: "global" }, select: { heatPumpAi: true } }).catch(() => null))?.heatPumpAi ?? true;
 
-type Classified = { result: HeatPumpComment | null; by: string; usage: AiUsage; reply?: string; extra?: string; lang?: Lang };
+type Classified = { result: HeatPumpComment | null; by: string; usage: AiUsage; reply?: string; extra?: string; lang?: Lang; specialist?: boolean };
 
 /**
  * AI on: the AI understands first (with the person's earlier comments on the post); when it fails the keyword parser
@@ -106,8 +106,8 @@ export async function classifyHeatPump(text: string, history: readonly string[] 
   if (aiFirst) {
     const understood = await understandHeatPumpComment(stripMentions(text) || text, history);
     if (understood) {
-      const mapped = heatPumpFromAiReply(understood.ai);
-      return { result: mapped.result, by: mapped.tag, usage: understood.usage, reply: mapped.reply, extra: mapped.extra, lang: mapped.lang };
+      const mapped = heatPumpFromAiReply(understood.ai, text);
+      return { result: mapped.result, by: mapped.tag, usage: understood.usage, reply: mapped.reply, extra: mapped.extra, lang: mapped.lang, specialist: mapped.specialist };
     }
     return { result: heatPumpByKeywords(text), by: "KEYWORD_FALLBACK", usage: { tokens: 0, costUsd: 0 } };
   }

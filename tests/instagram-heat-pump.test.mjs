@@ -248,7 +248,7 @@ test("several calculations per person per post: each new m² gets one, a repeate
   assert.equal(hp.heatPumpAction(rule, true, false, { m2: 300, previous: sent, today: 5 }).type, "skip", "limit + no public reply left → silent");
   assert.equal(hp.texts("uz").calcLimit, "Ko'proq hisob uchun mutaxassisga qo'ng'iroq qiling: +998 99 520 99 99");
   assert.equal(hp.heatPumpOutgoing("calc", { m2: 200, calc: "HISOB" }).reply, "200 m² uchun hisobni Direct'ga yubordik 📩");
-  // Without m² the one-reply rule stays.
+  // heatPumpAction alone still skips an answered person; teplonasos posts pass 0 and use heatPumpGate instead.
   assert.equal(hp.heatPumpAction(rule, true, true).type, "skip");
   assert.equal(hp.heatPumpAction({ isActive: false }, false, true, { m2: 450, previous: [], today: 0 }).type, "skip", "inactive post");
   const service = await read("../lib/instagram/service.ts");

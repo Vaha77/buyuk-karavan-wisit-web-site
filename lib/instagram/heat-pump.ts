@@ -68,6 +68,9 @@ export function extractM2(input: string | null | undefined) {
   // Phone numbers (9+ digits in one run) and prices go first.
   text = text.replace(/\+?\d[\d\s\-().]{7,}\d/g, match => match.replace(/\D/g, "").length >= 9 ? " " : match);
   text = text.replace(/\$\s*\d[\d\s.,]*|\d[\d.,]*\s*(?:\$|usd|dollar|доллар|у\.?е|so'?m|сум|сўм|ming|минг|тыс|mln|млн)/gu, " ");
+  // Rooms: "3.4 4ta xona", "3x4 4 ta xona" → 3 × 4 m each × 4 rooms = 48.
+  const rooms = /(\d{1,2})\s*[x×х*.,]\s*(\d{1,2})(?!\d)\D{0,6}?(\d{1,2})\s*(?:ta|та)?\s*(?:xon|хон|комнат|room)\p{L}*/u.exec(text);
+  if (rooms) return inRange(num(rooms[1]) * num(rooms[2]) * num(rooms[3]));
   const floors = new RegExp(String.raw`(\d{1,2})\s*(?:qavat\p{L}*|этаж\p{L}*|etaj\p{L}*)\D{0,20}?(\d{2,4})`, "u").exec(text);
   if (floors) return inRange(num(floors[1]) * num(floors[2]));
   const dims = /(\d{1,3}(?:[.,]\d)?)\s*[xх×*]\s*(\d{1,3}(?:[.,]\d)?)/u.exec(text);
@@ -83,6 +86,12 @@ export function extractM2(input: string | null | undefined) {
   if (/\d\s*(?:sotix|сотих|сотка|сотик|gektar|гектар|ga|га|kg|кг|tonna|тонна|litr|литр|kvt|квт|kw|hp|ot kuchi|от кучи|so'?m|sum|сум|сўм|\$)(?!\p{L})/u.test(text)) return null;
   const numbers = text.replace(/\d+\s*%/g, " ").match(/\d+(?:[.,]\d+)?/g) ?? [];
   return numbers.length === 1 && num(numbers[0]) >= 20 && num(numbers[0]) <= 1000 ? Math.round(num(numbers[0])) : null;
+}
+
+/** Ceiling height in m: "balandligi 3 metr", "высота 3.5 м" → 3 / 3.5, else null. */
+export function extractHeight(input: string | null | undefined) {
+  const match = /(?:balandlig\p{L}*|баландлиг\p{L}*|высот\p{L}*|потол\p{L}*|shift\p{L}*)\D{0,8}?(\d(?:[.,]\d+)?)\s*(?:m|м|metr|метр)?(?!\p{L})/u.exec(normalizeText(input ?? ""));
+  return match ? num(match[1]) : null;
 }
 
 /** Needed heat power from a comment / message: "180KW", "180 квт", "12 kvt", "12,5 kW" → kW (1–5000), else null. */
@@ -158,7 +167,7 @@ const T = {
     titleKw: (kw: number) => `${kw} kW issiqlik uchun mos teplonasos:`,
     givesKw: (kw: number) => `qishda (−12°C) ${kw} kW issiqlik beradi.`,
     bigKw: (kw: number, hp: number, nominal: number) => `${kw} kW issiqlik uchun taxminan ${hp} HP · ${nominal} kW nominal quvvatli teplonasos kerak (qishki hisob). Bunday loyiha individual tuziladi — narx va eng yaxshi variantni mutaxassis aytadi: ${SPECIALIST_PHONE}. Bino necha m² va qayerda joylashgan?`,
-    replyKw: (kw: number) => `${kw} kW uchun hisobni Direct'ga yubordik 📩`,
+    replyKw: (kw: number) => `${kw} kW uchun hisobni Direct'ga yubordik 📩`, tall: "⚠️ Shift baland — mutaxassis aniq hisoblaydi.",
   },
   ru: {
     hello: "Здравствуйте!",
@@ -180,7 +189,7 @@ const T = {
     titleKw: (kw: number) => `Подходящий тепловой насос на ${kw} kW тепла:`,
     givesKw: (kw: number) => `зимой (−12°C) даёт ${kw} kW тепла.`,
     bigKw: (kw: number, hp: number, nominal: number) => `Для ${kw} kW тепла нужен тепловой насос примерно ${hp} HP · ${nominal} kW номинальной мощности (зимний расчёт). Такой проект составляется индивидуально — цену и лучший вариант подскажет специалист: ${SPECIALIST_PHONE}. Какая площадь здания в м² и где оно находится?`,
-    replyKw: (kw: number) => `Расчёт для ${kw} kW отправили в Direct 📩`,
+    replyKw: (kw: number) => `Расчёт для ${kw} kW отправили в Direct 📩`, tall: "⚠️ Потолок высокий — специалист рассчитает точно.",
   },
 } as const;
 export const texts = (lang: Lang) => T[lang];
@@ -258,7 +267,7 @@ export function heatPumpFromAi(ai: { m2: number | null; topic: "heatpump" | "oth
 // ---- AI-first ("odamdek"): the AI understands, the code calculates ------------------------------------------
 
 export const HEAT_AI_INTENTS = ["AREA_M2", "POWER_KW", "QUESTION", "BANTER", "PRAISE", "OTHER_PRODUCT", "SPAM_INSULT"] as const;
-export type HeatAi = { intent: (typeof HEAT_AI_INTENTS)[number]; m2: number | null; kw: number | null; topic: string | null; lang: Lang; public_reply: string; dm_extra: string };
+export type HeatAi = { intent: (typeof HEAT_AI_INTENTS)[number]; m2: number | null; kw: number | null; topic: string | null; lang: Lang; public_reply: string; dm_extra: string; specialist?: boolean };
 const EMOJI = /\p{Extended_Pictographic}/gu;
 
 /**
@@ -280,16 +289,19 @@ export function safeAiText(text: string | null | undefined, max: number, isPubli
  * question beside them goes to the DM as `extra`. BANTER / PRAISE → POSITIVE with the AI's reply; OTHER_PRODUCT → the
  * call-center reply; SPAM_INSULT → no reply.
  */
-export function heatPumpFromAiReply(ai: HeatAi): { result: HeatPumpComment; reply: string; extra: string; lang: Lang; tag: string } {
-  const lang: Lang = ai.lang === "ru" ? "ru" : "uz", tag = `AI:${ai.intent}`.slice(0, 20);
-  const extra = safeAiText(ai.dm_extra, 400), reply = safeAiText(ai.public_reply, 150, true);
-  const m2 = ai.m2 === null ? null : inRange(ai.m2), kw = ai.kw !== null && ai.kw >= 1 && ai.kw <= 5000 ? Math.round(ai.kw) : null;
-  if (ai.intent === "SPAM_INSULT") return { result: { kind: "SPAM" }, reply: "", extra: "", lang, tag };
-  if (kw && (ai.intent === "POWER_KW" || !m2)) return { result: { kind: "HEAT_PUMP", intent: "kw", m2: null, kw }, reply: "", extra, lang, tag };
-  if (m2) return { result: { kind: "HEAT_PUMP", intent: "calc", m2 }, reply: "", extra, lang, tag };
-  if (ai.intent === "BANTER" || ai.intent === "PRAISE") return { result: { kind: "POSITIVE" }, reply, extra: "", lang, tag };
-  if (ai.intent === "OTHER_PRODUCT") return { result: { kind: "HEAT_PUMP", intent: "other", m2: null }, reply: "", extra: "", lang, tag };
-  return { result: { kind: "HEAT_PUMP", intent: "question", m2: null }, reply: "", extra, lang, tag };
+export function heatPumpFromAiReply(ai: HeatAi, text = ""): { result: HeatPumpComment; reply: string; extra: string; lang: Lang; tag: string; specialist: boolean } {
+  const lang: Lang = ai.lang === "ru" ? "ru" : "uz", tag = `AI:${ai.intent}`.slice(0, 20), specialist = !!ai.specialist && ai.intent === "QUESTION";
+  // A question no fact answers (material / service price…): the smooth "the specialist will answer" in the DM.
+  const extra = specialist ? specialistReply(ai.dm_extra, lang) : safeAiText(ai.dm_extra, 400), reply = safeAiText(ai.public_reply, 150, true);
+  // The code's parser backs up the AI's m² ("3.4 4ta xonw" → 48).
+  const m2 = (ai.m2 === null ? null : inRange(ai.m2)) ?? (ai.intent === "AREA_M2" || ai.intent === "QUESTION" ? extractM2(text) : null), kw = ai.kw !== null && ai.kw >= 1 && ai.kw <= 5000 ? Math.round(ai.kw) : null;
+  const out = (result: HeatPumpComment, values: { reply?: string; extra?: string } = {}) => ({ result, reply: values.reply ?? "", extra: values.extra ?? "", lang, tag, specialist: specialist && !!values.extra });
+  if (ai.intent === "SPAM_INSULT") return out({ kind: "SPAM" });
+  if (kw && (ai.intent === "POWER_KW" || !m2)) return out({ kind: "HEAT_PUMP", intent: "kw", m2: null, kw }, { extra });
+  if (m2) return out({ kind: "HEAT_PUMP", intent: "calc", m2 }, { extra });
+  if (ai.intent === "BANTER" || ai.intent === "PRAISE") return out({ kind: "POSITIVE" }, { reply });
+  if (ai.intent === "OTHER_PRODUCT") return out({ kind: "HEAT_PUMP", intent: "other", m2: null });
+  return out({ kind: "HEAT_PUMP", intent: "question", m2: null }, { extra });
 }
 
 /**
@@ -341,6 +353,18 @@ export const specialistReply = (aiReply: string | null | undefined, lang: Lang =
 /** Telegram (teplonasos private chat): the question no table answers. */
 export const specialistNotice = (input: { username: string | null; igsid: string; question: string; calc: string | null; link: string }) =>
   ["🧑‍🔧 Mutaxassis javobi kerak (teplonasos Direct)", input.username ? `@${input.username}` : `Instagram ${input.igsid}`, `Savol: «${input.question.slice(0, 500)}»`, `Oxirgi hisob: ${input.calc ?? "—"}`, `Suhbat: ${input.link}`].join("\n");
+
+export const MAX_REPLIES_PER_DAY = 8;
+/**
+ * Teplonasos post: every new comment of a person is answered by its own intent; the same text again is silent and a
+ * person gets at most 8 answers on a post in 24 h. `answered`: the person's earlier answered comments there. null = go.
+ */
+export function heatPumpGate(text: string, answered: ReadonlyArray<{ text: string; at: Date }>, now = new Date()) {
+  const key = normalizeText(stripMentions(text));
+  if (answered.some(row => normalizeText(stripMentions(row.text)) === key)) return "Takroriy matn — javobsiz";
+  if (answered.filter(row => now.getTime() - row.at.getTime() < 86_400_000).length >= MAX_REPLIES_PER_DAY) return "24 soatda 8 ta javob — chegara";
+  return null;
+}
 
 /** "450, 200 m²": the lead's m² list with `m2` added once (new m² never opens a second lead). */
 export function m2List(dimensions: string | null | undefined, m2: number | null | undefined) {

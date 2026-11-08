@@ -131,7 +131,8 @@ intent:
 - PRAISE: maqtov, minnatdorchilik, faqat emoji.
 - OTHER_PRODUCT: boshqa mahsulot haqida jiddiy savol (konditsioner, xolodilnik, kotyol...).
 - SPAM_INSULT: reklama, havola, haqorat, so'kinish.
-m2, kw: kommentda yozilgan son (o'zing hisoblama, o'ylab topma); yo'q bo'lsa null. Telefon, yil va narx m²/kW emas.
+m2, kw: kommentda yozilgan son (o'ylab topma); yo'q bo'lsa null. Telefon, yil va narx m²/kW emas. Xonalar: "3.4 4ta xona" yoki "3x4 4 ta xona" — har xona 3×4 m, 4 ta → m2 = 48.
+specialist: savolga quyidagi faktlar javob bermasa (material, xizmat yoki montaj narxi, boshqa brend, maxsus loyiha) — true; dm_extra'da mutaxassis aniq javob berishini silliq ayt.
 topic: savol mavzusi (montaj, kafolat, yetkazish, rassrochka, issiq_suv, svet, narx, boshqa) yoki null.
 lang: "ru" — mijoz ruscha yozgan bo'lsa, aks holda "uz".
 public_reply: faqat BANTER va PRAISE uchun, boshqasida "". Bitta qisqa jonli qator, o'zbek lotin (ruscha yozsa ruscha), ko'pi bilan 2 emoji, har safar boshqacha so'z bilan. BANTER — iliq, kulgili ("😂 Sheva har xil, issiqlik bir xil! 🔥"). PRAISE — qisqa minnatdorlik yoki faqat emoji ("🙌🔥").
@@ -140,7 +141,7 @@ Taqiq: raqam, narx, HP, kW, muddat, chegirma, va'da o'ylab topma; masxara, siyos
 Oldingi kommentlar faqat kontekst uchun.
 Faqat JSON qaytar.`;
 
-const heatPumpUnderstanding = z.object({ intent: z.enum(HEAT_AI_INTENTS), m2: z.number().nullable(), kw: z.number().nullable(), topic: z.string().nullable(), lang: z.enum(["uz", "ru"]), public_reply: z.string(), dm_extra: z.string() });
+const heatPumpUnderstanding = z.object({ intent: z.enum(HEAT_AI_INTENTS), m2: z.number().nullable(), kw: z.number().nullable(), topic: z.string().nullable(), lang: z.enum(["uz", "ru"]), public_reply: z.string(), dm_extra: z.string(), specialist: z.boolean() });
 
 /**
  * AI-first understanding of a teplonasos comment (with the person's earlier comments on the post), or null (no key /

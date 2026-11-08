@@ -13,10 +13,11 @@ import { DEFAULT_PUBLIC_REPLY, isEshikmaster, type CommentKind } from "./constan
 import { GraphError, getMediaPermalink, listComments, listMedia, refreshLongLived, replyToComment, sendPrivateReply } from "./graph";
 import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComments } from "./ingest";
 import { afterDirectEvents, recordDirectEvents } from "./direct";
+import { directLink } from "./direct-rules";
 import { negativeText, notifyNegative } from "./telegram";
 import { bindThread, buildCalc, coolerCommentTexts, heatPumpAiEnabled, sendHeatPumpTelegram, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
 import { askText, coolerAction, coolerTons } from "./cooler";
-import { heatPumpAction, heatPumpOutgoing, heatPumpReplyAnswered, isHeatPumpAccount, langOf, texts, type HeatPumpIntent, type Lang } from "./heat-pump";
+import { heatPumpAction, heatPumpOutgoing, heatPumpReplyAnswered, extractHeight, heatPumpGate, isHeatPumpAccount, langOf, specialistNotice, texts, type HeatPumpIntent, type Lang } from "./heat-pump";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, aiReplyProblem, tooSimilar, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
 /** The account connected before multi-account (Buyuk Karavan): its rows were migrated with this id. */
@@ -121,7 +122,7 @@ type Context = { account: InstagramAccount; token: string; rate: string | null; 
 type Outcome = "sent" | "failed" | "skipped" | "notified" | "retry" | "rate-limited" | "wait";
 
 /** Keywords first; when they are unclear the AI decides; without the AI the keyword fallback, else UNKNOWN (no reply). */
-async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage; m2?: number | null; kw?: number | null; intent?: HeatPumpIntent | null; reply?: string; extra?: string; lang?: Lang }> {
+async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage; m2?: number | null; kw?: number | null; intent?: HeatPumpIntent | null; reply?: string; extra?: string; lang?: Lang; specialist?: boolean }> {
   // Xolodilnik post ("global" only): a tonnage starts the Direct chat; anything else is classified as usual.
   if (coolerTons(rule, account.id, comment.text)) return { kind: "COOLER", by: "KEYWORD", usage: { tokens: 0, costUsd: 0 } };
   // Teplonasos post: only the "global" account (@eshikmaster never gets this flow).
@@ -129,12 +130,12 @@ async function classify(comment: InstagramComment, rule: RuleWithProduct | null,
     // AI on: the person's earlier comments on this post go with it (context for "450" → "200" → "onamga ham").
     const aiFirst = await heatPumpAiEnabled();
     const history = aiFirst ? (await getDb().instagramComment.findMany({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: comment.commentId } }, orderBy: { createdAt: "asc" }, take: 5, select: { text: true } })).map(row => row.text) : [];
-    const { result, by, usage, reply, extra, lang } = await classifyHeatPump(comment.text, history, aiFirst).catch(error => {
+    const { result, by, usage, reply, extra, lang, specialist } = await classifyHeatPump(comment.text, history, aiFirst).catch(error => {
       console.error("Instagram heat pump parse failed", { commentId: comment.commentId, type: safeType(error) });
-      return { result: null, by: "PARSE_FAILED", usage: { tokens: 0, costUsd: 0 }, reply: undefined, extra: undefined, lang: undefined };
+      return { result: null, by: "PARSE_FAILED", usage: { tokens: 0, costUsd: 0 }, reply: undefined, extra: undefined, lang: undefined, specialist: undefined };
     });
     // Nothing on a teplonasos post stays silent: not understood → the friendly reply.
-    return { kind: result?.kind ?? "POSITIVE", by, usage, reply, extra, lang, ...(result?.kind === "HEAT_PUMP" ? { m2: result.m2, kw: result.kw ?? null, intent: result.intent } : {}) };
+    return { kind: result?.kind ?? "POSITIVE", by, usage, reply, extra, lang, specialist, ...(result?.kind === "HEAT_PUMP" ? { m2: result.m2, kw: result.kw ?? null, intent: result.intent } : {}) };
   }
   // @eshikmaster: every comment goes to the AI; the keywords only when the AI does not answer.
   if (isEshikmaster(account)) {
@@ -207,17 +208,17 @@ async function processComment(commentId: string, context: Context): Promise<Outc
 
   const rule: RuleWithProduct | null = await db.instagramMediaRule.findUnique({ where: { mediaId: comment.mediaId }, include: { product: RULE_PRODUCT, secondProduct: RULE_PRODUCT } });
   // @eshikmaster: the reply written together with the classification (not kept for a retry, then it is written anew).
-  let classifiedReply = "", classifiedExtra = "", classifiedLang: Lang | null = null;
+  let classifiedReply = "", classifiedExtra = "", classifiedLang: Lang | null = null, classifiedSpecialist = false;
   if (!comment.kind) {
     const result = await classify(comment, rule, context.account);
-    classifiedReply = result.reply ?? ""; classifiedExtra = result.extra ?? ""; classifiedLang = result.lang ?? null;
+    classifiedReply = result.reply ?? ""; classifiedExtra = result.extra ?? ""; classifiedLang = result.lang ?? null; classifiedSpecialist = !!result.specialist;
     await update({ heatPumpKw: result.kw ?? null, kind: result.kind, classifiedBy: result.by, aiTokens: result.usage.tokens, aiCostUsd: result.usage.costUsd, productId: rule?.product?.id ?? null, productName: rule?.product?.name ?? null, heatPumpM2: result.m2 ?? null, heatPumpIntent: result.intent ?? null });
   }
   const kind = comment.kind as CommentKind;
   const account = context.account;
   if (comment.parentId && kind !== "COOLER" && !heatPumpReplyAnswered(kind, comment.heatPumpIntent, !!rule?.heatPump && isHeatPumpAccount(account.id))) { await finish("SKIPPED", "Javob-komment (reply) — javob berilmaydi"); return "skipped"; }
-  const [answered, repliesToday, calcs] = await Promise.all([
-    db.instagramComment.count({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, OR: [{ dmSentAt: { not: null } }, { publicReplyAt: { not: null } }] } }),
+  const [answeredRows, repliesToday, calcs] = await Promise.all([
+    db.instagramComment.findMany({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, OR: [{ dmSentAt: { not: null } }, { publicReplyAt: { not: null } }] }, select: { text: true, dmSentAt: true, publicReplyAt: true } }),
     db.instagramComment.count({ where: { accountId: account.id, publicReplyAt: { gte: tashkentDayStart() } } }),
     // Teplonasos: the m² / kW calculations this person already got on this post (a repeat is silent, 5 per 24 h together).
     kind === "HEAT_PUMP" ? db.instagramComment.findMany({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, heatPumpIntent: { in: ["calc", "kw"] }, dmSentAt: { not: null } }, select: { heatPumpM2: true, heatPumpKw: true, heatPumpIntent: true, dmSentAt: true } }) : [],
@@ -228,6 +229,10 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   const heatPost = !!rule?.heatPump && isHeatPumpAccount(account.id), heatPump = kind === "HEAT_PUMP" && heatPost;
   const friendly = heatPost ? texts(langOf(comment.text)).friendly : null;
   if (kind === "HEAT_PUMP" && !heatPump) { await finish("SKIPPED", "Teplonasos posti emas"); return "skipped"; }
+  // Teplonasos post: every new comment gets its own answer (no "one per person"); same text again / 8 in 24 h → silent.
+  const gate = heatPost && kind !== "NEGATIVE" ? heatPumpGate(comment.text, answeredRows.map(row => ({ text: row.text, at: (row.dmSentAt ?? row.publicReplyAt)! }))) : null;
+  if (gate) { await finish("SKIPPED", gate); return "skipped"; }
+  const answered = heatPost ? 0 : answeredRows.length;
   const action: Action | ReturnType<typeof heatPumpAction> | ReturnType<typeof coolerAction> = kind === "COOLER" ? coolerAction(rule, answered > 0, repliesToday < account.dailyReplyLimit) : heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit, calc) : chooseAction(kind, heatPost ? { ...account, positiveEnabled: true } : account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
 
   if (action.type === "skip") { await finish("SKIPPED", action.reason); return "skipped"; }
@@ -265,7 +270,9 @@ async function processComment(commentId: string, context: Context): Promise<Outc
       // The AI-first answer came with the classification; otherwise (AI off / retry) the Direct AI writes one.
       const answer = intent === "question" && !classifiedExtra ? await heatPumpChat(comment.text, null) : null;
       if (answer) await update({ aiTokens: comment.aiTokens + answer.usage.tokens, aiCostUsd: addUsage({ tokens: 0, costUsd: comment.aiCostUsd === null ? null : Number(comment.aiCostUsd) }, answer.usage).costUsd });
-      const out = heatPumpOutgoing(intent, { m2, kw, calc: calc?.text, answer: classifiedExtra || answer?.reply, extra: classifiedExtra }, lang);
+      // A ceiling over 3 m: the calculation says the specialist will count exactly.
+      const tall = calc && (extractHeight(comment.text) ?? 0) > 3 ? texts(lang).tall : "";
+      const out = heatPumpOutgoing(intent, { m2, kw, calc: calc?.text, answer: classifiedExtra || answer?.reply, extra: [tall, classifiedExtra].filter(Boolean).join("\n") }, lang);
       dm = out.dm; heatReply = out.reply; heatSummary = calc?.summary ?? null;
     } catch (error) {
       console.error("Instagram heat pump calc failed", { commentId, type: safeType(error) });
@@ -366,6 +373,8 @@ async function processComment(commentId: string, context: Context): Promise<Outc
     : action.type === "heatpump" && comment.heatPumpIntent === "other" ? "Mavzudan tashqari — call-center"
     : (action.type === "price" || action.type === "question" || action.type === "contact" || action.type === "heatpump" || action.type === "cooler") && !action.publicReply ? "Kunlik limit — faqat Direct" : null;
   await finish("SENT", reason);
+  // A comment question no fact answers: the specialist is told in the teplonasos Telegram chat.
+  if (classifiedSpecialist && dm && action.type === "heatpump") await sendHeatPumpTelegram(specialistNotice({ username: comment.username, igsid: comment.fromId, question: comment.text, calc: null, link: directLink(comment.username) })).catch(error => console.error("Instagram heat pump specialist notice failed", { type: safeType(error) }));
   // Teplonasos lead: m² written or price asked.
   if (account.leadsEnabled && action.type === "heatpump" && dm && (comment.heatPumpIntent === "calc" || comment.heatPumpIntent === "ask")) {
     try {

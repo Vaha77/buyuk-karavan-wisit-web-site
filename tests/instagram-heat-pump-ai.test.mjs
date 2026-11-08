@@ -150,6 +150,46 @@ test("Direct money filter: a sum the code did not calculate (“fankoil $300”)
   assert.match(bot, /\} else if \(ai\?\.specialist \|\| \(ai\?\.reply && await priceInvented\(ai\.reply\)\)\) \{\n[^\n]*\n\s*reply = specialistReply\(ai\.reply, lang\);\n\s*await needSpecialist\(thread, account, text\);/);
 });
 
+test("no more “one answer per person”: every new comment gets its intent's answer; same text again silent; 8 per 24 h", async () => {
+  const now = new Date("2026-11-08T12:00:00Z"), at = hours => new Date(now.getTime() - hours * 3_600_000);
+  assert.equal(hp.heatPumpGate("shisha nimadan yasaladi 😂😂", [{ text: "3.4", at: at(1) }], now), null, "a new comment is answered");
+  assert.equal(hp.heatPumpGate("@ali  Shisha nimadan yasaladi 😂😂", [{ text: "shisha nimadan yasaladi 😂😂", at: at(1) }], now), "Takroriy matn — javobsiz");
+  const eight = Array.from({ length: 8 }, (_, i) => ({ text: `t${i}`, at: at(i) }));
+  assert.equal(hp.heatPumpGate("yangi savol", eight, now), "24 soatda 8 ta javob — chegara");
+  assert.equal(hp.heatPumpGate("yangi savol", eight.map(row => ({ ...row, at: at(30) })), now), null, "older answers do not count");
+  const service = await read("../lib/instagram/service.ts");
+  assert.match(service, /const gate = heatPost && kind !== "NEGATIVE" \? heatPumpGate\(/);
+  assert.match(service, /const answered = heatPost \? 0 : answeredRows\.length;/, "other post types keep their one-answer rule");
+});
+
+test("sadulla: material / service price → DM sends to the specialist + Telegram", async () => {
+  const text = "Теплонасос, унга кетадеган материал, хизмат хаки  хаммаси канча булади? Урнатмокчи эдим";
+  const mapped = hp.heatPumpFromAiReply(AI({ intent: "QUESTION", topic: "narx", specialist: true, dm_extra: "Material va xizmat narxini mutaxassisimiz aniq aytadi — ozgina kuting 🙏 Tezroq: +998 99 520 99 99" }), text);
+  assert.deepEqual(mapped.result, { kind: "HEAT_PUMP", intent: "question", m2: null });
+  assert.equal(mapped.specialist, true);
+  const out = hp.heatPumpOutgoing("question", { answer: mapped.extra });
+  assert.match(out.dm, /mutaxassisimiz aniq aytadi — ozgina kuting 🙏 Tezroq: \+998 99 520 99 99/);
+  assert.equal(hp.heatPumpFromAiReply(AI({ intent: "QUESTION", specialist: true, dm_extra: "Montaj $500" })).extra, hp.specialistReply(null), "an invented sum → the fixed specialist text");
+  const service = await read("../lib/instagram/service.ts");
+  assert.match(service, /if \(classifiedSpecialist && dm && action\.type === "heatpump"\) await sendHeatPumpTelegram\(specialistNotice\(/);
+});
+
+test("“3.4 4ta xonw” → 48 m² calculation; a ceiling over 3 m → “shift baland” note", () => {
+  for (const text of ["3.4 4ta xonw", "3x4 4 ta xona", "3,4 4 ta xona"]) assert.equal(hp.extractM2(text), 48, text);
+  assert.deepEqual(hp.heatPumpFromAiReply(AI({ intent: "AREA_M2", m2: 3.4 }), "3.4 4ta xonw").result, { kind: "HEAT_PUMP", intent: "calc", m2: 48 }, "the parser backs up a wrong AI m²");
+  assert.equal(hp.extractHeight("3.4 Balandligi 3metr"), 3);
+  assert.equal(hp.extractHeight("balandligi 3.5 m"), 3.5);
+  assert.equal(hp.extractHeight("3.4 4ta xona"), null);
+  assert.equal(hp.texts("uz").tall, "⚠️ Shift baland — mutaxassis aniq hisoblaydi.");
+  assert.match(ai.HEAT_PUMP_UNDERSTAND, /"3\.4 4ta xona" yoki "3x4 4 ta xona" — har xona 3×4 m, 4 ta → m2 = 48/);
+});
+
+test("“shisha nimadan yasaladi 😂” → a short joke", () => {
+  const mapped = hp.heatPumpFromAiReply(AI({ intent: "BANTER", public_reply: "😂 Shisha emas, issiqlik muhim! 🔥" }), "shisha nimadan yasaladi 😂");
+  assert.deepEqual(mapped.result, { kind: "POSITIVE" });
+  assert.equal(mapped.reply, "😂 Shisha emas, issiqlik muhim! 🔥");
+});
+
 test("Direct: after an admin writes, the bot is silent (24 h)", () => {
   assert.equal(hp.directBotStep({ botReplies: 1, mutedUntil: new Date(Date.now() + 3_600_000) }), "silent");
   assert.deepEqual(hp.directValues("onamga 200 kerak", null), { m2: 200, kw: null });
