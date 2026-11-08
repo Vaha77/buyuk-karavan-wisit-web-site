@@ -180,6 +180,8 @@ Qoidalar:
 - m2: mijoz uy maydonini yozgan bo'lsa son (20–3000), aks holda null. Telefon, yil va narx m² emas.
 - kw: mijoz kerakli issiqlik quvvatini kW da yozgan bo'lsa son ("180KW", "12 квт"), aks holda null. O'zing hisoblama.
 - Qisqa, jonli, odamdek yoz; shablonni takrorlama. "Bizda yo'q" dema. Hazilga qisqa iliq javob.
+- m2 / kw faqat mijoz SHU xabarda yozgan son (o'zgartirma, o'zing hisoblama); mijoz tuzatsa ("... dedim", "yo'q, ...") yangi sonni ol.
+- Salom faqat suhbatdagi birinchi xabarda; telefon raqamlarni faqat mijoz so'rasa ber.
 Faqat JSON qaytar: {"reply": "...", "m2": number|null, "kw": number|null, "hp": number|null, "specialist": boolean}`;
 
 const heatPumpReply = z.object({ reply: z.string(), m2: z.number().nullable(), kw: z.number().nullable(), hp: z.number().nullable(), specialist: z.boolean() });

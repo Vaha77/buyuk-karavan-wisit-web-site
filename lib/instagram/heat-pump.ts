@@ -53,7 +53,7 @@ export const HUMAN_MUTE_MS = 24 * 3_600_000;
 
 // ---- m² from a comment / message ----------------------------------------------------------------------------
 
-const UNIT = String.raw`(?:kv\.?\s*m|kvadrat\p{L}*|kvd|kv|m2|m²|metr\p{L}*|кв\.?\s*м|квадрат\p{L}*|кв|км|м2|м²|метр\p{L}*)(?!\p{L})`;
+const UNIT = String.raw`(?:kv\.?\s*m|kvadrat\p{L}*|kwadrat\p{L}*|kvd|kv|m2|m²|metr\p{L}*|кв\.?\s*м|квадрат\p{L}*|кв|км|м2|м²|метр\p{L}*)(?!\p{L})`;
 const num = (value: string) => Number(value.replace(",", "."));
 const inRange = (value: number) => Number.isFinite(value) && value >= 20 && value <= 3000 ? Math.round(value) : null;
 const isYear = (value: number) => value >= 1900 && value <= 2099;
@@ -94,20 +94,35 @@ export function extractHeight(input: string | null | undefined) {
   return match ? num(match[1]) : null;
 }
 
-/** Needed heat power from a comment / message: "180KW", "180 квт", "12 kvt", "12,5 kW" → kW (1–5000), else null. */
+const kwValue = (text: string) => { const match = /(\d{1,5}(?:[.,]\d)?)\s*(?:kw|kvt|квт|кв\.?\s*т|kilovat\p{L}*|киловат\p{L}*)(?!\p{L})/u.exec(text); return match ? num(match[1]) : null; };
+/** Needed heat power from a comment / message: "180KW", "180 квт", "12 kvt", "12,5 kW" → kW (1–500), else null. */
 export function extractKw(input: string | null | undefined) {
-  const text = normalizeText(stripMentions(input ?? ""));
-  const match = /(\d{1,4}(?:[.,]\d)?)\s*(?:kw|kvt|квт|кв\.?\s*т|kilovat\p{L}*|киловат\p{L}*)(?!\p{L})/u.exec(text);
-  const value = match ? num(match[1]) : NaN;
-  return value >= 1 && value <= 5000 ? Math.round(value) : null;
+  const value = kwValue(normalizeText(stripMentions(input ?? ""))) ?? NaN;
+  return value >= 1 && value <= 500 ? Math.round(value) : null;
 }
 
-/** m² or kW of a Direct message: the AI's numbers when valid, else the parser's (kW wins over m²). */
-export function directValues(text: string, ai: { m2: number | null; kw: number | null } | null): { m2: number | null; kw: number | null } {
-  const kw = ai?.kw && ai.kw >= 1 && ai.kw <= 5000 ? Math.round(ai.kw) : extractKw(text);
-  if (kw) return { m2: null, kw };
-  return { m2: (ai?.m2 ? inRange(ai.m2) : null) ?? extractM2(text), kw: null };
+export type HeatValues = { m2: number | null; kw: number | null; absurd?: true; clarify?: number; power?: number };
+const BARE_KV = /(\d{2,4})\s*(?:kv|кв)(?!\p{L}|\.?\s*[mм](?!\p{L}))/u;
+const POWER = /(?:^|[^\p{L}])(?:tok|oyiga|sarf\p{L}*|свет\p{L}*|расход\p{L}*)(?!\p{L})/u;
+/**
+ * m² / kW of a comment or Direct message. The AI's number counts only when the person wrote it ("5,4" = 5.4), else the
+ * parser's. kW > 500 or m² > 20 000 → `absurd` (a joke, no calculation); kW with "tok / oyiga / sarf / свет / расход" →
+ * `power` (monthly use); a bare "170 кв" the AI read as kW → `clarify` (m² or kW?).
+ */
+export function directValues(text: string, ai: { m2: number | null; kw: number | null } | null): HeatValues {
+  const clean = normalizeText(stripMentions(text));
+  const said = new Set((clean.match(/\d+(?:[.,]\d+)?/g) ?? []).map(num));
+  const aiKw = ai?.kw && said.has(ai.kw) ? ai.kw : null, aiM2 = ai?.m2 && said.has(ai.m2) ? ai.m2 : null;
+  const rawKw = kwValue(clean) ?? aiKw, none = { m2: null, kw: null };
+  if ((rawKw ?? 0) > 500 || (aiM2 ?? 0) > 20000) return { ...none, absurd: true };
+  if (rawKw && POWER.test(clean)) return { ...none, power: rawKw };
+  const kw = extractKw(text), m2 = (aiM2 ? inRange(aiM2) : null) ?? extractM2(text), bare = BARE_KV.exec(clean);
+  if (!kw && aiKw && bare && num(bare[1]) === aiKw) return { ...none, clarify: aiKw };
+  if (kw || (aiKw && aiKw >= 1 && !m2)) return { m2: null, kw: kw ?? Math.round(aiKw!) };
+  return { m2, kw: null };
 }
+/** Monthly electricity of a `kw` pump: ≈ kW × 10 h × 30 days, approximate; the so'm price is the specialist's. */
+export const powerText = (kw: number, lang: Lang = "uz") => T[lang].power(String(Number(kw.toFixed(1))), Math.round(kw * 300));
 
 // ---- Model choice ------------------------------------------------------------------------------------------
 
@@ -124,13 +139,14 @@ export function pickHeatPump(m2: number, models: readonly HeatPumpRow[]): HeatPu
   const list = models.filter(item => item.isActive).sort((a, b) => a.winterKw - b.winterKw);
   const warm = m2 * 80, cold = m2 * 130;
   const model = list.find(item => watts(item.winterKw) >= warm);
-  if (!model) { const nominal = warm / 1000 / 0.66; return { big: true, hp: Math.round(nominal / 3), kw: Math.round(nominal) }; }
+  if (!model) { const nominal = warm / 1000 / 0.66; return { big: true, hp: Math.round(nominal / 3), kw: Math.round(warm / 1000) }; }
   return { big: false, model, bigger: cold > watts(model.winterKw) ? list.find(item => watts(item.winterKw) >= cold) ?? null : null };
 }
 
 const group = (value: number) => String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 const short = (value: number) => String(Number(value.toFixed(1)));
-export const modelLabel = (model: Pick<HeatPumpRow, "brand" | "hp" | "nominalKw">) => `${model.brand} ${short(model.hp)} HP · ${short(model.nominalKw)} kW`;
+// Only the winter kW goes to customers (8 HP → 15.8 kW), never the nominal.
+export const modelLabel = (model: Pick<HeatPumpRow, "brand" | "hp" | "winterKw">) => `${model.brand} ${short(model.hp)} HP · ${short(model.winterKw)} kW`;
 export const usdText = (usd: number) => `$${group(usd)}`;
 /** $ × CBU rate in million so‘m, one decimal ("33.8"); null without a rate. */
 export const mlnSom = (usd: number, rate: string | number | null | undefined) => rate && Number(rate) > 0 ? (usd * Number(rate) / 1e6).toFixed(1) : null;
@@ -166,8 +182,10 @@ const T = {
     friendly: "Rahmat! 🙌 Savollaringiz bo'lsa, Direct'ga yozing.",
     titleKw: (kw: number) => `${kw} kW issiqlik uchun mos teplonasos:`,
     givesKw: (kw: number) => `qishda (−12°C) ${kw} kW issiqlik beradi.`,
-    bigKw: (kw: number, hp: number, nominal: number) => `${kw} kW issiqlik uchun taxminan ${hp} HP · ${nominal} kW nominal quvvatli teplonasos kerak (qishki hisob). Bunday loyiha individual tuziladi — narx va eng yaxshi variantni mutaxassis aytadi: ${SPECIALIST_PHONE}. Bino necha m² va qayerda joylashgan?`,
+    bigKw: (kw: number, hp: number) => `${kw} kW issiqlik uchun taxminan ${hp} HP quvvatli teplonasos kerak (qishki hisob). Bunday loyiha individual tuziladi — narx va eng yaxshi variantni mutaxassis aytadi: ${SPECIALIST_PHONE}. Bino necha m² va qayerda joylashgan?`,
     replyKw: (kw: number) => `${kw} kW uchun hisobni Direct'ga yubordik 📩`, tall: "⚠️ Shift baland — mutaxassis aniq hisoblaydi.",
+    joke: "😄 Bunchasi butun mahallani isitadi! Uyingiz necha m²?", clarify: (n: number) => `${n} m² mi yoki ${n} kW?`,
+    power: (kw: string, kwh: number) => `⚡ ${kw} kW kuniga ~10 soat ishlasa: ~${kwh} kWh/oy (taxminan, ish rejimiga bog'liq). So'mdagi narxini mutaxassis aytadi: ${SPECIALIST_PHONE}`,
   },
   ru: {
     hello: "Здравствуйте!",
@@ -188,8 +206,10 @@ const T = {
     friendly: "Спасибо! 🙌 Если есть вопросы, пишите в Direct.",
     titleKw: (kw: number) => `Подходящий тепловой насос на ${kw} kW тепла:`,
     givesKw: (kw: number) => `зимой (−12°C) даёт ${kw} kW тепла.`,
-    bigKw: (kw: number, hp: number, nominal: number) => `Для ${kw} kW тепла нужен тепловой насос примерно ${hp} HP · ${nominal} kW номинальной мощности (зимний расчёт). Такой проект составляется индивидуально — цену и лучший вариант подскажет специалист: ${SPECIALIST_PHONE}. Какая площадь здания в м² и где оно находится?`,
+    bigKw: (kw: number, hp: number) => `Для ${kw} kW тепла нужен тепловой насос примерно на ${hp} HP (зимний расчёт). Такой проект составляется индивидуально — цену и лучший вариант подскажет специалист: ${SPECIALIST_PHONE}. Какая площадь здания в м² и где оно находится?`,
     replyKw: (kw: number) => `Расчёт для ${kw} kW отправили в Direct 📩`, tall: "⚠️ Потолок высокий — специалист рассчитает точно.",
+    joke: "😄 Столько хватит на целый квартал! Какая площадь вашего дома в м²?", clarify: (n: number) => `${n} м² или ${n} kW?`,
+    power: (kw: string, kwh: number) => `⚡ ${kw} kW при работе ~10 часов в день: ~${kwh} кВт·ч/мес (примерно, зависит от режима работы). Стоимость в сумах подскажет специалист: ${SPECIALIST_PHONE}`,
   },
 } as const;
 export const texts = (lang: Lang) => T[lang];
@@ -197,13 +217,17 @@ export const texts = (lang: Lang) => T[lang];
 export type HeatPumpCalc = { text: string; m2: number; big: boolean; summary: string; priceUsd: number | null };
 
 /** The HISOB XABARI for m², in Uzbek or Russian (Instagram's limit is 1000 chars). */
-export function calcMessage(m2: number, models: readonly HeatPumpRow[], rate: string | number | null, buffer: { usd: number; liters: number }, lang: Lang = "uz"): HeatPumpCalc {
-  const t = T[lang], footer = t.footer.join("\n");
+/** `hello`: only the chat's first message greets; `footer` (AI note, 2 phones, "leave your phone"): only the first calculation. */
+export type CalcStyle = { hello?: boolean; footer?: boolean };
+const styled = (t: (typeof T)[Lang], style: CalcStyle) => ({ hello: style.hello === false ? "" : `${t.hello} `, footer: style.footer === false ? "" : `\n\n${t.footer.join("\n")}` });
+
+export function calcMessage(m2: number, models: readonly HeatPumpRow[], rate: string | number | null, buffer: { usd: number; liters: number }, lang: Lang = "uz", style: CalcStyle = {}): HeatPumpCalc {
+  const t = T[lang], { hello, footer } = styled(t, style);
   const pick = pickHeatPump(m2, models);
-  if (pick.big) return { text: `${t.hello} ${t.big(m2, pick.hp, pick.kw)}\n\n${footer}`, m2, big: true, summary: `Katta loyiha: ~${pick.hp} HP · ${pick.kw} kW`, priceUsd: null };
+  if (pick.big) return { text: `${hello}${t.big(m2, pick.hp, pick.kw)}${footer}`, m2, big: true, summary: `Katta loyiha: ~${pick.hp} HP · ${pick.kw} kW`, priceUsd: null };
   const { model, bigger } = pick;
-  const lines = [`${t.hello} ${t.title(m2)}`, `🔥 ${modelLabel(model)} — ${t.heats(m2)}${bigger ? t.bigger(modelLabel(bigger)) : ""}`, ...modelLines(model, rate, buffer, lang)];
-  return { text: `${lines.join("\n")}\n\n${footer}`, m2, big: false, summary: `${modelLabel(model)} — ${usdText(model.priceUsd)}`, priceUsd: model.priceUsd };
+  const lines = [`${hello}${t.title(m2)}`, `🔥 ${modelLabel(model)} — ${t.heats(m2)}${bigger ? t.bigger(modelLabel(bigger)) : ""}`, ...modelLines(model, rate, buffer, lang)];
+  return { text: `${lines.join("\n")}${footer}`, m2, big: false, summary: `${modelLabel(model)} — ${usdText(model.priceUsd)}`, priceUsd: model.priceUsd };
 }
 
 /** Price (with the CBU so‘m), buffer tank, 380V, fan-coil and delivery lines of one model. */
@@ -222,15 +246,15 @@ function modelLines(model: HeatPumpRow, rate: string | number | null, buffer: { 
  * The HISOB XABARI for a needed winter heat power (kW): the smallest active model whose winter kW covers it, with its
  * price; more than any model → big project: nominal ≈ kW ÷ 0.66, HP ≈ nominal ÷ 3, no price, the specialist, m² + place.
  */
-export function calcKwMessage(kw: number, models: readonly HeatPumpRow[], rate: string | number | null, buffer: { usd: number; liters: number }, lang: Lang = "uz"): HeatPumpCalc {
-  const t = T[lang], footer = t.footer.join("\n");
+export function calcKwMessage(kw: number, models: readonly HeatPumpRow[], rate: string | number | null, buffer: { usd: number; liters: number }, lang: Lang = "uz", style: CalcStyle = {}): HeatPumpCalc {
+  const t = T[lang], { hello, footer } = styled(t, style);
   const model = models.filter(item => item.isActive).sort((a, b) => a.winterKw - b.winterKw).find(item => item.winterKw >= kw);
   if (!model) {
-    const nominal = Math.round(kw / 0.66), hp = Math.round(kw / 0.66 / 3);
-    return { text: `${t.hello} ${t.bigKw(kw, hp, nominal)}\n\n${footer}`, m2: 0, big: true, summary: `${kw} kW → katta loyiha: ~${hp} HP · ${nominal} kW`, priceUsd: null };
+    const hp = Math.round(kw / 0.66 / 3);
+    return { text: `${hello}${t.bigKw(kw, hp)}${footer}`, m2: 0, big: true, summary: `${kw} kW → katta loyiha: ~${hp} HP`, priceUsd: null };
   }
-  const lines = [`${t.hello} ${t.titleKw(kw)}`, `🔥 ${modelLabel(model)} — ${t.givesKw(Number(short(model.winterKw)))}`, ...modelLines(model, rate, buffer, lang)];
-  return { text: `${lines.join("\n")}\n\n${footer}`, m2: 0, big: false, summary: `${kw} kW → ${modelLabel(model)} — ${usdText(model.priceUsd)}`, priceUsd: model.priceUsd };
+  const lines = [`${hello}${t.titleKw(kw)}`, `🔥 ${modelLabel(model)} — ${t.givesKw(Number(short(model.winterKw)))}`, ...modelLines(model, rate, buffer, lang)];
+  return { text: `${lines.join("\n")}${footer}`, m2: 0, big: false, summary: `${kw} kW → ${modelLabel(model)} — ${usdText(model.priceUsd)}`, priceUsd: model.priceUsd };
 }
 
 // ---- Comment on a teplonasos post -------------------------------------------------------------------------
@@ -293,11 +317,14 @@ export function heatPumpFromAiReply(ai: HeatAi, text = ""): { result: HeatPumpCo
   const lang: Lang = ai.lang === "ru" ? "ru" : "uz", tag = `AI:${ai.intent}`.slice(0, 20), specialist = !!ai.specialist && ai.intent === "QUESTION";
   // A question no fact answers (material / service price…): the smooth "the specialist will answer" in the DM.
   const extra = specialist ? specialistReply(ai.dm_extra, lang) : safeAiText(ai.dm_extra, 400), reply = safeAiText(ai.public_reply, 150, true);
-  // The code's parser backs up the AI's m² ("3.4 4ta xonw" → 48).
-  const m2 = (ai.m2 === null ? null : inRange(ai.m2)) ?? (ai.intent === "AREA_M2" || ai.intent === "QUESTION" ? extractM2(text) : null), kw = ai.kw !== null && ai.kw >= 1 && ai.kw <= 5000 ? Math.round(ai.kw) : null;
+  // The AI's numbers only when written in the comment; the parser backs them up ("3.4 4ta xonw" → 48, "Uyim 180" → 180).
+  const values = directValues(text, ai), { m2, kw } = values, t = T[lang];
   const out = (result: HeatPumpComment, values: { reply?: string; extra?: string } = {}) => ({ result, reply: values.reply ?? "", extra: values.extra ?? "", lang, tag, specialist: specialist && !!values.extra });
   if (ai.intent === "SPAM_INSULT") return out({ kind: "SPAM" });
-  if (kw && (ai.intent === "POWER_KW" || !m2)) return out({ kind: "HEAT_PUMP", intent: "kw", m2: null, kw }, { extra });
+  if (values.absurd) return out({ kind: "POSITIVE" }, { reply: t.joke });
+  if (values.clarify) return out({ kind: "HEAT_PUMP", intent: "question", m2: null }, { extra: t.clarify(values.clarify) });
+  if (values.power) return out({ kind: "HEAT_PUMP", intent: "question", m2: null }, { extra: powerText(values.power, lang) });
+  if (kw) return out({ kind: "HEAT_PUMP", intent: "kw", m2: null, kw }, { extra });
   if (m2) return out({ kind: "HEAT_PUMP", intent: "calc", m2 }, { extra });
   if (ai.intent === "BANTER" || ai.intent === "PRAISE") return out({ kind: "POSITIVE" }, { reply });
   if (ai.intent === "OTHER_PRODUCT") return out({ kind: "HEAT_PUMP", intent: "other", m2: null });
@@ -385,9 +412,9 @@ export function heatPumpOutgoing(intent: HeatPumpIntent, input: { m2?: number | 
   if (intent === "kw" && input.kw && input.calc) return { reply: t.replyKw(input.kw), dm: withExtra(input.calc) };
   if (intent === "calc" && input.m2 && input.calc) return { reply: t.replyCalc(input.m2), dm: withExtra(input.calc) };
   if (intent === "ask") return { reply: t.replyAsk, dm: `${t.hello} ${t.m2Question}` };
-  if (intent === "question") return { reply: t.replyQuestion, dm: `${t.hello} ${input.answer?.trim() ? `${input.answer.trim()}
-
-` : ""}${t.m2Question}` };
+  // A clarifying answer ("170 m² mi yoki 170 kW?") is the whole question.
+  const answer = input.answer?.trim() ?? "";
+  if (intent === "question") return { reply: t.replyQuestion, dm: `${t.hello} ${answer.endsWith("?") ? answer : `${answer ? `${answer}\n\n` : ""}${t.m2Question}`}` };
   return { reply: t.offTopic, dm: null };
 }
 
