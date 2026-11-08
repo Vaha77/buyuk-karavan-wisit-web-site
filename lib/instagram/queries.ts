@@ -5,6 +5,7 @@ import { appConfig, GraphError, listMedia, type IgMedia } from "./graph";
 import { needsInsightsReconnect } from "./insights-rules";
 import { errorReason, isReel, tashkentDayStart } from "./rules";
 import { isHeatPumpAccount } from "./heat-pump";
+import { coolerTexts } from "./cooler";
 import { accountName, accountToken, getInstagramAccount, listInstagramAccounts } from "./service";
 
 /** The account switcher: every connected account, the first connected first. */
@@ -64,6 +65,9 @@ export async function getInstagramBoard(accountId: string) {
     bufferUsd: Number(settings?.heatPumpBufferUsd ?? 145), bufferLiters: settings?.heatPumpBufferLiters ?? 60, telegramLinked,
     chain: Object.fromEntries(comments.map(row => { const thread = threads.find(item => item.mediaId === row.mediaId); return [row.mediaId, { comments: row._count._all, direct: row._count.dmSentAt, m2: thread?._count.m2 ?? 0, phone: thread?._count.phone ?? 0 }]; })) as Record<string, { comments: number; direct: number; m2: number; phone: number }>,
   })) : null;
+  // Xolodilnik ("global" only): Komplektlar and the Direct texts.
+  const cooler = isHeatPumpAccount(account?.id) ? await Promise.all([db.coolerKit.findMany({ orderBy: { minTons: "asc" } }), db.siteSettings.findUnique({ where: { id: "global" }, select: { coolerTexts: true } })])
+    .then(([kits, settings]) => ({ kits: kits.map(kit => ({ id: kit.id, minTons: kit.minTons, maxTons: kit.maxTons, name: kit.name, items: kit.items, productId: kit.productId, priceUsd: kit.priceUsd === null ? null : Number(kit.priceUsd), isActive: kit.isActive })), texts: coolerTexts(settings?.coolerTexts) })) : null;
   const perMedia: Record<string, { comments: number; sent: number; failed: number; leads: number }> = {};
   for (const row of stats) {
     const item = perMedia[row.mediaId] ??= { comments: 0, sent: 0, failed: 0, leads: 0 };
@@ -88,7 +92,8 @@ export async function getInstagramBoard(accountId: string) {
     media: list,
     mediaError,
     heatPump,
-    rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { heatPump: rule.heatPump, productId: rule.productId, secondProductId: rule.secondProductId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText, publicReplyVariants: rule.publicReplyVariants, priceText: rule.priceText ?? "" }])),
+    cooler,
+    rules: Object.fromEntries(rules.map(rule => [rule.mediaId, { heatPump: rule.heatPump, cooler: rule.cooler, productId: rule.productId, secondProductId: rule.secondProductId, isActive: rule.isActive, keywords: rule.keywords, dmTemplate: rule.dmTemplate, publicReplyEnabled: rule.publicReplyEnabled, publicReplyText: rule.publicReplyText, publicReplyVariants: rule.publicReplyVariants, priceText: rule.priceText ?? "" }])),
     stats: perMedia,
     journal: journal.map(row => ({ ...row, createdAt: row.createdAt.toISOString(), reviewedAt: row.reviewedAt?.toISOString() ?? null, aiCostUsd: row.aiCostUsd === null ? null : Number(row.aiCostUsd), permalink: permalinks.get(row.mediaId) ?? null })),
     products: products.map(item => ({ id: item.id, name: item.name, model: item.model, hasPrice: item.priceUsd !== null, isVisible: item.isVisible })),

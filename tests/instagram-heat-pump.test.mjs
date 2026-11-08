@@ -145,7 +145,7 @@ test("@eshikmaster never enters the teplonasos flow (m² / price comments includ
   assert.match(await read("../lib/instagram/queries.ts"), /const heatPump = isHeatPumpAccount\(account\?\.id\) \?/, "table / post type hidden for other accounts");
   const board = await read("../components/admin/instagram/instagram-board.tsx");
   assert.match(board, /\{board\.heatPump && <HeatPumpTable/);
-  assert.match(board, /\{heatPumpEnabled && <label className="bk-field"><span>Post turi/);
+  assert.match(board, /\{heatPumpEnabled && <><option value="cooler">Xolodilnik \(tonna\)<\/option><option value="heat">Teplonasos/);
   // An eshikmaster m² / price comment is classified by the old rules (not HEAT_PUMP).
   const rules = await import("../lib/instagram/rules.ts");
   assert.equal(rules.classifyByKeywords("150 kv narxi qancha", [], { contact: true, asks: true }).definite, "PRICE");
@@ -222,8 +222,8 @@ test("reply-comments: queued only on teplonasos posts of the global account; our
   assert.equal(rows.find(row => row.commentId === "r2").reason, "Javob-komment (reply) — javob berilmaydi");
 
   const service = await read("../lib/instagram/service.ts");
-  assert.match(service, /\.\.\.\(isHeatPumpAccount\(accountId\) \? \{ allowsReply: async \(mediaId: string\) => !!await getDb\(\)\.instagramMediaRule\.findFirst\(\{ where: \{ mediaId, accountId, heatPump: true \}/);
-  assert.match(service, /if \(comment\.parentId && !heatPumpReplyAnswered\(kind, comment\.heatPumpIntent, !!rule\?\.heatPump && isHeatPumpAccount\(account\.id\)\)\) \{ await finish\("SKIPPED", "Javob-komment \(reply\) — javob berilmaydi"\)/);
+  assert.match(service, /\.\.\.\(isHeatPumpAccount\(accountId\) \? \{ allowsReply: async \(mediaId: string\) => !!await getDb\(\)\.instagramMediaRule\.findFirst\(\{ where: \{ mediaId, accountId, OR: \[\{ heatPump: true \}, \{ cooler: true \}\] \}/);
+  assert.match(service, /if \(comment\.parentId && kind !== "COOLER" && !heatPumpReplyAnswered\(kind, comment\.heatPumpIntent, !!rule\?\.heatPump && isHeatPumpAccount\(account\.id\)\)\) \{ await finish\("SKIPPED", "Javob-komment \(reply\) — javob berilmaydi"\)/);
 });
 
 test("reply-comment is answered only with m², a price ask or a teplonasos question", () => {
@@ -269,8 +269,8 @@ test("every new m² is added to the one lead (450, 200), never a second lead", a
 
 test("saving a teplonasos post skips the product / price text / DM template checks", async () => {
   const actions = await read("../app/admin/(protected)/instagram/actions.ts");
-  assert.match(actions, /if \(!value\.heatPump\) \{\n[^\n]*DM matni bo‘sh bo‘lmasin[^\n]*\n\s*\/\/ Free text; \{narx_som\} \/ \{mahsulot\} \/ \{havola\} need a product\.\n\s*if \(\/\\{\(mahsulot\|narx_som\|havola\)\\}\/\.test\(value\.dmTemplate\)/);
-  assert.match(actions, /if \(!value\.heatPump\) \{[\s\S]*?Narx matnida[\s\S]*?\n  \}\n/, "price text check inside the block");
+  assert.match(actions, /if \(!value\.heatPump && !value\.cooler\) \{\n[^\n]*DM matni bo‘sh bo‘lmasin[^\n]*\n\s*\/\/ Free text; \{narx_som\} \/ \{mahsulot\} \/ \{havola\} need a product\.\n\s*if \(\/\\{\(mahsulot\|narx_som\|havola\)\\}\/\.test\(value\.dmTemplate\)/);
+  assert.match(actions, /if \(!value\.heatPump && !value\.cooler\) \{[\s\S]*?Narx matnida[\s\S]*?\n  \}\n/, "price text check inside the block");
 });
 
 test("reply to another person: leading @mentions are dropped before classifying", () => {
@@ -299,7 +299,7 @@ test("m² units: kvd, kv., kvm, kvadrat metr, м², кв.м", () => {
 test("saving a teplonasos post: the price post's DM template is not required", async () => {
   const actions = await read("../app/admin/(protected)/instagram/actions.ts");
   assert.match(actions, /dmTemplate: z\.string\(\)\.trim\(\)\.max\(900, "DM matni 900 belgidan oshmasin\."\),/, "no min(5) in the schema");
-  assert.match(actions, /if \(!value\.heatPump\) \{\n\s*if \(value\.dmTemplate\.length < 5\) return \{ ok: false, error: "DM matni bo‘sh bo‘lmasin\." \};/);
+  assert.match(actions, /if \(!value\.heatPump && !value\.cooler\) \{\n\s*if \(value\.dmTemplate\.length < 5\) return \{ ok: false, error: "DM matni bo‘sh bo‘lmasin\." \};/);
 });
 
 test("m² parser: км typo, units in any case, and a lone 20–1000 number as the fallback", () => {
@@ -377,7 +377,7 @@ test("Telegram: a teplonasos lead goes only to the private chat (with 3 retries)
   assert.equal(logs.filter(item => item.message === "Teplonasos Telegram yuborilmadi").length, 4, "each failure logged");
 
   const telegram = await read("../lib/telegram/service.ts");
-  assert.match(telegram, /if\(isHeatPumpLead\(row\)\)\{const message=await sendHeatPumpTelegram\(newLeadGroupText\(lead\)\);[^\n]*return !!message;\}\n\s*\/\/ The link's/, "returns before any group send, also on failure");
+  assert.match(telegram, /if\(isHeatPumpLead\(row\)\)\{const message=await sendHeatPumpTelegram\(newLeadGroupText\(lead\)\);[^\n]*return !!message;\}\n\s*\/\/ Xolodilnik leads/, "returns before any group send, also on failure");
   assert.match(telegram, /sendMessage\(telegramGroupChatId\(\),newLeadGroupText\(lead\),claimKeyboard\(lead\.id\)\)/, "other leads: the group, as before");
   const bot = await read("../lib/instagram/heat-pump-bot.ts");
   assert.match(bot, /deliverPrivate\(await heatPumpChatId\(\), chatId => sendMessage\(chatId, text, keyboard\)\)/);

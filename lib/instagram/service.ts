@@ -14,7 +14,8 @@ import { GraphError, getMediaPermalink, listComments, listMedia, refreshLongLive
 import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComments } from "./ingest";
 import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { negativeText, notifyNegative } from "./telegram";
-import { bindThread, buildCalc, sendHeatPumpTelegram, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
+import { bindThread, buildCalc, coolerCommentTexts, sendHeatPumpTelegram, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
+import { askText, coolerAction, coolerTons } from "./cooler";
 import { heatPumpAction, heatPumpOutgoing, heatPumpReplyAnswered, isHeatPumpAccount, langOf, texts, type HeatPumpIntent } from "./heat-pump";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, aiReplyProblem, tooSimilar, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
@@ -48,8 +49,8 @@ const storeFor = (accountId: string): IngestStore => ({
     const result = await getDb().instagramComment.createMany({ data: [{ ...row, accountId }], skipDuplicates: true });
     return result.count === 1;
   },
-  // Teplonasos posts only, and only on the "global" account.
-  ...(isHeatPumpAccount(accountId) ? { allowsReply: async (mediaId: string) => !!await getDb().instagramMediaRule.findFirst({ where: { mediaId, accountId, heatPump: true }, select: { mediaId: true } }) } : {}),
+  // Teplonasos / xolodilnik posts only, and only on the "global" account.
+  ...(isHeatPumpAccount(accountId) ? { allowsReply: async (mediaId: string) => !!await getDb().instagramMediaRule.findFirst({ where: { mediaId, accountId, OR: [{ heatPump: true }, { cooler: true }] }, select: { mediaId: true } }) } : {}),
 });
 
 /**
@@ -121,6 +122,8 @@ type Outcome = "sent" | "failed" | "skipped" | "notified" | "retry" | "rate-limi
 
 /** Keywords first; when they are unclear the AI decides; without the AI the keyword fallback, else UNKNOWN (no reply). */
 async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage; m2?: number | null; intent?: HeatPumpIntent | null; reply?: string }> {
+  // Xolodilnik post ("global" only): a tonnage starts the Direct chat; anything else is classified as usual.
+  if (coolerTons(rule, account.id, comment.text)) return { kind: "COOLER", by: "KEYWORD", usage: { tokens: 0, costUsd: 0 } };
   // Teplonasos post: only the "global" account (@eshikmaster never gets this flow).
   if (rule?.heatPump && isHeatPumpAccount(account.id)) {
     const { result, by, usage } = await classifyHeatPump(comment.text).catch(error => {
@@ -209,7 +212,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   }
   const kind = comment.kind as CommentKind;
   const account = context.account;
-  if (comment.parentId && !heatPumpReplyAnswered(kind, comment.heatPumpIntent, !!rule?.heatPump && isHeatPumpAccount(account.id))) { await finish("SKIPPED", "Javob-komment (reply) — javob berilmaydi"); return "skipped"; }
+  if (comment.parentId && kind !== "COOLER" && !heatPumpReplyAnswered(kind, comment.heatPumpIntent, !!rule?.heatPump && isHeatPumpAccount(account.id))) { await finish("SKIPPED", "Javob-komment (reply) — javob berilmaydi"); return "skipped"; }
   const [answered, repliesToday, calcs] = await Promise.all([
     db.instagramComment.count({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, OR: [{ dmSentAt: { not: null } }, { publicReplyAt: { not: null } }] } }),
     db.instagramComment.count({ where: { accountId: account.id, publicReplyAt: { gte: tashkentDayStart() } } }),
@@ -220,7 +223,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   const heatPost = !!rule?.heatPump && isHeatPumpAccount(account.id), heatPump = kind === "HEAT_PUMP" && heatPost;
   const friendly = heatPost ? texts(langOf(comment.text)).friendly : null;
   if (kind === "HEAT_PUMP" && !heatPump) { await finish("SKIPPED", "Teplonasos posti emas"); return "skipped"; }
-  const action: Action | ReturnType<typeof heatPumpAction> = heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit, calc) : chooseAction(kind, heatPost ? { ...account, positiveEnabled: true } : account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
+  const action: Action | ReturnType<typeof heatPumpAction> | ReturnType<typeof coolerAction> = kind === "COOLER" ? coolerAction(rule, answered > 0, repliesToday < account.dailyReplyLimit) : heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit, calc) : chooseAction(kind, heatPost ? { ...account, positiveEnabled: true } : account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
 
   if (action.type === "skip") { await finish("SKIPPED", action.reason); return "skipped"; }
   if (action.type === "notify") {
@@ -261,6 +264,12 @@ async function processComment(commentId: string, context: Context): Promise<Outc
       heatReply = friendly;
     }
   }
+  const tons = action.type === "cooler" ? coolerTons(rule, account.id, comment.text) : null;
+  if (action.type === "cooler") {
+    if (!tons) { await finish("SKIPPED", "Xolodilnik posti emas yoki tonna topilmadi"); return "skipped"; }
+    const texts = await coolerCommentTexts(langOf(comment.text));
+    dm = askText(texts, tons); heatReply = texts.reply;
+  }
   if (action.type === "price" || action.type === "question" || action.type === "contact") {
     const contactTemplates = { PHONE: account.phoneDmTemplate, ADDRESS: account.addressDmTemplate, HOURS: account.hoursDmTemplate };
     const template = action.type === "contact" ? contactTemplates[action.kind]
@@ -295,11 +304,12 @@ async function processComment(commentId: string, context: Context): Promise<Outc
     : (action.type === "question" || action.type === "contact" || (action.type === "price" && (!rule?.productId || account.aiReplyAll))) && action.publicReply ? account.questionReplyText
     : action.type === "general" ? account.generalReplyText
     : action.type === "positive" ? positive
-    : action.type === "heatpump" && action.publicReply ? heatReply : null;
+    : (action.type === "heatpump" || action.type === "cooler") && action.publicReply ? heatReply : null;
   let publicReply = action.type === "price" && rule && !rule.publicReplyEnabled ? null : reply?.trim() || null, dmFailed: string | null = null;
 
   // Teplonasos: the thread is marked before the DM goes out (the customer's answer may come at once).
-  let thread = dm && action.type === "heatpump" ? await openThread({ accountId: account.id, igsid: comment.fromId, mediaId: comment.mediaId, username: comment.username, dm, m2: comment.heatPumpM2, summary: heatSummary }) : null;
+  // Xolodilnik uses the same thread (flow "cooler"), so the teplonasos Direct handler answers it.
+  let thread = dm && (action.type === "heatpump" || tons) ? await openThread({ accountId: account.id, igsid: comment.fromId, mediaId: comment.mediaId, username: comment.username, dm, m2: comment.heatPumpM2, summary: heatSummary, tons: tons ?? undefined }) : null;
   if (dm) {
     // Saved before sending: the echo of this DM may arrive before the API call returns, and must count as automatic.
     await update({ dmText: dm, dmSentAt: new Date() });
@@ -346,7 +356,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   const reason = dmFailed ? `Direct ketmadi (${dmFailed}) — do‘stona javob yozildi` : action.type === "general" ? "Postga mahsulot biriktirilmagan · umumiy javob yozildi"
     : action.type === "heatpump" && "limit" in action ? "Sutkalik 5 ta hisob — mutaxassis telefoni yozildi"
     : action.type === "heatpump" && comment.heatPumpIntent === "other" ? "Mavzudan tashqari — call-center"
-    : (action.type === "price" || action.type === "question" || action.type === "contact" || action.type === "heatpump") && !action.publicReply ? "Kunlik limit — faqat Direct" : null;
+    : (action.type === "price" || action.type === "question" || action.type === "contact" || action.type === "heatpump" || action.type === "cooler") && !action.publicReply ? "Kunlik limit — faqat Direct" : null;
   await finish("SENT", reason);
   // Teplonasos lead: m² written or price asked.
   if (account.leadsEnabled && action.type === "heatpump" && dm && (comment.heatPumpIntent === "calc" || comment.heatPumpIntent === "ask")) {

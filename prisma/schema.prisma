@@ -195,6 +195,7 @@ model Product {
   calculationLineItems CalculationLineItem[]
   workshopItems        WorkshopOrderItem[]
   instagramRules       InstagramMediaRule[]  @relation("InstagramRuleProduct")
+  coolerKits           CoolerKit[]
   instagramSecondRules InstagramMediaRule[]  @relation("InstagramRuleSecondProduct")
 
   @@index([isVisible, order])
@@ -221,6 +222,8 @@ model SiteSettings {
   // Teplonasos: buffer tank for models sold without one.
   heatPumpBufferUsd    Decimal @default(145) @db.Decimal(10, 2)
   heatPumpBufferLiters Int     @default(60)
+  // Xolodilnik Direct texts edited in the admin ({ reply, ask, kit, final, phone, thanks, handoff, noPrice }); null = defaults.
+  coolerTexts          Json?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -1342,6 +1345,8 @@ enum InstagramCommentKind {
   HOURS
   // Teplonasos post (only the first account, "global"): m² → calculation in Direct.
   HEAT_PUMP
+  // Xolodilnik post: tonnage → Direct chat (kamera soni → komplekt, viloyat + telefon → lead).
+  COOLER
 }
 
 // Connected professional accounts (the first one, from before multi-account, has id "global"). The token is AES-256-GCM
@@ -1438,6 +1443,8 @@ model InstagramMediaRule {
   publicReplyVariants String[]  @default([])
   // "Teplonasos (m² + suhbat)" post (only the "global" account): m² → calculation DM, short Direct chat.
   heatPump           Boolean   @default(false)
+  // "Xolodilnik (tonna + suhbat)" post: tonnage → Direct chat with the Komplektlar table.
+  cooler             Boolean   @default(false)
   permalink          String?
   caption            String?
   postedAt           DateTime?
@@ -2094,11 +2101,36 @@ model HeatPumpThread {
   lastBotMid  String?   @db.VarChar(255)
   lastBotAt   DateTime?
   lastInMid   String?   @db.VarChar(255)
+  // "heat" (teplonasos) or "cooler" (xolodilnik: tons → chambers → kit; step "chambers" → "contact" → "done" / "handoff").
+  flow        String    @default("heat") @db.VarChar(10)
+  tons        Int?
+  chambers    Int?
+  region      String?
+  step        String?   @db.VarChar(10)
+  misses      Int       @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@unique([accountId, igsid])
   @@index([mediaId])
+}
+
+// Komplektlar: one chamber of minTons–maxTons gets this kit; the price is the Prays product's (live), priceUsd only a
+// fallback; neither = "Narxni sotuvchimiz aniq aytadi".
+model CoolerKit {
+  id        String   @id @default(cuid())
+  minTons   Int
+  maxTons   Int
+  name      String   @db.VarChar(80)
+  items     String[] @default([])
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  priceUsd  Decimal? @db.Decimal(10, 2)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
 }
 
 // A private Telegram chat bound by sharing a verified contact ("heatpump": +998 91 637 77 77 gets the teplonasos leads).
