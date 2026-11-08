@@ -11,7 +11,7 @@ import { sendMessage } from "@/lib/telegram/client";
 import type { InlineKeyboard, TelegramMessage } from "@/lib/telegram/types";
 import { extractPhone } from "./direct-rules";
 import { sendDirectMessage } from "./graph";
-import { HUMAN_MUTE_MS, backlogText, calcMessage, deliverPrivate, isHeatPumpContact, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
+import { HUMAN_MUTE_MS, backlogText, calcMessage, deliverPrivate, isHeatPumpContact, m2List, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
 import { randomGapMs, type MessageEvent } from "./rules";
 
 const safeType = (error: unknown) => error instanceof Error ? error.name : "UnknownError";
@@ -96,14 +96,15 @@ export async function bindThread(threadId: string, accountId: string, fromId: st
   return db.heatPumpThread.update({ where: { id: other.id }, data: { username: moved.username, m2: moved.m2 ?? other.m2, model: moved.model ?? other.model, leadId: other.leadId ?? moved.leadId, lastBotText: moved.lastBotText, lastBotAt: moved.lastBotAt, ...mid } });
 }
 
-/** One lead per person ("ighp:<igsid>"), kept up to date with m², model / price, phone. Returns its id. */
+/** One lead per person ("ighp:<igsid>"), kept up to date with every m² ("450, 200 m²"), the last model / price, phone. Returns its id. */
 export async function upsertHeatPumpLead(thread: HeatPumpThread, account: InstagramAccount, comment?: string | null) {
   const db = getDb();
   const submissionKey = `ighp:${thread.igsid}`.slice(0, 100);
   const handle = thread.username ? `@${thread.username}` : `Instagram ${thread.igsid}`;
   const big = !!thread.model?.startsWith("Katta loyiha");
-  const fields = { phone: thread.phone, dimensions: thread.m2 ? `${thread.m2} m²` : null, product: thread.model, notes: [`Instagram · teplonasos (@${account.username})`, comment ? `Komment: «${comment.slice(0, 500)}»` : "", `Instagram: ${thread.username ? `https://instagram.com/${thread.username}` : handle}`, thread.m2 ? `Maydon: ${thread.m2} m²` : "Maydon: so‘ralgan", thread.model ? `Hisob: ${thread.model}` : "", big ? "⚠️ Katta loyiha" : "", thread.phone ? `Telefon: ${thread.phone}` : ""].filter(Boolean).join("\n") };
-  const existing = await db.lead.findUnique({ where: { submissionKey }, select: { id: true } });
+  const existing = await db.lead.findUnique({ where: { submissionKey }, select: { id: true, dimensions: true } });
+  const dimensions = m2List(existing?.dimensions, thread.m2);
+  const fields = { phone: thread.phone, dimensions, product: thread.model, notes: [`Instagram · teplonasos (@${account.username})`, comment ? `Komment: «${comment.slice(0, 500)}»` : "", `Instagram: ${thread.username ? `https://instagram.com/${thread.username}` : handle}`, dimensions ? `Maydon: ${dimensions}` : "Maydon: so‘ralgan", thread.model ? `Hisob: ${thread.model}` : "", big ? "⚠️ Katta loyiha" : "", thread.phone ? `Telefon: ${thread.phone}` : ""].filter(Boolean).join("\n") };
   if (existing) {
     await db.lead.update({ where: { id: existing.id }, data: fields });
     return existing.id;
