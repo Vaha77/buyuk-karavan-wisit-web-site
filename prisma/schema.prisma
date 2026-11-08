@@ -221,6 +221,8 @@ model SiteSettings {
   // Teplonasos: buffer tank for models sold without one.
   heatPumpBufferUsd    Decimal @default(145) @db.Decimal(10, 2)
   heatPumpBufferLiters Int     @default(60)
+  // Xolodilnik Direct texts edited in the admin ({ reply, ask, kit, final, phone, thanks, handoff, noPrice }); null = defaults.
+  coolerTexts          Json?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -1342,6 +1344,8 @@ enum InstagramCommentKind {
   HOURS
   // Teplonasos post (only the first account, "global"): m² → calculation in Direct.
   HEAT_PUMP
+  // Xolodilnik post: tonnage → Direct chat (kamera soni → komplekt, viloyat + telefon → lead).
+  COOLER
 }
 
 // Connected professional accounts (the first one, from before multi-account, has id "global"). The token is AES-256-GCM
@@ -1438,6 +1442,8 @@ model InstagramMediaRule {
   publicReplyVariants String[]  @default([])
   // "Teplonasos (m² + suhbat)" post (only the "global" account): m² → calculation DM, short Direct chat.
   heatPump           Boolean   @default(false)
+  // "Xolodilnik (tonna + suhbat)" post: tonnage → Direct chat with the Komplektlar table.
+  cooler             Boolean   @default(false)
   permalink          String?
   caption            String?
   postedAt           DateTime?
@@ -2094,6 +2100,48 @@ model HeatPumpThread {
   lastBotMid  String?   @db.VarChar(255)
   lastBotAt   DateTime?
   lastInMid   String?   @db.VarChar(255)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([accountId, igsid])
+  @@index([mediaId])
+}
+
+// Komplektlar: one chamber of minTons–maxTons gets this kit; priceUsd null = "Narxni sotuvchimiz aniq aytadi".
+model CoolerKit {
+  id        String   @id @default(cuid())
+  minTons   Int
+  maxTons   Int
+  name      String   @db.VarChar(80)
+  items     String[] @default([])
+  priceUsd  Decimal? @db.Decimal(10, 2)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A Direct chat started from a xolodilnik post comment (one per comment; a new comment restarts the person's chat).
+model CoolerThread {
+  id          String    @id @default(cuid())
+  accountId   String    @db.VarChar(64)
+  igsid       String    @db.VarChar(64)
+  commentId   String    @unique @db.VarChar(64)
+  mediaId     String    @db.VarChar(64)
+  username    String?
+  // "chambers" → "contact" → "done"; "handoff" = the seller writes, the bot is silent.
+  step        String    @default("chambers") @db.VarChar(10)
+  tons        Int
+  chambers    Int?
+  kit         String?
+  region      String?
+  phone       String?
+  misses      Int       @default(0)
+  leadId      String?
+  lastBotText String?
+  lastBotMid  String?   @db.VarChar(255)
+  lastBotAt   DateTime?
+  lastInMid   String?   @db.VarChar(255)
+  mutedUntil  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

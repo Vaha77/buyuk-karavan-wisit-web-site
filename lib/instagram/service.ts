@@ -15,6 +15,8 @@ import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComme
 import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { negativeText, notifyNegative } from "./telegram";
 import { bindThread, buildCalc, sendHeatPumpTelegram, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
+import { askText, coolerAction, extractTons } from "./cooler";
+import { bindCoolerThread, handleCoolerDirect, loadCoolerTexts, openCoolerThread } from "./cooler-bot";
 import { heatPumpAction, heatPumpOutgoing, heatPumpReplyAnswered, isHeatPumpAccount, langOf, texts, type HeatPumpIntent } from "./heat-pump";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, aiReplyProblem, tooSimilar, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
@@ -79,6 +81,7 @@ export async function ingestNotification(payload: unknown) {
 export async function afterNotification(results: NonNullable<Awaited<ReturnType<typeof ingestNotification>>>) {
   await Promise.all(results.map(async result => {
     if (isHeatPumpAccount(result.account.id) && result.events.length) await handleHeatPumpDirect(result.events, result.account, accountToken(result.account));
+    if (result.events.length) await handleCoolerDirect(result.events, result.account, accountToken(result.account));
     if (result.direct.touched.length || result.direct.phones.length) await afterDirectEvents(result.direct, result.account, accountToken(result.account)).catch(error => console.error("Instagram Direct failed", { type: safeType(error) }));
     if (result.queued.length) await processQueue({ accountId: result.account.id, budgetMs: 240_000 });
   }));
@@ -121,6 +124,8 @@ type Outcome = "sent" | "failed" | "skipped" | "notified" | "retry" | "rate-limi
 
 /** Keywords first; when they are unclear the AI decides; without the AI the keyword fallback, else UNKNOWN (no reply). */
 async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage; m2?: number | null; intent?: HeatPumpIntent | null; reply?: string }> {
+  // Xolodilnik post: a tonnage starts the Direct chat; anything else is classified as usual.
+  if (rule?.cooler && extractTons(comment.text)) return { kind: "COOLER", by: "KEYWORD", usage: { tokens: 0, costUsd: 0 } };
   // Teplonasos post: only the "global" account (@eshikmaster never gets this flow).
   if (rule?.heatPump && isHeatPumpAccount(account.id)) {
     const { result, by, usage } = await classifyHeatPump(comment.text).catch(error => {
@@ -219,7 +224,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   const heatPost = !!rule?.heatPump && isHeatPumpAccount(account.id), heatPump = kind === "HEAT_PUMP" && heatPost;
   const friendly = heatPost ? texts(langOf(comment.text)).friendly : null;
   if (kind === "HEAT_PUMP" && !heatPump) { await finish("SKIPPED", "Teplonasos posti emas"); return "skipped"; }
-  const action: Action | ReturnType<typeof heatPumpAction> = heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit, comment.heatPumpIntent === "calc" && !calcSent) : chooseAction(kind, heatPost ? { ...account, positiveEnabled: true } : account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
+  const action: Action | ReturnType<typeof heatPumpAction> | ReturnType<typeof coolerAction> = kind === "COOLER" ? coolerAction(rule, answered > 0, repliesToday < account.dailyReplyLimit) : heatPump ? heatPumpAction(rule, answered > 0, repliesToday < account.dailyReplyLimit, comment.heatPumpIntent === "calc" && !calcSent) : chooseAction(kind, heatPost ? { ...account, positiveEnabled: true } : account, { rule, alreadyAnswered: answered > 0, repliesToday, generalReplyEnabled: account.generalReplyEnabled });
 
   if (action.type === "skip") { await finish("SKIPPED", action.reason); return "skipped"; }
   if (action.type === "notify") {
@@ -259,6 +264,12 @@ async function processComment(commentId: string, context: Context): Promise<Outc
       heatReply = friendly;
     }
   }
+  const tons = action.type === "cooler" ? extractTons(comment.text) : null;
+  if (action.type === "cooler") {
+    if (!tons) { await finish("SKIPPED", "Tonna topilmadi"); return "skipped"; }
+    const texts = await loadCoolerTexts();
+    dm = askText(texts, tons); heatReply = texts.reply;
+  }
   if (action.type === "price" || action.type === "question" || action.type === "contact") {
     const contactTemplates = { PHONE: account.phoneDmTemplate, ADDRESS: account.addressDmTemplate, HOURS: account.hoursDmTemplate };
     const template = action.type === "contact" ? contactTemplates[action.kind]
@@ -293,11 +304,12 @@ async function processComment(commentId: string, context: Context): Promise<Outc
     : (action.type === "question" || action.type === "contact" || (action.type === "price" && (!rule?.productId || account.aiReplyAll))) && action.publicReply ? account.questionReplyText
     : action.type === "general" ? account.generalReplyText
     : action.type === "positive" ? positive
-    : action.type === "heatpump" && action.publicReply ? heatReply : null;
+    : (action.type === "heatpump" || action.type === "cooler") && action.publicReply ? heatReply : null;
   let publicReply = action.type === "price" && rule && !rule.publicReplyEnabled ? null : reply?.trim() || null, dmFailed: string | null = null;
 
   // Teplonasos: the thread is marked before the DM goes out (the customer's answer may come at once).
   let thread = dm && action.type === "heatpump" ? await openThread({ accountId: account.id, igsid: comment.fromId, mediaId: comment.mediaId, username: comment.username, dm, m2: comment.heatPumpM2, summary: heatSummary }) : null;
+  const cooler = dm && tons ? await openCoolerThread({ accountId: account.id, igsid: comment.fromId, commentId, mediaId: comment.mediaId, username: comment.username, tons, dm }) : null;
   if (dm) {
     // Saved before sending: the echo of this DM may arrive before the API call returns, and must count as automatic.
     await update({ dmText: dm, dmSentAt: new Date() });
@@ -305,6 +317,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
       const sent = await sendPrivateReply(context.token, account.igUserId, commentId, dm);
       await update({ dmText: dm, dmMessageId: sent.message_id ?? null, dmSentAt: new Date(), attempts: { increment: 1 } });
       if (thread) thread = await bindThread(thread.id, account.id, comment.fromId, sent).catch(error => { console.error("Instagram heat pump thread bind failed", { type: safeType(error) }); return thread; });
+      if (cooler) await bindCoolerThread(cooler, sent).catch(error => console.error("Instagram cooler thread bind failed", { type: safeType(error) }));
     } catch (error) {
       const info = errorInfo(error), attempts = comment.attempts + 1;
       console.error("Instagram private reply failed", { type: safeType(error) });
@@ -343,7 +356,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
 
   const reason = dmFailed ? `Direct ketmadi (${dmFailed}) — do‘stona javob yozildi` : action.type === "general" ? "Postga mahsulot biriktirilmagan · umumiy javob yozildi"
     : action.type === "heatpump" && comment.heatPumpIntent === "other" ? "Mavzudan tashqari — call-center"
-    : (action.type === "price" || action.type === "question" || action.type === "contact" || action.type === "heatpump") && !action.publicReply ? "Kunlik limit — faqat Direct" : null;
+    : (action.type === "price" || action.type === "question" || action.type === "contact" || action.type === "heatpump" || action.type === "cooler") && !action.publicReply ? "Kunlik limit — faqat Direct" : null;
   await finish("SENT", reason);
   // Teplonasos lead: m² written or price asked.
   if (account.leadsEnabled && action.type === "heatpump" && dm && (comment.heatPumpIntent === "calc" || comment.heatPumpIntent === "ask")) {

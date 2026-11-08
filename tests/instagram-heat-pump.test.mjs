@@ -145,7 +145,7 @@ test("@eshikmaster never enters the teplonasos flow (m² / price comments includ
   assert.match(await read("../lib/instagram/queries.ts"), /const heatPump = isHeatPumpAccount\(account\?\.id\) \?/, "table / post type hidden for other accounts");
   const board = await read("../components/admin/instagram/instagram-board.tsx");
   assert.match(board, /\{board\.heatPump && <HeatPumpTable/);
-  assert.match(board, /\{heatPumpEnabled && <label className="bk-field"><span>Post turi/);
+  assert.match(board, /\{heatPumpEnabled && <option value="heat">Teplonasos/);
   // An eshikmaster m² / price comment is classified by the old rules (not HEAT_PUMP).
   const rules = await import("../lib/instagram/rules.ts");
   assert.equal(rules.classifyByKeywords("150 kv narxi qancha", [], { contact: true, asks: true }).definite, "PRICE");
@@ -245,8 +245,8 @@ test("m² coming later: one more calculation + public reply despite the one-repl
 
 test("saving a teplonasos post skips the product / price text / DM template checks", async () => {
   const actions = await read("../app/admin/(protected)/instagram/actions.ts");
-  assert.match(actions, /if \(!value\.heatPump\) \{\n[^\n]*DM matni bo‘sh bo‘lmasin[^\n]*\n\s*\/\/ Free text; \{narx_som\} \/ \{mahsulot\} \/ \{havola\} need a product\.\n\s*if \(\/\\{\(mahsulot\|narx_som\|havola\)\\}\/\.test\(value\.dmTemplate\)/);
-  assert.match(actions, /if \(!value\.heatPump\) \{[\s\S]*?Narx matnida[\s\S]*?\n  \}\n/, "price text check inside the block");
+  assert.match(actions, /if \(!value\.heatPump && !value\.cooler\) \{\n[^\n]*DM matni bo‘sh bo‘lmasin[^\n]*\n\s*\/\/ Free text; \{narx_som\} \/ \{mahsulot\} \/ \{havola\} need a product\.\n\s*if \(\/\\{\(mahsulot\|narx_som\|havola\)\\}\/\.test\(value\.dmTemplate\)/);
+  assert.match(actions, /if \(!value\.heatPump && !value\.cooler\) \{[\s\S]*?Narx matnida[\s\S]*?\n  \}\n/, "price text check inside the block");
 });
 
 test("reply to another person: leading @mentions are dropped before classifying", () => {
@@ -275,7 +275,7 @@ test("m² units: kvd, kv., kvm, kvadrat metr, м², кв.м", () => {
 test("saving a teplonasos post: the price post's DM template is not required", async () => {
   const actions = await read("../app/admin/(protected)/instagram/actions.ts");
   assert.match(actions, /dmTemplate: z\.string\(\)\.trim\(\)\.max\(900, "DM matni 900 belgidan oshmasin\."\),/, "no min(5) in the schema");
-  assert.match(actions, /if \(!value\.heatPump\) \{\n\s*if \(value\.dmTemplate\.length < 5\) return \{ ok: false, error: "DM matni bo‘sh bo‘lmasin\." \};/);
+  assert.match(actions, /if \(!value\.heatPump && !value\.cooler\) \{\n\s*if \(value\.dmTemplate\.length < 5\) return \{ ok: false, error: "DM matni bo‘sh bo‘lmasin\." \};/);
 });
 
 test("m² parser: км typo, units in any case, and a lone 20–1000 number as the fallback", () => {

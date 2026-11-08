@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Camera, ExternalLink, Film, RefreshCw, Search, X } from "lucide-react";
-import { runInstagramQueueAction, saveHeatPumpTableAction, saveInstagramGeneralAction, saveMediaRuleAction } from "@/app/admin/(protected)/instagram/actions";
+import { runInstagramQueueAction, saveCoolerSettingsAction, saveHeatPumpTableAction, saveInstagramGeneralAction, saveMediaRuleAction } from "@/app/admin/(protected)/instagram/actions";
 import { BusyLabel } from "@/components/admin/feedback";
 import type { BoardMedia, InstagramBoard as Board } from "@/lib/instagram/queries";
 import { COMMENT_KINDS, CONTACT_PLACEHOLDERS, DEFAULT_DAILY_REPLY_LIMIT, DEFAULT_DM_TEMPLATE, DEFAULT_GENERAL_REPLY, DEFAULT_KEYWORDS, DEFAULT_PUBLIC_REPLY_VARIANTS, DEFAULT_QUESTION_DM, DEFAULT_QUESTION_REPLY, KIND_LABELS, PLACEHOLDERS, SECOND_PLACEHOLDERS, type CommentKind } from "@/lib/instagram/constants";
@@ -50,7 +50,8 @@ function ProductPicker({ products, value, onChange }: { products: Product[]; val
 
 type Chain = NonNullable<Board["heatPump"]>["chain"][string];
 function MediaCard({ accountId, media, rule, stats, products, canEdit, heatPumpEnabled, chain }: { accountId: string; media: BoardMedia; rule: Board["rules"][string] | undefined; stats: Board["stats"][string] | undefined; products: Product[]; canEdit: boolean; heatPumpEnabled: boolean; chain?: Chain }) {
-  const [heatPump, setHeatPump] = useState(heatPumpEnabled && !!rule?.heatPump);
+  const [postType, setPostType] = useState(heatPumpEnabled && rule?.heatPump ? "heat" : rule?.cooler ? "cooler" : "price");
+  const heatPump = postType === "heat", cooler = postType === "cooler";
   const [productId, setProductId] = useState<string | null>(rule?.productId ?? null);
   const [secondProductId, setSecondProductId] = useState<string | null>(rule?.secondProductId ?? null);
   const [isActive, setActive] = useState(rule?.isActive ?? true);
@@ -63,7 +64,7 @@ function MediaCard({ accountId, media, rule, stats, products, canEdit, heatPumpE
   const { pending, save, note, clear } = useSave();
   const change = <T,>(setter: (value: T) => void) => (value: T) => { setter(value); clear(); };
   const product = products.find(item => item.id === productId);
-  const state = !rule ? "Sozlanmagan" : !rule.isActive ? "O‘chiq" : heatPumpEnabled && rule.heatPump ? "Teplonasos" : rule.productId ? "Faol" : rule.priceText ? "Narx matni" : "Mahsulot yo‘q";
+  const state = !rule ? "Sozlanmagan" : !rule.isActive ? "O‘chiq" : heatPumpEnabled && rule.heatPump ? "Teplonasos" : rule.cooler ? "Xolodilnik" : rule.productId ? "Faol" : rule.priceText ? "Narx matni" : "Mahsulot yo‘q";
 
   return <article className={`bk-card ig-media ${rule?.isActive && rule.productId ? "is-live" : ""}`}>
     <div className="ig-media-top">
@@ -77,15 +78,15 @@ function MediaCard({ accountId, media, rule, stats, products, canEdit, heatPumpE
         <p className="ig-caption">{media.caption || <span className="bk-muted">Izohsiz</span>}</p>
         <p className="bk-muted">{media.postedAt ? day(media.postedAt) : "—"}{media.commentsCount !== null && ` · ${media.commentsCount} komment`}{!media.fromApi && " · eski post"}</p>
         <p className="ig-stats"><span>{stats?.comments ?? 0} komment</span><span>{stats?.sent ?? 0} javob</span><span>{stats?.leads ?? 0} lid</span>{!!stats?.failed && <span className="is-bad">{stats.failed} xato</span>}</p>
-        <p><span className={`ig-tag ${state === "Faol" || state === "Narx matni" || state === "Teplonasos" ? "is-ok" : ""}`}>{state}</span>{product && !heatPump && <span className="ig-product"> {product.name}</span>}</p>
+        <p><span className={`ig-tag ${state === "Faol" || state === "Narx matni" || state === "Teplonasos" || state === "Xolodilnik" ? "is-ok" : ""}`}>{state}</span>{product && postType === "price" && <span className="ig-product"> {product.name}</span>}</p>
         {heatPumpEnabled && rule?.heatPump && <p className="ig-stats"><span>{chain?.comments ?? 0} komment</span><span>→ {chain?.direct ?? 0} Direct</span><span>→ {chain?.m2 ?? 0} m²</span><span>→ {chain?.phone ?? 0} telefon</span></p>}
       </div>
     </div>
     {canEdit && <button type="button" className="bk-btn" onClick={() => setOpen(value => !value)} aria-expanded={open}>{open ? "Yopish" : "Sozlash"}</button>}
-    {canEdit && open && <form className="ig-rule" onSubmit={event => { event.preventDefault(); save(() => saveMediaRuleAction({ accountId, mediaId: media.id, priceText: productId ? "" : priceText, productId, secondProductId, isActive, keywords, dmTemplate, publicReplyEnabled, publicReplyText: variants.split("\n").map(item => item.trim()).find(Boolean) ?? "", publicReplyVariants: variants, permalink: media.permalink, caption: media.caption || null, postedAt: media.postedAt, heatPump })); }}>
-      {heatPumpEnabled && <label className="bk-field"><span>Post turi</span><select value={heatPump ? "heat" : "price"} onChange={event => change(setHeatPump)(event.target.value === "heat")}><option value="price">Narx / savol (mahsulot)</option><option value="heat">Teplonasos (m² + suhbat)</option></select></label>}
+    {canEdit && open && <form className="ig-rule" onSubmit={event => { event.preventDefault(); save(() => saveMediaRuleAction({ accountId, mediaId: media.id, priceText: productId ? "" : priceText, productId, secondProductId, isActive, keywords, dmTemplate, publicReplyEnabled, publicReplyText: variants.split("\n").map(item => item.trim()).find(Boolean) ?? "", publicReplyVariants: variants, permalink: media.permalink, caption: media.caption || null, postedAt: media.postedAt, heatPump, cooler })); }}>
+      <label className="bk-field"><span>Post turi</span><select value={postType} onChange={event => change(setPostType)(event.target.value)}><option value="price">Narx / savol (mahsulot)</option><option value="cooler">Xolodilnik (tonna + suhbat)</option>{heatPumpEnabled && <option value="heat">Teplonasos (m² + suhbat)</option>}</select></label>
       <label className="ig-switch"><input type="checkbox" checked={isActive} onChange={event => change(setActive)(event.target.checked)}/><span>Avto-javoblar faol (shu post uchun barcha turlar)</span></label>
-      {heatPump ? <p className="bk-muted">Kommentdan m² olinadi, Direct’ga Teplonasos jadvali bo‘yicha hisob yuboriladi va bot faqat shu postdan boshlangan Direct’da qisqa suhbat qiladi.</p> : <>
+      {cooler ? <p className="bk-muted">Kommentdan tonna olinadi, Direct’da kamera soni so‘raladi va Komplektlar jadvali bo‘yicha narx yuboriladi; telefon qoldirilsa lid ochiladi.</p> : heatPump ? <p className="bk-muted">Kommentdan m² olinadi, Direct’ga Teplonasos jadvali bo‘yicha hisob yuboriladi va bot faqat shu postdan boshlangan Direct’da qisqa suhbat qiladi.</p> : <>
       <div className="bk-field"><span>Mahsulot</span><ProductPicker products={products} value={productId} onChange={change(setProductId)}/></div>
       {!productId && <label className="bk-field"><span>Narx matni <small className="bk-muted">(mahsulotsiz post: narx so‘ralsa shu Direct’ga ketadi; bo‘sh — akkauntning “narx telefonda” matni; {CONTACT_PLACEHOLDERS.join(" ")})</small></span><textarea rows={3} value={priceText} onChange={event => change(setPriceText)(event.target.value)} placeholder="Masalan: Eshik narxi 2 500 000 so‘mdan. Batafsil: {telefon}" maxLength={900}/></label>}
       <div className="bk-field"><span>Qo‘shimcha mahsulot <small className="bk-muted">(ixtiyoriy; matnda {SECOND_PLACEHOLDERS.join(" ")} — yo‘q bo‘lsa shu qatorlar yuborilmaydi)</small></span><ProductPicker products={products.filter(item => item.id !== productId)} value={secondProductId} onChange={change(setSecondProductId)}/></div>
@@ -98,6 +99,36 @@ function MediaCard({ accountId, media, rule, stats, products, canEdit, heatPumpE
       <div className="bk-actions"><button type="submit" className="bk-btn is-primary" disabled={pending}><BusyLabel busy={pending}>Saqlash</BusyLabel></button>{note}</div>
     </form>}
   </article>;
+}
+
+type Cooler = Board["cooler"];
+type KitDraft = { id: string | null; minTons: string; maxTons: string; name: string; items: string; priceUsd: string; isActive: boolean };
+const TEXT_LABELS: Record<keyof Cooler["texts"], string> = { reply: "Kommentga ochiq javob", ask: "Direct 1-xabar ({tonna}, {kamera})", kit: "Komplekt xabari ({kamera}, {komplekt}, {tarkib}, {narx}, {jami})", final: "Yakuniy savol (viloyat + telefon)", phone: "Faqat viloyat yozilsa", thanks: "Telefon kelganda", handoff: "Sotuvchiga o‘tkazish", noPrice: "Narx kiritilmagan bo‘lsa" };
+
+/** Xolodilnik: Komplektlar (one chamber's tonnage range → kit) and the editable Direct texts. */
+function CoolerSettings({ data }: { data: Cooler }) {
+  const [kits, setKits] = useState<KitDraft[]>(data.kits.map(kit => ({ ...kit, minTons: String(kit.minTons), maxTons: String(kit.maxTons), items: kit.items.join("\n"), priceUsd: kit.priceUsd === null ? "" : String(kit.priceUsd) })));
+  const [texts, setTexts] = useState(data.texts);
+  const { pending, save, note, clear } = useSave();
+  const set = (index: number, key: keyof KitDraft, value: string | boolean) => { setKits(list => list.map((kit, i) => i === index ? { ...kit, [key]: value } : kit)); clear(); };
+  const submit = () => save(() => saveCoolerSettingsAction({ texts, kits: kits.map(kit => ({ id: kit.id, minTons: Number(kit.minTons), maxTons: Number(kit.maxTons), name: kit.name, items: kit.items.split("\n").map(item => item.trim()).filter(Boolean), priceUsd: kit.priceUsd.trim() ? Number(kit.priceUsd.replace(",", ".")) : null, isActive: kit.isActive })) }));
+  return <form className="bk-card" onSubmit={event => { event.preventDefault(); submit(); }}>
+    <div><h2>Xolodilnik · Komplektlar</h2><p className="bk-muted">Bitta kamera tonnasi oralig‘iga tushgan komplekt tanlanadi; jami = kamera soni × narx. Narx bo‘sh bo‘lsa “{texts.noPrice}” yuboriladi.</p></div>
+    <div className="bk-table-wrap"><table className="bk-table"><thead><tr><th className="is-left">Tonna dan</th><th className="is-left">gacha</th><th className="is-left">Nomi</th><th className="is-left">Tarkibi (har qatorda bittasi)</th><th className="is-left">Narx $</th><th>Faol</th><th/></tr></thead><tbody>
+      {kits.map((kit, index) => <tr key={kit.id ?? `new-${index}`}>
+        <td className="is-left"><input aria-label="Tonna dan" value={kit.minTons} inputMode="numeric" size={5} onChange={event => set(index, "minTons", event.target.value)}/></td>
+        <td className="is-left"><input aria-label="Tonna gacha" value={kit.maxTons} inputMode="numeric" size={5} onChange={event => set(index, "maxTons", event.target.value)}/></td>
+        <td className="is-left"><input aria-label="Komplekt nomi" value={kit.name} size={14} onChange={event => set(index, "name", event.target.value)}/></td>
+        <td className="is-left"><textarea aria-label="Tarkibi" rows={4} value={kit.items} onChange={event => set(index, "items", event.target.value)}/></td>
+        <td className="is-left"><input aria-label="Narx $" value={kit.priceUsd} inputMode="decimal" size={7} placeholder="—" onChange={event => set(index, "priceUsd", event.target.value)}/></td>
+        <td><input type="checkbox" aria-label="Faol" checked={kit.isActive} onChange={event => set(index, "isActive", event.target.checked)}/></td>
+        <td><button type="button" className="bk-icon-btn" aria-label="Komplektni o‘chirish" onClick={() => { setKits(list => list.filter((_, i) => i !== index)); clear(); }}><X size={15}/></button></td>
+      </tr>)}
+    </tbody></table></div>
+    <button type="button" className="ig-link-btn" onClick={() => { setKits(list => [...list, { id: null, minTons: "", maxTons: "", name: "", items: "", priceUsd: "", isActive: true }]); clear(); }}>+ Komplekt qo‘shish</button>
+    {(Object.keys(TEXT_LABELS) as Array<keyof Cooler["texts"]>).map(key => <label key={key} className="bk-field"><span>{TEXT_LABELS[key]}</span><textarea rows={key === "kit" ? 6 : 2} value={texts[key]} maxLength={900} onChange={event => { setTexts(value => ({ ...value, [key]: event.target.value })); clear(); }}/></label>)}
+    <div className="bk-actions"><button type="submit" className="bk-btn is-primary" disabled={pending}><BusyLabel busy={pending}>Saqlash</BusyLabel></button>{note}</div>
+  </form>;
 }
 
 type HeatPump = NonNullable<Board["heatPump"]>;
@@ -191,7 +222,7 @@ function GeneralSettings({ account, repliesToday }: { account: Account; repliesT
 }
 
 const STATUS: Record<string, { label: string; className: string }> = { SENT: { label: "Yuborildi", className: "is-ok" }, FAILED: { label: "Xato", className: "is-bad" }, SKIPPED: { label: "O‘tkazildi", className: "" }, PENDING: { label: "Navbatda", className: "is-wait" }, NOTIFIED: { label: "Adminga", className: "is-bad" } };
-const KIND_CLASS: Record<string, string> = { HEAT_PUMP: "is-ok", PRICE: "is-ok", POSITIVE: "is-ok", QUESTION: "is-wait", NEGATIVE: "is-bad", SPAM: "", UNKNOWN: "", PHONE: "is-wait", ADDRESS: "is-wait", HOURS: "is-wait" };
+const KIND_CLASS: Record<string, string> = { HEAT_PUMP: "is-ok", COOLER: "is-ok", PRICE: "is-ok", POSITIVE: "is-ok", QUESTION: "is-wait", NEGATIVE: "is-bad", SPAM: "", UNKNOWN: "", PHONE: "is-wait", ADDRESS: "is-wait", HOURS: "is-wait" };
 const usd = (value: number) => `$${value < 0.01 ? value.toFixed(5) : value.toFixed(2)}`;
 
 function KindStats({ board }: { board: Board }) {
@@ -240,6 +271,7 @@ export function InstagramBoard({ board, canConnect }: { board: Board; canConnect
     <div className="ig-toolbar"><h2>Postlar va Reels</h2><label className="ig-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Izoh bo‘yicha qidirish" aria-label="Postlarni qidirish"/></label></div>
     {media.length ? <div className="ig-grid">{media.map(item => <MediaCard key={item.id} accountId={accountId} media={item} rule={board.rules[item.id]} stats={board.stats[item.id]} products={board.products} canEdit heatPumpEnabled={!!board.heatPump} chain={board.heatPump?.chain[item.id]}/>)}</div> : <div className="bk-empty">Post topilmadi</div>}
     {board.heatPump && <HeatPumpTable data={board.heatPump}/>}
+    <CoolerSettings data={board.cooler}/>
     <Journal rows={board.journal} accountId={accountId} heatPump={!!board.heatPump}/>
   </div>;
 }
