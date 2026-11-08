@@ -6,13 +6,13 @@ import type { HeatPumpThread, InstagramAccount } from "@/generated/prisma/client
 import { getUsdUzsRate } from "@/lib/currency/cbu";
 import { getDb } from "@/lib/db";
 import { expireDashboard } from "@/lib/referrals/tracking";
-import { classifyHeatPumpComment, heatPumpChat, type AiUsage } from "./ai";
+import { classifyHeatPumpComment, heatPumpChat, understandHeatPumpComment, type AiUsage, type ChatTurn } from "./ai";
 import { sendMessage } from "@/lib/telegram/client";
 import type { InlineKeyboard, TelegramMessage } from "@/lib/telegram/types";
-import { extractPhone } from "./direct-rules";
-import { sendDirectMessage } from "./graph";
-import { HUMAN_MUTE_MS, backlogText, calcMessage, deliverPrivate, isHeatPumpContact, m2List, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
-import { randomGapMs, type MessageEvent } from "./rules";
+import { directLink, extractPhone } from "./direct-rules";
+import { sendDirectMessage, sendSenderAction } from "./graph";
+import { HUMAN_MUTE_MS, backlogText, calcKwMessage, calcMessage, directValues, heatPumpFromAiReply, hpPriceLine, specialistNotice, specialistReply, deliverPrivate, isHeatPumpContact, m2List, directBotStep, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
+import type { MessageEvent } from "./rules";
 import { coolerTexts, coolerTurn, kitPrice, type CoolerKitRow } from "./cooler";
 import { DEFAULT_MARKUP, clampMarkup } from "@/lib/prays/rules";
 
@@ -59,19 +59,51 @@ export async function flushHeatPumpBacklog() {
 }
 
 /** The HISOB XABARI with the current table, buffer tank price and CBU rate (`rate` when the caller already has it). */
-export async function buildCalc(m2: number, rate?: string | null, lang: Lang = "uz") {
+const loadModels = async () => (await getDb().heatPumpModel.findMany({ where: { isActive: true } })).map(row => ({ ...row, hp: Number(row.hp), nominalKw: Number(row.nominalKw), winterKw: Number(row.winterKw), priceUsd: Number(row.priceUsd) }));
+
+/** The last ~10 messages of the person's Direct chat (without the one being answered), oldest first. */
+async function chatHistory(accountId: string, igsid: string, mid: string): Promise<ChatTurn[]> {
+  const rows = await getDb().instagramMessage.findMany({ where: { accountId, mid: { not: mid }, text: { not: null }, OR: [{ fromId: igsid }, { toId: igsid }] }, orderBy: { sentAt: "desc" }, take: 10, select: { fromId: true, text: true } });
+  return rows.reverse().map(row => ({ role: row.fromId === igsid ? "user" : "assistant", text: row.text! }));
+}
+
+/** Telegram "Mutaxassis javobi kerak" (teplonasos private chat) and the mark on the lead. */
+async function needSpecialist(thread: HeatPumpThread, account: InstagramAccount, question: string) {
+  await sendHeatPumpTelegram(specialistNotice({ username: thread.username, igsid: thread.igsid, question, calc: thread.model ?? (thread.m2 ? `${thread.m2} m²` : null), link: directLink(thread.username) }));
+  await saveLead(thread, account).catch(error => console.error("Instagram heat pump lead failed", { type: safeType(error) }));
+  const leadId = (await getDb().heatPumpThread.findUnique({ where: { id: thread.id }, select: { leadId: true } }))?.leadId;
+  if (leadId) await getDb().lead.update({ where: { id: leadId }, data: { managerNote: `⚠️ Mutaxassis javobi kerak: «${question.slice(0, 300)}»` } });
+}
+
+export async function buildCalc(m2: number, rate?: string | null, lang: Lang = "uz", kw?: number | null) {
   const db = getDb();
-  const [rows, settings, cbu] = await Promise.all([
-    db.heatPumpModel.findMany({ where: { isActive: true } }),
+  const [models, settings, cbu] = await Promise.all([
+    loadModels(),
     db.siteSettings.findUnique({ where: { id: "global" }, select: { heatPumpBufferUsd: true, heatPumpBufferLiters: true } }),
     rate === undefined ? getUsdUzsRate().then(value => value?.rate ?? null).catch(() => null) : rate,
   ]);
-  const models = rows.map(row => ({ ...row, hp: Number(row.hp), nominalKw: Number(row.nominalKw), winterKw: Number(row.winterKw), priceUsd: Number(row.priceUsd) }));
-  return calcMessage(m2, models, cbu, { usd: Number(settings?.heatPumpBufferUsd ?? 145), liters: settings?.heatPumpBufferLiters ?? 60 }, lang);
+  const buffer = { usd: Number(settings?.heatPumpBufferUsd ?? 145), liters: settings?.heatPumpBufferLiters ?? 60 };
+  return kw ? calcKwMessage(kw, models, cbu, buffer, lang) : calcMessage(m2, models, cbu, buffer, lang);
 }
 
-/** Keywords first, then the AI; without the AI an unclear comment stays UNKNOWN (no reply). */
-export async function classifyHeatPump(text: string): Promise<{ result: HeatPumpComment | null; by: string; usage: AiUsage }> {
+/** Admin switch "AI javob" (SiteSettings.heatPumpAi, on by default). */
+export const heatPumpAiEnabled = async () => (await getDb().siteSettings.findUnique({ where: { id: "global" }, select: { heatPumpAi: true } }).catch(() => null))?.heatPumpAi ?? true;
+
+type Classified = { result: HeatPumpComment | null; by: string; usage: AiUsage; reply?: string; extra?: string; lang?: Lang };
+
+/**
+ * AI on: the AI understands first (with the person's earlier comments on the post); when it fails the keyword parser
+ * decides, so nothing stays unanswered. AI off: keywords first, then the old AI classifier.
+ */
+export async function classifyHeatPump(text: string, history: readonly string[] = [], aiFirst = false): Promise<Classified> {
+  if (aiFirst) {
+    const understood = await understandHeatPumpComment(stripMentions(text) || text, history);
+    if (understood) {
+      const mapped = heatPumpFromAiReply(understood.ai);
+      return { result: mapped.result, by: mapped.tag, usage: understood.usage, reply: mapped.reply, extra: mapped.extra, lang: mapped.lang };
+    }
+    return { result: heatPumpByKeywords(text), by: "KEYWORD_FALLBACK", usage: { tokens: 0, costUsd: 0 } };
+  }
   const keywords = heatPumpByKeywords(text);
   if (keywords) return { result: keywords, by: "KEYWORD", usage: { tokens: 0, costUsd: 0 } };
   const ai = await classifyHeatPumpComment(stripMentions(text) || text);
@@ -171,24 +203,37 @@ async function answer(thread: HeatPumpThread, event: MessageEvent, account: Inst
   // One answer per incoming message, also when Meta delivers the webhook twice.
   const claimed = await db.heatPumpThread.updateMany({ where: { id: thread.id, botReplies: thread.botReplies, OR: [{ lastInMid: null }, { lastInMid: { not: event.mid } }] }, data: { botReplies: { increment: 1 }, lastInMid: event.mid } });
   if (claimed.count !== 1) return;
+  // Real time: the customer sees "seen" and "typing…" at once; the answer goes 2–4 s after the message at the earliest.
+  const started = Date.now();
+  for (const action of ["mark_seen", "typing_on"] as const) await sendSenderAction(token, account.igUserId, thread.igsid, action).catch(() => undefined);
 
   let reply: string | null = cooler ? await coolerReply(thread, text, step, lang, account) : step === "limit" ? t.limit : phone ? t.thanks : null;
   if (!reply && !cooler) {
-    let m2 = extractM2(text);
-    if (!m2) {
-      const ai = await heatPumpChat(text, thread.lastBotText);
-      m2 = ai?.m2 && ai.m2 >= 20 && ai.m2 <= 3000 ? Math.round(ai.m2) : null;
-      reply = ai?.reply || null;
-    }
-    if (m2) {
-      const calc = await buildCalc(m2, undefined, lang);
+    // AI on: the AI reads the message (with the last ~10 messages) first, the parser fills in what it missed; off: the parser first.
+    const aiOn = await heatPumpAiEnabled();
+    const quick = aiOn ? null : directValues(text, null);
+    const ai = quick?.m2 || quick?.kw ? null : await heatPumpChat(text, aiOn ? await chatHistory(account.id, thread.igsid, event.mid) : thread.lastBotText);
+    const { m2, kw } = quick?.m2 || quick?.kw ? quick : directValues(text, ai);
+    reply = ai?.reply || null;
+    console.info("Instagram heat pump Direct", { m2, kw, hp: ai?.hp ?? null, specialist: !!ai?.specialist, by: ai ? "AI" : "PARSER" });
+    if (m2 || kw) {
+      const calc = await buildCalc(m2 ?? 0, undefined, lang, kw);
       reply = calc.text;
-      thread = await db.heatPumpThread.update({ where: { id: thread.id }, data: { m2, model: calc.summary } });
+      thread = await db.heatPumpThread.update({ where: { id: thread.id }, data: { ...(m2 ? { m2 } : {}), model: calc.summary } });
       await saveLead(thread, account);
+    } else if (ai?.specialist) {
+      // Not in the knowledge base (fan-coil / montaj price, another brand…): nothing invented, the specialist is told.
+      reply = specialistReply(ai.reply, lang);
+      await needSpecialist(thread, account, text);
+    } else if (ai?.hp) {
+      const [models, rate] = await Promise.all([loadModels(), getUsdUzsRate().then(value => value?.rate ?? null).catch(() => null)]);
+      const line = hpPriceLine(ai.hp, models, rate, lang);
+      reply = line ? [reply, line].filter(Boolean).join("\n") : specialistReply(null, lang);
+      if (!line) await needSpecialist(thread, account, text);
     }
   }
   if (!reply) return;
-  await sleep(randomGapMs());
+  await sleep(Math.max(0, 2_000 + Math.random() * 2_000 - (Date.now() - started)));
   // Saved before sending: the echo may arrive before the API call returns.
   await db.heatPumpThread.update({ where: { id: thread.id }, data: { lastBotText: reply.slice(0, 1000), lastBotAt: new Date() } });
   const sent = await sendDirectMessage(token, account.igUserId, thread.igsid, reply.slice(0, 1000));

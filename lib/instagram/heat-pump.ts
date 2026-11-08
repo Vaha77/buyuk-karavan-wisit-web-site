@@ -1,6 +1,6 @@
 // Teplonasos bot: pure rules (no DB / network), covered by tests/instagram-heat-pump.test.mjs. Only the first account
 // ("global", @buyuk_karavan) ever uses them; @eshikmaster never does.
-import { classifyByKeywords, normalizeText } from "./rules";
+import { aiReplyProblem, classifyByKeywords, normalizeText } from "./rules";
 import { DEFAULT_KEYWORDS } from "./constants";
 
 export const HEAT_PUMP_ACCOUNT_ID = "global";
@@ -85,6 +85,21 @@ export function extractM2(input: string | null | undefined) {
   return numbers.length === 1 && num(numbers[0]) >= 20 && num(numbers[0]) <= 1000 ? Math.round(num(numbers[0])) : null;
 }
 
+/** Needed heat power from a comment / message: "180KW", "180 квт", "12 kvt", "12,5 kW" → kW (1–5000), else null. */
+export function extractKw(input: string | null | undefined) {
+  const text = normalizeText(stripMentions(input ?? ""));
+  const match = /(\d{1,4}(?:[.,]\d)?)\s*(?:kw|kvt|квт|кв\.?\s*т|kilovat\p{L}*|киловат\p{L}*)(?!\p{L})/u.exec(text);
+  const value = match ? num(match[1]) : NaN;
+  return value >= 1 && value <= 5000 ? Math.round(value) : null;
+}
+
+/** m² or kW of a Direct message: the AI's numbers when valid, else the parser's (kW wins over m²). */
+export function directValues(text: string, ai: { m2: number | null; kw: number | null } | null): { m2: number | null; kw: number | null } {
+  const kw = ai?.kw && ai.kw >= 1 && ai.kw <= 5000 ? Math.round(ai.kw) : extractKw(text);
+  if (kw) return { m2: null, kw };
+  return { m2: (ai?.m2 ? inRange(ai.m2) : null) ?? extractM2(text), kw: null };
+}
+
 // ---- Model choice ------------------------------------------------------------------------------------------
 
 export type HeatPumpRow = { brand: string; hp: number; nominalKw: number; winterKw: number; voltage: number; priceUsd: number; bufferIncluded: boolean; isActive: boolean };
@@ -140,6 +155,10 @@ const T = {
     offTopic: `Bu savol bo'yicha call-centerimizga murojaat qiling: ${CALL_CENTER_PHONE}`,
     limit: `Batafsil gaplashish uchun qo'ng'iroq qiling: ${SPECIALIST_PHONE}`, calcLimit: `Ko'proq hisob uchun mutaxassisga qo'ng'iroq qiling: ${SPECIALIST_PHONE}`, thanks: "Rahmat, mutaxassis tez orada qo'ng'iroq qiladi",
     friendly: "Rahmat! 🙌 Savollaringiz bo'lsa, Direct'ga yozing.",
+    titleKw: (kw: number) => `${kw} kW issiqlik uchun mos teplonasos:`,
+    givesKw: (kw: number) => `qishda (−12°C) ${kw} kW issiqlik beradi.`,
+    bigKw: (kw: number, hp: number, nominal: number) => `${kw} kW issiqlik uchun taxminan ${hp} HP · ${nominal} kW nominal quvvatli teplonasos kerak (qishki hisob). Bunday loyiha individual tuziladi — narx va eng yaxshi variantni mutaxassis aytadi: ${SPECIALIST_PHONE}. Bino necha m² va qayerda joylashgan?`,
+    replyKw: (kw: number) => `${kw} kW uchun hisobni Direct'ga yubordik 📩`,
   },
   ru: {
     hello: "Здравствуйте!",
@@ -158,6 +177,10 @@ const T = {
     offTopic: `По этому вопросу обратитесь в наш call-центр: ${CALL_CENTER_PHONE}`,
     limit: `Чтобы обсудить подробнее, позвоните: ${SPECIALIST_PHONE}`, calcLimit: `Для дополнительных расчётов позвоните специалисту: ${SPECIALIST_PHONE}`, thanks: "Спасибо, специалист скоро вам позвонит",
     friendly: "Спасибо! 🙌 Если есть вопросы, пишите в Direct.",
+    titleKw: (kw: number) => `Подходящий тепловой насос на ${kw} kW тепла:`,
+    givesKw: (kw: number) => `зимой (−12°C) даёт ${kw} kW тепла.`,
+    bigKw: (kw: number, hp: number, nominal: number) => `Для ${kw} kW тепла нужен тепловой насос примерно ${hp} HP · ${nominal} kW номинальной мощности (зимний расчёт). Такой проект составляется индивидуально — цену и лучший вариант подскажет специалист: ${SPECIALIST_PHONE}. Какая площадь здания в м² и где оно находится?`,
+    replyKw: (kw: number) => `Расчёт для ${kw} kW отправили в Direct 📩`,
   },
 } as const;
 export const texts = (lang: Lang) => T[lang];
@@ -170,24 +193,41 @@ export function calcMessage(m2: number, models: readonly HeatPumpRow[], rate: st
   const pick = pickHeatPump(m2, models);
   if (pick.big) return { text: `${t.hello} ${t.big(m2, pick.hp, pick.kw)}\n\n${footer}`, m2, big: true, summary: `Katta loyiha: ~${pick.hp} HP · ${pick.kw} kW`, priceUsd: null };
   const { model, bigger } = pick;
-  const som = (usd: number) => mlnSom(usd, rate);
-  const price = som(model.priceUsd), bufferSom = som(buffer.usd);
-  const lines = [
-    `${t.hello} ${t.title(m2)}`,
-    `🔥 ${modelLabel(model)} — ${t.heats(m2)}${bigger ? t.bigger(modelLabel(bigger)) : ""}`,
+  const lines = [`${t.hello} ${t.title(m2)}`, `🔥 ${modelLabel(model)} — ${t.heats(m2)}${bigger ? t.bigger(modelLabel(bigger)) : ""}`, ...modelLines(model, rate, buffer, lang)];
+  return { text: `${lines.join("\n")}\n\n${footer}`, m2, big: false, summary: `${modelLabel(model)} — ${usdText(model.priceUsd)}`, priceUsd: model.priceUsd };
+}
+
+/** Price (with the CBU so‘m), buffer tank, 380V, fan-coil and delivery lines of one model. */
+function modelLines(model: HeatPumpRow, rate: string | number | null, buffer: { usd: number; liters: number }, lang: Lang) {
+  const t = T[lang], price = mlnSom(model.priceUsd, rate), bufferSom = mlnSom(buffer.usd, rate);
+  return [
     `${t.price} ${usdText(model.priceUsd)}${price ? ` (${t.som(price)}${t.rate})` : ""}${model.bufferIncluded ? t.withBuffer : ""}`,
     ...(model.bufferIncluded ? [] : [t.noBuffer(buffer.liters, usdText(buffer.usd), bufferSom ? ` (${t.som(bufferSom)})` : "")]),
     ...(model.voltage >= 380 ? [t.volt] : []),
     t.fancoil,
     t.delivery,
   ];
-  return { text: `${lines.join("\n")}\n\n${footer}`, m2, big: false, summary: `${modelLabel(model)} — ${usdText(model.priceUsd)}`, priceUsd: model.priceUsd };
+}
+
+/**
+ * The HISOB XABARI for a needed winter heat power (kW): the smallest active model whose winter kW covers it, with its
+ * price; more than any model → big project: nominal ≈ kW ÷ 0.66, HP ≈ nominal ÷ 3, no price, the specialist, m² + place.
+ */
+export function calcKwMessage(kw: number, models: readonly HeatPumpRow[], rate: string | number | null, buffer: { usd: number; liters: number }, lang: Lang = "uz"): HeatPumpCalc {
+  const t = T[lang], footer = t.footer.join("\n");
+  const model = models.filter(item => item.isActive).sort((a, b) => a.winterKw - b.winterKw).find(item => item.winterKw >= kw);
+  if (!model) {
+    const nominal = Math.round(kw / 0.66), hp = Math.round(kw / 0.66 / 3);
+    return { text: `${t.hello} ${t.bigKw(kw, hp, nominal)}\n\n${footer}`, m2: 0, big: true, summary: `${kw} kW → katta loyiha: ~${hp} HP · ${nominal} kW`, priceUsd: null };
+  }
+  const lines = [`${t.hello} ${t.titleKw(kw)}`, `🔥 ${modelLabel(model)} — ${t.givesKw(Number(short(model.winterKw)))}`, ...modelLines(model, rate, buffer, lang)];
+  return { text: `${lines.join("\n")}\n\n${footer}`, m2: 0, big: false, summary: `${kw} kW → ${modelLabel(model)} — ${usdText(model.priceUsd)}`, priceUsd: model.priceUsd };
 }
 
 // ---- Comment on a teplonasos post -------------------------------------------------------------------------
 
-export type HeatPumpIntent = "calc" | "ask" | "question" | "other";
-export type HeatPumpComment = { kind: "HEAT_PUMP"; intent: HeatPumpIntent; m2: number | null } | { kind: "SPAM" | "NEGATIVE" | "POSITIVE" };
+export type HeatPumpIntent = "calc" | "kw" | "ask" | "question" | "other";
+export type HeatPumpComment = { kind: "HEAT_PUMP"; intent: HeatPumpIntent; m2: number | null; kw?: number | null } | { kind: "SPAM" | "NEGATIVE" | "POSITIVE" };
 
 /** "@user @other 60 kvd qancha" → "60 kvd qancha": a reply starts with the people it answers. */
 export const stripMentions = (text: string) => text.replace(/^\s*(?:@[\w.]+[\s,:]*)+/u, "").trim();
@@ -197,6 +237,8 @@ export function heatPumpByKeywords(input: string): HeatPumpComment | null {
   const text = stripMentions(input);
   const keywords = classifyByKeywords(text, DEFAULT_KEYWORDS);
   if (keywords.fallback === "SPAM" || keywords.fallback === "NEGATIVE") return { kind: keywords.fallback };
+  const kw = extractKw(text);
+  if (kw) return { kind: "HEAT_PUMP", intent: "kw", m2: null, kw };
   const m2 = extractM2(text);
   if (m2) return { kind: "HEAT_PUMP", intent: "calc", m2 };
   if (keywords.matched.includes("PRICE")) return { kind: "HEAT_PUMP", intent: "ask", m2: null };
@@ -213,21 +255,79 @@ export function heatPumpFromAi(ai: { m2: number | null; topic: "heatpump" | "oth
   return { kind: "HEAT_PUMP", intent: ai.topic === "heatpump" ? "question" : "other", m2: null };
 }
 
+// ---- AI-first ("odamdek"): the AI understands, the code calculates ------------------------------------------
+
+export const HEAT_AI_INTENTS = ["AREA_M2", "POWER_KW", "QUESTION", "BANTER", "PRAISE", "OTHER_PRODUCT", "SPAM_INSULT"] as const;
+export type HeatAi = { intent: (typeof HEAT_AI_INTENTS)[number]; m2: number | null; kw: number | null; topic: string | null; lang: Lang; public_reply: string; dm_extra: string };
+const EMOJI = /\p{Extended_Pictographic}/gu;
+
+/**
+ * An AI text that may go out, or "". Both: no "AI", no link / @mention, no number except our two phones (prices, HP and
+ * kW come only from the code). A public reply: also no phone, price, promise (aiReplyProblem; emoji-only is fine) and at
+ * most 2 emoji.
+ */
+export function safeAiText(text: string | null | undefined, max: number, isPublic = false) {
+  const value = (text ?? "").trim().slice(0, max);
+  if (!value) return "";
+  const withoutPhones = value.replaceAll(SPECIALIST_PHONE, "").replaceAll(CALL_CENTER_PHONE, "");
+  if (/\d|@|https?:|www\./.test(withoutPhones) || /(?:^|[^\p{L}])(?:ai|ии|chatgpt|gpt)(?!\p{L})|sun'iy intellekt|сунъий интеллект|искусственн/iu.test(value)) return "";
+  if (isPublic && ((/\p{L}/u.test(value) && aiReplyProblem(value)) || (value.match(EMOJI)?.length ?? 0) > 2)) return "";
+  return value;
+}
+
+/**
+ * The AI's answer → the comment's kind for the existing flow. m² / kW (the code calculates) win over the intent; a
+ * question beside them goes to the DM as `extra`. BANTER / PRAISE → POSITIVE with the AI's reply; OTHER_PRODUCT → the
+ * call-center reply; SPAM_INSULT → no reply.
+ */
+export function heatPumpFromAiReply(ai: HeatAi): { result: HeatPumpComment; reply: string; extra: string; lang: Lang; tag: string } {
+  const lang: Lang = ai.lang === "ru" ? "ru" : "uz", tag = `AI:${ai.intent}`.slice(0, 20);
+  const extra = safeAiText(ai.dm_extra, 400), reply = safeAiText(ai.public_reply, 150, true);
+  const m2 = ai.m2 === null ? null : inRange(ai.m2), kw = ai.kw !== null && ai.kw >= 1 && ai.kw <= 5000 ? Math.round(ai.kw) : null;
+  if (ai.intent === "SPAM_INSULT") return { result: { kind: "SPAM" }, reply: "", extra: "", lang, tag };
+  if (kw && (ai.intent === "POWER_KW" || !m2)) return { result: { kind: "HEAT_PUMP", intent: "kw", m2: null, kw }, reply: "", extra, lang, tag };
+  if (m2) return { result: { kind: "HEAT_PUMP", intent: "calc", m2 }, reply: "", extra, lang, tag };
+  if (ai.intent === "BANTER" || ai.intent === "PRAISE") return { result: { kind: "POSITIVE" }, reply, extra: "", lang, tag };
+  if (ai.intent === "OTHER_PRODUCT") return { result: { kind: "HEAT_PUMP", intent: "other", m2: null }, reply: "", extra: "", lang, tag };
+  return { result: { kind: "HEAT_PUMP", intent: "question", m2: null }, reply: "", extra, lang, tag };
+}
+
 /**
  * An inactive post gets nothing. A comment with m² (`calc`): every new m² of the person on this post gets its own
  * calculation and public reply; an m² already calculated there is silent; the 6th calculation in 24 h gets only the
  * specialist line (`limit`). Other comments: one public reply and one Direct per person per post.
  */
-export function heatPumpAction(rule: { isActive: boolean } | null, alreadyAnswered: boolean, underLimit: boolean, calc?: { m2: number; previous: readonly number[]; today: number }) {
+export function heatPumpAction(rule: { isActive: boolean } | null, alreadyAnswered: boolean, underLimit: boolean, calc?: { m2: number; previous: readonly number[]; today: number; unit?: "m²" | "kW" }) {
   if (rule && !rule.isActive) return { type: "skip" as const, reason: "Post uchun avto-javoblar o‘chirilgan" };
   if (calc) {
-    if (calc.previous.includes(calc.m2)) return { type: "skip" as const, reason: "Takroriy m² — javobsiz" };
+    if (calc.previous.includes(calc.m2)) return { type: "skip" as const, reason: `Takroriy ${calc.unit ?? "m²"} — javobsiz` };
     if (calc.today >= MAX_CALCS_PER_DAY) return underLimit ? { type: "heatpump" as const, publicReply: true, limit: true } : { type: "skip" as const, reason: "Sutkalik hisob limiti va kunlik javob limiti" };
     return { type: "heatpump" as const, publicReply: underLimit };
   }
   if (alreadyAnswered) return { type: "skip" as const, reason: "Bu odamga shu postda javob berilgan — suhbat Direct’da" };
   return { type: "heatpump" as const, publicReply: underLimit };
 }
+
+/** "Aire 8 HP · 24 kW — $3 250 (~41.4 mln so'm)" for a model asked by its HP in Direct; null when the table has none. */
+export function hpPriceLine(hp: number, models: readonly HeatPumpRow[], rate: string | number | null, lang: Lang = "uz") {
+  const model = models.find(item => item.isActive && Math.abs(item.hp - hp) < 0.05);
+  if (!model) return null;
+  const mln = mlnSom(model.priceUsd, rate);
+  return `🔥 ${modelLabel(model)} — ${usdText(model.priceUsd)}${mln ? ` (${T[lang].som(mln)}${T[lang].rate})` : ""}${model.bufferIncluded ? T[lang].withBuffer : ""}`;
+}
+
+const SPECIALIST_TEXT = {
+  uz: `Bu savolga mutaxassisimiz aniq javob beradi — ozgina kuting 🙏 Tezroq bo'lishi uchun qo'ng'iroq qilsangiz ham bo'ladi: ${SPECIALIST_PHONE}`,
+  ru: `На этот вопрос точно ответит наш специалист — подождите немного 🙏 Чтобы быстрее, можно позвонить: ${SPECIALIST_PHONE}`,
+};
+/** The AI's own "the specialist will answer" words when safe and with the specialist's phone; else the fixed text. */
+export const specialistReply = (aiReply: string | null | undefined, lang: Lang = "uz") => {
+  const text = safeAiText(aiReply, 400);
+  return text && text.includes(SPECIALIST_PHONE) ? text : SPECIALIST_TEXT[lang];
+};
+/** Telegram (teplonasos private chat): the question no table answers. */
+export const specialistNotice = (input: { username: string | null; igsid: string; question: string; calc: string | null; link: string }) =>
+  ["🧑‍🔧 Mutaxassis javobi kerak (teplonasos Direct)", input.username ? `@${input.username}` : `Instagram ${input.igsid}`, `Savol: «${input.question.slice(0, 500)}»`, `Oxirgi hisob: ${input.calc ?? "—"}`, `Suhbat: ${input.link}`].join("\n");
 
 /** "450, 200 m²": the lead's m² list with `m2` added once (new m² never opens a second lead). */
 export function m2List(dimensions: string | null | undefined, m2: number | null | undefined) {
@@ -238,12 +338,15 @@ export function m2List(dimensions: string | null | undefined, m2: number | null 
 
 /** A reply-comment is answered only on a teplonasos post, and only with m², a price ask or a teplonasos question. */
 export const heatPumpReplyAnswered = (kind: string, intent: string | null, heatPumpPost: boolean) =>
-  heatPumpPost && kind === "HEAT_PUMP" && (intent === "calc" || intent === "ask" || intent === "question");
+  heatPumpPost && kind === "HEAT_PUMP" && (intent === "calc" || intent === "kw" || intent === "ask" || intent === "question");
 
 /** Public reply and Direct text for a HEAT_PUMP comment; an off-topic one gets the call-center reply and no Direct. */
-export function heatPumpOutgoing(intent: HeatPumpIntent, input: { m2?: number | null; calc?: string | null; answer?: string | null }, lang: Lang = "uz") {
+export function heatPumpOutgoing(intent: HeatPumpIntent, input: { m2?: number | null; kw?: number | null; calc?: string | null; answer?: string | null; extra?: string | null }, lang: Lang = "uz") {
   const t = T[lang];
-  if (intent === "calc" && input.m2 && input.calc) return { reply: t.replyCalc(input.m2), dm: input.calc };
+  // A question asked beside the m² / kW ("ustanovka qilasizlarmi") is answered under the calculation (1000 chars max).
+  const withExtra = (calc: string) => input.extra?.trim() ? `${calc}\n\n${input.extra.trim()}`.slice(0, 1000) : calc;
+  if (intent === "kw" && input.kw && input.calc) return { reply: t.replyKw(input.kw), dm: withExtra(input.calc) };
+  if (intent === "calc" && input.m2 && input.calc) return { reply: t.replyCalc(input.m2), dm: withExtra(input.calc) };
   if (intent === "ask") return { reply: t.replyAsk, dm: `${t.hello} ${t.m2Question}` };
   if (intent === "question") return { reply: t.replyQuestion, dm: `${t.hello} ${input.answer?.trim() ? `${input.answer.trim()}
 

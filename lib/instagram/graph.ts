@@ -146,6 +146,11 @@ export function sendDirectMessage(token: string, igUserId: string, recipientId: 
   return call<{ recipient_id?: string; message_id?: string }>(graph(`${igUserId}/messages`), { method: "POST", token, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: { id: recipientId }, message: { text } }) });
 }
 
+/** "mark_seen" / "typing_on" in a Direct chat (the customer sees the bot read and type). */
+export function sendSenderAction(token: string, igUserId: string, recipientId: string, action: "mark_seen" | "typing_on") {
+  return call<{ recipient_id?: string }>(graph(`${igUserId}/messages`), { method: "POST", token, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipient: { id: recipientId }, sender_action: action }) });
+}
+
 /** Permalink of one post (for the Telegram notice when the post has no saved settings). */
 export async function getMediaPermalink(token: string, mediaId: string) {
   return (await call<{ permalink?: string }>(graph(mediaId, { fields: "permalink" }), { token })).permalink ?? null;

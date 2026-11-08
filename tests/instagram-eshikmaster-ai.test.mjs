@@ -65,7 +65,7 @@ test("AI down: no answer (null) → the keywords decide", async () => {
   assert.equal(fallback("🔥🔥"), "POSITIVE");
   const service = await read("../lib/instagram/service.ts");
   assert.match(service, /if \(isEshikmaster\(account\)\) \{\n\s*const ai = await classifyEshikmaster\(comment\.text\);\n\s*if \(ai\) return \{ kind: ai\.kind, by: "AI", usage: ai\.usage, reply: ai\.reply \};\n\s*const fallback = classifyByKeywords/, "AI first, keywords only as the fallback");
-  assert.match(service, /const ready = classifiedReply && !aiReplyProblem\(classifiedReply\) && !tooSimilar\(classifiedReply, recent\)/, "the reply is checked like any AI reply");
+  assert.match(service, /const ready = classifiedReply && \(heatPost \|\| !aiReplyProblem\(classifiedReply\)\) && !tooSimilar\(classifiedReply, recent\)/, "the reply is checked like any AI reply");
 });
 
 test("@buyuk_karavan unchanged: not eshikmaster, keyword-first path and its prompts as before", async () => {

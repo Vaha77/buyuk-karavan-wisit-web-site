@@ -5,6 +5,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { CommentKind } from "./constants";
+import { HEAT_AI_INTENTS } from "./heat-pump";
 import { ESHIK_INTENTS, aiCostUsd, aiReplyProblem, eshikmasterKind, firstGoodReply, isShortComment, tooSimilar, validPositiveReply } from "./rules";
 
 const DEFAULT_MODEL = "gpt-4.1-mini";
@@ -120,6 +121,43 @@ export async function classifyHeatPumpComment(comment: string) {
   }
 }
 
+export const HEAT_PUMP_UNDERSTAND = `Sen Buyuk Karavan do'konining teplonasos (issiqlik nasosi) Reels posti ostidagi kommentni odamdek tushunasan.
+Mijozlar shoshib, xato, sheva bilan, lotin/kirill aralash, ba'zan ruscha yozadi. Ma'noni tushun.
+intent:
+- AREA_M2: uy/bino maydoni yozilgan ("150", "1000 kvadiratka", "10x12", "2 qavat 100 dan").
+- POWER_KW: kerakli issiqlik quvvati kW da ("180KW", "180 квт", "12 kvt").
+- QUESTION: teplonasos haqida savol (montaj, kafolat, yetkazish, rassrochka, issiq suv, svet puli, narx).
+- BANTER: hazil, sheva, video yoki gapiruvchi haqida o'yin-kulgi.
+- PRAISE: maqtov, minnatdorchilik, faqat emoji.
+- OTHER_PRODUCT: boshqa mahsulot haqida jiddiy savol (konditsioner, xolodilnik, kotyol...).
+- SPAM_INSULT: reklama, havola, haqorat, so'kinish.
+m2, kw: kommentda yozilgan son (o'zing hisoblama, o'ylab topma); yo'q bo'lsa null. Telefon, yil va narx m²/kW emas.
+topic: savol mavzusi (montaj, kafolat, yetkazish, rassrochka, issiq_suv, svet, narx, boshqa) yoki null.
+lang: "ru" — mijoz ruscha yozgan bo'lsa, aks holda "uz".
+public_reply: faqat BANTER va PRAISE uchun, boshqasida "". Bitta qisqa jonli qator, o'zbek lotin (ruscha yozsa ruscha), ko'pi bilan 2 emoji, har safar boshqacha so'z bilan. BANTER — iliq, kulgili ("😂 Sheva har xil, issiqlik bir xil! 🔥"). PRAISE — qisqa minnatdorlik yoki faqat emoji ("🙌🔥").
+dm_extra: m²/kW bilan birga yoki alohida savol bo'lsa — 1–2 gapli javob, aks holda "". Faqat shu faktlar: yetkazish butun O'zbekiston bo'ylab, narxi kelishiladi; rassrochka yo'q; issiq suv isitadi; fankoyl alohida; montaj, kafolat, svet puli va boshqa aniq savollar — "Mutaxassis aniq aytadi: +998 99 520 99 99".
+Taqiq: raqam, narx, HP, kW, muddat, chegirma, va'da o'ylab topma; masxara, siyosat, din, shaxsga tegish yo'q; "AI" so'zini yozma; "bizda yo'q" dema.
+Oldingi kommentlar faqat kontekst uchun.
+Faqat JSON qaytar.`;
+
+const heatPumpUnderstanding = z.object({ intent: z.enum(HEAT_AI_INTENTS), m2: z.number().nullable(), kw: z.number().nullable(), topic: z.string().nullable(), lang: z.enum(["uz", "ru"]), public_reply: z.string(), dm_extra: z.string() });
+
+/**
+ * AI-first understanding of a teplonasos comment (with the person's earlier comments on the post), or null (no key /
+ * error / timeout) — then the keyword parser decides. A cheap model, small output.
+ */
+export async function understandHeatPumpComment(comment: string, history: readonly string[] = [], openai: Pick<OpenAI, "responses"> | null = client()) {
+  if (!openai) return null;
+  try {
+    const context = history.length ? `Shu odamning shu postdagi oldingi kommentlari: ${JSON.stringify(history.slice(-5).map(item => item.slice(0, 200)))}\n` : "";
+    const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 250, input: [{ role: "system", content: HEAT_PUMP_UNDERSTAND }, { role: "user", content: `${context}Komment: ${JSON.stringify(comment.slice(0, 600))}` }], text: { format: zodTextFormat(heatPumpUnderstanding, "heat_pump_understanding") } });
+    return response.output_parsed ? { ai: response.output_parsed, usage: usageOf(response) } : null;
+  } catch (error) {
+    console.warn("Instagram AI heat pump understand failed", safe(error));
+    return null;
+  }
+}
+
 /** The only facts the bot may use (no invented numbers or promises). */
 export const HEAT_PUMP_PROMPT = `Sen Buyuk Karavan do'konining Instagram Direct'dagi teplonasos (issiqlik nasosi) yordamchisisan.
 Faqat quyidagi ma'lumotlardan foydalan; boshqa raqam, narx, muddat yoki va'da TO'QIMA:
@@ -133,22 +171,31 @@ Faqat quyidagi ma'lumotlardan foydalan; boshqa raqam, narx, muddat yoki va'da TO
 - Montaj narxi va kafolat: "Mutaxassis aniq aytadi: +998 99 520 99 99".
 - Oylik svet puli: so'mda hisoblama; faqat "1 kW tok → 3.5 kW issiqlik" de va mutaxassis raqamini ber: +998 99 520 99 99.
 - Model narxini o'zing aytma: narx uy maydoni (m²) bo'yicha alohida hisob bilan yuboriladi — m² so'ra.
+- Aniq model narxi so'ralsa ("8 HP necha pul") — hp ga shu HP sonini yoz; narxni kod qo'shadi, o'zing yozma.
+- Bilmasang yoki narx bu ro'yxatda yo'q bo'lsa (fankoyl narxi, montaj narxi, boshqa brend, maxsus loyiha) — o'ylab topma: specialist = true, reply'da har safar boshqacha so'z bilan silliq ayt: mutaxassisimiz aniq javob beradi, ozgina kuting 🙏, tezroq bo'lishi uchun +998 99 520 99 99 ga qo'ng'iroq qilsa ham bo'ladi.
 Qoidalar:
 - Teplonasosga aloqasi yo'q savol → aynan shu javob: "Bu savol bo'yicha call-centerimizga murojaat qiling: +998 91 637 77 77".
 - Javob 2–3 gapdan oshmasin, mijoz yozgan tilda (o'zbek yoki rus).
 - m2: mijoz uy maydonini yozgan bo'lsa son (20–3000), aks holda null. Telefon, yil va narx m² emas.
-Faqat JSON qaytar: {"reply": "...", "m2": number|null}`;
+- kw: mijoz kerakli issiqlik quvvatini kW da yozgan bo'lsa son ("180KW", "12 квт"), aks holda null. O'zing hisoblama.
+- Qisqa, jonli, odamdek yoz; shablonni takrorlama. "Bizda yo'q" dema. Hazilga qisqa iliq javob.
+Faqat JSON qaytar: {"reply": "...", "m2": number|null, "kw": number|null, "hp": number|null, "specialist": boolean}`;
 
-const heatPumpReply = z.object({ reply: z.string(), m2: z.number().nullable() });
+const heatPumpReply = z.object({ reply: z.string(), m2: z.number().nullable(), kw: z.number().nullable(), hp: z.number().nullable(), specialist: z.boolean() });
+export type ChatTurn = { role: "user" | "assistant"; text: string };
 
-/** A short Direct answer (and the m² if the customer wrote one), or null (no key / error / empty). */
-export async function heatPumpChat(message: string, lastBotText: string | null) {
-  const openai = client();
+/**
+ * A short Direct answer with what the customer wrote (m², kW, an asked model's HP) and whether a specialist must answer,
+ * or null (no key / error / empty). `context`: the last bot text, or the last ~10 messages of the chat. Direct is real
+ * time: one try, 6 s.
+ */
+export async function heatPumpChat(message: string, context: string | readonly ChatTurn[] | null, openai: Pick<OpenAI, "responses"> | null = client()) {
   if (!openai) return null;
+  const turns: ChatTurn[] = typeof context === "string" ? [{ role: "assistant", text: context }] : [...(context ?? [])].slice(-10);
   try {
-    const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 300, input: [{ role: "system", content: HEAT_PUMP_PROMPT }, ...(lastBotText ? [{ role: "assistant" as const, content: lastBotText.slice(0, 1000) }] : []), { role: "user", content: message.slice(0, 1000) }], text: { format: zodTextFormat(heatPumpReply, "heat_pump_reply") } });
+    const response = await openai.responses.parse({ model: instagramModel(), store: false, max_output_tokens: 300, input: [{ role: "system", content: HEAT_PUMP_PROMPT }, ...turns.map(turn => ({ role: turn.role, content: turn.text.slice(0, 1000) })), { role: "user", content: message.slice(0, 1000) }], text: { format: zodTextFormat(heatPumpReply, "heat_pump_reply") } }, { timeout: 6_000, maxRetries: 0 });
     const parsed = response.output_parsed;
-    return parsed && (parsed.reply.trim() || parsed.m2) ? { reply: parsed.reply.trim().slice(0, 600), m2: parsed.m2, usage: usageOf(response) } : null;
+    return parsed && (parsed.reply.trim() || parsed.m2 || parsed.kw || parsed.hp) ? { reply: parsed.reply.trim().slice(0, 600), m2: parsed.m2, kw: parsed.kw, hp: parsed.hp, specialist: parsed.specialist, usage: usageOf(response) } : null;
   } catch (error) {
     console.warn("Instagram AI heat pump reply failed", safe(error));
     return null;
