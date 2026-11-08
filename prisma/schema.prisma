@@ -195,6 +195,7 @@ model Product {
   calculationLineItems CalculationLineItem[]
   workshopItems        WorkshopOrderItem[]
   instagramRules       InstagramMediaRule[]  @relation("InstagramRuleProduct")
+  coolerKits           CoolerKit[]
   instagramSecondRules InstagramMediaRule[]  @relation("InstagramRuleSecondProduct")
 
   @@index([isVisible, order])
@@ -2100,6 +2101,13 @@ model HeatPumpThread {
   lastBotMid  String?   @db.VarChar(255)
   lastBotAt   DateTime?
   lastInMid   String?   @db.VarChar(255)
+  // "heat" (teplonasos) or "cooler" (xolodilnik: tons → chambers → kit; step "chambers" → "contact" → "done" / "handoff").
+  flow        String    @default("heat") @db.VarChar(10)
+  tons        Int?
+  chambers    Int?
+  region      String?
+  step        String?   @db.VarChar(10)
+  misses      Int       @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -2107,46 +2115,22 @@ model HeatPumpThread {
   @@index([mediaId])
 }
 
-// Komplektlar: one chamber of minTons–maxTons gets this kit; priceUsd null = "Narxni sotuvchimiz aniq aytadi".
+// Komplektlar: one chamber of minTons–maxTons gets this kit; the price is the Prays product's (live), priceUsd only a
+// fallback; neither = "Narxni sotuvchimiz aniq aytadi".
 model CoolerKit {
   id        String   @id @default(cuid())
   minTons   Int
   maxTons   Int
   name      String   @db.VarChar(80)
   items     String[] @default([])
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   priceUsd  Decimal? @db.Decimal(10, 2)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
 
-// A Direct chat started from a xolodilnik post comment (one per comment; a new comment restarts the person's chat).
-model CoolerThread {
-  id          String    @id @default(cuid())
-  accountId   String    @db.VarChar(64)
-  igsid       String    @db.VarChar(64)
-  commentId   String    @unique @db.VarChar(64)
-  mediaId     String    @db.VarChar(64)
-  username    String?
-  // "chambers" → "contact" → "done"; "handoff" = the seller writes, the bot is silent.
-  step        String    @default("chambers") @db.VarChar(10)
-  tons        Int
-  chambers    Int?
-  kit         String?
-  region      String?
-  phone       String?
-  misses      Int       @default(0)
-  leadId      String?
-  lastBotText String?
-  lastBotMid  String?   @db.VarChar(255)
-  lastBotAt   DateTime?
-  lastInMid   String?   @db.VarChar(255)
-  mutedUntil  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@unique([accountId, igsid])
-  @@index([mediaId])
+  @@index([productId])
 }
 
 // A private Telegram chat bound by sharing a verified contact ("heatpump": +998 91 637 77 77 gets the teplonasos leads).

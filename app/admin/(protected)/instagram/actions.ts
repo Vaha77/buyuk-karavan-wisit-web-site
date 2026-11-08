@@ -140,6 +140,7 @@ export async function saveMediaRuleAction(raw: unknown): Promise<Result> {
   const postedAt = value.postedAt ? new Date(value.postedAt) : null;
   // Teplonasos posts exist only on the "global" account (@buyuk_karavan).
   if (value.heatPump && !isHeatPumpAccount(value.accountId)) return { ok: false, error: "Teplonasos turi faqat @buyuk_karavan uchun." };
+  if (value.cooler && !isHeatPumpAccount(value.accountId)) return { ok: false, error: "Xolodilnik turi faqat @buyuk_karavan uchun." };
   const data = { accountId: value.accountId, heatPump: value.heatPump, cooler: value.cooler, priceText: value.priceText || null, productId: value.productId, secondProductId, isActive: value.isActive, keywords: keywords.length ? keywords : DEFAULT_KEYWORDS, dmTemplate: value.dmTemplate, publicReplyEnabled: value.publicReplyEnabled, publicReplyText: variants[0] ?? (value.publicReplyText || DEFAULT_PUBLIC_REPLY), publicReplyVariants: variants, permalink: value.permalink, caption: value.caption?.slice(0, 500) ?? null, postedAt: postedAt && !Number.isNaN(postedAt.getTime()) ? postedAt : null, updatedById: actor.id };
   await getDb().instagramMediaRule.upsert({ where: { mediaId: value.mediaId }, create: { mediaId: value.mediaId, ...data }, update: data });
   await writeAudit(actor, { action: "UPDATE", entityType: "INSTAGRAM_MEDIA", entityId: value.mediaId, entityName: value.permalink ?? value.mediaId, summary: `Instagram post sozlamasini saqladi (${value.isActive ? "faol" : "o‘chiq"})`, after: { productId: value.productId, secondProductId, isActive: value.isActive, keywords: data.keywords, publicReplyEnabled: value.publicReplyEnabled } });
@@ -262,16 +263,18 @@ export async function saveHeatPumpTableAction(raw: unknown): Promise<Result> {
 
 // ---- Xolodilnik: Komplektlar + Direct matnlari -------------------------------------------------------------
 
+const coolerTextSchema = z.object(Object.fromEntries(COOLER_TEXT_KEYS.map(key => [key, z.string().trim().max(900, "Matn 900 belgidan oshmasin.")])) as Record<(typeof COOLER_TEXT_KEYS)[number], z.ZodString>);
 const coolerSchema = z.object({
   kits: z.array(z.object({
     id: z.string().trim().max(40).nullable(),
     minTons: z.number().int().min(1).max(100_000), maxTons: z.number().int().min(1).max(100_000),
     name: z.string().trim().min(1, "Komplekt nomini yozing.").max(80),
     items: z.array(z.string().trim().min(1).max(120)).max(30),
+    productId: z.string().trim().min(1).max(100).nullable(),
     priceUsd: z.number().positive().max(10_000_000).nullable(),
     isActive: z.boolean(),
   }).refine(kit => kit.minTons <= kit.maxTons, "Tonna oralig‘i: “dan” ≤ “gacha” bo‘lsin.")).max(30),
-  texts: z.object(Object.fromEntries(COOLER_TEXT_KEYS.map(key => [key, z.string().trim().max(900, "Matn 900 belgidan oshmasin.")])) as Record<(typeof COOLER_TEXT_KEYS)[number], z.ZodString>),
+  texts: z.object({ uz: coolerTextSchema, ru: coolerTextSchema }),
 });
 
 /** Saves the whole Komplektlar table (rows left out are deleted) and the Direct texts (empty = default). */
@@ -281,6 +284,8 @@ export async function saveCoolerSettingsAction(raw: unknown): Promise<Result> {
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Ma’lumotlarni tekshiring." };
   const { kits, texts } = parsed.data;
   const db = getDb();
+  const productIds = [...new Set(kits.map(kit => kit.productId).filter((productId): productId is string => !!productId))];
+  if (productIds.length && await db.product.count({ where: { id: { in: productIds }, archivedAt: null } }) !== productIds.length) return { ok: false, error: "Mahsulot topilmadi." };
   await db.$transaction([
     db.coolerKit.deleteMany({ where: { id: { notIn: kits.map(kit => kit.id).filter((kitId): kitId is string => !!kitId) } } }),
     ...kits.map(({ id: kitId, ...kit }) => kitId ? db.coolerKit.upsert({ where: { id: kitId }, create: { id: kitId, ...kit }, update: kit }) : db.coolerKit.create({ data: kit })),

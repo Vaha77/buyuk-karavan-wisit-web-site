@@ -101,7 +101,7 @@ export async function syncCards(conversationId: string) {
 
 /** A conversation started on a teplonasos post ("global" only). */
 const isHeatThread = async (conversation: { accountId: string; igsid: string }) =>
-  isHeatPumpAccount(conversation.accountId) && !!await getDb().heatPumpThread.findUnique({ where: { accountId_igsid: { accountId: conversation.accountId, igsid: conversation.igsid } }, select: { id: true } });
+  isHeatPumpAccount(conversation.accountId) && (await getDb().heatPumpThread.findUnique({ where: { accountId_igsid: { accountId: conversation.accountId, igsid: conversation.igsid } }, select: { flow: true } }))?.flow === "heat";
 
 // ---- Webhook events --------------------------------------------------------------------------------------
 
@@ -220,6 +220,11 @@ export const dismissReason = (code: string) => DISMISS_REASONS[code] ?? null;
 
 // ---- Tick: reminders, digest, report ---------------------------------------------------------------------
 
+/** Plain notice to the account's Direct group / "Instagram so‘rovlarini oladi" admins (xolodilnik bot). */
+export async function notifyInstagramAdmins(account: Pick<InstagramAccount, "id" | "directChatId">, text: string) {
+  return broadcast(await recipients(account), (await accountTag(account.id)) + text);
+}
+
 async function broadcast(people: Recipient[], text: string, buttons?: (person: Recipient) => InlineKeyboard) {
   let sent = 0;
   for (const person of people) {
@@ -294,7 +299,7 @@ async function accountTick(accountId: string, options: { force?: boolean; now?: 
         db.instagramConversation.findMany({ where: { accountId, status: { in: ["UNREAD", "OPENED"] }, waitingSince: { not: null } }, select: { username: true, name: true, waitingSince: true, igsid: true } }),
       ]);
       // Teplonasos conversations: not in the group's list, a short list of their own to the private chat.
-      const heatIds = isHeatPumpAccount(accountId) && waiting.length ? new Set((await db.heatPumpThread.findMany({ where: { accountId, igsid: { in: waiting.map(row => row.igsid) } }, select: { igsid: true } })).map(row => row.igsid)) : new Set<string>();
+      const heatIds = isHeatPumpAccount(accountId) && waiting.length ? new Set((await db.heatPumpThread.findMany({ where: { accountId, flow: "heat", igsid: { in: waiting.map(row => row.igsid) } }, select: { igsid: true } })).map(row => row.igsid)) : new Set<string>();
       const heatWaiting = waiting.filter(row => heatIds.has(row.igsid));
       await broadcast(await recipients(account, true), tag + reportText(today, { conversations: incoming.length, answered: answers.length, responseMs: answers.map(row => row.responseMs!), waiting: waiting.filter(row => !heatIds.has(row.igsid)).map(row => ({ username: row.username, name: row.name, waitingMs: now.getTime() - row.waitingSince!.getTime() })) }));
       if (heatWaiting.length) await sendHeatPumpTelegram(heatWaitingText(today, heatWaiting.map(row => ({ label: personLabel(row), waited: duration(now.getTime() - row.waitingSince!.getTime()) }))));

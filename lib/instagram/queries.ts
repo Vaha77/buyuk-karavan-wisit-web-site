@@ -65,8 +65,9 @@ export async function getInstagramBoard(accountId: string) {
     bufferUsd: Number(settings?.heatPumpBufferUsd ?? 145), bufferLiters: settings?.heatPumpBufferLiters ?? 60, telegramLinked,
     chain: Object.fromEntries(comments.map(row => { const thread = threads.find(item => item.mediaId === row.mediaId); return [row.mediaId, { comments: row._count._all, direct: row._count.dmSentAt, m2: thread?._count.m2 ?? 0, phone: thread?._count.phone ?? 0 }]; })) as Record<string, { comments: number; direct: number; m2: number; phone: number }>,
   })) : null;
-  const cooler = await Promise.all([db.coolerKit.findMany({ orderBy: { minTons: "asc" } }), db.siteSettings.findUnique({ where: { id: "global" }, select: { coolerTexts: true } })])
-    .then(([kits, settings]) => ({ kits: kits.map(kit => ({ id: kit.id, minTons: kit.minTons, maxTons: kit.maxTons, name: kit.name, items: kit.items, priceUsd: kit.priceUsd === null ? null : Number(kit.priceUsd), isActive: kit.isActive })), texts: coolerTexts(settings?.coolerTexts) }));
+  // Xolodilnik ("global" only): Komplektlar and the Direct texts.
+  const cooler = isHeatPumpAccount(account?.id) ? await Promise.all([db.coolerKit.findMany({ orderBy: { minTons: "asc" } }), db.siteSettings.findUnique({ where: { id: "global" }, select: { coolerTexts: true } })])
+    .then(([kits, settings]) => ({ kits: kits.map(kit => ({ id: kit.id, minTons: kit.minTons, maxTons: kit.maxTons, name: kit.name, items: kit.items, productId: kit.productId, priceUsd: kit.priceUsd === null ? null : Number(kit.priceUsd), isActive: kit.isActive })), texts: coolerTexts(settings?.coolerTexts) })) : null;
   const perMedia: Record<string, { comments: number; sent: number; failed: number; leads: number }> = {};
   for (const row of stats) {
     const item = perMedia[row.mediaId] ??= { comments: 0, sent: 0, failed: 0, leads: 0 };

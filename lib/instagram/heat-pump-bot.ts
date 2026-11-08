@@ -13,6 +13,8 @@ import { extractPhone } from "./direct-rules";
 import { sendDirectMessage } from "./graph";
 import { HUMAN_MUTE_MS, backlogText, calcMessage, deliverPrivate, isHeatPumpContact, directBotStep, extractM2, heatPumpByKeywords, heatPumpFromAi, isBotEcho, isHeatPumpAccount, langOf, stripMentions, texts, threadIgsid, type HeatPumpComment, type Lang } from "./heat-pump";
 import { randomGapMs, type MessageEvent } from "./rules";
+import { coolerTexts, coolerTurn, kitPrice, type CoolerKitRow } from "./cooler";
+import { DEFAULT_MARKUP, clampMarkup } from "@/lib/prays/rules";
 
 const safeType = (error: unknown) => error instanceof Error ? error.name : "UnknownError";
 
@@ -76,10 +78,14 @@ export async function classifyHeatPump(text: string): Promise<{ result: HeatPump
   return ai ? { result: heatPumpFromAi(ai), by: "AI", usage: ai.usage } : { result: null, by: "KEYWORD_FALLBACK", usage: { tokens: 0, costUsd: 0 } };
 }
 
-/** Marks the person's thread as teplonasos (before the comment DM goes out, so its echo counts as the bot's). */
-export async function openThread(input: { accountId: string; igsid: string; mediaId: string; username: string | null; dm: string; m2: number | null; summary: string | null }) {
-  const data = { username: input.username, lastBotText: input.dm, lastBotAt: new Date(), ...(input.m2 ? { m2: input.m2, model: input.summary } : {}) };
-  return getDb().heatPumpThread.upsert({ where: { accountId_igsid: { accountId: input.accountId, igsid: input.igsid } }, create: { accountId: input.accountId, igsid: input.igsid, mediaId: input.mediaId, ...data }, update: data });
+/**
+ * Marks the person's thread as teplonasos, or (with `tons`) starts the xolodilnik chat over, before the comment DM goes
+ * out, so its echo counts as the bot's.
+ */
+export async function openThread(input: { accountId: string; igsid: string; mediaId: string; username: string | null; dm: string; m2: number | null; summary: string | null; tons?: number }) {
+  const flow = input.tons ? { flow: "cooler", tons: input.tons, step: "chambers", chambers: null, region: null, misses: 0, botReplies: 0, model: null, m2: null } : { flow: "heat" };
+  const data = { username: input.username, lastBotText: input.dm, lastBotAt: new Date(), mediaId: input.mediaId, ...flow, ...(input.m2 ? { m2: input.m2, model: input.summary } : {}) };
+  return getDb().heatPumpThread.upsert({ where: { accountId_igsid: { accountId: input.accountId, igsid: input.igsid } }, create: { accountId: input.accountId, igsid: input.igsid, ...data }, update: data });
 }
 
 /**
@@ -93,7 +99,7 @@ export async function bindThread(threadId: string, accountId: string, fromId: st
   const other = await db.heatPumpThread.findUnique({ where: { accountId_igsid: { accountId, igsid } } });
   if (!other) return db.heatPumpThread.update({ where: { id: threadId }, data: { igsid, ...mid } });
   const moved = await db.heatPumpThread.delete({ where: { id: threadId } });
-  return db.heatPumpThread.update({ where: { id: other.id }, data: { username: moved.username, m2: moved.m2 ?? other.m2, model: moved.model ?? other.model, leadId: other.leadId ?? moved.leadId, lastBotText: moved.lastBotText, lastBotAt: moved.lastBotAt, ...mid } });
+  return db.heatPumpThread.update({ where: { id: other.id }, data: { username: moved.username, flow: moved.flow, tons: moved.tons, step: moved.step, chambers: moved.chambers, region: moved.region, misses: moved.misses, botReplies: moved.flow === "cooler" ? moved.botReplies : other.botReplies, m2: moved.m2 ?? other.m2, model: moved.model ?? other.model, leadId: other.leadId ?? moved.leadId, lastBotText: moved.lastBotText, lastBotAt: moved.lastBotAt, ...mid } });
 }
 
 /** One lead per person ("ighp:<igsid>"), kept up to date with m², model / price, phone. Returns its id. */
@@ -149,10 +155,11 @@ export async function handleHeatPumpDirect(events: MessageEvent[], account: Inst
 }
 
 async function answer(thread: HeatPumpThread, event: MessageEvent, account: InstagramAccount, token: string) {
-  const db = getDb(), text = event.text!.trim();
+  const db = getDb(), text = event.text!.trim(), cooler = thread.flow === "cooler";
   // The customer's language; a message without letters ("150") keeps the language of our last message.
   const lang = langOf(text, thread.lastBotText), t = texts(lang);
-  const phone = extractPhone(text);
+  // Xolodilnik: the phone is handled by its own turn (lead → the Instagram admins).
+  const phone = cooler ? null : extractPhone(text);
   if (phone) {
     thread = await db.heatPumpThread.update({ where: { id: thread.id }, data: { phone } });
     await saveLead(thread, account);
@@ -164,8 +171,8 @@ async function answer(thread: HeatPumpThread, event: MessageEvent, account: Inst
   const claimed = await db.heatPumpThread.updateMany({ where: { id: thread.id, botReplies: thread.botReplies, OR: [{ lastInMid: null }, { lastInMid: { not: event.mid } }] }, data: { botReplies: { increment: 1 }, lastInMid: event.mid } });
   if (claimed.count !== 1) return;
 
-  let reply: string | null = step === "limit" ? t.limit : phone ? t.thanks : null;
-  if (!reply) {
+  let reply: string | null = cooler ? await coolerReply(thread, text, step, lang, account) : step === "limit" ? t.limit : phone ? t.thanks : null;
+  if (!reply && !cooler) {
     let m2 = extractM2(text);
     if (!m2) {
       const ai = await heatPumpChat(text, thread.lastBotText);
@@ -185,4 +192,51 @@ async function answer(thread: HeatPumpThread, event: MessageEvent, account: Inst
   await db.heatPumpThread.update({ where: { id: thread.id }, data: { lastBotText: reply.slice(0, 1000), lastBotAt: new Date() } });
   const sent = await sendDirectMessage(token, account.igUserId, thread.igsid, reply.slice(0, 1000));
   if (sent.message_id) await db.heatPumpThread.update({ where: { id: thread.id }, data: { lastBotMid: sent.message_id } });
+}
+
+// ---- Xolodilnik (same thread, claim, limit and mute as teplonasos) ----------------------------------------
+
+async function loadCooler(lang: Lang) {
+  const db = getDb();
+  const num = (value: { toString(): string } | null) => value === null ? null : Number(value.toString());
+  const [kits, settings] = await Promise.all([db.coolerKit.findMany({ include: { product: { select: { basePriceUsd: true, priceUsd: true, archivedAt: true } } } }), db.siteSettings.findUnique({ where: { id: "global" }, select: { coolerTexts: true, priceMarkupPercent: true } })]);
+  const markup = clampMarkup(settings?.priceMarkupPercent ?? DEFAULT_MARKUP) ?? DEFAULT_MARKUP;
+  const rows: CoolerKitRow[] = kits.map(kit => ({ ...kit, priceUsd: kitPrice({ priceUsd: num(kit.priceUsd) }, kit.product && { basePriceUsd: num(kit.product.basePriceUsd), priceUsd: num(kit.product.priceUsd), archivedAt: kit.product.archivedAt }, markup) }));
+  return { kits: rows, texts: coolerTexts(settings?.coolerTexts)[lang] };
+}
+/** The comment's public reply and first DM texts (admin-edited), in the comment's language. */
+export const coolerCommentTexts = async (lang: Lang) => (await loadCooler(lang)).texts;
+
+/** One turn of the xolodilnik chat; the 6th bot message is the handoff, then silence. Saves the state and the lead. */
+async function coolerReply(thread: HeatPumpThread, text: string, step: "reply" | "limit", lang: Lang, account: InstagramAccount) {
+  if (thread.step !== "chambers" && thread.step !== "contact") return null;
+  const [{ kits, texts: t }, rate] = await Promise.all([loadCooler(lang), getUsdUzsRate().then(value => value?.rate ?? null).catch(() => null)]);
+  const turn = step === "limit" ? { reply: t.handoff, data: { step: "handoff" }, lead: true, handoff: true } : coolerTurn(thread, text, kits, t, rate, lang);
+  thread = await getDb().heatPumpThread.update({ where: { id: thread.id }, data: turn.data });
+  if (turn.lead && account.leadsEnabled) await saveCoolerLead(thread, account, !!turn.handoff).catch(error => console.error("Instagram cooler lead failed", { type: safeType(error) }));
+  return turn.reply;
+}
+
+/** One lead per person ("igcool:<igsid>"), source "Reels komment"; new → Telegram (publishLeadToTelegram), later phone → a notice. */
+async function saveCoolerLead(thread: HeatPumpThread, account: InstagramAccount, handoff: boolean) {
+  const db = getDb(), submissionKey = `igcool:${thread.igsid}`.slice(0, 100);
+  const handle = thread.username ? `@${thread.username}` : `Instagram ${thread.igsid}`;
+  const fields = { phone: thread.phone, region: thread.region, capacity: thread.tons ? `${thread.tons} t` : null, dimensions: thread.chambers ? `${thread.chambers} ta kamera` : null, product: thread.model, notes: [`Instagram · xolodilnik (@${account.username}) · Reels komment`, `Instagram: ${thread.username ? `https://instagram.com/${thread.username}` : handle}`, `Tonna: ${thread.tons ?? "—"}`, `Kamera: ${thread.chambers ?? "—"}`, thread.model ? `Komplekt: ${thread.model}` : "", `Viloyat: ${thread.region ?? "—"}`, thread.phone ? `Telefon: ${thread.phone}` : "", handoff ? "⚠️ Bot tushunmadi — sotuvchi Direct’da yozsin" : ""].filter(Boolean).join("\n") };
+  const existing = await db.lead.findUnique({ where: { submissionKey }, select: { id: true } });
+  let leadId = existing?.id ?? null;
+  if (existing) {
+    await db.lead.update({ where: { id: existing.id }, data: fields });
+    const { notifyInstagramAdmins } = await import("./direct");
+    await notifyInstagramAdmins(account, [handoff ? "❄️ Xolodilnik: sotuvchi yozsin" : "❄️ Xolodilnik: telefon qoldirdi", handle, `Tonna: ${thread.tons ?? "—"} · Kamera: ${thread.chambers ?? "—"}`, `Komplekt: ${thread.model ?? "—"}`, `Viloyat: ${thread.region ?? "—"}`, `Telefon: ${thread.phone ?? "—"}`].join("\n"));
+  } else {
+    const created = await db.lead.createManyAndReturn({ data: [{ submissionKey, customerName: handle, requestType: "Reels komment", source: "INSTAGRAM", instagramAccountId: account.id, ...fields }], skipDuplicates: true, select: { id: true } });
+    leadId = created[0]?.id ?? null;
+    if (leadId) {
+      await db.leadActivity.create({ data: { leadId, type: "LEAD_CREATED" } });
+      try { expireDashboard(); } catch { /* outside a request scope */ }
+      const { publishLeadToTelegram } = await import("@/lib/telegram/service");
+      await publishLeadToTelegram(leadId);
+    }
+  }
+  if (leadId && leadId !== thread.leadId) await db.heatPumpThread.update({ where: { id: thread.id }, data: { leadId } });
 }

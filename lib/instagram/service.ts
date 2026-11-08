@@ -14,9 +14,8 @@ import { GraphError, getMediaPermalink, listComments, listMedia, refreshLongLive
 import { ingestFetchedComments, ingestWebhook, type IngestStore, type MediaComments } from "./ingest";
 import { afterDirectEvents, recordDirectEvents } from "./direct";
 import { negativeText, notifyNegative } from "./telegram";
-import { bindThread, buildCalc, sendHeatPumpTelegram, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
-import { askText, coolerAction, extractTons } from "./cooler";
-import { bindCoolerThread, handleCoolerDirect, loadCoolerTexts, openCoolerThread } from "./cooler-bot";
+import { bindThread, buildCalc, coolerCommentTexts, sendHeatPumpTelegram, classifyHeatPump, handleHeatPumpDirect, openThread, upsertHeatPumpLead } from "./heat-pump-bot";
+import { askText, coolerAction, coolerTons } from "./cooler";
 import { heatPumpAction, heatPumpOutgoing, heatPumpReplyAnswered, isHeatPumpAccount, langOf, texts, type HeatPumpIntent } from "./heat-pump";
 import { MAX_ATTEMPTS, REFRESH_WHEN_DAYS_LEFT, aiReplyProblem, tooSimilar, accountBrand, accountName, backoffMs, chooseAction, classifyByKeywords, errorReason, isRateLimit, isRetryable, kindFromAsks, leadKey, parseWebhook, pickVariant, priceSom, productLink, randomGapMs, renderTemplate, tashkentDayStart, tooOld, type Action, type GraphErrorInfo } from "./rules";
 
@@ -50,8 +49,8 @@ const storeFor = (accountId: string): IngestStore => ({
     const result = await getDb().instagramComment.createMany({ data: [{ ...row, accountId }], skipDuplicates: true });
     return result.count === 1;
   },
-  // Teplonasos posts only, and only on the "global" account.
-  ...(isHeatPumpAccount(accountId) ? { allowsReply: async (mediaId: string) => !!await getDb().instagramMediaRule.findFirst({ where: { mediaId, accountId, heatPump: true }, select: { mediaId: true } }) } : {}),
+  // Teplonasos / xolodilnik posts only, and only on the "global" account.
+  ...(isHeatPumpAccount(accountId) ? { allowsReply: async (mediaId: string) => !!await getDb().instagramMediaRule.findFirst({ where: { mediaId, accountId, OR: [{ heatPump: true }, { cooler: true }] }, select: { mediaId: true } }) } : {}),
 });
 
 /**
@@ -81,7 +80,6 @@ export async function ingestNotification(payload: unknown) {
 export async function afterNotification(results: NonNullable<Awaited<ReturnType<typeof ingestNotification>>>) {
   await Promise.all(results.map(async result => {
     if (isHeatPumpAccount(result.account.id) && result.events.length) await handleHeatPumpDirect(result.events, result.account, accountToken(result.account));
-    if (result.events.length) await handleCoolerDirect(result.events, result.account, accountToken(result.account));
     if (result.direct.touched.length || result.direct.phones.length) await afterDirectEvents(result.direct, result.account, accountToken(result.account)).catch(error => console.error("Instagram Direct failed", { type: safeType(error) }));
     if (result.queued.length) await processQueue({ accountId: result.account.id, budgetMs: 240_000 });
   }));
@@ -124,8 +122,8 @@ type Outcome = "sent" | "failed" | "skipped" | "notified" | "retry" | "rate-limi
 
 /** Keywords first; when they are unclear the AI decides; without the AI the keyword fallback, else UNKNOWN (no reply). */
 async function classify(comment: InstagramComment, rule: RuleWithProduct | null, account: InstagramAccount): Promise<{ kind: CommentKind; by: string; usage: AiUsage; m2?: number | null; intent?: HeatPumpIntent | null; reply?: string }> {
-  // Xolodilnik post: a tonnage starts the Direct chat; anything else is classified as usual.
-  if (rule?.cooler && extractTons(comment.text)) return { kind: "COOLER", by: "KEYWORD", usage: { tokens: 0, costUsd: 0 } };
+  // Xolodilnik post ("global" only): a tonnage starts the Direct chat; anything else is classified as usual.
+  if (coolerTons(rule, account.id, comment.text)) return { kind: "COOLER", by: "KEYWORD", usage: { tokens: 0, costUsd: 0 } };
   // Teplonasos post: only the "global" account (@eshikmaster never gets this flow).
   if (rule?.heatPump && isHeatPumpAccount(account.id)) {
     const { result, by, usage } = await classifyHeatPump(comment.text).catch(error => {
@@ -214,7 +212,7 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   }
   const kind = comment.kind as CommentKind;
   const account = context.account;
-  if (comment.parentId && !heatPumpReplyAnswered(kind, comment.heatPumpIntent, !!rule?.heatPump && isHeatPumpAccount(account.id))) { await finish("SKIPPED", "Javob-komment (reply) — javob berilmaydi"); return "skipped"; }
+  if (comment.parentId && kind !== "COOLER" && !heatPumpReplyAnswered(kind, comment.heatPumpIntent, !!rule?.heatPump && isHeatPumpAccount(account.id))) { await finish("SKIPPED", "Javob-komment (reply) — javob berilmaydi"); return "skipped"; }
   const [answered, repliesToday, calcSent] = await Promise.all([
     db.instagramComment.count({ where: { mediaId: comment.mediaId, fromId: comment.fromId, commentId: { not: commentId }, OR: [{ dmSentAt: { not: null } }, { publicReplyAt: { not: null } }] } }),
     db.instagramComment.count({ where: { accountId: account.id, publicReplyAt: { gte: tashkentDayStart() } } }),
@@ -264,10 +262,10 @@ async function processComment(commentId: string, context: Context): Promise<Outc
       heatReply = friendly;
     }
   }
-  const tons = action.type === "cooler" ? extractTons(comment.text) : null;
+  const tons = action.type === "cooler" ? coolerTons(rule, account.id, comment.text) : null;
   if (action.type === "cooler") {
-    if (!tons) { await finish("SKIPPED", "Tonna topilmadi"); return "skipped"; }
-    const texts = await loadCoolerTexts();
+    if (!tons) { await finish("SKIPPED", "Xolodilnik posti emas yoki tonna topilmadi"); return "skipped"; }
+    const texts = await coolerCommentTexts(langOf(comment.text));
     dm = askText(texts, tons); heatReply = texts.reply;
   }
   if (action.type === "price" || action.type === "question" || action.type === "contact") {
@@ -308,8 +306,8 @@ async function processComment(commentId: string, context: Context): Promise<Outc
   let publicReply = action.type === "price" && rule && !rule.publicReplyEnabled ? null : reply?.trim() || null, dmFailed: string | null = null;
 
   // Teplonasos: the thread is marked before the DM goes out (the customer's answer may come at once).
-  let thread = dm && action.type === "heatpump" ? await openThread({ accountId: account.id, igsid: comment.fromId, mediaId: comment.mediaId, username: comment.username, dm, m2: comment.heatPumpM2, summary: heatSummary }) : null;
-  const cooler = dm && tons ? await openCoolerThread({ accountId: account.id, igsid: comment.fromId, commentId, mediaId: comment.mediaId, username: comment.username, tons, dm }) : null;
+  // Xolodilnik uses the same thread (flow "cooler"), so the teplonasos Direct handler answers it.
+  let thread = dm && (action.type === "heatpump" || tons) ? await openThread({ accountId: account.id, igsid: comment.fromId, mediaId: comment.mediaId, username: comment.username, dm, m2: comment.heatPumpM2, summary: heatSummary, tons: tons ?? undefined }) : null;
   if (dm) {
     // Saved before sending: the echo of this DM may arrive before the API call returns, and must count as automatic.
     await update({ dmText: dm, dmSentAt: new Date() });
@@ -317,7 +315,6 @@ async function processComment(commentId: string, context: Context): Promise<Outc
       const sent = await sendPrivateReply(context.token, account.igUserId, commentId, dm);
       await update({ dmText: dm, dmMessageId: sent.message_id ?? null, dmSentAt: new Date(), attempts: { increment: 1 } });
       if (thread) thread = await bindThread(thread.id, account.id, comment.fromId, sent).catch(error => { console.error("Instagram heat pump thread bind failed", { type: safeType(error) }); return thread; });
-      if (cooler) await bindCoolerThread(cooler, sent).catch(error => console.error("Instagram cooler thread bind failed", { type: safeType(error) }));
     } catch (error) {
       const info = errorInfo(error), attempts = comment.attempts + 1;
       console.error("Instagram private reply failed", { type: safeType(error) });

@@ -8,6 +8,7 @@ import { handleSehCallback,handleSehMessage } from "@/lib/sex/bot-handlers";
 import { handleInstagramCallback } from "@/lib/instagram/telegram";
 import { handleHeatPumpBinding, sendHeatPumpTelegram } from "@/lib/instagram/heat-pump-bot";
 import { isHeatPumpLead } from "@/lib/instagram/heat-pump";
+import { isCoolerLead } from "@/lib/instagram/cooler";
 import { handleStoryCallback } from "@/lib/stories/telegram";
 import { SITE_URL } from "@/lib/site-url";
 import { pendingAgentText,profileMenuText,startDecision } from "./start-rules";
@@ -35,11 +36,13 @@ export async function publishLeadToTelegram(leadId:string){
   if(reserved.count!==1)return false;
   try{
     const db=getDb();
-    const row=await db.lead.findUnique({where:{id:leadId},select:{id:true,submissionKey:true,customerName:true,region:true,requestType:true,product:true,temperature:true,source:true,assignedAgentId:true,referralLink:{select:{name:true,ownerAgent:true}}}});
+    const row=await db.lead.findUnique({where:{id:leadId},select:{id:true,submissionKey:true,customerName:true,phone:true,capacity:true,dimensions:true,instagramAccountId:true,region:true,requestType:true,product:true,temperature:true,source:true,assignedAgentId:true,referralLink:{select:{name:true,ownerAgent:true}}}});
     if(!row)throw new Error("Lead missing");
     const lead={...row,referralName:row.referralLink?.name??null};
     // Teplonasos leads: only the private chat of +998 91 637 77 77, never the group (not even when that fails).
     if(isHeatPumpLead(row)){const message=await sendHeatPumpTelegram(newLeadGroupText(lead));await db.lead.update({where:{id:leadId},data:message?{telegramNotificationStatus:"PUBLISHED",telegramChatId:String(message.chat.id),telegramMessageId:message.message_id,telegramPublishedAt:new Date(),telegramPublishFailedAt:null}:{telegramNotificationStatus:"FAILED",telegramPublishFailedAt:new Date()}});return !!message;}
+    // Xolodilnik leads: the account's Direct group / "Instagram so‘rovlarini oladi" admins, with tonnage, chambers, phone.
+    if(isCoolerLead(row)){const account=row.instagramAccountId?await db.instagramAccount.findUnique({where:{id:row.instagramAccountId},select:{id:true,directChatId:true}}):null;const {notifyInstagramAdmins}=await import("@/lib/instagram/direct");const sent=account?await notifyInstagramAdmins(account,[newLeadGroupText(lead),row.capacity&&`⚖️ ${row.capacity}${row.dimensions?` · ${row.dimensions}`:""}`,row.phone&&`📞 ${row.phone}`].filter(Boolean).join("\n")):0;await db.lead.update({where:{id:leadId},data:sent?{telegramNotificationStatus:"PUBLISHED",telegramPublishedAt:new Date(),telegramPublishFailedAt:null}:{telegramNotificationStatus:"FAILED",telegramPublishFailedAt:new Date()}});return sent>0;}
     // The link's "Mas’ul sotuvchi": the lead goes straight to them (no claim button); otherwise the group claims it.
     const owner=row.referralLink?.ownerAgent;
     const assigned=!row.assignedAgentId&&owner?.isApproved&&owner.isActive?(await db.lead.updateMany({where:{id:leadId,assignedAgentId:null},data:{assignedAgentId:owner.id,claimedAt:new Date()}})).count===1:false;
