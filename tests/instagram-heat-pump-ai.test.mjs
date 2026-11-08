@@ -235,7 +235,7 @@ test("“9800kw🙌” → a joke, no calculation", () => {
   const mapped = hp.heatPumpFromAiReply(AI({ intent: "POWER_KW", kw: 9800 }), "9800kw🙌");
   assert.deepEqual(mapped.result, { kind: "POSITIVE" });
   assert.equal(mapped.reply, hp.texts("uz").joke);
-  assert.deepEqual(hp.directValues("uyim 50000 kv", { m2: 50000, kw: null }).absurd, true);
+  assert.deepEqual(hp.directValues("uyim 200000 kv", { m2: 200000, kw: null }).absurd, true);
 });
 
 test("“5,4 kw tok bir oyda qancha” → ~1620 kWh/oy, approximate, so'm by the specialist", () => {
@@ -252,4 +252,16 @@ test("“170 кв радиатор система” read as kW by the AI → �
   assert.deepEqual(hp.directValues("170 кв радиатор система", { m2: 170, kw: null }), { m2: 170, kw: null }, "the AI agrees with m² → calculation");
   const mapped = hp.heatPumpFromAiReply(AI({ intent: "POWER_KW", kw: 170 }), "170 кв радиатор система");
   assert.equal(hp.heatPumpOutgoing(mapped.result.intent, { answer: mapped.extra }, mapped.lang).dm, "Assalomu alaykum! 170 m² mi yoki 170 kW?");
+});
+
+test("“1200 kW issiqxona” → big project (no price, specialist); “9800kw🙌” → joke; “quvvati 180” → 180 kW", () => {
+  assert.deepEqual(hp.directValues("1200 kW issiqxona", null), { m2: null, kw: 1200 });
+  const big = hp.calcKwMessage(1200, MODELS, RATE, BUFFER);
+  assert.equal(big.big, true);
+  assert.equal(big.priceUsd, null);
+  assert.match(big.text, /520 99 99/);
+  assert.equal(hp.directValues("9800kw🙌", null).absurd, true);
+  assert.deepEqual(hp.directValues("quvvati 180", null), { m2: null, kw: 180 });
+  assert.equal(hp.extractKw("мощность 24"), 24);
+  assert.equal(hp.extractKw("quvvat 380V"), null, "volts are not kW");
 });

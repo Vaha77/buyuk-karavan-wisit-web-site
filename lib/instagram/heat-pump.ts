@@ -94,11 +94,12 @@ export function extractHeight(input: string | null | undefined) {
   return match ? num(match[1]) : null;
 }
 
-const kwValue = (text: string) => { const match = /(\d{1,5}(?:[.,]\d)?)\s*(?:kw|kvt|квт|кв\.?\s*т|kilovat\p{L}*|киловат\p{L}*)(?!\p{L})/u.exec(text); return match ? num(match[1]) : null; };
-/** Needed heat power from a comment / message: "180KW", "180 квт", "12 kvt", "12,5 kW" → kW (1–500), else null. */
+// "180 kW", or "quvvati 180" / "мощность 180" (not "quvvat 380V").
+const kwValue = (text: string) => { const match = /(\d{1,5}(?:[.,]\d)?)\s*(?:kw|kvt|квт|кв\.?\s*т|kilovat\p{L}*|киловат\p{L}*)(?!\p{L})|(?:quvvat|мощност|moshnost)\p{L}*\D{0,6}?(\d{1,5}(?:[.,]\d)?)(?![\d.,]|\s*(?:v|в|hp|ot)(?!\p{L}))/u.exec(text); return match ? num(match[1] ?? match[2]) : null; };
+/** Needed heat power from a comment / message: "180KW", "180 квт", "12 kvt", "12,5 kW" → kW (1–5000), else null. */
 export function extractKw(input: string | null | undefined) {
   const value = kwValue(normalizeText(stripMentions(input ?? ""))) ?? NaN;
-  return value >= 1 && value <= 500 ? Math.round(value) : null;
+  return value >= 1 && value <= 5000 ? Math.round(value) : null;
 }
 
 export type HeatValues = { m2: number | null; kw: number | null; absurd?: true; clarify?: number; power?: number };
@@ -106,7 +107,7 @@ const BARE_KV = /(\d{2,4})\s*(?:kv|кв)(?!\p{L}|\.?\s*[mм](?!\p{L}))/u;
 const POWER = /(?:^|[^\p{L}])(?:tok|oyiga|sarf\p{L}*|свет\p{L}*|расход\p{L}*)(?!\p{L})/u;
 /**
  * m² / kW of a comment or Direct message. The AI's number counts only when the person wrote it ("5,4" = 5.4), else the
- * parser's. kW > 500 or m² > 20 000 → `absurd` (a joke, no calculation); kW with "tok / oyiga / sarf / свет / расход" →
+ * parser's. kW > 5000 or m² > 100 000 → `absurd` (a joke, no calculation); kW with "tok / oyiga / sarf / свет / расход" →
  * `power` (monthly use); a bare "170 кв" the AI read as kW → `clarify` (m² or kW?).
  */
 export function directValues(text: string, ai: { m2: number | null; kw: number | null } | null): HeatValues {
@@ -114,7 +115,7 @@ export function directValues(text: string, ai: { m2: number | null; kw: number |
   const said = new Set((clean.match(/\d+(?:[.,]\d+)?/g) ?? []).map(num));
   const aiKw = ai?.kw && said.has(ai.kw) ? ai.kw : null, aiM2 = ai?.m2 && said.has(ai.m2) ? ai.m2 : null;
   const rawKw = kwValue(clean) ?? aiKw, none = { m2: null, kw: null };
-  if ((rawKw ?? 0) > 500 || (aiM2 ?? 0) > 20000) return { ...none, absurd: true };
+  if ((rawKw ?? 0) > 5000 || (aiM2 ?? 0) > 100000) return { ...none, absurd: true };
   if (rawKw && POWER.test(clean)) return { ...none, power: rawKw };
   const kw = extractKw(text), m2 = (aiM2 ? inRange(aiM2) : null) ?? extractM2(text), bare = BARE_KV.exec(clean);
   if (!kw && aiKw && bare && num(bare[1]) === aiKw) return { ...none, clarify: aiKw };
