@@ -248,13 +248,13 @@ test("several calculations per person per post: each new m² gets one, a repeate
   assert.equal(hp.heatPumpAction(rule, true, false, { m2: 300, previous: sent, today: 5 }).type, "skip", "limit + no public reply left → silent");
   assert.equal(hp.texts("uz").calcLimit, "Ko'proq hisob uchun mutaxassisga qo'ng'iroq qiling: +998 99 520 99 99");
   assert.equal(hp.heatPumpOutgoing("calc", { m2: 200, calc: "HISOB" }).reply, "200 m² uchun hisobni Direct'ga yubordik 📩");
-  // Without m² the one-reply rule stays.
+  // heatPumpAction alone still skips an answered person; teplonasos posts pass 0 and use heatPumpGate instead.
   assert.equal(hp.heatPumpAction(rule, true, true).type, "skip");
   assert.equal(hp.heatPumpAction({ isActive: false }, false, true, { m2: 450, previous: [], today: 0 }).type, "skip", "inactive post");
   const service = await read("../lib/instagram/service.ts");
-  assert.match(service, /heatPumpIntent: "calc", dmSentAt: \{ not: null \} \}, select: \{ heatPumpM2: true, dmSentAt: true \} \}\) : \[\],/);
+  assert.match(service, /heatPumpIntent: \{ in: \["calc", "kw"\] \}, dmSentAt: \{ not: null \} \}, select: \{ heatPumpM2: true, heatPumpKw: true, heatPumpIntent: true, dmSentAt: true \} \}\) : \[\],/);
   assert.match(service, /heatPumpAction\(rule, answered > 0, repliesToday < account\.dailyReplyLimit, calc\)/);
-  assert.match(service, /if \(action\.type === "heatpump" && "limit" in action\) heatReply = texts\(langOf\(comment\.text\)\)\.calcLimit;/);
+  assert.match(service, /if \(action\.type === "heatpump" && "limit" in action\) heatReply = texts\(heatLang\)\.calcLimit;/);
 });
 
 test("every new m² is added to the one lead (450, 200), never a second lead", async () => {
@@ -319,7 +319,7 @@ test("no comment on a teplonasos post stays silent: parse / calc / Direct errors
   assert.equal(hp.texts("uz").friendly, "Rahmat! 🙌 Savollaringiz bo'lsa, Direct'ga yozing.");
   assert.equal(hp.texts("ru").friendly, "Спасибо! 🙌 Если есть вопросы, пишите в Direct.");
   const service = await read("../lib/instagram/service.ts");
-  assert.match(service, /await classifyHeatPump\(comment\.text\)\.catch\(error => \{\n\s*console\.error\("Instagram heat pump parse failed"[^\n]*\n\s*return \{ result: null, by: "PARSE_FAILED"/, "parse error → logged");
+  assert.match(service, /await classifyHeatPump\(comment\.text, history, aiFirst\)\.catch\(error => \{\n\s*console\.error\("Instagram heat pump parse failed"[^\n]*\n\s*return \{ result: null, by: "PARSE_FAILED"/, "parse error → logged");
   assert.match(service, /return \{ kind: result\?\.kind \?\? "POSITIVE", by, usage,/, "not understood → friendly reply, not UNKNOWN");
   assert.match(service, /chooseAction\(kind, heatPost \? \{ \.\.\.account, positiveEnabled: true \} : account,/, "the friendly reply is not switched off on a teplonasos post");
   assert.match(service, /if \(!written\?\.reply && !friendly\) \{[^\n]*\n\s*positive = written\?\.reply \|\| friendly;/, "AI reply failed → fixed friendly text");

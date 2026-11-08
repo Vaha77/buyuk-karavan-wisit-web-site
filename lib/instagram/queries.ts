@@ -47,7 +47,7 @@ export async function getInstagramBoard(accountId: string) {
     db.instagramMediaRule.findMany({ where: own, orderBy: { updatedAt: "desc" } }),
     db.instagramComment.groupBy({ by: ["mediaId", "status"], where: own, _count: { _all: true } }),
     db.instagramComment.groupBy({ by: ["mediaId"], where: { ...own, leadId: { not: null } }, _count: { _all: true } }),
-    db.instagramComment.findMany({ where: own, orderBy: { createdAt: "desc" }, take: 150, select: { commentId: true, mediaId: true, username: true, text: true, status: true, reason: true, productName: true, createdAt: true, leadId: true, publicReplyError: true, kind: true, classifiedBy: true, aiCostUsd: true, aiTokens: true, dmText: true, publicReplyText: true, reviewedAt: true, reviewedBy: true } }),
+    db.instagramComment.findMany({ where: own, orderBy: { createdAt: "desc" }, take: 150, select: { commentId: true, mediaId: true, username: true, text: true, status: true, reason: true, productName: true, createdAt: true, leadId: true, publicReplyError: true, kind: true, classifiedBy: true, aiCostUsd: true, aiTokens: true, dmText: true, publicReplyText: true, heatPumpM2: true, heatPumpKw: true, reviewedAt: true, reviewedBy: true } }),
     db.product.findMany({ where: { archivedAt: null }, orderBy: [{ name: "asc" }], select: { id: true, name: true, model: true, priceUsd: true, isVisible: true } }),
     db.instagramComment.groupBy({ by: ["kind"], where: own, _count: { _all: true } }),
     db.instagramComment.aggregate({ where: own, _sum: { aiCostUsd: true, aiTokens: true } }),
@@ -57,12 +57,12 @@ export async function getInstagramBoard(accountId: string) {
   const telegramLinked = isHeatPumpAccount(account?.id) && !!(process.env.HEATPUMP_TELEGRAM_CHAT_ID?.trim() || await db.telegramChatBinding.findUnique({ where: { key: "heatpump" }, select: { key: true } }).catch(() => null));
   const heatPump = isHeatPumpAccount(account?.id) ? await Promise.all([
     db.heatPumpModel.findMany({ orderBy: [{ winterKw: "asc" }] }),
-    db.siteSettings.findUnique({ where: { id: "global" }, select: { heatPumpBufferUsd: true, heatPumpBufferLiters: true } }),
+    db.siteSettings.findUnique({ where: { id: "global" }, select: { heatPumpBufferUsd: true, heatPumpBufferLiters: true, heatPumpAi: true } }),
     db.instagramComment.groupBy({ by: ["mediaId"], where: { ...own, kind: "HEAT_PUMP" }, _count: { _all: true, dmSentAt: true } }),
     db.heatPumpThread.groupBy({ by: ["mediaId"], where: own, _count: { m2: true, phone: true } }),
   ]).then(([models, settings, comments, threads]) => ({
     models: models.map(row => ({ id: row.id, brand: row.brand, model: row.model, hp: Number(row.hp), nominalKw: Number(row.nominalKw), winterKw: Number(row.winterKw), voltage: row.voltage, priceUsd: Number(row.priceUsd), bufferIncluded: row.bufferIncluded, isActive: row.isActive })),
-    bufferUsd: Number(settings?.heatPumpBufferUsd ?? 145), bufferLiters: settings?.heatPumpBufferLiters ?? 60, telegramLinked,
+    bufferUsd: Number(settings?.heatPumpBufferUsd ?? 145), bufferLiters: settings?.heatPumpBufferLiters ?? 60, aiEnabled: settings?.heatPumpAi ?? true, telegramLinked,
     chain: Object.fromEntries(comments.map(row => { const thread = threads.find(item => item.mediaId === row.mediaId); return [row.mediaId, { comments: row._count._all, direct: row._count.dmSentAt, m2: thread?._count.m2 ?? 0, phone: thread?._count.phone ?? 0 }]; })) as Record<string, { comments: number; direct: number; m2: number; phone: number }>,
   })) : null;
   // Xolodilnik ("global" only): Komplektlar and the Direct texts.

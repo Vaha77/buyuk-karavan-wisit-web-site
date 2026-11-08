@@ -242,6 +242,7 @@ const heatPumpSchema = z.object({
     bufferIncluded: z.boolean(), isActive: z.boolean(),
   })).max(50),
   bufferUsd: z.number().min(0).max(100_000), bufferLiters: z.number().int().min(1).max(10_000),
+  aiEnabled: z.boolean().optional().default(true),
 });
 
 /** Saves the whole table (rows left out are deleted) and the buffer tank price. */
@@ -249,12 +250,12 @@ export async function saveHeatPumpTableAction(raw: unknown): Promise<Result> {
   const actor = await requireRole("SUPER_ADMIN", "ADMIN");
   const parsed = heatPumpSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Ma’lumotlarni tekshiring." };
-  const { rows, bufferUsd, bufferLiters } = parsed.data;
+  const { rows, bufferUsd, bufferLiters, aiEnabled } = parsed.data;
   const db = getDb();
   await db.$transaction([
     db.heatPumpModel.deleteMany({ where: { id: { notIn: rows.map(row => row.id).filter((rowId): rowId is string => !!rowId) } } }),
     ...rows.map(({ id: rowId, ...row }) => rowId ? db.heatPumpModel.upsert({ where: { id: rowId }, create: { id: rowId, ...row }, update: row }) : db.heatPumpModel.create({ data: row })),
-    db.siteSettings.upsert({ where: { id: "global" }, create: { id: "global", heatPumpBufferUsd: bufferUsd, heatPumpBufferLiters: bufferLiters }, update: { heatPumpBufferUsd: bufferUsd, heatPumpBufferLiters: bufferLiters } }),
+    db.siteSettings.upsert({ where: { id: "global" }, create: { id: "global", heatPumpBufferUsd: bufferUsd, heatPumpBufferLiters: bufferLiters, heatPumpAi: aiEnabled }, update: { heatPumpBufferUsd: bufferUsd, heatPumpBufferLiters: bufferLiters, heatPumpAi: aiEnabled } }),
   ]);
   await writeAudit(actor, { action: "UPDATE", entityType: "SITE_SETTINGS", entityId: "heat-pump", entityName: "Teplonasos jadvali", summary: `Teplonasos jadvalini saqladi (${rows.length} model)`, after: parsed.data });
   revalidatePath("/admin/instagram");

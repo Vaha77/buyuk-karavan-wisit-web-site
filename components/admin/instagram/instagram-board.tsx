@@ -144,10 +144,11 @@ const HEAT_COLUMNS: Array<{ key: "brand" | "model" | "hp" | "nominalKw" | "winte
 function HeatPumpTable({ data }: { data: HeatPump }) {
   const [rows, setRows] = useState<HeatPumpDraft[]>(data.models.map(row => ({ ...row, hp: String(row.hp), nominalKw: String(row.nominalKw), winterKw: String(row.winterKw), priceUsd: String(row.priceUsd), voltage: String(row.voltage) })));
   const [buffer, setBuffer] = useState({ usd: String(data.bufferUsd), liters: String(data.bufferLiters) });
+  const [aiEnabled, setAiEnabled] = useState(data.aiEnabled);
   const { pending, save, note, clear } = useSave();
   const set = (index: number, key: keyof HeatPumpRow, value: string | boolean) => { setRows(list => list.map((row, i) => i === index ? { ...row, [key]: value } : row)); clear(); };
   const toNumber = (value: unknown) => Number(String(value).replace(",", "."));
-  const submit = () => save(() => saveHeatPumpTableAction({ rows: rows.map((row): HeatPumpRow => ({ id: typeof row.id === "string" ? row.id : null, brand: String(row.brand), model: String(row.model), hp: toNumber(row.hp), nominalKw: toNumber(row.nominalKw), winterKw: toNumber(row.winterKw), voltage: toNumber(row.voltage), priceUsd: toNumber(row.priceUsd), bufferIncluded: !!row.bufferIncluded, isActive: !!row.isActive })), bufferUsd: toNumber(buffer.usd), bufferLiters: toNumber(buffer.liters) }));
+  const submit = () => save(() => saveHeatPumpTableAction({ rows: rows.map((row): HeatPumpRow => ({ id: typeof row.id === "string" ? row.id : null, brand: String(row.brand), model: String(row.model), hp: toNumber(row.hp), nominalKw: toNumber(row.nominalKw), winterKw: toNumber(row.winterKw), voltage: toNumber(row.voltage), priceUsd: toNumber(row.priceUsd), bufferIncluded: !!row.bufferIncluded, isActive: !!row.isActive })), bufferUsd: toNumber(buffer.usd), bufferLiters: toNumber(buffer.liters), aiEnabled }));
   return <form className="bk-card" onSubmit={event => { event.preventDefault(); submit(); }}>
     <div><h2>Teplonasos jadvali</h2><p className="bk-muted">Model qishki kW bo‘yicha tanlanadi (yaxshi uteplit: m² × 80 W, uteplitsiz: m² × 130 W). Narx — sotiladigan narx, ustama qo‘shilmaydi; so‘m CBU kursi bo‘yicha.</p><p className={data.telegramLinked ? "ig-ok" : "ig-error"}>Telegram (+998 91 637 77 77): {data.telegramLinked ? "ulangan ✓ — teplonasos lidlari faqat shu shaxsiy chatga boradi" : "ulanmagan — shu akkaunt botga “/start teplonasos” yozib, raqamini ulashsin"}</p></div>
     <div className="bk-table-wrap"><table className="bk-table"><thead><tr>{HEAT_COLUMNS.map(column => <th key={column.key} className="is-left">{column.label}</th>)}<th>Tok</th><th>Bufer bak narxda</th><th>Faol</th><th/></tr></thead><tbody>
@@ -159,6 +160,7 @@ function HeatPumpTable({ data }: { data: HeatPump }) {
         <td><button type="button" className="bk-icon-btn" aria-label="Qatorni o‘chirish" onClick={() => { setRows(list => list.filter((_, i) => i !== index)); clear(); }}><X size={15}/></button></td>
       </tr>)}
     </tbody></table></div>
+    <label className="ig-switch"><input type="checkbox" checked={aiEnabled} onChange={event => { setAiEnabled(event.target.checked); clear(); }}/><span>AI javob — komment va Direct avval AI bilan tushuniladi (odamdek); o‘chiq — kalit so‘z parseri</span></label>
     <button type="button" className="ig-link-btn" onClick={() => { setRows(list => [...list, { id: null, brand: "Aire", model: "", hp: "", nominalKw: "", winterKw: "", priceUsd: "", voltage: "220", bufferIncluded: true, isActive: true }]); clear(); }}>+ Model qo‘shish</button>
     <div className="bk-actions">
       <label className="bk-field"><span>Bufer bak hajmi, L <small className="bk-muted">(bufer baksiz modellar uchun tavsiya)</small></span><input value={buffer.liters} inputMode="numeric" onChange={event => { setBuffer(value => ({ ...value, liters: event.target.value })); clear(); }}/></label>
@@ -252,10 +254,10 @@ function Journal({ rows, accountId, heatPump }: { rows: Board["journal"]; accoun
         <td>{dateTime(row.createdAt)}</td>
         <td className="is-left">{row.username ? <a href={`https://instagram.com/${row.username}`} target="_blank" rel="noreferrer">@{row.username}</a> : "—"}</td>
         <td className="is-left ig-wrap">{row.text || "—"}{row.permalink && <a className="ig-ext" href={row.permalink} target="_blank" rel="noreferrer" aria-label="Post"><ExternalLink size={12}/></a>}{row.productName && <small className="ig-reason">{row.productName}</small>}</td>
-        <td className="is-left">{row.kind ? <span className={`ig-tag ${KIND_CLASS[row.kind]}`} title={row.classifiedBy ?? ""}>{KIND_LABELS[row.kind as CommentKind]}</span> : "—"}</td>
+        <td className="is-left">{row.kind ? <span className={`ig-tag ${KIND_CLASS[row.kind]}`} title={[row.classifiedBy, row.heatPumpM2 && `${row.heatPumpM2} m²`, row.heatPumpKw && `${row.heatPumpKw} kW`].filter(Boolean).join(" · ")}>{KIND_LABELS[row.kind as CommentKind]}</span> : "—"}</td>
         <td className="is-left ig-wrap">{row.publicReplyText && <small className="ig-reply">💬 {row.publicReplyText}</small>}{row.dmText && <small className="ig-reply" title={row.dmText}>📩 {row.dmText.length > 90 ? `${row.dmText.slice(0, 90)}…` : row.dmText}</small>}{!row.publicReplyText && !row.dmText && "—"}</td>
         <td className="is-left ig-wrap"><span className={`ig-tag ${STATUS[row.status].className}`}>{STATUS[row.status].label}</span>{row.leadId && <span className="ig-tag is-ok">lid</span>}{row.reviewedAt && <span className="ig-tag is-ok">ko‘rildi{row.reviewedBy ? `: ${row.reviewedBy}` : ""}</span>}{row.reason && <small className="ig-reason">{row.reason}</small>}{row.publicReplyError && <small className="ig-reason">Ochiq javob: {row.publicReplyError}</small>}</td>
-        <td>{row.aiCostUsd ? usd(row.aiCostUsd) : row.classifiedBy === "AI" ? "$0" : "—"}</td>
+        <td>{row.aiCostUsd ? usd(row.aiCostUsd) : row.classifiedBy?.startsWith("AI") ? "$0" : "—"}</td>
       </tr>)}
     </tbody></table></div> : <div className="bk-empty">Hali yozuv yo‘q</div>}
   </section>;

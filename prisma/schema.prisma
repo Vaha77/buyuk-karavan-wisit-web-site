@@ -224,6 +224,8 @@ model SiteSettings {
   heatPumpBufferLiters Int     @default(60)
   // Xolodilnik Direct texts edited in the admin ({ reply, ask, kit, final, phone, thanks, handoff, noPrice }); null = defaults.
   coolerTexts          Json?
+  // Teplonasos: every comment / Direct message understood by the AI first ("odamdek"); off = keyword parser first.
+  heatPumpAi           Boolean @default(true)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -1482,6 +1484,8 @@ model InstagramComment {
   kind             InstagramCommentKind?
   // Teplonasos post: m² found in the comment and what was sent ("calc" | "ask" | "question" | "other").
   heatPumpM2       Int?
+  // Teplonasos: needed heat power from the comment ("180KW"), intent "kw".
+  heatPumpKw       Int?
   heatPumpIntent   String?              @db.VarChar(10)
   // "KEYWORD" | "AI" | "KEYWORD_FALLBACK"
   classifiedBy     String?              @db.VarChar(20)
