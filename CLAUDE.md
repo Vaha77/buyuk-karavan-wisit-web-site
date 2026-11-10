@@ -17,3 +17,12 @@
 - Sub-agentga aniq, qisqa vazifa ber; natijani o'zing tekshir, ko'r-ko'rona qabul qilma.
 - Bir faylni ikki agent bir vaqtda tahrirlamasin.
 - Hisobotda: qaysi sub-agentlar ishlatildi, nima qildi.
+
+## Obsidian jurnal
+- Har PR merge bo'lgach (yoki merge'ga tayyor bo'lganda) G:\obsidian-vault\Loyihalar\Buyuk Karavan sayti.md fayli oxiriga qisqa yozuv qo'sh:
+  ### YYYY-MM-DD — PR #N: <sarlavha>
+  - Nima o'zgardi: 2–4 qator, oddiy o'zbek tilida
+  - Migratsiya: bor/yo'q · Testlar: X/X · Commit: <hash>
+- Fayl yo'q bo'lsa — yarat (frontmatter: teglar: [buyuk-karavan, sayt]). Faqat oxiriga qo'sh, eski yozuvlarni o'zgartirma/o'chirma.
+- Vault alohida git repo (Obsidian Git plagini o'zi sinxronlaydi) — u yerda git commit/push QILMA, faqat faylga yoz.
+- Parol, token, .env qiymatlari jurnalga YOZILMASIN.
