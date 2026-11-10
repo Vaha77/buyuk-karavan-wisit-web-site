@@ -9,3 +9,11 @@
 - Hisobotda: PR raqami/havolasi va master'dagi commit hash.
 - Bir vazifada bir nechta mustaqil qism bo'lsa — har biri alohida PR (sun'iy bo'lak qilma).
 - Commit'larda `Co-authored-by:` qatori faqat haqiqatan birga ishlagan, GitHub akkaunti bor odam uchun yoziladi (men aytsam).
+
+## Sub-agentlar
+- Katta vazifalarda (bir nechta mustaqil qism, ko'p fayl bo'ylab qidiruv, test + review + build tekshiruvi) ishni sub-agentlarga bo'lib, PARALLEL bajar (Agent/Task tool).
+- Odatiy taqsimot: 1) Explore — kerakli fayl/kodni topadi; 2) asosiy agent — kodni yozadi; 3) parallel: testlar/tsc/lint/build tekshiruvchi va mustaqil code-review agenti (faqat muammolarni qaytaradi).
+- Kichik ishlar (1–2 fayl, oddiy tuzatish) — sub-agentsiz, o'zing qil: token tejash (Ponytail).
+- Sub-agentga aniq, qisqa vazifa ber; natijani o'zing tekshir, ko'r-ko'rona qabul qilma.
+- Bir faylni ikki agent bir vaqtda tahrirlamasin.
+- Hisobotda: qaysi sub-agentlar ishlatildi, nima qildi.
