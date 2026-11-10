@@ -2,8 +2,9 @@ import "server-only";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
+import { leadRegionName } from "@/lib/dashboard/regions";
 import type { LeadActivityType, SalesAgent } from "@/generated/prisma/client";
-import { priceText } from "./stats-rules";
+import { productLine } from "./stats-rules";
 import type { ConversationMessage, Lead, LeadSource, LeadStatus, LeadTimelineItem } from "./types";
 
 const statusMap = { NEW:"new", REVIEWING:"reviewing", CONTACTED:"contacted", COMPLETED:"completed", IN_PROGRESS:"in_progress", WON:"won", LOST:"lost" } as const;
@@ -41,7 +42,7 @@ export async function getAdminLeads(filter:{region?:string}={}) {
     orderBy:{createdAt:"desc"},
     select:{
       id:true, customerName:true, phone:true, telegram:true, requestType:true, product:true, dimensions:true, capacity:true, temperature:true, region:true, regionCode:true,
-      status:true, source:true, notes:true, aiSummary:true, chatHistory:true, managerNote:true, createdAt:true, claimedAt:true, telegramPrivateDeliveryFailedAt:true, telegramPublishedAt:true, instagramAccountId:true, productId:true,
+      status:true, source:true, notes:true, aiSummary:true, chatHistory:true, managerNote:true, createdAt:true, claimedAt:true, telegramPrivateDeliveryFailedAt:true, instagramAccountId:true, productId:true,
       referralLink:{ select:{ name:true } },
       assignedAgent:{ select:agentName },
       activities:{ orderBy:{createdAt:"asc"}, select:{ id:true, type:true, comment:true, metadata:true, createdAt:true, agent:{ select:agentName } } },
@@ -65,13 +66,13 @@ export async function getAdminLeads(filter:{region?:string}={}) {
     if (!activities.some((item) => item.type === "LEAD_CREATED")) activities.unshift({ id:`created-${row.id}`, type:"LEAD_CREATED", title:"Madina yangi murojaat yaratdi", detail:"", createdAt:row.createdAt.toISOString(), agentName:"" });
     return {
       id:row.id, customerName:row.customerName||"Noma’lum mijoz", phone:row.phone||"", telegram:row.telegram||"",
-      requestType:row.requestType, product:row.product||"", dimensions:row.dimensions||"", capacity:row.capacity||"", temperature:row.temperature||"", region:row.region||"",
+      requestType:row.requestType, product:row.product||"", dimensions:row.dimensions||"", capacity:row.capacity||"", temperature:row.temperature||"", region:leadRegionName(row.regionCode,row.region),
       dateLabel:new Intl.DateTimeFormat("uz-UZ",{timeZone:"Asia/Tashkent",day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(date),
       dateGroup:day===today?"today":day===yesterday?"yesterday":"week", status:statusMap[row.status] as LeadStatus, source:sourceMap[row.source] as LeadSource,
       isUnread:row.status==="NEW", additional:row.notes||"", summary:row.aiSummary||"", conversation:conversation(row.chatHistory), managerNote:row.managerNote||"", createdAt:row.createdAt.toISOString(),
       assignedAgentName:seller(row.assignedAgent), claimedAt:row.claimedAt?row.claimedAt.toISOString():"", privateDeliveryFailed:Boolean(row.telegramPrivateDeliveryFailedAt),
       lastContact:contact?.createdAt.toISOString()||"", nextFollowUp:next?.scheduledFor.toISOString()||"", followUpOverdue:Boolean(next&&next.scheduledFor.getTime()<now.getTime()), timeline:activities, referralSource:row.referralLink?.name||"", regionCode:row.regionCode||"",
-      hot:Boolean(row.phone||row.telegramPublishedAt), price:row.product||row.productId?priceText(prices.get(row.productId??"")??null):"",
+      hot:Boolean(row.phone), price:row.product?productLine(row.product,prices.get(row.productId??"")??null).price:"",
       sourceLabel:row.instagramAccountId&&igHandle.has(row.instagramAccountId)?`${row.source==="INSTAGRAM_DM"?"Instagram DM":"Instagram"} · ${igHandle.get(row.instagramAccountId)}`:"",
     };
   });

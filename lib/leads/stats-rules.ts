@@ -15,6 +15,14 @@ export const HEAT_FROM = 8, HEAT_TO = 22;
 const MONTHS = ["Yan", "Fev", "Mar", "Apr", "May", "Iyn", "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek"];
 
 export const priceText = (price: number | null) => price ? `$${String(Math.round(price)).replace(/\B(?=(\d{3})+$)/g, " ")}` : "narxsiz";
+const AIRE_WINTER_KW: Record<number, number> = { 3: 6.6, 6: 12.5, 8: 15.8, 12: 23.7 };
+/** "Aire 12 HP · 35 kW — $4 100" → model group "Aire 12 HP · 23.7 kW" (old nominal-kW leads too), text without the price, price once. */
+export function productLine(text: string, price: number | null) {
+  const own = text.match(/\$\s?\d[\d ]*/)?.[0].trim(), bare = text.replace(/\s*[—–-]?\s*\$\s?\d.*$/, "").trim();
+  const hp = Number(bare.match(/(\d+(?:[.,]\d+)?)\s*HP/i)?.[1].replace(",", ".")), aire = /aire/i.test(bare);
+  const group = /katta loyiha/i.test(bare) || (aire && hp > 12) ? "Katta loyiha" : aire && AIRE_WINTER_KW[hp] ? `Aire ${hp} HP · ${AIRE_WINTER_KW[hp]} kW` : bare;
+  return { bare, group, price: group === "Katta loyiha" ? "narxsiz" : price ? priceText(price) : own ?? "narxsiz" };
+}
 
 /** [from, to) of the chosen chip, the equal period before it and the chart buckets (hours today, days, months for Yil). */
 export function leadPeriod(raw: string | undefined, now = new Date()) {
@@ -37,7 +45,8 @@ const NEW = (r: LeadStatRow) => r.status === "NEW", CONTACTED = (r: LeadStatRow)
 const pct = (part: number, whole: number) => whole ? Math.round(part / whole * 100) : 0;
 function change(now: number, before: number, suffix: string) {
   const diff = now - before;
-  return { text: `${diff < 0 ? "▼" : "▲"} ${before ? `${Math.abs(Math.round(diff / before * 100))}%` : Math.abs(diff)} ${suffix}`, down: diff < 0 };
+  const rate = before ? Math.abs(Math.round(diff / before * 100)) : Infinity;
+  return { text: `${diff < 0 ? "▼" : "▲"} ${rate <= 300 ? `${rate}%` : `${diff < 0 ? "−" : "+"}${Math.abs(diff)} ta`} ${suffix}`, down: diff < 0 };
 }
 
 export function buildLeadStats(rows: LeadStatRow[], period: LeadPeriod) {
@@ -45,13 +54,14 @@ export function buildLeadStats(rows: LeadStatRow[], period: LeadPeriod) {
   const cur = rows.filter(inPeriod), prev = rows.filter(r => r.at >= period.prevFrom && r.at < period.from);
   const sum = (list: LeadStatRow[], test: (r: LeadStatRow) => boolean = () => true) => list.reduce((s, r) => s + (test(r) ? r.n : 0), 0);
   const span = period.to.getTime() - period.from.getTime();
-  const spark = (test: (r: LeadStatRow) => boolean) => { const v = Array(7).fill(0); for (const r of cur) if (test(r)) v[Math.min(6, Math.floor((r.at.getTime() - period.from.getTime()) * 7 / span))] += r.n; return v as number[]; };
+  const spark = (test: (r: LeadStatRow) => boolean) => { const v: number[] = Array(7).fill(0); for (const r of cur) if (test(r)) v[Math.min(6, Math.floor((r.at.getTime() - period.from.getTime()) * 7 / span))] += r.n; return v; };
   const total = sum(cur), answered = total - sum(cur, NEW);
   const todayTest = (r: LeadStatRow) => r.at >= period.today, yesterday = new Date(period.today.getTime() - DAY);
+  const todayHours = Array.from({ length: HEAT_TO - HEAT_FROM }, (_, h) => sum(rows, r => todayTest(r) && local(r.at).getUTCHours() === HEAT_FROM + h));
   const todayCount = sum(rows, todayTest), yesterdayCount = sum(rows, r => r.at >= yesterday && r.at < period.today);
   const kpis = [
-    { key: "new", name: "Yangi so‘rovlar", color: "#22d3ee", value: sum(cur, NEW), spark: spark(NEW), change: change(sum(cur, NEW), sum(prev, NEW), "o‘tgan davrga") },
-    { key: "today", name: "Bugungi", color: "#8b5cf6", value: todayCount, spark: spark(() => true), change: change(todayCount, yesterdayCount, "kechagiga") },
+    { key: "total", name: "Davrdagi so‘rovlar", color: "#22d3ee", value: total, spark: spark(() => true), change: change(total, sum(prev), "o‘tgan davrga") },
+    { key: "today", name: "Bugungi", color: "#8b5cf6", value: todayCount, spark: todayHours, change: change(todayCount, yesterdayCount, "kechagiga") },
     { key: "contacted", name: "Bog‘lanildi", color: "#fbbf24", value: sum(cur, CONTACTED), spark: spark(CONTACTED), change: change(sum(cur, CONTACTED), sum(prev, CONTACTED), "o‘tgan davrga") },
     { key: "won", name: "Muvaffaqiyatli", color: "#34d399", value: sum(cur, WON), spark: spark(WON), change: change(sum(cur, WON), sum(prev, WON), "o‘tgan davrga") },
   ];
@@ -61,12 +71,11 @@ export function buildLeadStats(rows: LeadStatRow[], period: LeadPeriod) {
   for (const r of cur) { const s = series[at(r)]; s[sourceGroup(r.source)] += r.n; if (!NEW(r)) s.answered += r.n; }
   const sources = SOURCE_GROUPS.map(([key, name, color]) => ({ key, name, color, value: sum(cur, r => sourceGroup(r.source) === key) })).filter(s => s.value).sort((a, b) => b.value - a.value);
   const phone = sum(cur, r => r.phone), won = sum(cur, WON);
-  const funnel = [["Jami so‘rovlar", total], ["Javob berildi", answered], ["Telefon olindi", phone], ["Muvaffaqiyatli", won]].map(([name, value], i, all) => ({ name: name as string, value: value as number, pct: i ? Math.min(100, pct(value as number, all[i - 1][1] as number)) : 100 }));
-  // shortcut: stages are the spec's independent counts (a NEW lead can already have a phone), so % is capped at 100.
-  const byProduct = new Map<string, { name: string; price: number | null; value: number }>();
-  for (const r of cur) { const p = byProduct.get(r.product) ?? { name: r.product, price: r.price, value: 0 }; p.value += r.n; p.price ??= r.price; byProduct.set(r.product, p); }
+  const funnel = [["Jami so‘rovlar", total], ["Javob berildi", answered], ["Telefon olindi", phone], ["Muvaffaqiyatli", won]].map(([name, value]) => ({ name: name as string, value: value as number, pct: pct(value as number, total) }));
+  const byProduct = new Map<string, { name: string; price: string; value: number }>();
+  for (const r of cur) { const line = productLine(r.product, r.price), p = byProduct.get(line.group) ?? { name: line.group, price: line.price, value: 0 }; p.value += r.n; if (p.price === "narxsiz") p.price = line.price; byProduct.set(line.group, p); }
   const ranked = [...byProduct.values()].sort((a, b) => b.value - a.value), rest = ranked.slice(6).reduce((s, p) => s + p.value, 0);
-  const products = [...ranked.slice(0, 6).map(p => ({ name: p.name, price: priceText(p.price), value: p.value })), ...(rest ? [{ name: "Boshqalar", price: "", value: rest }] : [])];
+  const products = [...ranked.slice(0, 6), ...(rest ? [{ name: "Boshqalar", price: "", value: rest }] : [])];
   // Heatmap: Monday-first weekday × hours 08–21 (each cell is one hour, the last ends at 22:00).
   const heat = WEEKDAYS.map(() => Array(HEAT_TO - HEAT_FROM).fill(0) as number[]);
   for (const r of cur) { const d = local(r.at), h = d.getUTCHours(); if (h >= HEAT_FROM && h < HEAT_TO) heat[(d.getUTCDay() + 6) % 7][h - HEAT_FROM] += r.n; }

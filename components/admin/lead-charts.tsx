@@ -11,7 +11,7 @@ const Empty = () => <p className="lc-empty">Ma’lumot yo‘q</p>;
 const Bar = ({ w, color, i }: { w: number; color: string; i: number }) => <div className="lc-bar"><b style={{ "--w": `${w}%`, background: color, transitionDelay: `${800 + i * 60}ms` } as React.CSSProperties}/></div>;
 
 function Spark({ values, color }: { values: number[]; color: string }) {
-  const max = Math.max(1, ...values), d = "M" + values.map((v, i) => `${(i * 100 / 6).toFixed(1)},${(36 - v / max * 30).toFixed(1)}`).join(" L");
+  const max = Math.max(1, ...values), d = "M" + values.map((v, i) => `${(i * 100 / Math.max(1, values.length - 1)).toFixed(1)},${(36 - v / max * 30).toFixed(1)}`).join(" L");
   return <svg className="lc-spark lc-wipe" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden>
     <path d={`${d} L100,40 L0,40Z`} fill={color} fillOpacity=".18"/><path d={d} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke"/>
   </svg>;
@@ -22,9 +22,9 @@ function Area({ series }: { series: LeadStats["series"] }) {
   const max = Math.max(4, ...series.map(s => s.instagram + s.site + s.other)), x = (i: number) => L + (n > 1 ? i * (R - L) / (n - 1) : (R - L) / 2), y = (v: number) => B - v / max * (B - T);
   const stack = (upto: number) => series.map(p => SOURCE_GROUPS.slice(0, upto).reduce((sum, [key]) => sum + p[key], 0));
   const layers = SOURCE_GROUPS.map(([key, , color], k) => {
-    const top = stack(k + 1), base = stack(k);
-    const d = "M" + top.map((v, i) => `${x(i)},${y(v)}`).join(" L") + " L" + base.map((v, i) => `${x(i)},${y(v)}`).reverse().join(" L") + "Z";
-    return <path key={key} d={d} fill={color} fillOpacity=".28" stroke={color} strokeWidth="1.5"/>;
+    if (series.every(p => !p[key])) return null;
+    const top = "M" + stack(k + 1).map((v, i) => `${x(i)},${y(v)}`).join(" L"), base = stack(k).map((v, i) => `${x(i)},${y(v)}`).reverse().join(" L");
+    return <g key={key}><path d={`${top} L${base}Z`} fill={color} fillOpacity=".28"/><path d={top} fill="none" stroke={color} strokeWidth="2"/></g>;
   });
   const every = Math.ceil(n / 8), s = tip === null ? null : series[tip];
   return <div className="lc-area" onMouseLeave={() => setTip(null)}>
@@ -71,7 +71,7 @@ export function LeadCharts({ period, stats }: { period: LeadPeriodKey; stats: Le
     </div>
     <div className="lc-r3">
       <section className="lc-card"><h3>Sotuv voronkasi</h3><p className="lc-hint">So‘rovdan sotuvgacha</p>
-        {empty ? <Empty/> : <Reveal className="lc-reveal">{stats.funnel.map((f, i) => <div key={f.name} className="lc-it"><div className="lc-row"><span>{f.name}</span><b>{f.value}</b></div><Bar w={Math.max(f.value / stats.total * 100, f.value ? 3 : 0)} color={["#22d3ee", "#8b5cf6", "#fbbf24", "#34d399"][i]} i={i}/>{i > 0 && <p className="lc-conv">↳ {f.pct}% oldingi bosqichdan</p>}</div>)}</Reveal>}</section>
+        {empty ? <Empty/> : <Reveal className="lc-reveal">{stats.funnel.map((f, i) => <div key={f.name} className="lc-it"><div className="lc-row"><span>{f.name}</span><b>{f.value}{i > 0 && <small> · {f.pct}%</small>}</b></div><Bar w={Math.max(f.value / stats.total * 100, f.value ? 3 : 0)} color={["#22d3ee", "#8b5cf6", "#fbbf24", "#34d399"][i]} i={i}/></div>)}</Reveal>}</section>
       <section className="lc-card"><h3>Mahsulotlar bo‘yicha</h3><p className="lc-hint">Eng ko‘p so‘ralgan</p>
         {empty ? <Empty/> : <Reveal className="lc-reveal">{stats.products.map((p, i) => <div key={i} className="lc-it"><div className="lc-row"><span>{p.name}{p.price && <small> · {p.price}</small>}</span><span>{p.value}</span></div><Bar w={p.value / topProduct * 100} color="linear-gradient(90deg,#8b5cf6,#22d3ee)" i={i}/></div>)}</Reveal>}</section>
       <section className="lc-card"><h3>Qachon yozishadi</h3><p className="lc-hint">Hafta kuni × soat ({String(HEAT_FROM).padStart(2, "0")}–{HEAT_TO})</p>

@@ -121,3 +121,8 @@ export function matchRegionText(text: string | null | undefined): string | null 
   const value = (text || "").toLowerCase();
   return value ? TEXT_PATTERNS.find(([pattern]) => pattern.test(value))?.[1] ?? null : null;
 }
+/** Lead "Hudud" for display and the filter: one of the 13 Uzbek regions (Toshkent shahri → viloyati, as customers) or "Noma’lum". */
+export function leadRegionName(code: string | null | undefined, text: string | null | undefined) {
+  const found = (code && REGION_BY_CODE.get(code)?.country === "UZ" ? code : null) ?? matchRegionText(text);
+  return found ? regionName(found === "UZ-TK" ? "UZ-TO" : found) : "Noma’lum";
+}

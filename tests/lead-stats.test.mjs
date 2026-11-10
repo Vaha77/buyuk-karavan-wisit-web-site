@@ -38,13 +38,13 @@ test("sources, statuses, funnel %, products top 6 + Boshqalar, heatmap cell and 
   ];
   const s = rules.buildLeadStats(rows, p);
   assert.equal(s.total, 14);
-  assert.deepEqual(s.kpis.map(k => k.value), [10, 0, 2, 1]);
+  assert.deepEqual(s.kpis.map(k => k.value), [14, 0, 2, 1], "Davrdagi so‘rovlar = all leads of the period");
   assert.deepEqual(s.sources.map(x => [x.key, x.value]), [["instagram", 11], ["site", 2], ["other", 1]]);
-  assert.deepEqual(s.funnel.map(f => [f.value, f.pct]), [[14, 100], [4, 29], [3, 75], [1, 33]]);
+  assert.deepEqual(s.funnel.map(f => [f.value, f.pct]), [[14, 100], [4, 29], [3, 21], [1, 7]], "every stage as % of Jami");
   assert.equal(s.answeredPct, 29);
   const phoneFirst = rules.buildLeadStats([row("2026-11-08T10:00", { phone: true, n: 3 }), row("2026-11-08T10:00", { status: "CONTACTED" })], p);
-  assert.deepEqual(phoneFirst.funnel.map(f => f.pct), [100, 25, 100, 0], "3 phones over 1 answered stays 100%");
-  assert.deepEqual(s.products[0], { name: "Aire 12 HP", price: "$4 100", value: 6 });
+  assert.deepEqual(phoneFirst.funnel.map(f => f.pct), [100, 25, 75, 0], "3 phones of 4 leads = 75%, never over 100");
+  assert.deepEqual(s.products[0], { name: "Aire 12 HP · 23.7 kW", price: "$4 100", value: 6 });
   assert.equal(s.products.length, 7);
   assert.deepEqual(s.products[6], { name: "Boshqalar", price: "", value: 3 });
   assert.equal(s.products.find(x => x.name === "Xolodilnik").price, "narxsiz");
@@ -85,9 +85,57 @@ test("charts only for staff: same requireAdmin as the list; a SELLER never reach
 test("no sideways scroll at 360px and the 1440px grid", async () => {
   const css = await read("components/admin/admin-leads.css");
   assert.doesNotMatch(css, /\.lead-table\{[^}]*min-width/, "table fits the screen");
-  assert.match(css, /@media\(max-width:700px\)\{\.lead-hide-m,\.lead-avatar\{display:none\}\}\s*$/, "phone hides avatar, phone, source, time (last rule wins)");
+  assert.match(css, /@media\(max-width:700px\)\{\.lead-hide-m,\.lead-avatar\{display:none\}\.lead-m-only\{display:block!important\}\}\s*$/, "phone hides avatar, phone, source, time and shows 📞 · vaqt under the name (last rule wins)");
   assert.match(css, /\.lc-r2\{display:grid;grid-template-columns:2fr 1fr/);
   assert.match(css, /\.lc-r3\{display:grid;grid-template-columns:1\.1fr 1fr 1fr/);
   assert.match(css, /@media\(max-width:1100px\)\{\.lc-kpis\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}[^}]*\}\.lc-r2,\.lc-r3\{grid-template-columns:minmax\(0,1fr\)\}/);
   assert.match(css, /prefers-reduced-motion:reduce\)\{\.lc \*/);
+});
+
+const regions = await import("../lib/dashboard/regions.ts");
+
+test("KPI change: over 300% shows +N ta; Bugungi sparkline = today's hours 08–22", () => {
+  const p = rules.leadPeriod("7d", NOW);
+  const s = rules.buildLeadStats([row("2026-10-30T10:00"), row("2026-11-08T10:00", { n: 5 }), row("2026-11-10T09:30", { n: 2 }), row("2026-11-10T21:10"), row("2026-11-10T07:00")], p);
+  assert.equal(s.kpis[0].name, "Davrdagi so‘rovlar");
+  assert.equal(s.kpis[0].change.text, "▲ +8 ta o‘tgan davrga", "9 vs 1 = 800% → absolute");
+  assert.equal(s.kpis[1].spark.length, 14);
+  assert.equal(s.kpis[1].spark[1], 2, "09:00");
+  assert.equal(s.kpis[1].spark[13], 1, "21:00");
+  assert.equal(s.kpis[1].spark.reduce((a, b) => a + b, 0), 3, "07:00 is outside 08–22");
+});
+
+test("product groups: one Aire model whatever kW was written, winter kW from the table, Katta loyiha one group, price once", () => {
+  const line = rules.productLine;
+  assert.deepEqual(line("Aire 12 HP · 23.7 kW", 4100), { bare: "Aire 12 HP · 23.7 kW", group: "Aire 12 HP · 23.7 kW", price: "$4 100" });
+  assert.equal(line("Aire 12 HP · 35 kW", null).group, "Aire 12 HP · 23.7 kW", "old nominal kW");
+  assert.equal(line("Aire 3 HP · 9 kW", null).group, "Aire 3 HP · 6.6 kW");
+  assert.equal(line("Aire 6HP", null).group, "Aire 6 HP · 12.5 kW");
+  assert.equal(line("Aire 8 HP · 24 kW", null).group, "Aire 8 HP · 15.8 kW");
+  assert.deepEqual(line("Aire 6 HP · 12.5 kW — $2 650 (~33.8 mln so'm)", null), { bare: "Aire 6 HP · 12.5 kW", group: "Aire 6 HP · 12.5 kW", price: "$2 650" }, "no \"$2 650 · narxsiz\"");
+  assert.equal(line("Aire 20 HP", null).group, "Katta loyiha");
+  assert.equal(line("Katta loyiha: ~30 HP · 66 kW", null).group, "Katta loyiha");
+  assert.equal(line("Xolodilnik · 100 t", null).price, "narxsiz", "narxsiz only without any price");
+  const s = rules.buildLeadStats([row("2026-11-09T10:00", { product: "Aire 12 HP · 35 kW", price: null }), row("2026-11-09T11:00", { product: "Aire 12 HP · 23.7 kW", price: 4100 }), row("2026-11-09T12:00", { product: "Aire 16 HP", price: null }), row("2026-11-09T12:00", { product: "Katta loyiha", price: null })], rules.leadPeriod("7d", NOW));
+  assert.deepEqual(s.products, [{ name: "Aire 12 HP · 23.7 kW", price: "$4 100", value: 2 }, { name: "Katta loyiha", price: "narxsiz", value: 2 }]);
+});
+
+test("hot lead = has a phone (Telegram delivery no longer counts)", async () => {
+  const queries = await read("lib/leads/queries.ts");
+  assert.match(queries, /hot:Boolean\(row\.phone\)/);
+  assert.doesNotMatch(queries, /telegramPublishedAt/);
+});
+
+test("Hudud: only the 13 Uzbek regions or Noma’lum; DB text is normalized for display only", () => {
+  const name = regions.leadRegionName;
+  assert.equal(name(null, "namanagan"), "Namangan viloyati");
+  assert.equal(name(null, "Fargona"), "Farg‘ona viloyati");
+  assert.equal(name(null, "test"), "Noma’lum");
+  assert.equal(name(null, "asdasd 123"), "Noma’lum");
+  assert.equal(name(null, null), "Noma’lum");
+  assert.equal(name("UZ-SA", "junk"), "Samarqand viloyati", "the resolved code wins");
+  assert.equal(name("UZ-TK", null), "Toshkent viloyati", "Toshkent shahri is counted with the viloyat");
+  assert.equal(name("KZ-ALM", "Almaty"), "Noma’lum", "outside Uzbekistan");
+  const all = new Set(regions.REGIONS.filter(r => r.country === "UZ").map(r => name(r.code, null)));
+  assert.equal(all.size, 13);
 });
