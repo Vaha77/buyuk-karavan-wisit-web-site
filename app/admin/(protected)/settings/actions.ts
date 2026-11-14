@@ -24,3 +24,17 @@ export async function sendSehGroupTestAction(): Promise<{ ok: true; migratedTo?:
   await requireRole("SUPER_ADMIN");
   return sendGroupTest();
 }
+
+/** Import buyurtma approver (sees prices, decides orders); null = only Super Admin. */
+export async function saveImportApproverAction(raw: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+  const actor = await requireRole("SUPER_ADMIN");
+  const userId = typeof raw === "string" && raw ? raw.slice(0, 40) : null;
+  const user = userId ? await getDb().adminUser.findFirst({ where: { id: userId, isActive: true, archivedAt: null, role: { notIn: ["WORKSHOP", "STOREKEEPER"] } }, select: { id: true, name: true } }) : null;
+  if (userId && !user) return { ok: false, error: "Foydalanuvchi topilmadi yoki faol emas." };
+  const previous = (await getDb().siteSettings.findUnique({ where: { id: "global" }, select: { importApproverId: true } }))?.importApproverId ?? null;
+  await getDb().siteSettings.upsert({ where: { id: "global" }, create: { id: "global", importApproverId: userId }, update: { importApproverId: userId } });
+  await writeAudit(actor, { action: "UPDATE", entityType: "SITE_SETTINGS", entityId: "global", entityName: "Import tasdiqlovchi", summary: `Import tasdiqlovchisini ${user ? user.name : "tanlanmagan (faqat Super Admin)"} qildi`, before: { importApproverId: previous }, after: { importApproverId: userId } });
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/import", "layout");
+  return { ok: true };
+}
