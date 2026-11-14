@@ -54,3 +54,6 @@ mobile/android/app/build/
 mobile/android/local.properties
 *.jks
 *.keystore
+
+# Local working files (mockups, source catalogs, zips) — never committed
+/Claude outputs/
