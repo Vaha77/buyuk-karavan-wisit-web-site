@@ -5,12 +5,13 @@ import { getEmployees } from "@/lib/employees/queries";
 import { myDueCustomers } from "@/lib/customers/seller-queries";
 import { referralLinksAreNew } from "@/lib/referrals/rules";
 import { sexBadgeCount } from "@/lib/sex/queries";
+import { importBadge } from "@/lib/import/service";
 
 /** Badge counts for the sidebar of whichever role is signed in (each role only queries what its menu shows). */
 export async function getShellData(user: AdminUser) {
   if (user.role === "SELLER") {
     const due = user.salesPersonId ? (await myDueCustomers(user).catch(error => { console.error("[shell-data] seller due count failed", error); return []; })).length : 0;
-    return { dueToday: due };
+    return { dueToday: due, ...await importBadge(user) };
   }
   if (user.role === "WORKSHOP" || user.role === "STOREKEEPER") return { sexBadge: await sexBadgeCount(user) };
   const canReview = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
@@ -21,6 +22,6 @@ export async function getShellData(user: AdminUser) {
     ${user.role === "SUPER_ADMIN" ? Prisma.sql`((SELECT count(*) FROM "WorkshopCorrectionRequest" WHERE status = 'PENDING') + (SELECT count(*) FROM "WorkshopOrder" WHERE "receivedNote" IS NOT NULL AND "receivedCheckedAt" IS NULL) + (SELECT count(*) FROM "KassaDraft" WHERE status = 'PENDING'))::int` : Prisma.sql`0`} AS corrections`)
     .then(rows => rows[0]).catch(error => { console.error("[shell-data] admin badge counts failed", error); return { leads: 0, purchases: 0, corrections: 0 }; });
   const staff = user.role === "SUPER_ADMIN" ? getEmployees().catch(error => { console.error("[shell-data] employees failed", error); return []; }) : [];
-  const [{ leads, purchases, corrections }, sexBadge, employees] = await Promise.all([counts, sexBadgeCount(user), staff]);
-  return { employees: employees.filter(item => !item.archived).map(({ id, name, debt }) => ({ id, name, debt })), newLeads: leads, pendingPurchases: purchases + corrections, linksBadge: referralLinksAreNew(), sexBadge };
+  const [{ leads, purchases, corrections }, sexBadge, employees, importData] = await Promise.all([counts, sexBadgeCount(user), staff, importBadge(user)]);
+  return { ...importData, employees: employees.filter(item => !item.archived).map(({ id, name, debt }) => ({ id, name, debt })), newLeads: leads, pendingPurchases: purchases + corrections, linksBadge: referralLinksAreNew(), sexBadge };
 }
