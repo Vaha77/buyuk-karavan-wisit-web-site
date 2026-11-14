@@ -4,6 +4,7 @@ import { forbidden, redirect } from "next/navigation";
 import type { AdminRole } from "@/generated/prisma/client";
 import { getAdminSession } from "./session";
 import { PASSWORD_PAGE, homeFor, isLimitedRole } from "./seller-access";
+import { canUseImport } from "@/lib/import/rules";
 
 /** Signed in, and not still on a temporary password (that only opens "Yangi parol o‘rnating"; actions get 403). */
 async function requireSession() {
@@ -50,4 +51,11 @@ export async function requireSeller() {
 /** Seh zakazlari pages and actions: staff, SELLER and WORKSHOP. What each may see or press is decided per order (lib/sex/rules.ts). */
 export async function requireSexUser() {
   return requireSession();
+}
+
+/** Import buyurtma pages and actions: SELLER and staff; WORKSHOP / STOREKEEPER go home. Approver rights are checked per action. */
+export async function requireImportUser() {
+  const user = await requireSession();
+  if (!canUseImport(user.role)) await rejectLimited(user.role);
+  return user;
 }

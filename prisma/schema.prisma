@@ -226,6 +226,8 @@ model SiteSettings {
   coolerTexts          Json?
   // Teplonasos: every comment / Direct message understood by the AI first ("odamdek"); off = keyword parser first.
   heatPumpAi           Boolean @default(true)
+  // Import buyurtma: the user who approves import orders (sees prices); null = only SUPER_ADMIN.
+  importApproverId     String? @db.VarChar(40)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -498,6 +500,8 @@ model AdminUser {
   shopShortages         ShopShortage[]              @relation("ShopShortageCreator")
   shopShortagesDeleted  ShopShortage[]              @relation("ShopShortageDeleter")
   shopShortageLogs      ShopShortageLog[]
+  importOrders          ImportOrder[]               @relation("ImportOrderSeller")
+  importDecisions       ImportOrder[]               @relation("ImportOrderApprover")
 
   @@index([approvalStatus, isActive])
 }
@@ -2143,4 +2147,121 @@ model TelegramChatBinding {
   chatId    String   @db.VarChar(32)
   phone     String?  @db.VarChar(20)
   updatedAt DateTime @updatedAt
+}
+
+// ── Import buyurtma: factory catalogs (category tree) → seller cart → approver → boss summary / Excel ──
+enum ImportOrderStatus {
+  PENDING
+  APPROVED
+  RETURNED
+  REJECTED
+  SENT
+}
+
+model ImportCategory {
+  id        String           @id @default(cuid())
+  nameUz    String
+  nameEn    String?
+  parentId  String?
+  parent    ImportCategory?  @relation("ImportCategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  ImportCategory[] @relation("ImportCategoryTree")
+  sort      Int              @default(0)
+  catalogs  ImportCatalog[]
+  createdAt DateTime         @default(now())
+
+  @@index([parentId])
+}
+
+model ImportAgent {
+  id        String          @id @default(cuid())
+  name      String          @unique
+  country   String
+  // USD | CNY | EUR
+  currency  String          @default("USD") @db.VarChar(3)
+  note      String?
+  catalogs  ImportCatalog[]
+  createdAt DateTime        @default(now())
+}
+
+model ImportCatalog {
+  id         String          @id @default(cuid())
+  agentId    String
+  agent      ImportAgent     @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  categoryId String
+  category   ImportCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  title      String
+  code       String          @db.VarChar(20)
+  sourceFile String?
+  products   ImportProduct[]
+  createdAt  DateTime        @default(now())
+
+  @@unique([agentId, code])
+  @@index([categoryId])
+}
+
+model ImportProduct {
+  id            String            @id @default(cuid())
+  code          String            @unique
+  catalogId     String
+  catalog       ImportCatalog     @relation(fields: [catalogId], references: [id], onDelete: Restrict)
+  groupEn       String
+  nameEn        String
+  nameUz        String
+  model         String
+  // elektr | gaz | boshqa
+  type          String            @db.VarChar(10)
+  // [{ en, value, uz, value_uz }] as in the catalog
+  specs         Json
+  imageUrl      String?
+  catPage       String?           @db.VarChar(10)
+  // Checker's note on the catalog data: ADMIN / SUPER_ADMIN only.
+  flag          String?
+  // Factory price: SUPER_ADMIN and the import approver only, never a seller (page or API).
+  priceAmount   Decimal?          @db.Decimal(12, 2)
+  priceCurrency String?           @db.VarChar(3)
+  moq           Int?
+  active        Boolean           @default(true)
+  items         ImportOrderItem[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([catalogId, active])
+}
+
+model ImportOrder {
+  id           String            @id @default(cuid())
+  // Shown as IMP-0001.
+  number       Int               @unique @default(autoincrement())
+  // One per "Rasmiylashtirish" press on the client: a repeated request returns the same order.
+  requestId    String?           @unique @db.VarChar(40)
+  sellerId     String
+  seller       AdminUser         @relation("ImportOrderSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  status       ImportOrderStatus @default(PENDING)
+  client       String?
+  neededBy     DateTime?         @db.Date
+  comment      String?
+  approverId   String?
+  approver     AdminUser?        @relation("ImportOrderApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
+  decisionNote String?
+  sentAt       DateTime?
+  items        ImportOrderItem[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([sellerId, createdAt])
+  @@index([status])
+}
+
+model ImportOrderItem {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       ImportOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     ImportProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  qty         Int
+  // Set by the approver ("✎ sonini o'zgartirish"); null = as ordered.
+  approvedQty Int?
+
+  @@unique([orderId, productId])
 }
