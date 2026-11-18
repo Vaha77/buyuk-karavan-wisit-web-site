@@ -7,7 +7,7 @@ import { AdminSearch } from "./admin-search";
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeCheck, Bell, ChevronDown, Store, UserRound, FileText, Bot, Boxes, Calculator, CalendarDays, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PackageCheck, Percent, PhoneCall, Plus, PlusCircle, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wallet, Wrench, X } from "lucide-react";
+import { BadgeCheck, Bell, ChevronDown, Store, UserRound, FileText, Bot, Boxes, Calculator, CalendarDays, Globe, Camera, ChevronLeft, ClipboardList, FolderKanban, Handshake, History, Home, LayoutDashboard, Link2, LogOut, Menu, MessageSquare, Package, PackageCheck, Percent, PhoneCall, Plus, PlusCircle, Settings, ShoppingBag, Tags, Target, UserCheck, Users, Wallet, Wrench, X } from "lucide-react";
 import { logoutAction } from "@/app/admin/login/actions";
 import { homeFor } from "@/lib/auth/seller-access";
 import { NavigationProgress } from "./feedback";
@@ -15,7 +15,7 @@ import { BottomNav } from "@/components/ui/aurora";
 import { debtTone } from "@/lib/employees/rules";
 import { money } from "@/lib/kassa/rules";
 
-type NavItem = { label: string; /** Phone bottom bar name */ short?: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; adminOnly?: boolean; badge?: "leads" | "new" | "purchases" | "due" | "sex"; soon?: boolean };
+type NavItem = { label: string; /** Phone bottom bar name */ short?: string; href: string; icon: typeof LayoutDashboard; superOnly?: boolean; adminOnly?: boolean; badge?: "leads" | "new" | "purchases" | "due" | "sex" | "import"; soon?: boolean; approverOnly?: boolean };
 // Grouped as in the BKLead design; items without a page yet are shown disabled with "Tez orada".
 const navigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "ASOSIY", items: [
@@ -36,6 +36,9 @@ const navigation: Array<{ group: string; items: NavItem[] }> = [
     { label: "Buyurtmalar", href: "#", icon: ShoppingBag, soon: true },
     { label: "Seh zakazlari", href: "/admin/seh", icon: Wrench, badge: "sex" },
     { label: "Sotuvchilar", href: "/admin/sales-agents", icon: UserCheck },
+    { label: "🌍 Import buyurtma", href: "/admin/import", icon: Globe },
+    { label: "Import tasdiqlash", href: "/admin/import/tasdiq", icon: BadgeCheck, approverOnly: true, badge: "import" },
+    { label: "Import yig‘ma", href: "/admin/import/yigma", icon: ClipboardList, superOnly: true },
     { label: "Sotuv rejasi", href: "/admin/sales-plan", icon: Target, adminOnly: true },
     { label: "Sotuvlar", href: "/admin/sales", icon: ShoppingBag },
     { label: "Hisob-kitob", href: "/admin/calculations", icon: Calculator },
@@ -94,6 +97,9 @@ const SECTIONS: Array<{ match: (path: string) => boolean; title: string | ((path
   { match: path => path.startsWith("/admin/users"), title: "Foydalanuvchilar", subtitle: "Admin panel foydalanuvchilari va rollari" },
   { match: path => path.startsWith("/admin/activity"), title: "Faoliyat tarixi", subtitle: "Admin amallari jurnali" },
   { match: path => path.startsWith("/admin/products"), title: "Mahsulotlar", subtitle: "Saytdagi mahsulotlarni boshqarish" },
+  { match: path => path.startsWith("/admin/import/tasdiq"), title: "Import · Tasdiqlash", subtitle: "Sotuvchilar import zayavkalarini tasdiqlash" },
+  { match: path => path.startsWith("/admin/import/yigma"), title: "Import · Yig‘ma", subtitle: "Tasdiqlangan zayavkalar katalog bo‘yicha, Excel" },
+  { match: path => path.startsWith("/admin/import"), title: "Import buyurtma", subtitle: "Zavod kataloglari va savatcha" },
   { match: path => path.startsWith("/admin/prays"), title: "Prays", subtitle: "Prays narxlari, sotuv ustamasi va seh zapchastlari" },
 ];
 function sectionOf(path: string) {
@@ -114,6 +120,11 @@ const sellerNavigation: Array<{ group: string; items: NavItem[] }> = [
   { group: "SEH", items: [
     { label: "Mening zakazlarim", href: "/admin/seh", icon: Wrench },
     { label: "Yangi zakaz", href: "/admin/seh/new", icon: PlusCircle },
+  ] },
+  { group: "IMPORT", items: [
+    { label: "🌍 Import buyurtma", short: "Import", href: "/admin/import", icon: Globe },
+    { label: "Mening zayavkalarim", href: "/admin/import/my", icon: ClipboardList },
+    { label: "Tasdiqlash", href: "/admin/import/tasdiq", icon: BadgeCheck, approverOnly: true, badge: "import" },
   ] },
 ];
 
@@ -147,7 +158,7 @@ function NavigationPending() {
   return <span className={`admin-nav-pending ${pending ? "is-pending" : ""}`} aria-hidden />;
 }
 
-export function AdminShell({ children, user, newLeads = 0, linksBadge = false, pendingPurchases = 0, dueToday = 0, sexBadge = 0, employees = [] }: { employees?: Array<{ id: string; name: string; debt: number }>; children: React.ReactNode; user: { name: string; role: keyof typeof roleLabels }; newLeads?: number; linksBadge?: boolean; pendingPurchases?: number; dueToday?: number; sexBadge?: number }) {
+export function AdminShell({ children, user, newLeads = 0, linksBadge = false, pendingPurchases = 0, dueToday = 0, sexBadge = 0, importApprover = false, importPending = 0, employees = [] }: { importApprover?: boolean; importPending?: number; employees?: Array<{ id: string; name: string; debt: number }>; children: React.ReactNode; user: { name: string; role: keyof typeof roleLabels }; newLeads?: number; linksBadge?: boolean; pendingPurchases?: number; dueToday?: number; sexBadge?: number }) {
   const [open, setOpen] = useState(false);
   const workspace = useRef<HTMLDivElement>(null);
   // Label table cells for the phone card layout, again whenever rows change (navigation, filters, refresh).
@@ -167,7 +178,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
   const groups = user.role === "SELLER" ? sellerNavigation : user.role === "WORKSHOP" ? workshopNavigation : user.role === "STOREKEEPER" ? storeNavigation : navigation;
   const home = homeFor(user.role);
   const isAdmin = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
-  const visible = (item: NavItem) => (!item.superOnly || user.role === "SUPER_ADMIN") && (!item.adminOnly || isAdmin);
+  const visible = (item: NavItem) => (!item.superOnly || user.role === "SUPER_ADMIN") && (!item.adminOnly || isAdmin) && (!item.approverOnly || importApprover);
   // The most specific matching item is active, so /admin/customers/purchases does not also light up "Doimiy mijozlar".
   const activeHref = groups.flatMap(group => group.items).filter(item => !item.soon && (item.href === pathname || (item.href !== "/admin" && pathname.startsWith(`${item.href}/`)))).sort((a, b) => b.href.length - a.href.length)[0]?.href;
   const pages = [...groups.flatMap(group => group.items), ...shopPages].filter(item => visible(item) && !item.soon);
@@ -195,7 +206,7 @@ export function AdminShell({ children, user, newLeads = 0, linksBadge = false, p
       </NavFold>}{groups.map(section => <div className="admin-nav-group" key={section.group}><span className="admin-nav-group-label">{section.group}</span>{section.items.filter(visible).map(item => {
         const Icon = item.icon;
         const active = item.href === activeHref;
-        const count = item.badge === "leads" ? newLeads : item.badge === "purchases" ? pendingPurchases : item.badge === "due" ? dueToday : item.badge === "sex" ? sexBadge : 0;
+        const count = item.badge === "leads" ? newLeads : item.badge === "purchases" ? pendingPurchases : item.badge === "due" ? dueToday : item.badge === "sex" ? sexBadge : item.badge === "import" ? importPending : 0;
         const badge = count > 0 ? <span className="admin-nav-badge is-count">{count}</span> : item.badge === "new" && linksBadge ? <span className="admin-nav-badge">YANGI</span> : null;
         return <div key={item.label}>{item.soon ? <span className="admin-nav-item is-disabled" aria-disabled="true"><Icon size={17}/>{item.label}<span className="admin-nav-badge is-soon">Tez orada</span></span> : <Link className={`admin-nav-item ${active ? "is-active" : ""}`} href={item.href} onClick={() => setOpen(false)}><Icon size={17}/>{item.label}{badge}<NavigationPending/></Link>}{item.label === "Kontent" && <Link className={`admin-nav-child ${homeContentRoute ? "is-active" : ""}`} href="/admin/content/home" onClick={() => setOpen(false)}><Home size={14}/>Home Page<NavigationPending/></Link>}</div>;
       })}</div>)}</nav>

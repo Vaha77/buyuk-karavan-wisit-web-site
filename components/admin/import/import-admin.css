@@ -1,0 +1,29 @@
+/* Import buyurtma — approver ("Tasdiqlash kerak") and boss summary (design: Claude outputs/import_buyurtma_maket.html, screens 2–3). */
+.impa-board{display:grid;gap:12px;min-width:0}
+.impa-board>*{min-width:0}
+.impa-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.impa-title{margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.impa-pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700}
+.impa-pill.p2{background:rgba(52,211,153,.13);color:#34d399}.impa-pill.p3{background:rgba(251,191,36,.13);color:#fbbf24}
+.impa-pill.p4{background:rgba(248,113,113,.13);color:#f87171}.impa-pill.p5{background:rgba(139,92,246,.18);color:#c4b5fd}
+.impa-table td,.impa-table th{vertical-align:top;overflow-wrap:anywhere}
+.impa-lines{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:13px}
+.impa-qty{width:70px;padding:4px 6px;border:1px solid #2a3150;border-radius:8px;background:#0b1020;color:#fff;font-weight:700;font-size:16px}
+.impa-actions{display:grid;gap:5px;min-width:150px}
+.impa-actions.is-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.impa-btn{border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:7px 11px;min-height:36px;font-weight:700;font-size:12.5px;cursor:pointer;background:rgba(255,255,255,.06);color:#e7eaf5;text-align:left}
+.impa-btn:disabled{opacity:.55;cursor:wait}
+.impa-btn[aria-pressed=true]{outline:2px solid #8b5cf6}
+.impa-btn.is-green{background:#34d399;color:#062;border-color:#34d399}
+.impa-btn.is-red{background:rgba(248,113,113,.15);color:#f87171;border-color:rgba(248,113,113,.3)}
+.impa-btn.is-gold{background:#C9A24B;color:#1a1300;border-color:#C9A24B}
+.impa-confirm{display:grid;gap:5px}
+.impa-note{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #2a3150;border-radius:8px;background:#0b1020;color:#fff;font:inherit;font-size:16px;resize:vertical}
+.impa-ok{color:#34d399;font-weight:700;font-size:13px;margin:0}.impa-err{color:#f87171;font-weight:700;font-size:13px;margin:0}
+.impa-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:12px}
+.impa-kpis>*{min-width:0}
+.bk-kpi strong.impa-kpi{font-size:24px;overflow-wrap:anywhere}
+.impa-details{border-top:1px dashed rgba(255,255,255,.09);padding-top:8px}
+.impa-details summary{cursor:pointer;font-weight:700;font-size:13px;padding:4px 0;overflow-wrap:anywhere}
+.impa-code{font-family:ui-monospace,monospace;color:#22d3ee;font-size:11px}
+@media (max-width:640px){.impa-hm{display:none}.impa-actions{min-width:0}}

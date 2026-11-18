@@ -3,6 +3,8 @@
 export const SELLER_HOME = "/admin/my";
 /** Seh zakazlari: sellers order here, the workshop (WORKSHOP) works only here. */
 export const SEX_HOME = "/admin/seh";
+/** Import buyurtma: sellers order from factory catalogs here (WORKSHOP / STOREKEEPER do not). */
+export const IMPORT_HOME = "/admin/import";
 
 /** "Yangi parol o‘rnating" after a password reset: every role may open it. */
 export const PASSWORD_PAGE = "/admin/password";
@@ -10,7 +12,7 @@ export const PASSWORD_PAGE = "/admin/password";
 const within = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 
 export function isSellerPathAllowed(pathname: string) {
-  return within(pathname, SELLER_HOME) || within(pathname, SEX_HOME);
+  return within(pathname, SELLER_HOME) || within(pathname, SEX_HOME) || within(pathname, IMPORT_HOME);
 }
 export function isWorkshopPathAllowed(pathname: string) {
   return within(pathname, SEX_HOME);
